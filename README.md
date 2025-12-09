@@ -35,11 +35,13 @@ A fast, cross-platform CLI tool for managing chat sessions across workspaces and
 ```bash
 cd csm-rust
 cargo build --release
+# or
+cargo install --path .
 ```
 
-The binary will be at `csm-rust/target/release/csm` (or `csm.exe` on Windows).
+The `csm` (Linux, MacOS) or `csm.exe` (Windows) binary will be in the `csm-rust/target/release/` or the `$HOME/.cargo/bin/` directory.
 
-### Add to PATH
+### Add to PATH (unnecessary if installed to `$HOME/.cargo/bin`)
 
 ```powershell
 # Windows PowerShell
