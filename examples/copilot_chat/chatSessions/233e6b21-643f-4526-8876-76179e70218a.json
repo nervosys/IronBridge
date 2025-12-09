@@ -1,0 +1,59 @@
+{
+  "version": 3,
+  "sessionId": "233e6b21-643f-4526-8876-76179e70218a",
+  "creationDate": 1725984900000,
+  "lastMessageDate": 1731711000000,
+  "isImported": false,
+  "initialLocation": "panel",
+  "customTitle": "Archive Sept 2024",
+  "responderUsername": "developer@example.com",
+  "responderAvatarIconUri": null,
+  "requests": [
+    {
+      "time": 1725984900000,
+      "message": {
+        "text": "How do I set up a new React project with TypeScript?"
+      },
+      "response": {
+        "text": "Let me guide you through setting up a React + TypeScript project..."
+      }
+    },
+    {
+      "time": 1725985800000,
+      "message": {
+        "text": "What is the best folder structure for this project?"
+      },
+      "response": {
+        "text": "Here is a recommended folder structure for React + TypeScript..."
+      }
+    },
+    {
+      "time": 1731709800000,
+      "message": {
+        "text": "How do I optimize my React component performance?"
+      },
+      "response": {
+        "text": "Here are some key optimization strategies for React components..."
+      }
+    },
+    {
+      "time": 1731710400000,
+      "message": {
+        "text": "What about using React.memo and useMemo?"
+      },
+      "response": {
+        "text": "Great question! React.memo and useMemo are excellent tools..."
+      }
+    },
+    {
+      "time": 1731711000000,
+      "message": {
+        "text": "Can you show me an example with useCallback?"
+      },
+      "response": {
+        "text": "Absolutely! Here is a practical example using useCallback..."
+      }
+    }
+  ],
+  "_originalId": "session-archive-sept-2024"
+}

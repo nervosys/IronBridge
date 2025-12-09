@@ -1,0 +1,20 @@
+{
+    "id": "demo-llamafile-001",
+    "title": "Llamafile Portable LLM",
+    "created_at": "2024-12-08T20:00:00Z",
+    "model": "llava-v1.5-7b-q4.llamafile",
+    "messages": [
+        {
+            "role": "user",
+            "content": "What is llamafile and why is it useful?",
+            "timestamp": "2024-12-08T20:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Llamafile is a revolutionary way to distribute LLMs:\n\n## What is Llamafile?\n\nA single executable file containing:\n- The model weights\n- The inference engine (llama.cpp)\n- Cross-platform runtime\n\n## Key Benefits\n\n1. **Single File Distribution**\n   - No installation needed\n   - No dependencies\n   - Just download and run\n\n2. **Cross-Platform**\n   - Works on Windows, macOS, Linux\n   - Same file runs everywhere\n   - Cosmopolitan Libc magic\n\n3. **Easy Sharing**\n   - Send a model via email/USB\n   - No technical setup for users\n   - Great for air-gapped systems\n\n4. **Built-in Server**\n   - OpenAI-compatible API\n   - Web UI included\n   - Port 8080 by default\n\n## Quick Start\n```bash\n# Download\nwget https://huggingface.co/Mozilla/llava-v1.5-7b-llamafile/resolve/main/llava-v1.5-7b-q4.llamafile\n\n# Make executable (macOS/Linux)\nchmod +x llava-v1.5-7b-q4.llamafile\n\n# Run\n./llava-v1.5-7b-q4.llamafile --server --port 8080\n```",
+            "timestamp": "2024-12-08T20:00:45Z"
+        }
+    ],
+    "provider": "llamafile",
+    "endpoint": "http://localhost:8080/v1"
+}

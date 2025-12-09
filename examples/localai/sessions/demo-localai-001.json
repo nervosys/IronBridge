@@ -1,0 +1,20 @@
+{
+    "id": "demo-localai-001",
+    "title": "Docker Deployment Guide",
+    "created_at": "2024-12-08T16:00:00Z",
+    "model": "gpt-3.5-turbo",
+    "messages": [
+        {
+            "role": "user",
+            "content": "How do I set up LocalAI with Docker?",
+            "timestamp": "2024-12-08T16:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Here's how to deploy LocalAI with Docker:\n\n## Quick Start\n```bash\n# CPU only\ndocker run -p 8080:8080 \\\n  -v $PWD/models:/models \\\n  localai/localai:latest\n\n# With GPU (NVIDIA)\ndocker run --gpus all -p 8080:8080 \\\n  -v $PWD/models:/models \\\n  localai/localai:latest-gpu-nvidia-cuda-12\n```\n\n## Docker Compose\n```yaml\nversion: '3.8'\nservices:\n  localai:\n    image: localai/localai:latest\n    ports:\n      - \"8080:8080\"\n    volumes:\n      - ./models:/models\n    environment:\n      - THREADS=4\n      - CONTEXT_SIZE=512\n```\n\n## Download Models\n```bash\n# Inside the container or with API\ncurl http://localhost:8080/models/apply \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"url\": \"github:go-skynet/model-gallery/gpt4all-j.yaml\"}'\n```\n\nLocalAI is great for self-hosted inference!",
+            "timestamp": "2024-12-08T16:00:45Z"
+        }
+    ],
+    "provider": "localai",
+    "endpoint": "http://localhost:8080/v1"
+}

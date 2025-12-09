@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "source": "chatgpt",
+    "exported_at": "2024-01-20"
+  },
+  "messages": [
+    {
+      "content": "What are REST API best practices?",
+      "role": "user",
+      "model": null,
+      "timestamp": "2024-01-15T10:00:00Z",
+      "id": "msg-1"
+    },
+    {
+      "content": "Here are key REST API best practices:\n\n1. Use nouns for resources\n2. Use HTTP methods correctly\n3. Version your API...",
+      "role": "assistant",
+      "model": "gpt-4",
+      "timestamp": "2024-01-15T10:00:30Z",
+      "id": "msg-2"
+    }
+  ],
+  "created_at": "2024-01-15T10:00:00Z",
+  "model": "gpt-4",
+  "updated_at": "2024-01-15T11:00:00Z",
+  "id": "cloud-123",
+  "title": "API Design Discussion"
+}

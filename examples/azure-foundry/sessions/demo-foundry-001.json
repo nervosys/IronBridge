@@ -1,0 +1,30 @@
+{
+    "id": "demo-foundry-001",
+    "title": "Azure AI Development",
+    "created_at": "2024-12-08T11:00:00Z",
+    "model": "gpt-4o",
+    "messages": [
+        {
+            "role": "user",
+            "content": "How do I deploy a model to Azure AI Foundry?",
+            "timestamp": "2024-12-08T11:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Here's how to deploy models to Azure AI Foundry:\n\n## Using Azure AI Studio\n\n1. Go to [ai.azure.com](https://ai.azure.com)\n2. Create a new project or select existing\n3. Navigate to **Deployments** > **Deploy model**\n4. Choose your model (GPT-4, Llama, Phi, etc.)\n5. Configure deployment settings\n6. Deploy!\n\n## Using Azure CLI\n```bash\n# Login\naz login\n\n# Create deployment\naz ml online-deployment create \\\n    --name my-deployment \\\n    --endpoint-name my-endpoint \\\n    --model azureml://registries/azureml/models/gpt-4/versions/1 \\\n    --instance-type Standard_NC24ads_A100_v4\n```\n\n## Using Python SDK\n```python\nfrom azure.ai.ml import MLClient\nfrom azure.identity import DefaultAzureCredential\n\nclient = MLClient(\n    DefaultAzureCredential(),\n    subscription_id=\"...\",\n    resource_group_name=\"...\",\n    workspace_name=\"...\"\n)\n\n# Deploy model\ndeployment = client.online_deployments.begin_create_or_update(\n    deployment_config\n).result()\n```",
+            "timestamp": "2024-12-08T11:01:00Z"
+        },
+        {
+            "role": "user",
+            "content": "How do I use the local development server?",
+            "timestamp": "2024-12-08T11:30:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Azure AI Foundry provides a local development server:\n\n## Install AI Foundry CLI\n```bash\npip install azure-ai-foundry\n```\n\n## Start Local Server\n```bash\n# Start with default settings (port 5272)\nai-foundry serve --model phi-3-mini\n\n# Custom port\nai-foundry serve --model phi-3-mini --port 8080\n```\n\n## Connect from Code\n```python\nfrom openai import OpenAI\n\nclient = OpenAI(\n    base_url=\"http://localhost:5272/v1\",\n    api_key=\"local\"  # Not required for local\n)\n\nresponse = client.chat.completions.create(\n    model=\"phi-3-mini\",\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}]\n)\n```\n\n## Environment Variable\n```bash\nexport AZURE_AI_FOUNDRY_ENDPOINT=http://localhost:5272\n```\n\nThe local server is great for development before deploying to Azure!",
+            "timestamp": "2024-12-08T11:31:00Z"
+        }
+    ],
+    "provider": "azure-foundry",
+    "endpoint": "http://localhost:5272/v1"
+}

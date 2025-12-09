@@ -1,0 +1,30 @@
+{
+    "id": "demo-lmstudio-001",
+    "title": "Creative Writing Assistant",
+    "created_at": "2024-12-08T15:00:00Z",
+    "model": "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
+    "messages": [
+        {
+            "role": "user",
+            "content": "Help me write an opening paragraph for a sci-fi story.",
+            "timestamp": "2024-12-08T15:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Here's an atmospheric opening for your sci-fi story:\n\n---\n\nThe last transmission from Earth came three hundred years ago, nothing more than static and a woman's voice saying \"We're still here.\" Captain Yuki Chen had listened to it exactly 2,847 times during her decade aboard the *Perseverance*, memorizing every crackle, every pause, every tremor in that unknown woman's words. Now, as her ship emerged from its final jump, she stared at the blue marble hanging in the void—alive, impossibly alive, its continents hidden beneath swirling clouds that hadn't been there when humanity fled.\n\n---\n\nThis opening establishes:\n- A mystery (what happened to Earth?)\n- A protagonist with emotional stakes\n- A sense of time and isolation\n- An immediate hook (Earth has changed)\n\nWould you like me to continue or try a different tone?",
+            "timestamp": "2024-12-08T15:00:30Z"
+        },
+        {
+            "role": "user",
+            "content": "That's great! Can you make it more action-oriented?",
+            "timestamp": "2024-12-08T15:15:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Here's a more action-packed version:\n\n---\n\nThe proximity alarm screamed three seconds before the railgun round punched through the *Perseverance*'s hull.\n\n\"Evasive!\" Captain Chen threw herself against the restraints as the ship lurched, stars wheeling across the viewport. Another round—where the hell were they coming from? Earth hung before them, impossibly blue after three centuries of silence, and someone down there really didn't want visitors.\n\n\"Unknown vessel is charging weapons again,\" her XO called out, blood streaming from a gash above his eye. \"Impact in twelve seconds.\"\n\nChen's fingers flew across the console. They hadn't crossed four hundred light-years to die in orbit. \"All hands, brace for emergency burn. We're going through them.\"\n\n---\n\nThis version:\n- Opens with immediate danger\n- Uses short, punchy sentences\n- Shows the captain making quick decisions\n- Still preserves the mystery of Earth\n\nWant me to develop either version further?",
+            "timestamp": "2024-12-08T15:15:45Z"
+        }
+    ],
+    "provider": "lm-studio",
+    "endpoint": "http://localhost:1234/v1"
+}

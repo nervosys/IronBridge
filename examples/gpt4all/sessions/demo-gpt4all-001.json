@@ -1,0 +1,20 @@
+{
+    "id": "demo-gpt4all-001",
+    "title": "GPT4All Setup Guide",
+    "created_at": "2024-12-08T19:00:00Z",
+    "model": "mistral-7b-openorca.Q4_0.gguf",
+    "messages": [
+        {
+            "role": "user",
+            "content": "How do I get started with GPT4All?",
+            "timestamp": "2024-12-08T19:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "GPT4All is easy to set up! Here's how:\n\n## Installation\n\n### Desktop App\n1. Download from [gpt4all.io](https://gpt4all.io)\n2. Install for your platform\n3. Launch and download a model\n\n### Python Library\n```bash\npip install gpt4all\n```\n\n```python\nfrom gpt4all import GPT4All\n\n# Download and load model\nmodel = GPT4All(\"mistral-7b-openorca.Q4_0.gguf\")\n\n# Generate text\nresponse = model.generate(\"Hello, how are you?\")\nprint(response)\n\n# Chat mode\nwith model.chat_session():\n    response = model.generate(\"Tell me a joke\")\n    print(response)\n```\n\n## API Server\n```bash\n# Start server with default port 4891\ngpt4all-api --model mistral-7b-openorca.Q4_0.gguf\n```\n\n## Features\n- CPU-optimized inference\n- No GPU required\n- Privacy-focused (all local)\n- Cross-platform",
+            "timestamp": "2024-12-08T19:00:45Z"
+        }
+    ],
+    "provider": "gpt4all",
+    "endpoint": "http://localhost:4891/v1"
+}

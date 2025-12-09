@@ -1,0 +1,40 @@
+{
+    "version": 3,
+    "sessionId": "demo-copilot-001",
+    "creationDate": 1733616000000,
+    "lastMessageDate": 1733619600000,
+    "isImported": false,
+    "initialLocation": "panel",
+    "customTitle": "React Component Architecture",
+    "responderUsername": "copilot@github.com",
+    "responderAvatarIconUri": null,
+    "requests": [
+        {
+            "time": 1733616000000,
+            "message": {
+                "text": "How should I structure a large React application?"
+            },
+            "response": {
+                "text": "For large React applications, I recommend a feature-based folder structure:\n\n```\nsrc/\n├── features/\n│   ├── auth/\n│   │   ├── components/\n│   │   ├── hooks/\n│   │   ├── services/\n│   │   └── index.ts\n│   ├── dashboard/\n│   └── settings/\n├── shared/\n│   ├── components/\n│   ├── hooks/\n│   └── utils/\n└── App.tsx\n```\n\nThis keeps related code together and makes the codebase easier to navigate."
+            }
+        },
+        {
+            "time": 1733617200000,
+            "message": {
+                "text": "What about state management?"
+            },
+            "response": {
+                "text": "For state management in React, you have several options:\n\n1. **React Context + useReducer**: Good for medium apps\n2. **Redux Toolkit**: Best for large apps with complex state\n3. **Zustand**: Lightweight, great DX\n4. **Jotai/Recoil**: Atomic state management\n\nFor most applications, I recommend starting with React Context and only adding Redux if you need:\n- Time-travel debugging\n- Middleware for async logic\n- DevTools integration"
+            }
+        },
+        {
+            "time": 1733619600000,
+            "message": {
+                "text": "Can you show me a custom hook example?"
+            },
+            "response": {
+                "text": "Here's a useful custom hook for API calls:\n\n```typescript\nimport { useState, useEffect } from 'react';\n\nfunction useFetch<T>(url: string) {\n  const [data, setData] = useState<T | null>(null);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState<Error | null>(null);\n\n  useEffect(() => {\n    const fetchData = async () => {\n      try {\n        const response = await fetch(url);\n        const json = await response.json();\n        setData(json);\n      } catch (err) {\n        setError(err as Error);\n      } finally {\n        setLoading(false);\n      }\n    };\n    fetchData();\n  }, [url]);\n\n  return { data, loading, error };\n}\n```"
+            }
+        }
+    ]
+}

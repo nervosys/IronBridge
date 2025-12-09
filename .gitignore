@@ -1,0 +1,60 @@
+# Chat Session Manager (CSM)
+
+# Rust build artifacts
+csm-rust/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archive (legacy development code with hardcoded paths - exclude from release)
+archive/
+
+# Test artifacts
+*.log
+*.tmp
+*.bak
+
+# Demo exports
+/exports/
+
+# VS Code extension build artifacts
+vscode-extension/out/
+vscode-extension/node_modules/
+vscode-extension/.vscode-test/
+vscode-extension/*.vsix
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+venv/
+
+# Secrets and credentials (never commit these)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*secret*
+*credential*
+*password*
+config.local.json
+.secrets/
+
+# API keys and tokens
+.api_key
+.token
+*.apikey

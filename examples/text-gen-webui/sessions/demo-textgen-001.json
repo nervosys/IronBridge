@@ -1,0 +1,30 @@
+{
+    "id": "demo-textgen-001",
+    "title": "Model Fine-tuning Discussion",
+    "created_at": "2024-12-08T17:00:00Z",
+    "model": "TheBloke/Llama-2-13B-chat-GPTQ",
+    "messages": [
+        {
+            "role": "user",
+            "content": "How do I use Text Generation WebUI for inference?",
+            "timestamp": "2024-12-08T17:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Text Generation WebUI (oobabooga) is a powerful interface for LLM inference:\n\n## Installation\n```bash\n# Clone the repository\ngit clone https://github.com/oobabooga/text-generation-webui\ncd text-generation-webui\n\n# One-click installer (recommended)\n# Windows: start_windows.bat\n# Linux: ./start_linux.sh\n# macOS: ./start_macos.sh\n\n# Or manual:\npip install -r requirements.txt\npython server.py\n```\n\n## Enable API Server\n```bash\n# Start with API enabled\npython server.py --api --api-port 5000\n\n# Or add to CMD_FLAGS.txt:\n--api\n--api-port 5000\n```\n\n## Download Models\n1. Go to the **Model** tab\n2. Enter model name: `TheBloke/Llama-2-13B-chat-GPTQ`\n3. Click **Download**\n4. Load the model\n\nThe API will be available at `http://localhost:5000/v1`!",
+            "timestamp": "2024-12-08T17:00:45Z"
+        },
+        {
+            "role": "user",
+            "content": "What loaders are available?",
+            "timestamp": "2024-12-08T17:30:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Text Generation WebUI supports multiple model loaders:\n\n## Loaders\n\n| Loader | Use Case | GPU Memory |\n|--------|----------|------------|\n| **Transformers** | Default, HuggingFace models | High |\n| **llama.cpp** | GGUF quantized models | Low-Medium |\n| **ExLlamaV2** | GPTQ/EXL2 quantized, fast | Medium |\n| **AutoGPTQ** | GPTQ models | Medium |\n| **GPTQ-for-LLaMa** | Legacy GPTQ | Medium |\n| **ctransformers** | GGML models | Low |\n| **AutoAWQ** | AWQ quantized models | Medium |\n\n## Recommended Combinations\n\n```\nFull precision    → Transformers\nGGUF (4-8 bit)    → llama.cpp\nGPTQ              → ExLlamaV2 (fastest)\nAWQ               → AutoAWQ\nEXL2              → ExLlamaV2\n```\n\n## Memory Tips\n- Use GGUF Q4_K_M for best quality/size ratio\n- Enable `--load-in-4bit` for transformers\n- Use `--n-gpu-layers` to offload to GPU with llama.cpp",
+            "timestamp": "2024-12-08T17:31:00Z"
+        }
+    ],
+    "provider": "text-gen-webui",
+    "endpoint": "http://localhost:5000/v1"
+}

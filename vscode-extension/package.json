@@ -1,0 +1,348 @@
+{
+    "name": "chat-session-manager",
+    "displayName": "Chat Session Manager",
+    "description": "GUI interface for managing chat sessions across workspaces",
+    "version": "0.1.0",
+    "publisher": "nervosys",
+    "icon": "resources/icon.png",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "chat",
+        "session",
+        "manager",
+        "csm"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "configuration": {
+            "title": "Chat Session Manager",
+            "properties": {
+                "csm.binaryPath": {
+                    "type": "string",
+                    "default": "csm",
+                    "description": "Path to csm binary (or just 'csm' if in PATH)"
+                },
+                "csm.showNotifications": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show notifications for operations"
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "csm.showWorkspaces",
+                "title": "CSM: Show All Workspaces",
+                "icon": "$(list-tree)"
+            },
+            {
+                "command": "csm.showSessions",
+                "title": "CSM: Show Sessions for Current Workspace",
+                "icon": "$(comment-discussion)"
+            },
+            {
+                "command": "csm.showHistory",
+                "title": "CSM: Show Chat History",
+                "icon": "$(history)"
+            },
+            {
+                "command": "csm.findWorkspace",
+                "title": "CSM: Find Workspace",
+                "icon": "$(search)"
+            },
+            {
+                "command": "csm.exportSessions",
+                "title": "CSM: Export Sessions",
+                "icon": "$(export)"
+            },
+            {
+                "command": "csm.importSessions",
+                "title": "CSM: Import Sessions",
+                "icon": "$(import)"
+            },
+            {
+                "command": "csm.fetchHistory",
+                "title": "CSM: Fetch History from Other Workspaces",
+                "icon": "$(cloud-download)"
+            },
+            {
+                "command": "csm.mergeHistory",
+                "title": "CSM: Merge All Sessions",
+                "icon": "$(git-merge)"
+            },
+            {
+                "command": "csm.refresh",
+                "title": "CSM: Refresh",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "csm.launchTui",
+                "title": "CSM: Launch TUI",
+                "icon": "$(terminal)"
+            },
+            {
+                "command": "csm.moveSessions",
+                "title": "CSM: Move Sessions to Another Workspace",
+                "icon": "$(move)"
+            },
+            {
+                "command": "csm.gitInit",
+                "title": "CSM: Initialize Git Versioning",
+                "icon": "$(git-branch-create)"
+            },
+            {
+                "command": "csm.gitAdd",
+                "title": "CSM: Stage & Commit Sessions",
+                "icon": "$(git-commit)"
+            },
+            {
+                "command": "csm.gitStatus",
+                "title": "CSM: Show Git Status",
+                "icon": "$(git-compare)"
+            },
+            {
+                "command": "csm.gitSnapshot",
+                "title": "CSM: Create Git Snapshot",
+                "icon": "$(tag)"
+            },
+            {
+                "command": "csm.createMigration",
+                "title": "CSM: Create Migration Package",
+                "icon": "$(package)"
+            },
+            {
+                "command": "csm.restoreMigration",
+                "title": "CSM: Restore Migration Package",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "csm.showVersion",
+                "title": "CSM: Show Version",
+                "icon": "$(info)"
+            },
+            {
+                "command": "csm.loadSession",
+                "title": "View Session",
+                "icon": "$(open-preview)"
+            },
+            {
+                "command": "csm.mergeSessionsForWorkspace",
+                "title": "Merge All Sessions",
+                "icon": "$(git-merge)"
+            },
+            {
+                "command": "csm.fetchSessionsForWorkspace",
+                "title": "Fetch from Other Workspaces",
+                "icon": "$(cloud-download)"
+            },
+            {
+                "command": "csm.copySessionId",
+                "title": "Copy Session ID",
+                "icon": "$(clippy)"
+            },
+            {
+                "command": "csm.viewSessionDetails",
+                "title": "View Session Details",
+                "icon": "$(info)"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "csm",
+                    "title": "Chat Session Manager",
+                    "icon": "$(comment-discussion)"
+                }
+            ]
+        },
+        "views": {
+            "csm": [
+                {
+                    "id": "csm.workspaces",
+                    "name": "Workspaces",
+                    "icon": "$(folder)"
+                },
+                {
+                    "id": "csm.sessions",
+                    "name": "Sessions",
+                    "icon": "$(comment)"
+                }
+            ]
+        },
+        "viewsWelcome": [
+            {
+                "view": "csm.workspaces",
+                "contents": "No workspaces found.\n[Refresh](command:csm.refresh)"
+            },
+            {
+                "view": "csm.sessions",
+                "contents": "Open a workspace to view sessions.\n[Show All Workspaces](command:csm.showWorkspaces)"
+            }
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "csm.refresh",
+                    "when": "view == csm.workspaces || view == csm.sessions",
+                    "group": "navigation"
+                },
+                {
+                    "command": "csm.findWorkspace",
+                    "when": "view == csm.workspaces",
+                    "group": "navigation"
+                },
+                {
+                    "command": "csm.launchTui",
+                    "when": "view == csm.workspaces || view == csm.sessions",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "csm.showSessions",
+                    "when": "view == csm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "group": "inline"
+                },
+                {
+                    "command": "csm.mergeSessionsForWorkspace",
+                    "when": "view == csm.workspaces && viewItem == workspaceWithChats",
+                    "group": "1_sessions"
+                },
+                {
+                    "command": "csm.fetchSessionsForWorkspace",
+                    "when": "view == csm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "group": "1_sessions"
+                },
+                {
+                    "command": "csm.exportSessions",
+                    "when": "view == csm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "group": "2_export"
+                },
+                {
+                    "command": "csm.moveSessions",
+                    "when": "view == csm.workspaces && viewItem == workspaceWithChats",
+                    "group": "2_export"
+                },
+                {
+                    "command": "csm.loadSession",
+                    "when": "view == csm.sessions && viewItem == session",
+                    "group": "inline"
+                },
+                {
+                    "command": "csm.mergeSessionsForWorkspace",
+                    "when": "view == csm.sessions && viewItem == session",
+                    "group": "1_actions"
+                },
+                {
+                    "command": "csm.fetchSessionsForWorkspace",
+                    "when": "view == csm.sessions && viewItem == session",
+                    "group": "1_actions"
+                },
+                {
+                    "command": "csm.copySessionId",
+                    "when": "view == csm.sessions && viewItem == session",
+                    "group": "2_info"
+                },
+                {
+                    "command": "csm.viewSessionDetails",
+                    "when": "view == csm.sessions && viewItem == session",
+                    "group": "2_info"
+                }
+            ],
+            "commandPalette": [
+                {
+                    "command": "csm.showWorkspaces"
+                },
+                {
+                    "command": "csm.showSessions"
+                },
+                {
+                    "command": "csm.showHistory"
+                },
+                {
+                    "command": "csm.findWorkspace"
+                },
+                {
+                    "command": "csm.exportSessions"
+                },
+                {
+                    "command": "csm.importSessions"
+                },
+                {
+                    "command": "csm.fetchHistory"
+                },
+                {
+                    "command": "csm.mergeHistory"
+                },
+                {
+                    "command": "csm.launchTui"
+                },
+                {
+                    "command": "csm.moveSessions"
+                },
+                {
+                    "command": "csm.gitInit"
+                },
+                {
+                    "command": "csm.gitAdd"
+                },
+                {
+                    "command": "csm.gitStatus"
+                },
+                {
+                    "command": "csm.gitSnapshot"
+                },
+                {
+                    "command": "csm.createMigration"
+                },
+                {
+                    "command": "csm.restoreMigration"
+                },
+                {
+                    "command": "csm.showVersion"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile && npm run copy-binary",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "lint": "eslint src --ext ts",
+        "pretest": "npm run compile",
+        "test": "node ./out/test/runTest.js",
+        "test:unit": "mocha --require ts-node/register src/test/suite/*.test.ts",
+        "copy-binary": "node scripts/copy-binary.js"
+    },
+    "files": [
+        "out/**/*",
+        "bin/**/*",
+        "resources/**/*"
+    ],
+    "devDependencies": {
+        "@types/vscode": "^1.85.0",
+        "@types/node": "^20.x",
+        "@types/mocha": "^10.0.6",
+        "@types/glob": "^8.1.0",
+        "@typescript-eslint/eslint-plugin": "^6.13.0",
+        "@typescript-eslint/parser": "^6.13.0",
+        "@vscode/test-electron": "^2.3.8",
+        "eslint": "^8.54.0",
+        "glob": "^10.3.10",
+        "mocha": "^10.2.0",
+        "typescript": "^5.3.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/nervosys/chat-session-manager.git"
+    },
+    "license": "MIT"
+}

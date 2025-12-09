@@ -1,0 +1,7 @@
+{
+  "model": "local-model",
+  "provider_type": "LmStudio",
+  "endpoint": "http://localhost:1234/v1",
+  "api_key": null,
+  "enabled": true
+}

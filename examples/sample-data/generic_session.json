@@ -1,0 +1,22 @@
+{
+  "model": "llama2",
+  "provider": "Ollama",
+  "id": "local-session-001",
+  "updated_at": 1765223014869,
+  "created_at": 1765223013869,
+  "messages": [
+    {
+      "role": "user",
+      "content": "How do I create a vector in Rust?",
+      "timestamp": 1765223013869,
+      "model": null
+    },
+    {
+      "role": "assistant",
+      "content": "You can create a vector using `Vec::new()` or the `vec![]` macro:\r\n\r\n`\rust\r\nlet v1: Vec<i32> = Vec::new();\r\nlet v2 = vec![1, 2, 3];\r\n`\r",
+      "timestamp": 1765223014869,
+      "model": "llama2"
+    }
+  ],
+  "title": "Rust Programming Help"
+}

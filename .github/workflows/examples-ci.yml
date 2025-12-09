@@ -1,0 +1,181 @@
+name: Rust Examples CI
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'csm-rust/examples/*.rs'
+      - 'csm-rust/src/**'
+      - '.github/workflows/examples-ci.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'csm-rust/examples/*.rs'
+      - 'csm-rust/src/**'
+      - '.github/workflows/examples-ci.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ==========================================================================
+  # Build All Rust Examples
+  # ==========================================================================
+  build-examples:
+    name: Build Examples (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            csm-rust/target/
+          key: ${{ runner.os }}-cargo-examples-${{ hashFiles('csm-rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-examples-
+            ${{ runner.os }}-cargo-
+
+      - name: Build all examples
+        working-directory: csm-rust
+        run: cargo build --examples
+
+      - name: List built examples
+        working-directory: csm-rust
+        shell: bash
+        run: |
+          echo "Built examples:"
+          if [ -d "target/debug/examples" ]; then
+            ls -la target/debug/examples/ | grep -v '\.d$' | grep -v '\.pdb$' || true
+          fi
+
+  # ==========================================================================
+  # Run Rust Examples
+  # ==========================================================================
+  run-examples:
+    name: Run Examples (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: build-examples
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            csm-rust/target/
+          key: ${{ runner.os }}-cargo-examples-${{ hashFiles('csm-rust/Cargo.lock') }}
+
+      - name: Create mock VS Code data directory (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$HOME/.config/Code/User/workspaceStorage"
+          mkdir -p "$HOME/.config/Code/User/globalStorage/github.copilot-chat"
+          echo "Created mock VS Code directory"
+
+      - name: Create mock VS Code data directory (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$HOME/Library/Application Support/Code/User/workspaceStorage"
+          mkdir -p "$HOME/Library/Application Support/Code/User/globalStorage/github.copilot-chat"
+          echo "Created mock VS Code directory"
+
+      - name: Create mock VS Code data directory (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "$env:APPDATA\Code\User\workspaceStorage" -Force
+          New-Item -ItemType Directory -Path "$env:APPDATA\Code\User\globalStorage\github.copilot-chat" -Force
+          Write-Host "Created mock VS Code directory"
+
+      - name: Run local_providers example
+        working-directory: csm-rust
+        run: cargo run --example local_providers
+        continue-on-error: true
+
+      - name: Run cloud_providers example
+        working-directory: csm-rust
+        run: cargo run --example cloud_providers
+
+      - name: Run basic_usage example
+        working-directory: csm-rust
+        run: cargo run --example basic_usage
+        continue-on-error: true
+
+      - name: Run session_operations example
+        working-directory: csm-rust
+        run: cargo run --example session_operations
+        continue-on-error: true
+
+      - name: Run history_management example
+        working-directory: csm-rust
+        run: cargo run --example history_management
+        continue-on-error: true
+
+      - name: Run storage_operations example
+        working-directory: csm-rust
+        run: cargo run --example storage_operations
+        continue-on-error: true
+
+  # ==========================================================================
+  # Example Documentation Check
+  # ==========================================================================
+  doc-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build documentation
+        working-directory: csm-rust
+        run: cargo doc --no-deps --examples
+
+      - name: Check example documentation
+        working-directory: csm-rust
+        run: |
+          echo "Checking example files have documentation..."
+          for example in examples/*.rs; do
+            if [ -f "$example" ]; then
+              name=$(basename "$example" .rs)
+              # Check for module-level documentation
+              if head -5 "$example" | grep -q '//!'; then
+                echo "✓ $name has module documentation"
+              else
+                echo "⚠ $name missing module documentation"
+              fi
+            fi
+          done

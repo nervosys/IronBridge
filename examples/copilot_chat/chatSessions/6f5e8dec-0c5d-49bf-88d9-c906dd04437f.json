@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "sessionId": "6f5e8dec-0c5d-49bf-88d9-c906dd04437f",
+  "creationDate": 1731709800000,
+  "lastMessageDate": 1731711000000,
+  "isImported": false,
+  "initialLocation": "panel",
+  "customTitle": "Recent Session",
+  "responderUsername": "developer@example.com",
+  "responderAvatarIconUri": null,
+  "requests": [
+    {
+      "time": 1731709800000,
+      "message": {
+        "text": "How do I optimize my React component performance?"
+      },
+      "response": {
+        "text": "Here are some key optimization strategies for React components..."
+      }
+    },
+    {
+      "time": 1731710400000,
+      "message": {
+        "text": "What about using React.memo and useMemo?"
+      },
+      "response": {
+        "text": "Great question! React.memo and useMemo are excellent tools..."
+      }
+    },
+    {
+      "time": 1731711000000,
+      "message": {
+        "text": "Can you show me an example with useCallback?"
+      },
+      "response": {
+        "text": "Absolutely! Here is a practical example using useCallback..."
+      }
+    }
+  ],
+  "_originalId": "session-recent-nov-2024"
+}

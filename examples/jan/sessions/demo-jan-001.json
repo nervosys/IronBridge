@@ -1,0 +1,20 @@
+{
+    "id": "demo-jan-001",
+    "title": "Getting Started with Jan",
+    "created_at": "2024-12-08T18:00:00Z",
+    "model": "mistral-ins-7b-q4",
+    "messages": [
+        {
+            "role": "user",
+            "content": "What makes Jan different from other local LLM tools?",
+            "timestamp": "2024-12-08T18:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Jan stands out for several reasons:\n\n## Key Differentiators\n\n1. **Privacy-First Design**\n   - 100% offline capable\n   - No telemetry or data collection\n   - Open source (AGPLv3)\n\n2. **User-Friendly Interface**\n   - Clean, ChatGPT-like UI\n   - One-click model downloads\n   - Built-in model management\n\n3. **Cross-Platform**\n   - Windows, macOS, Linux\n   - Consistent experience across platforms\n   - Native performance\n\n4. **OpenAI-Compatible API**\n   - Drop-in replacement for OpenAI\n   - Works with existing tools\n   - Port 1337 by default\n\n5. **Extensions System**\n   - Modular architecture\n   - Community extensions\n   - Custom integrations\n\n## Comparison\n\n| Feature | Jan | LM Studio | Ollama |\n|---------|-----|-----------|--------|\n| GUI | ✅ Modern | ✅ Modern | ❌ CLI |\n| API | ✅ Port 1337 | ✅ Port 1234 | ✅ Port 11434 |\n| Open Source | ✅ AGPLv3 | ❌ Proprietary | ✅ MIT |\n| Extensions | ✅ | ❌ | Limited |",
+            "timestamp": "2024-12-08T18:00:45Z"
+        }
+    ],
+    "provider": "jan",
+    "endpoint": "http://localhost:1337/v1"
+}

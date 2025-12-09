@@ -1,0 +1,30 @@
+{
+  "initialLocation": "imported",
+  "isImported": true,
+  "sessionId": "imported-001",
+  "creationDate": 1765223062177,
+  "responses": [
+    {
+      "message": {
+        "role": "assistant",
+        "text": "Async/await is syntactic sugar for Promises. The async keyword makes a function return a Promise, and await pauses execution until the Promise resolves."
+      },
+      "result": {
+        "model": "claude-3-opus"
+      }
+    }
+  ],
+  "responderUsername": "Claude",
+  "version": 3,
+  "lastMessageDate": 1765223063177,
+  "requests": [
+    {
+      "message": {
+        "role": "user",
+        "text": "Explain async/await in JavaScript"
+      },
+      "variableData": {}
+    }
+  ],
+  "customTitle": "JavaScript Async Help"
+}

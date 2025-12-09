@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#61afef;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#98c379;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#grad)" opacity="0.15"/>
+  <circle cx="64" cy="64" r="60" fill="none" stroke="url(#grad)" stroke-width="3"/>
+  
+  <!-- Chat bubbles -->
+  <g fill="#61afef">
+    <!-- First bubble -->
+    <rect x="20" y="30" width="50" height="30" rx="6" ry="6"/>
+    <polygon points="25,60 30,60 25,70"/>
+  </g>
+  
+  <g fill="#98c379">
+    <!-- Second bubble -->
+    <rect x="58" y="55" width="50" height="30" rx="6" ry="6"/>
+    <polygon points="103,85 98,85 103,95"/>
+  </g>
+  
+  <!-- Connection arrows (session manager) -->
+  <path d="M52 45 L58 65" stroke="#e5c07b" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="55" cy="55" r="4" fill="#e5c07b"/>
+</svg>

@@ -1,0 +1,27 @@
+{
+    "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#aiInteractions",
+    "value": [
+        {
+            "id": "interaction-001",
+            "createdDateTime": "2024-01-15T10:00:00Z",
+            "appClass": "Office.Word",
+            "body": {
+                "content": "Help me write a professional introduction for my report"
+            },
+            "from": {
+                "user": {"displayName": "John Doe"}
+            }
+        },
+        {
+            "id": "interaction-002",
+            "createdDateTime": "2024-01-15T10:00:30Z",
+            "appClass": "Office.Word",
+            "body": {
+                "content": "Here's a professional introduction for your report:\n\nThis comprehensive report provides an in-depth analysis of..."
+            },
+            "from": {
+                "application": {"displayName": "Copilot"}
+            }
+        }
+    ]
+}

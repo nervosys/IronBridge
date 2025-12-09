@@ -1,0 +1,30 @@
+{
+  "initialLocation": "imported",
+  "isImported": true,
+  "sessionId": "ChatGPT:cloud-123",
+  "creationDate": 1765223060065,
+  "responses": [
+    {
+      "message": {
+        "role": "assistant",
+        "text": "Here are key REST API best practices:\n\n1. Use nouns for resources\n2. Use HTTP methods correctly\n3. Version your API..."
+      },
+      "result": {
+        "model": "gpt-4"
+      }
+    }
+  ],
+  "responderUsername": "ChatGPT",
+  "version": 3,
+  "lastMessageDate": 1765223060065,
+  "requests": [
+    {
+      "message": {
+        "role": "user",
+        "text": "What are REST API best practices?"
+      },
+      "variableData": {}
+    }
+  ],
+  "customTitle": "API Design Discussion"
+}

@@ -1,0 +1,24 @@
+{
+  "default_provider": "Copilot",
+  "providers": [
+    {
+      "model": null,
+      "provider_type": "Copilot",
+      "endpoint": null,
+      "enabled": true
+    },
+    {
+      "model": "codellama",
+      "provider_type": "Ollama",
+      "endpoint": "http://localhost:11434",
+      "enabled": true
+    },
+    {
+      "model": null,
+      "provider_type": "LmStudio",
+      "endpoint": "http://localhost:1234/v1",
+      "enabled": true
+    }
+  ],
+  "auto_discover": true
+}

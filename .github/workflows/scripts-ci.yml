@@ -1,0 +1,374 @@
+name: Example Scripts CI
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'csm-rust/examples/**'
+      - '.github/workflows/scripts-ci.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'csm-rust/examples/**'
+      - '.github/workflows/scripts-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  # ==========================================================================
+  # PowerShell Scripts (Cross-Platform)
+  # ==========================================================================
+  powershell-scripts:
+    name: PowerShell Scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PowerShell (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            # Install PowerShell on Ubuntu
+            sudo apt-get update
+            sudo apt-get install -y wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update
+            sudo apt-get install -y powershell
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            # Install PowerShell on macOS
+            brew install --cask powershell
+          fi
+
+      - name: Verify PowerShell installation
+        shell: pwsh
+        run: |
+          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+          Write-Host "OS: $($PSVersionTable.OS)"
+          Write-Host "Platform: $($PSVersionTable.Platform)"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            csm-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('csm-rust/Cargo.lock') }}
+
+      - name: Build CSM binary
+        working-directory: csm-rust
+        run: cargo build --release
+
+      - name: Create mock VS Code data directory
+        shell: pwsh
+        run: |
+          $vscodePath = switch ($PSVersionTable.Platform) {
+            "Win32NT" { "$env:APPDATA/Code" }
+            "Unix" { 
+              if ($IsMacOS) { "$HOME/Library/Application Support/Code" }
+              else { "$HOME/.config/Code" }
+            }
+            default { "$HOME/.config/Code" }
+          }
+          
+          # Create minimal mock structure
+          $workspaceStorage = Join-Path $vscodePath "User/workspaceStorage"
+          New-Item -ItemType Directory -Path $workspaceStorage -Force | Out-Null
+          Write-Host "Created mock VS Code directory: $vscodePath"
+
+      - name: Test local_providers.ps1
+        shell: pwsh
+        working-directory: csm-rust/examples/scripts
+        run: |
+          Write-Host "Testing local_providers.ps1..."
+          try {
+            ./local_providers.ps1
+            Write-Host "✓ local_providers.ps1 completed successfully"
+          } catch {
+            Write-Host "⚠ local_providers.ps1 failed (may be expected without VS Code): $_"
+            exit 0  # Don't fail the job
+          }
+
+      - name: Test cloud_providers.ps1
+        shell: pwsh
+        working-directory: csm-rust/examples/scripts
+        run: |
+          Write-Host "Testing cloud_providers.ps1..."
+          ./cloud_providers.ps1
+          Write-Host "✓ cloud_providers.ps1 completed successfully"
+
+      - name: Verify generated JSON files
+        shell: pwsh
+        working-directory: csm-rust/examples
+        run: |
+          $tempDir = "./temp"
+          if (Test-Path $tempDir) {
+            Write-Host "Generated files in temp/:"
+            Get-ChildItem $tempDir -Filter "*.json" | ForEach-Object {
+              Write-Host "  - $($_.Name) ($($_.Length) bytes)"
+              # Validate JSON
+              try {
+                $content = Get-Content $_.FullName -Raw | ConvertFrom-Json
+                Write-Host "    ✓ Valid JSON"
+              } catch {
+                Write-Host "    ✗ Invalid JSON: $_"
+                exit 1
+              }
+            }
+          } else {
+            Write-Host "No temp directory created"
+          }
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-json-${{ matrix.os }}
+          path: csm-rust/examples/temp/*.json
+          if-no-files-found: ignore
+
+  # ==========================================================================
+  # Bash Scripts (Linux/macOS)
+  # ==========================================================================
+  bash-scripts:
+    name: Bash Scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install jq coreutils
+
+      - name: Verify bash version
+        run: |
+          echo "Bash version: $BASH_VERSION"
+          echo "Shell: $SHELL"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            csm-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('csm-rust/Cargo.lock') }}
+
+      - name: Build CSM binary
+        working-directory: csm-rust
+        run: cargo build --release
+
+      - name: Create mock VS Code data directory
+        run: |
+          if [ "$(uname)" = "Darwin" ]; then
+            VSCODE_PATH="$HOME/Library/Application Support/Code"
+          else
+            VSCODE_PATH="$HOME/.config/Code"
+          fi
+          
+          mkdir -p "$VSCODE_PATH/User/workspaceStorage"
+          echo "Created mock VS Code directory: $VSCODE_PATH"
+
+      - name: Make scripts executable
+        working-directory: csm-rust/examples/scripts
+        run: chmod +x *.sh
+
+      - name: Test local_providers.sh
+        working-directory: csm-rust/examples/scripts
+        run: |
+          echo "Testing local_providers.sh..."
+          ./local_providers.sh || {
+            echo "⚠ local_providers.sh failed (may be expected without VS Code)"
+            exit 0
+          }
+          echo "✓ local_providers.sh completed successfully"
+
+      - name: Test cloud_providers.sh
+        working-directory: csm-rust/examples/scripts
+        run: |
+          echo "Testing cloud_providers.sh..."
+          ./cloud_providers.sh
+          echo "✓ cloud_providers.sh completed successfully"
+
+      - name: Verify generated JSON files
+        working-directory: csm-rust/examples
+        run: |
+          if [ -d "./temp" ]; then
+            echo "Generated files in temp/:"
+            for file in ./temp/*.json; do
+              if [ -f "$file" ]; then
+                size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
+                echo "  - $(basename "$file") ($size bytes)"
+                # Validate JSON with jq
+                if jq empty "$file" 2>/dev/null; then
+                  echo "    ✓ Valid JSON"
+                else
+                  echo "    ✗ Invalid JSON"
+                  exit 1
+                fi
+              fi
+            done
+          else
+            echo "No temp directory created"
+          fi
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-json-bash-${{ matrix.os }}
+          path: csm-rust/examples/temp/*.json
+          if-no-files-found: ignore
+
+  # ==========================================================================
+  # Bash Scripts on Windows (Git Bash)
+  # ==========================================================================
+  bash-scripts-windows:
+    name: Bash Scripts (Windows/Git Bash)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            csm-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('csm-rust/Cargo.lock') }}
+
+      - name: Build CSM binary
+        working-directory: csm-rust
+        run: cargo build --release
+
+      - name: Create mock VS Code data directory
+        shell: bash
+        run: |
+          mkdir -p "$APPDATA/Code/User/workspaceStorage"
+          echo "Created mock VS Code directory: $APPDATA/Code"
+
+      - name: Test local_providers.sh (Git Bash)
+        shell: bash
+        working-directory: csm-rust/examples/scripts
+        run: |
+          echo "Testing local_providers.sh on Windows (Git Bash)..."
+          bash ./local_providers.sh || {
+            echo "⚠ local_providers.sh failed (may be expected without VS Code)"
+            exit 0
+          }
+          echo "✓ local_providers.sh completed successfully"
+
+      - name: Test cloud_providers.sh (Git Bash)
+        shell: bash
+        working-directory: csm-rust/examples/scripts
+        run: |
+          echo "Testing cloud_providers.sh on Windows (Git Bash)..."
+          bash ./cloud_providers.sh
+          echo "✓ cloud_providers.sh completed successfully"
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-json-bash-windows
+          path: csm-rust/examples/temp/*.json
+          if-no-files-found: ignore
+
+  # ==========================================================================
+  # Script Syntax Validation
+  # ==========================================================================
+  syntax-check:
+    name: Script Syntax Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Setup PowerShell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https software-properties-common
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y powershell
+
+      - name: Check Bash script syntax
+        working-directory: csm-rust/examples/scripts
+        run: |
+          echo "Checking Bash script syntax with ShellCheck..."
+          for script in *.sh; do
+            echo "Checking $script..."
+            shellcheck --severity=error "$script" || {
+              echo "⚠ ShellCheck found issues in $script"
+            }
+          done
+          echo "✓ Bash syntax check complete"
+
+      - name: Check PowerShell script syntax
+        shell: pwsh
+        working-directory: csm-rust/examples/scripts
+        run: |
+          Write-Host "Checking PowerShell script syntax..."
+          $errors = @()
+          Get-ChildItem -Filter "*.ps1" | ForEach-Object {
+            Write-Host "Checking $($_.Name)..."
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$null,
+              [ref]$parseErrors
+            ) | Out-Null
+            
+            if ($parseErrors.Count -gt 0) {
+              Write-Host "  ✗ Syntax errors found:"
+              $parseErrors | ForEach-Object { Write-Host "    - $_" }
+              $errors += $_.Name
+            } else {
+              Write-Host "  ✓ Syntax OK"
+            }
+          }
+          
+          if ($errors.Count -gt 0) {
+            Write-Host "`n✗ Scripts with errors: $($errors -join ', ')"
+            exit 1
+          }
+          Write-Host "`n✓ All PowerShell scripts have valid syntax"

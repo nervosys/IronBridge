@@ -1,0 +1,28 @@
+[
+    {
+        "id": "conv-001",
+        "title": "Rust Programming",
+        "create_time": 1700000000.0,
+        "update_time": 1700001000.0,
+        "mapping": {
+            "node-1": {
+                "id": "node-1",
+                "message": {
+                    "id": "msg-1",
+                    "author": {"role": "user"},
+                    "content": {"parts": ["How do I use iterators in Rust?"]},
+                    "create_time": 1700000000.0
+                }
+            },
+            "node-2": {
+                "id": "node-2",
+                "message": {
+                    "id": "msg-2",
+                    "author": {"role": "assistant"},
+                    "content": {"parts": ["Iterators in Rust are lazy and powerful. They implement the Iterator trait which provides many useful methods like map(), filter(), and collect()."]},
+                    "create_time": 1700000100.0
+                }
+            }
+        }
+    }
+]

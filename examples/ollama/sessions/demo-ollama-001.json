@@ -1,0 +1,30 @@
+{
+    "id": "demo-ollama-001",
+    "title": "Rust Error Handling",
+    "created_at": "2024-12-08T09:00:00Z",
+    "model": "llama3.2:latest",
+    "messages": [
+        {
+            "role": "user",
+            "content": "What's the best way to handle errors in Rust?",
+            "timestamp": "2024-12-08T09:00:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Rust has excellent error handling! Here are the main approaches:\n\n## 1. Result Type\n```rust\nfn divide(a: f64, b: f64) -> Result<f64, String> {\n    if b == 0.0 {\n        Err(\"Division by zero\".to_string())\n    } else {\n        Ok(a / b)\n    }\n}\n```\n\n## 2. The ? Operator\n```rust\nfn read_file(path: &str) -> Result<String, std::io::Error> {\n    let contents = std::fs::read_to_string(path)?;\n    Ok(contents)\n}\n```\n\n## 3. Custom Error Types with thiserror\n```rust\nuse thiserror::Error;\n\n#[derive(Error, Debug)]\nenum MyError {\n    #[error(\"IO error: {0}\")]\n    Io(#[from] std::io::Error),\n    #[error(\"Parse error: {0}\")]\n    Parse(String),\n}\n```\n\n## 4. anyhow for Applications\n```rust\nuse anyhow::{Context, Result};\n\nfn main() -> Result<()> {\n    let config = load_config()\n        .context(\"Failed to load configuration\")?;\n    Ok(())\n}\n```",
+            "timestamp": "2024-12-08T09:00:30Z"
+        },
+        {
+            "role": "user",
+            "content": "When should I use panic! vs Result?",
+            "timestamp": "2024-12-08T09:15:00Z"
+        },
+        {
+            "role": "assistant",
+            "content": "Great question! Here's when to use each:\n\n## Use `Result<T, E>` when:\n- The error is **recoverable**\n- It's part of normal operation (file not found, network timeout)\n- The caller should decide how to handle it\n- You're writing a library\n\n## Use `panic!` when:\n- The error is **unrecoverable** (corrupted data, impossible state)\n- It's a programming bug (index out of bounds)\n- During prototyping (replace with Result later)\n- In tests with `.unwrap()`\n\n## Example:\n```rust\n// Use Result - user might provide wrong path\nfn load_config(path: &str) -> Result<Config, Error> { ... }\n\n// Use panic - this should never happen\nfn get_validated_index(arr: &[i32], idx: usize) -> i32 {\n    assert!(idx < arr.len(), \"Index already validated!\");\n    arr[idx]\n}\n```\n\n**Rule of thumb**: If in doubt, use `Result`. Let the caller decide.",
+            "timestamp": "2024-12-08T09:15:45Z"
+        }
+    ],
+    "provider": "ollama",
+    "endpoint": "http://localhost:11434"
+}

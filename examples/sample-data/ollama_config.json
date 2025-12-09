@@ -1,0 +1,7 @@
+{
+  "model": "llama2",
+  "provider_type": "Ollama",
+  "endpoint": "http://localhost:11434",
+  "api_key": null,
+  "enabled": true
+}
