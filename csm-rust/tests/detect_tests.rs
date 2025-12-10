@@ -225,13 +225,25 @@ mod workspace_detection_tests {
 
     #[test]
     fn test_normalize_path_removes_trailing_slash() {
+        // Test with Unix-style path
         let path = normalize_path("/home/user/project/");
-        // Should remove trailing slash on all platforms
         assert!(
-            !path.ends_with('/') && !path.ends_with('\\'),
-            "Path should not end with slash: {}",
+            !path.ends_with('/'),
+            "Unix path should not end with /: '{}'",
             path
         );
+
+        // Test with Windows-style path
+        let path2 = normalize_path("C:\\Users\\test\\project\\");
+        assert!(
+            !path2.ends_with('\\'),
+            "Windows path should not end with \\: '{}'",
+            path2
+        );
+
+        // Test path without trailing slash stays unchanged (except lowercasing)
+        let path3 = normalize_path("/home/user/project");
+        assert_eq!(path3, "/home/user/project");
     }
 
     #[test]
