@@ -56,15 +56,15 @@ echo ""
 
 # Demo 5: Show history
 echo "=== Demo 5: Show History ==="
-echo "Running: csm history show $DEMO_PATH"
-$CSM history show "$DEMO_PATH" || echo "(no history)"
+echo "Running: csm show path $DEMO_PATH"
+$CSM show path "$DEMO_PATH" || echo "(no history)"
 echo ""
 
 # Demo 6: Export sessions
 echo "=== Demo 6: Export Sessions ==="
 EXPORT_PATH="/tmp/csm_demo_export_$(date +%Y%m%d_%H%M%S)"
-echo "Running: csm export path $EXPORT_PATH --path $DEMO_PATH"
-$CSM export path "$EXPORT_PATH" --path "$DEMO_PATH" || echo "(export skipped)"
+echo "Running: csm export path $EXPORT_PATH $DEMO_PATH"
+$CSM export path "$EXPORT_PATH" "$DEMO_PATH" || echo "(export skipped)"
 if [ -d "$EXPORT_PATH" ]; then
     echo "Exported files:"
     ls -la "$EXPORT_PATH"

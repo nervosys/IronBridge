@@ -24,17 +24,17 @@ Write-Host "    csm run tui                # Launch interactive browser"
 Write-Host ""
 
 Write-Host "  History:" -ForegroundColor Yellow
-Write-Host "    csm history show           # Show sessions for current directory"
-Write-Host "    csm history fetch          # Fetch sessions from other workspaces"
-Write-Host "    csm history merge          # Merge all sessions into one"
+Write-Host "    csm show path              # Show sessions for current directory"
+Write-Host "    csm fetch path             # Fetch sessions from other workspaces"
+Write-Host "    csm merge path             # Merge all sessions into one"
 Write-Host ""
 
 Write-Host "  Export/Import:" -ForegroundColor Yellow
-Write-Host "    csm export path <dest> --path <project>  # Export sessions by path"
-Write-Host "    csm export hash <dest> <hash>            # Export sessions by hash"
-Write-Host "    csm import path <src> --path <project>   # Import sessions by path"
-Write-Host "    csm import hash <src> <hash>             # Import sessions by hash"
-Write-Host "    csm move <hash> <project>                # Move sessions between workspaces"
+Write-Host "    csm export path <dest> [project]   # Export sessions by path"
+Write-Host "    csm export workspace <dest> <hash> # Export sessions by hash"
+Write-Host "    csm import path <src> [project]    # Import sessions by path"
+Write-Host "    csm import workspace <src> <hash>  # Import sessions by hash"
+Write-Host "    csm move <hash> <project>          # Move sessions between workspaces"
 Write-Host ""
 
 Write-Host "  Git Integration:" -ForegroundColor Yellow

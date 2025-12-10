@@ -56,15 +56,15 @@ Write-Host ""
 
 # Demo 5: Show history for demo_project
 Write-Host "=== Demo 5: Show History ===" -ForegroundColor Green
-Write-Host "Running: csm history show $demoPath" -ForegroundColor Yellow
-& $csm history show $demoPath
+Write-Host "Running: csm show path $demoPath" -ForegroundColor Yellow
+& $csm show path $demoPath
 Write-Host ""
 
 # Demo 6: Export sessions to temp directory
 Write-Host "=== Demo 6: Export Sessions ===" -ForegroundColor Green
 $exportPath = Join-Path $env:TEMP "csm_demo_export_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-Write-Host "Running: csm export path $exportPath --path $demoPath" -ForegroundColor Yellow
-& $csm export path $exportPath --path $demoPath
+Write-Host "Running: csm export path $exportPath $demoPath" -ForegroundColor Yellow
+& $csm export path $exportPath $demoPath
 if (Test-Path $exportPath) {
     Write-Host "Exported files:" -ForegroundColor Cyan
     Get-ChildItem $exportPath | ForEach-Object { Write-Host "  - $($_.Name)" }
