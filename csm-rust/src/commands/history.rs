@@ -348,7 +348,7 @@ pub fn history_merge(
     let first_date = timestamp_to_date(first_time);
     let last_date = timestamp_to_date(last_time);
     let days_span = if first_time > 0 && last_time > 0 {
-        ((last_time - first_time) / (1000 * 60 * 60 * 24)) as i64
+        (last_time - first_time) / (1000 * 60 * 60 * 24)
     } else {
         0
     };
@@ -718,7 +718,7 @@ fn merge_sessions_internal(
     let first_date = timestamp_to_date(first_time);
     let last_date = timestamp_to_date(last_time);
     let days_span = if first_time > 0 && last_time > 0 {
-        ((last_time - first_time) / (1000 * 60 * 60 * 24)) as i64
+        (last_time - first_time) / (1000 * 60 * 60 * 24)
     } else {
         0
     };
@@ -1602,7 +1602,7 @@ pub fn merge_all_providers(
     println!("{} Scanning providers...", "[*]".blue());
 
     for provider_type in all_provider_types {
-        if let Some(provider) = registry.get_provider(provider_type.clone()) {
+        if let Some(provider) = registry.get_provider(provider_type) {
             if provider.is_available() {
                 match provider.list_sessions() {
                     Ok(sessions) if !sessions.is_empty() => {

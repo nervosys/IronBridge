@@ -124,7 +124,7 @@ impl ChatProvider for CursorProvider {
                     let entry = entry?;
                     let path = entry.path();
 
-                    if path.extension().map_or(false, |e| e == "json") {
+                    if path.extension().is_some_and(|e| e == "json") {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             if let Ok(session) = serde_json::from_str::<ChatSession>(&content) {
                                 sessions.push(session);

@@ -6,8 +6,6 @@
 //! - Ollama format
 //! - Generic markdown format
 
-#![allow(dead_code)]
-
 use crate::models::{ChatMessage, ChatRequest, ChatSession};
 use serde::{Deserialize, Serialize};
 

@@ -5,6 +5,9 @@ use crate::models::{ChatSession, SessionWithPath, Workspace, WorkspaceJson};
 use std::path::{Path, PathBuf};
 use urlencoding::decode;
 
+/// Type alias for workspace info tuple (hash, path, project_path, modified_time)
+pub type WorkspaceInfo = (String, PathBuf, Option<String>, std::time::SystemTime);
+
 /// Get the VS Code workspaceStorage path based on the operating system
 pub fn get_workspace_storage_path() -> Result<PathBuf> {
     let path = if cfg!(target_os = "windows") {
@@ -140,7 +143,7 @@ pub fn discover_workspaces() -> Result<Vec<Workspace>> {
                         .filter_map(|m| m.modified().ok())
                         .max()
                 })
-                .map(|t| chrono::DateTime::<Utc>::from(t))
+                .map(chrono::DateTime::<Utc>::from)
         } else {
             None
         };
@@ -225,9 +228,7 @@ pub fn find_workspace_by_path(
 }
 
 /// Find all workspaces for a project (by name matching)
-pub fn find_all_workspaces_for_project(
-    project_name: &str,
-) -> Result<Vec<(String, PathBuf, Option<String>, std::time::SystemTime)>> {
+pub fn find_all_workspaces_for_project(project_name: &str) -> Result<Vec<WorkspaceInfo>> {
     let storage_path = get_workspace_storage_path()?;
 
     if !storage_path.exists() {

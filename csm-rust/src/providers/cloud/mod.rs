@@ -26,8 +26,6 @@
 //! - Configuration file (`~/.config/csm/config.json`)
 //! - Command-line arguments
 
-#![allow(dead_code)]
-
 pub mod anthropic;
 pub mod chatgpt;
 pub mod common;

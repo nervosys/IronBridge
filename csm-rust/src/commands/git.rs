@@ -239,7 +239,7 @@ pub fn git_status(project_path: &str) -> Result<()> {
 
         if !modified.is_empty() {
             println!("\n  Modified files:");
-            for (_i, f) in modified.iter().take(5).enumerate() {
+            for f in modified.iter().take(5) {
                 println!(
                     "    - {}",
                     f.trim_start_matches(|c: char| c.is_whitespace() || c == 'M')

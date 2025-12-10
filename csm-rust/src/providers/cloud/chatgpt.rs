@@ -49,10 +49,8 @@ impl ChatGPTProvider {
     fn get_auth_header(&self) -> Option<String> {
         if let Some(ref token) = self.session_token {
             Some(format!("Bearer {}", token))
-        } else if let Some(ref key) = self.api_key {
-            Some(format!("Bearer {}", key))
         } else {
-            None
+            self.api_key.as_ref().map(|key| format!("Bearer {}", key))
         }
     }
 }

@@ -111,7 +111,7 @@ pub fn detect_providers(with_sessions: bool) -> Result<()> {
     ];
 
     for provider_type in all_provider_types {
-        if let Some(provider) = registry.get_provider(provider_type.clone()) {
+        if let Some(provider) = registry.get_provider(provider_type) {
             let available = provider.is_available();
             let session_count = if available {
                 provider.list_sessions().map(|s| s.len()).unwrap_or(0)
@@ -238,7 +238,7 @@ pub fn detect_session(session_id: &str, path: Option<&str>) -> Result<()> {
         ];
 
         for provider_type in provider_types {
-            if let Some(provider) = registry.get_provider(provider_type.clone()) {
+            if let Some(provider) = registry.get_provider(provider_type) {
                 if provider.is_available() {
                     if let Ok(sessions) = provider.list_sessions() {
                         for session in sessions {
@@ -367,7 +367,7 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
     let mut provider_summary: Vec<(String, usize)> = Vec::new();
 
     for provider_type in provider_types {
-        if let Some(provider) = registry.get_provider(provider_type.clone()) {
+        if let Some(provider) = registry.get_provider(provider_type) {
             if provider.is_available() {
                 let session_count = provider.list_sessions().map(|s| s.len()).unwrap_or(0);
 

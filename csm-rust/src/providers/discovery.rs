@@ -1,7 +1,5 @@
 //! Provider discovery utilities
 
-#![allow(dead_code)]
-
 use super::{ProviderRegistry, ProviderType};
 use colored::*;
 
@@ -67,7 +65,7 @@ pub fn is_provider_available(provider_type: ProviderType) -> bool {
     let registry = ProviderRegistry::new();
     registry
         .get_provider(provider_type)
-        .map_or(false, |p| p.is_available())
+        .is_some_and(|p| p.is_available())
 }
 
 /// Get provider endpoints for display

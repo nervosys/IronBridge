@@ -20,6 +20,9 @@ use crate::models::ChatSession;
 use crate::providers::{ProviderRegistry, ProviderType};
 use crate::workspace::{discover_workspaces, get_chat_sessions_from_workspace};
 
+/// Type alias for harvested session query result (id, provider, title, msg_count, created, last_msg, workspace)
+type HarvestQueryResult = (String, String, String, i64, i64, i64, Option<String>);
+
 /// Web-based LLM provider endpoint configuration
 #[derive(Debug, Clone)]
 struct WebProviderEndpoint {
@@ -142,7 +145,7 @@ fn scan_web_providers(timeout_secs: u64) -> Vec<String> {
                         let status = response.status();
                         if status.is_success() || status.is_redirection() {
                             reachable.lock().unwrap().push(name.to_string());
-                            (name, true, format!("{}", desc), url)
+                            (name, true, desc.to_string(), url)
                         } else {
                             (name, false, format!("HTTP {}", status.as_u16()), url)
                         }
@@ -417,7 +420,7 @@ pub fn harvest_scan(
     ];
 
     for pt in &provider_types {
-        if let Some(provider) = registry.get_provider(pt.clone()) {
+        if let Some(provider) = registry.get_provider(*pt) {
             let available = provider.is_available();
             let session_count = if available {
                 provider.list_sessions().map(|s| s.len()).unwrap_or(0)
@@ -426,7 +429,7 @@ pub fn harvest_scan(
             };
 
             if available {
-                available_providers.push((pt.clone(), session_count));
+                available_providers.push((*pt, session_count));
                 total_sessions += session_count;
 
                 let status = if session_count > 0 {
@@ -494,8 +497,7 @@ pub fn harvest_scan(
                 for ws in workspaces_with_sessions.iter().take(5) {
                     let name = ws
                         .project_path
-                        .as_ref()
-                        .map(|p| p.clone())
+                        .clone()
                         .unwrap_or_else(|| ws.hash[..8.min(ws.hash.len())].to_string());
                     println!(
                         "      {} {} ({} sessions)",
@@ -659,7 +661,7 @@ pub fn harvest_run(
             continue;
         }
 
-        if let Some(provider) = registry.get_provider(pt.clone()) {
+        if let Some(provider) = registry.get_provider(*pt) {
             if !provider.is_available() {
                 continue;
             }
@@ -1037,7 +1039,7 @@ pub fn harvest_list(
     // Build params slice
     let params_slice: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
 
-    let sessions: Vec<(String, String, String, i64, i64, i64, Option<String>)> = stmt
+    let sessions: Vec<HarvestQueryResult> = stmt
         .query_map(params_slice.as_slice(), |row| {
             Ok((
                 row.get(0)?,

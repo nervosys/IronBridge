@@ -155,7 +155,7 @@ pub fn is_vscode_running() -> bool {
     let mut sys = System::new();
     sys.refresh_processes();
 
-    for (_pid, process) in sys.processes() {
+    for process in sys.processes().values() {
         let name = process.name().to_lowercase();
         if name.contains("code") && !name.contains("codec") {
             return true;
@@ -224,7 +224,7 @@ pub fn read_empty_window_sessions() -> Result<Vec<ChatSession>> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "json") {
+        if path.extension().is_some_and(|e| e == "json") {
             if let Ok(content) = std::fs::read_to_string(&path) {
                 if let Ok(session) = serde_json::from_str::<ChatSession>(&content) {
                     sessions.push(session);
@@ -296,7 +296,7 @@ pub fn count_empty_window_sessions() -> Result<usize> {
 
     let count = std::fs::read_dir(&sessions_path)?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .count();
 
     Ok(count)
