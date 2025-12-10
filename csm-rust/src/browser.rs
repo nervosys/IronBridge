@@ -534,6 +534,7 @@ fn scan_browser_cookies_internal(
 }
 
 /// Copy cookie database to temp file and scan (for when browser has lock)
+#[allow(dead_code)]
 fn scan_browser_cookies_with_copy(
     browser: &BrowserType,
     cookies_path: &PathBuf,

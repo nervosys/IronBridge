@@ -1651,7 +1651,7 @@ pub fn harvest_share(
     db_path: Option<&str>,
     url: &str,
     name: Option<&str>,
-    workspace: Option<&str>,
+    _workspace: Option<&str>,
 ) -> Result<()> {
     let db_path = get_db_path(db_path)?;
 

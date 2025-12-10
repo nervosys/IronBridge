@@ -4,6 +4,9 @@
 //! from multiple providers. This serves as an intermediate representation that
 //! normalizes data from various sources (VS Code, web providers, share links, etc.)
 //!
+//! Note: Many types and methods are infrastructure for future integration.
+#![allow(dead_code)]
+
 //! ## Schema Overview
 //!
 //! ```text
@@ -23,7 +26,7 @@
 //! ```
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
