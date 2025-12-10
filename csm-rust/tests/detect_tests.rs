@@ -226,8 +226,12 @@ mod workspace_detection_tests {
     #[test]
     fn test_normalize_path_removes_trailing_slash() {
         let path = normalize_path("/home/user/project/");
-        // On Unix, removes trailing slash; on Windows, path handling may differ
-        assert!(!path.ends_with('/') || cfg!(windows));
+        // Should remove trailing slash on all platforms
+        assert!(
+            !path.ends_with('/') && !path.ends_with('\\'),
+            "Path should not end with slash: {}",
+            path
+        );
     }
 
     #[test]

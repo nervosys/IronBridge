@@ -49,7 +49,9 @@ pub fn normalize_path(path: &str) -> String {
     if let Ok(canonical) = path.canonicalize() {
         canonical.to_string_lossy().to_lowercase()
     } else {
-        path.to_string_lossy().to_lowercase()
+        // Fallback: lowercase and strip trailing slashes
+        let normalized = path.to_string_lossy().to_lowercase();
+        normalized.trim_end_matches(['/', '\\']).to_string()
     }
 }
 
