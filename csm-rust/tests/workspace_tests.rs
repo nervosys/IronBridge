@@ -680,3 +680,96 @@ mod cross_platform_tests {
         assert!(decoded.contains("mnt") || decoded.contains("Users"));
     }
 }
+
+// ============================================================================
+// Global Storage and Empty Window Sessions Path Tests
+// ============================================================================
+
+mod global_storage_path_tests {
+    use csm::workspace::{get_empty_window_sessions_path, get_global_storage_path};
+
+    #[test]
+    fn test_get_global_storage_path_returns_valid_path() {
+        let result = get_global_storage_path();
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        // Should end with globalStorage
+        assert!(path.to_string_lossy().contains("globalStorage"));
+    }
+
+    #[test]
+    fn test_get_global_storage_path_contains_code_user() {
+        let result = get_global_storage_path();
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        let path_str = path.to_string_lossy().to_lowercase();
+        // Should contain Code/User or Code\User path segments
+        assert!(path_str.contains("code"));
+        assert!(path_str.contains("user"));
+    }
+
+    #[test]
+    fn test_get_empty_window_sessions_path_returns_valid_path() {
+        let result = get_empty_window_sessions_path();
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        // Should end with emptyWindowChatSessions
+        assert!(path.to_string_lossy().contains("emptyWindowChatSessions"));
+    }
+
+    #[test]
+    fn test_get_empty_window_sessions_path_under_global_storage() {
+        let global = get_global_storage_path().unwrap();
+        let empty_sessions = get_empty_window_sessions_path().unwrap();
+
+        // Empty window sessions path should be under global storage
+        assert!(empty_sessions.starts_with(&global));
+    }
+
+    #[test]
+    fn test_empty_window_sessions_path_is_not_workspace_storage() {
+        let result = get_empty_window_sessions_path();
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        let path_str = path.to_string_lossy();
+
+        // Should NOT be under workspaceStorage
+        assert!(!path_str.contains("workspaceStorage"));
+        // Should be under globalStorage
+        assert!(path_str.contains("globalStorage"));
+    }
+
+    #[test]
+    fn test_global_storage_path_platform_specific() {
+        let result = get_global_storage_path();
+        assert!(result.is_ok());
+
+        let path = result.unwrap();
+        let path_str = path.to_string_lossy();
+
+        // Platform-specific checks
+        if cfg!(target_os = "windows") {
+            // Windows: Should be under AppData/Roaming/Code
+            assert!(
+                path_str.contains("AppData") || path_str.contains("Roaming"),
+                "Windows path should contain AppData or Roaming"
+            );
+        } else if cfg!(target_os = "macos") {
+            // macOS: Should be under Library/Application Support/Code
+            assert!(
+                path_str.contains("Library") || path_str.contains("Application Support"),
+                "macOS path should contain Library or Application Support"
+            );
+        } else {
+            // Linux: Should be under .config/Code
+            assert!(
+                path_str.contains(".config"),
+                "Linux path should contain .config"
+            );
+        }
+    }
+}

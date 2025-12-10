@@ -887,3 +887,232 @@ mod index_serialization_tests {
         assert!(entry.title.is_empty());
     }
 }
+
+// ============================================================================
+// Empty Window Sessions (ALL SESSIONS) Tests
+// ============================================================================
+
+mod empty_window_sessions_tests {
+    use csm::models::ChatSession;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Helper to create a test chat session
+    fn create_test_session(session_id: &str, title: &str) -> ChatSession {
+        let json = format!(
+            r#"{{
+                "version": 3,
+                "sessionId": "{}",
+                "creationDate": 1700000000000,
+                "lastMessageDate": 1700000000000,
+                "customTitle": "{}",
+                "initialLocation": "panel",
+                "requests": [
+                    {{
+                        "timestamp": 1700000000000,
+                        "message": {{"text": "Test message"}},
+                        "response": {{"value": [{{"value": "Test response"}}]}}
+                    }}
+                ]
+            }}"#,
+            session_id, title
+        );
+        serde_json::from_str(&json).unwrap()
+    }
+
+    /// Helper to create a temp directory simulating emptyWindowChatSessions
+    fn setup_test_sessions_dir() -> TempDir {
+        let temp_dir = TempDir::new().unwrap();
+        temp_dir
+    }
+
+    #[test]
+    fn test_empty_window_session_json_parsing() {
+        let session = create_test_session("test-session-123", "My Test Session");
+        assert_eq!(session.session_id, Some("test-session-123".to_string()));
+        assert_eq!(session.custom_title, Some("My Test Session".to_string()));
+        assert_eq!(session.version, 3);
+    }
+
+    #[test]
+    fn test_empty_window_session_file_read() {
+        let temp_dir = setup_test_sessions_dir();
+        let session_id = "abc123-def456";
+        let session = create_test_session(session_id, "Test Title");
+
+        // Write session to temp directory
+        let session_path = temp_dir.path().join(format!("{}.json", session_id));
+        let json = serde_json::to_string_pretty(&session).unwrap();
+        fs::write(&session_path, &json).unwrap();
+
+        // Read it back
+        let content = fs::read_to_string(&session_path).unwrap();
+        let restored: ChatSession = serde_json::from_str(&content).unwrap();
+
+        assert_eq!(restored.session_id, Some(session_id.to_string()));
+        assert_eq!(restored.custom_title, Some("Test Title".to_string()));
+    }
+
+    #[test]
+    fn test_empty_window_sessions_directory_scan() {
+        let temp_dir = setup_test_sessions_dir();
+
+        // Create multiple session files
+        for i in 1..=3 {
+            let session_id = format!("session-{}", i);
+            let session = create_test_session(&session_id, &format!("Session {}", i));
+            let session_path = temp_dir.path().join(format!("{}.json", session_id));
+            let json = serde_json::to_string_pretty(&session).unwrap();
+            fs::write(&session_path, &json).unwrap();
+        }
+
+        // Count JSON files
+        let count = fs::read_dir(temp_dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .count();
+
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_empty_window_session_with_no_session_id() {
+        // Some sessions might not have a session_id
+        let json = r#"{
+            "version": 3,
+            "creationDate": 1700000000000,
+            "lastMessageDate": 1700000000000,
+            "customTitle": "No ID Session",
+            "initialLocation": "panel",
+            "requests": []
+        }"#;
+
+        let session: ChatSession = serde_json::from_str(json).unwrap();
+        assert!(session.session_id.is_none());
+        assert_eq!(session.custom_title, Some("No ID Session".to_string()));
+    }
+
+    #[test]
+    fn test_empty_window_session_sorting_by_date() {
+        let mut sessions = vec![
+            {
+                let mut s = create_test_session("old", "Old Session");
+                s.last_message_date = 1000;
+                s
+            },
+            {
+                let mut s = create_test_session("new", "New Session");
+                s.last_message_date = 3000;
+                s
+            },
+            {
+                let mut s = create_test_session("mid", "Mid Session");
+                s.last_message_date = 2000;
+                s
+            },
+        ];
+
+        // Sort by last_message_date descending (most recent first)
+        sessions.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
+
+        assert_eq!(sessions[0].session_id, Some("new".to_string()));
+        assert_eq!(sessions[1].session_id, Some("mid".to_string()));
+        assert_eq!(sessions[2].session_id, Some("old".to_string()));
+    }
+
+    #[test]
+    fn test_empty_window_session_request_count() {
+        let session = create_test_session("test", "Test");
+        assert_eq!(session.request_count(), 1);
+    }
+
+    #[test]
+    fn test_empty_window_session_empty_requests() {
+        let json = r#"{
+            "version": 3,
+            "sessionId": "empty-requests",
+            "creationDate": 1700000000000,
+            "lastMessageDate": 1700000000000,
+            "initialLocation": "panel",
+            "requests": []
+        }"#;
+
+        let session: ChatSession = serde_json::from_str(json).unwrap();
+        assert_eq!(session.request_count(), 0);
+        assert!(session.is_empty());
+    }
+
+    #[test]
+    fn test_empty_window_session_title_extraction() {
+        // Session with custom title
+        let session = create_test_session("test", "My Custom Title");
+        assert_eq!(session.title(), "My Custom Title");
+
+        // Session without custom title (should fall back to first message or "Untitled")
+        let json = r#"{
+            "version": 3,
+            "sessionId": "no-title",
+            "creationDate": 1700000000000,
+            "lastMessageDate": 1700000000000,
+            "initialLocation": "panel",
+            "requests": []
+        }"#;
+        let session: ChatSession = serde_json::from_str(json).unwrap();
+        assert_eq!(session.title(), "Untitled");
+    }
+
+    #[test]
+    fn test_empty_window_session_file_naming() {
+        let session_id = "0a9b131f-2644-41df-abe0-34eb3dc658fe";
+        let expected_filename = format!("{}.json", session_id);
+        assert_eq!(expected_filename, "0a9b131f-2644-41df-abe0-34eb3dc658fe.json");
+    }
+
+    #[test]
+    fn test_empty_window_session_ignore_non_json_files() {
+        let temp_dir = setup_test_sessions_dir();
+
+        // Create a valid session file
+        let session = create_test_session("valid", "Valid Session");
+        let json = serde_json::to_string_pretty(&session).unwrap();
+        fs::write(temp_dir.path().join("valid.json"), &json).unwrap();
+
+        // Create some non-JSON files that should be ignored
+        fs::write(temp_dir.path().join("readme.txt"), "ignore me").unwrap();
+        fs::write(temp_dir.path().join(".hidden"), "hidden file").unwrap();
+        fs::write(temp_dir.path().join("backup.json.bak"), "backup").unwrap();
+
+        // Only count .json files
+        let json_count = fs::read_dir(temp_dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .count();
+
+        assert_eq!(json_count, 1);
+    }
+
+    #[test]
+    fn test_empty_window_session_invalid_json_handling() {
+        let temp_dir = setup_test_sessions_dir();
+
+        // Create a valid session
+        let session = create_test_session("valid", "Valid");
+        let json = serde_json::to_string_pretty(&session).unwrap();
+        fs::write(temp_dir.path().join("valid.json"), &json).unwrap();
+
+        // Create an invalid JSON file
+        fs::write(temp_dir.path().join("invalid.json"), "{ not valid json }").unwrap();
+
+        // Reading the valid one should work
+        let valid_content = fs::read_to_string(temp_dir.path().join("valid.json")).unwrap();
+        let valid_session: Result<ChatSession, _> = serde_json::from_str(&valid_content);
+        assert!(valid_session.is_ok());
+
+        // Reading the invalid one should fail
+        let invalid_content = fs::read_to_string(temp_dir.path().join("invalid.json")).unwrap();
+        let invalid_session: Result<ChatSession, _> = serde_json::from_str(&invalid_content);
+        assert!(invalid_session.is_err());
+    }
+}
