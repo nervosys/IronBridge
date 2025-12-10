@@ -1066,7 +1066,10 @@ mod empty_window_sessions_tests {
     fn test_empty_window_session_file_naming() {
         let session_id = "0a9b131f-2644-41df-abe0-34eb3dc658fe";
         let expected_filename = format!("{}.json", session_id);
-        assert_eq!(expected_filename, "0a9b131f-2644-41df-abe0-34eb3dc658fe.json");
+        assert_eq!(
+            expected_filename,
+            "0a9b131f-2644-41df-abe0-34eb3dc658fe.json"
+        );
     }
 
     #[test]
