@@ -4,6 +4,7 @@ use anyhow::Result;
 use tabled::{settings::Style, Table, Tabled};
 
 use crate::models::Workspace;
+use crate::storage::read_empty_window_sessions;
 use crate::workspace::discover_workspaces;
 
 #[derive(Tabled)]
@@ -61,6 +62,13 @@ pub fn list_workspaces() -> Result<()> {
     println!("{}", table);
     println!("\nTotal workspaces: {}", workspaces.len());
 
+    // Show empty window sessions count (ALL SESSIONS)
+    if let Ok(empty_count) = crate::storage::count_empty_window_sessions() {
+        if empty_count > 0 {
+            println!("Empty window sessions (ALL SESSIONS): {}", empty_count);
+        }
+    }
+
     Ok(())
 }
 
@@ -84,6 +92,25 @@ pub fn list_sessions(project_path: Option<&str>) -> Result<()> {
     };
 
     let mut rows: Vec<SessionRow> = Vec::new();
+
+    // Add empty window sessions (ALL SESSIONS) if no specific project filter
+    if project_path.is_none() {
+        if let Ok(empty_sessions) = read_empty_window_sessions() {
+            for session in empty_sessions {
+                let modified = chrono::DateTime::from_timestamp_millis(session.last_message_date)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+
+                let session_id = session.session_id.as_deref().unwrap_or("unknown");
+                rows.push(SessionRow {
+                    project_path: "(ALL SESSIONS)".to_string(),
+                    session_file: format!("{}.json", session_id),
+                    last_modified: modified,
+                    messages: session.request_count(),
+                });
+            }
+        }
+    }
 
     for ws in filtered_workspaces {
         if !ws.has_chat_sessions {

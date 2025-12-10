@@ -5,14 +5,21 @@ A fast, cross-platform CLI tool for managing chat sessions across workspaces and
 ## Features
 
 - **Workspace Discovery** - Find and list all VS Code workspaces with chat sessions
+- **ALL SESSIONS Support** - Access VS Code's workspace-independent "ALL SESSIONS" window
 - **History Merging** - Merge chat histories from multiple workspaces chronologically
 - **Session Management** - Import, export, and move chat sessions between workspaces
+- **Harvest System** - Unified database for collecting sessions from all providers
+- **Share Link Import** - Import shared chats from ChatGPT, Claude, Gemini, Perplexity, and more
+- **Full-Text Search** - Search across all harvested messages with FTS5
+- **Session Checkpoints** - Version snapshots for session tracking
 - **Git Integration** - Version control your chat histories
 - **Migration Tools** - Move chat histories to new machines
 - **Interactive TUI** - Browse workspaces and sessions with a color-coded terminal UI
-- **Multi-Provider Support** - Integrate with Cursor, Ollama, vLLM, Azure AI Foundry, and more
+- **Multi-Provider Support** - Local LLMs, cloud APIs, and web-based chat providers
 
-## Supported LLM Providers
+## Supported Providers
+
+### Local LLM Providers
 
 | Provider         | Type         | Default Endpoint           |
 | ---------------- | ------------ | -------------------------- |
@@ -27,6 +34,25 @@ A fast, cross-platform CLI tool for managing chat sessions across workspaces and
 | Jan.ai           | Local LLM    | `http://localhost:1337/v1` |
 | GPT4All          | Local LLM    | `http://localhost:4891/v1` |
 | Llamafile        | Local LLM    | `http://localhost:8080/v1` |
+
+### Cloud/Web Providers (via Share Links & Browser Auth)
+
+| Provider     | Share Links | Browser Auth | Endpoint                        |
+| ------------ | :---------: | :----------: | ------------------------------- |
+| ChatGPT      |      ✅      |      ✅       | `https://chat.openai.com`       |
+| Claude       |      ✅      |      ✅       | `https://claude.ai`             |
+| Gemini       |      ✅      |      ✅       | `https://gemini.google.com`     |
+| Perplexity   |      ✅      |      ✅       | `https://www.perplexity.ai`     |
+| DeepSeek     |      ✅      |      ❌       | `https://chat.deepseek.com`     |
+| M365 Copilot |      ❌      |      ✅       | `https://copilot.microsoft.com` |
+| HuggingChat  |      ❌      |      ✅       | `https://huggingface.co/chat`   |
+| Mistral      |      ❌      |      ✅       | `https://chat.mistral.ai`       |
+| Groq         |      ❌      |      ✅       | `https://groq.com`              |
+| Cohere Coral |      ❌      |      ✅       | `https://coral.cohere.com`      |
+| Phind        |      ❌      |      ✅       | `https://www.phind.com`         |
+| You.com      |      ❌      |      ✅       | `https://you.com/chat`          |
+| Pi           |      ❌      |      ✅       | `https://pi.ai`                 |
+| Character.AI |      ❌      |      ✅       | `https://character.ai`          |
 
 ## Installation
 
@@ -60,6 +86,21 @@ export PATH="$PATH:$(pwd)/csm-rust/target/release"
 ```bash
 csm list workspaces
 ```
+
+Output includes workspace-bound sessions and VS Code's "ALL SESSIONS" (workspace-independent sessions):
+
+```text
+Total workspaces: 137
+Empty window sessions (ALL SESSIONS): 3
+```
+
+### List All Sessions
+
+```bash
+csm list sessions
+```
+
+Sessions from VS Code's "ALL SESSIONS" window appear with `(ALL SESSIONS)` as the project path.
 
 ### Find a Workspace
 
@@ -211,8 +252,11 @@ Collect and unify chat sessions from all providers into a single searchable data
 # Initialize the harvest database
 csm harvest init
 
-# Scan for available providers and sessions
+# Scan for available local providers and sessions
 csm harvest scan
+
+# Scan for web-based LLM providers (ChatGPT, Claude, Gemini, etc.)
+csm harvest scan --web
 
 # Collect all sessions into the database
 csm harvest run
@@ -220,17 +264,21 @@ csm harvest run
 # Check harvest status
 csm harvest status
 
-# Search across all sessions
+# Search across all sessions (full-text search)
 csm harvest search "authentication"
+
+# Search with provider filter
+csm harvest search "api" --provider chatgpt
 ```
 
 #### Import Shared Chat URLs
 
-Import chat sessions from share links (ChatGPT, Claude, Gemini, Perplexity, Poe):
+Import chat sessions from share links (ChatGPT, Claude, Gemini, Perplexity, DeepSeek):
 
 ```bash
 # Register a share link for import
 csm harvest share "https://chatgpt.com/share/abc123"
+csm harvest share "https://claude.ai/share/abc123"
 
 # List pending and imported links
 csm harvest shares
@@ -254,69 +302,70 @@ csm harvest restore my-session-id checkpoint-id
 
 ## All Commands
 
-| Command                                  | Description                           |
-| ---------------------------------------- | ------------------------------------- |
-| `csm list workspaces`                    | List all VS Code workspaces           |
-| `csm list sessions`                      | List all chat sessions                |
-| `csm list path [<path>]`                 | List sessions for a project path      |
-| `csm find workspace <pattern>`           | Find workspaces matching pattern      |
-| `csm find session <pattern>`             | Find sessions by content              |
-| `csm find path <pattern>`                | Find sessions in a path               |
-| `csm show workspace <name>`              | Show workspace details                |
-| `csm show session <id>`                  | Show session details                  |
-| `csm show path [<path>]`                 | Show chat history timeline            |
-| `csm fetch workspace <name>`             | Fetch sessions from workspace         |
-| `csm fetch session <id1> <id2> ...`      | Fetch specific sessions               |
-| `csm fetch path [<path>]`                | Fetch sessions from old workspaces    |
-| `csm merge workspace <name>`             | Merge sessions by workspace name      |
-| `csm merge workspaces <n1> <n2> ...`     | Merge from multiple workspace names   |
-| `csm merge sessions <id1> <id2> ...`     | Merge specific sessions by ID         |
-| `csm merge path [<path>]`                | Merge all sessions into one           |
-| `csm merge provider <name>`              | Merge sessions from a provider        |
-| `csm merge providers <p1> <p2> ...`      | Merge from multiple providers         |
-| `csm merge all`                          | Merge all sessions from all providers |
-| `csm export workspace <dest> <hash>`     | Export sessions from workspace        |
-| `csm export sessions <dest> <ids...>`    | Export specific sessions              |
-| `csm export path <dest> [<path>]`        | Export sessions from path             |
-| `csm import workspace <src> <hash>`      | Import sessions into workspace        |
-| `csm import sessions <files...>`         | Import specific session files         |
-| `csm import path <src> [<target>]`       | Import sessions into path             |
-| `csm move workspace <src_hash> <target>` | Move all sessions from workspace      |
-| `csm move sessions <ids...> <target>`    | Move specific sessions                |
-| `csm move path <src> <target>`           | Move sessions between paths           |
-| `csm git config --name <n> --email <e>`  | Configure git user                    |
-| `csm git init <path>`                    | Initialize git for chat sessions      |
-| `csm git add <path>`                     | Stage chat session changes            |
-| `csm git status <path>`                  | Show git status of sessions           |
-| `csm git snapshot <path>`                | Create a tagged snapshot              |
-| `csm git track <path>`                   | Track sessions with file changes      |
-| `csm git log <path>`                     | Show chat session commit history      |
-| `csm git diff <path>`                    | Diff sessions between commits         |
-| `csm detect`                             | Auto-detect workspace and providers   |
-| `csm detect workspace [<path>]`          | Detect workspace for a path           |
-| `csm detect providers`                   | Detect available providers            |
-| `csm detect session <id>`                | Detect which provider owns a session  |
-| `csm detect all [<path>]`                | Full detection report                 |
-| `csm harvest init`                       | Initialize harvest database           |
-| `csm harvest scan`                       | Scan for providers and sessions       |
-| `csm harvest run`                        | Collect sessions from all providers   |
-| `csm harvest status`                     | Show harvest database statistics      |
-| `csm harvest list`                       | List harvested sessions               |
-| `csm harvest export`                     | Export sessions from harvest DB       |
-| `csm harvest share <url>`                | Import a shared chat URL              |
-| `csm harvest shares`                     | List pending/imported share links     |
-| `csm harvest checkpoint <session>`       | Create session checkpoint             |
-| `csm harvest checkpoints <session>`      | List session checkpoints              |
-| `csm harvest restore <session> <cp>`     | Restore session to checkpoint         |
-| `csm harvest search <query>`             | Full-text search across sessions      |
-| `csm migration create <output>`          | Create migration package              |
-| `csm migration restore <package>`        | Restore from migration                |
-| `csm run tui`                            | Launch interactive TUI                |
-| `csm provider list`                      | List available LLM providers          |
-| `csm provider info <name>`               | Show provider details                 |
-| `csm provider config <name>`             | Configure a provider                  |
-| `csm provider import --from <name>`      | Import sessions from provider         |
-| `csm provider test <name>`               | Test provider connection              |
+| Command                                  | Description                                      |
+| ---------------------------------------- | ------------------------------------------------ |
+| `csm list workspaces`                    | List all VS Code workspaces + ALL SESSIONS count |
+| `csm list sessions`                      | List all chat sessions (incl. ALL SESSIONS)      |
+| `csm list path [<path>]`                 | List sessions for a project path                 |
+| `csm find workspace <pattern>`           | Find workspaces matching pattern                 |
+| `csm find session <pattern>`             | Find sessions by content                         |
+| `csm find path <pattern>`                | Find sessions in a path                          |
+| `csm show workspace <name>`              | Show workspace details                           |
+| `csm show session <id>`                  | Show session details                             |
+| `csm show path [<path>]`                 | Show chat history timeline                       |
+| `csm fetch workspace <name>`             | Fetch sessions from workspace                    |
+| `csm fetch session <id1> <id2> ...`      | Fetch specific sessions                          |
+| `csm fetch path [<path>]`                | Fetch sessions from old workspaces               |
+| `csm merge workspace <name>`             | Merge sessions by workspace name                 |
+| `csm merge workspaces <n1> <n2> ...`     | Merge from multiple workspace names              |
+| `csm merge sessions <id1> <id2> ...`     | Merge specific sessions by ID                    |
+| `csm merge path [<path>]`                | Merge all sessions into one                      |
+| `csm merge provider <name>`              | Merge sessions from a provider                   |
+| `csm merge providers <p1> <p2> ...`      | Merge from multiple providers                    |
+| `csm merge all`                          | Merge all sessions from all providers            |
+| `csm export workspace <dest> <hash>`     | Export sessions from workspace                   |
+| `csm export sessions <dest> <ids...>`    | Export specific sessions                         |
+| `csm export path <dest> [<path>]`        | Export sessions from path                        |
+| `csm import workspace <src> <hash>`      | Import sessions into workspace                   |
+| `csm import sessions <files...>`         | Import specific session files                    |
+| `csm import path <src> [<target>]`       | Import sessions into path                        |
+| `csm move workspace <src_hash> <target>` | Move all sessions from workspace                 |
+| `csm move sessions <ids...> <target>`    | Move specific sessions                           |
+| `csm move path <src> <target>`           | Move sessions between paths                      |
+| `csm git config --name <n> --email <e>`  | Configure git user                               |
+| `csm git init <path>`                    | Initialize git for chat sessions                 |
+| `csm git add <path>`                     | Stage chat session changes                       |
+| `csm git status <path>`                  | Show git status of sessions                      |
+| `csm git snapshot <path>`                | Create a tagged snapshot                         |
+| `csm git track <path>`                   | Track sessions with file changes                 |
+| `csm git log <path>`                     | Show chat session commit history                 |
+| `csm git diff <path>`                    | Diff sessions between commits                    |
+| `csm detect`                             | Auto-detect workspace and providers              |
+| `csm detect workspace [<path>]`          | Detect workspace for a path                      |
+| `csm detect providers`                   | Detect available providers                       |
+| `csm detect session <id>`                | Detect which provider owns a session             |
+| `csm detect all [<path>]`                | Full detection report                            |
+| `csm harvest init`                       | Initialize harvest database                      |
+| `csm harvest scan`                       | Scan for local providers and sessions            |
+| `csm harvest scan --web`                 | Scan for web LLM providers (ChatGPT, etc.)       |
+| `csm harvest run`                        | Collect sessions from all providers              |
+| `csm harvest status`                     | Show harvest database statistics                 |
+| `csm harvest list`                       | List harvested sessions                          |
+| `csm harvest export`                     | Export sessions from harvest DB                  |
+| `csm harvest share <url>`                | Import a shared chat URL                         |
+| `csm harvest shares`                     | List pending/imported share links                |
+| `csm harvest checkpoint <session>`       | Create session checkpoint                        |
+| `csm harvest checkpoints <session>`      | List session checkpoints                         |
+| `csm harvest restore <session> <cp>`     | Restore session to checkpoint                    |
+| `csm harvest search <query>`             | Full-text search across sessions                 |
+| `csm migration create <output>`          | Create migration package                         |
+| `csm migration restore <package>`        | Restore from migration                           |
+| `csm run tui`                            | Launch interactive TUI                           |
+| `csm provider list`                      | List available LLM providers                     |
+| `csm provider info <name>`               | Show provider details                            |
+| `csm provider config <name>`             | Configure a provider                             |
+| `csm provider import --from <name>`      | Import sessions from provider                    |
+| `csm provider test <name>`               | Test provider connection                         |
 
 ## Project Structure
 
@@ -373,7 +422,7 @@ See [vscode-extension/README.md](vscode-extension/README.md) for full documentat
 
 CSM supports importing and managing chat sessions from multiple LLM providers:
 
-### Supported Providers
+### Local Providers
 
 | Provider         | Type      | Default Endpoint            |
 | ---------------- | --------- | --------------------------- |
@@ -388,11 +437,28 @@ CSM supports importing and managing chat sessions from multiple LLM providers:
 | GPT4All          | Local API | `http://localhost:4891/v1`  |
 | Azure AI Foundry | Local API | `http://localhost:5272`     |
 
+### Web/Cloud Providers
+
+| Provider     | Import Method        | Endpoint                        |
+| ------------ | -------------------- | ------------------------------- |
+| ChatGPT      | Share Links, Browser | `https://chat.openai.com`       |
+| Claude       | Share Links, Browser | `https://claude.ai`             |
+| Gemini       | Share Links, Browser | `https://gemini.google.com`     |
+| Perplexity   | Share Links, Browser | `https://www.perplexity.ai`     |
+| DeepSeek     | Share Links          | `https://chat.deepseek.com`     |
+| M365 Copilot | Browser Auth         | `https://copilot.microsoft.com` |
+| HuggingChat  | Browser Auth         | `https://huggingface.co/chat`   |
+| Mistral      | Browser Auth         | `https://chat.mistral.ai`       |
+| Groq         | Browser Auth         | `https://groq.com`              |
+
 ### Discover Available Providers
 
 ```bash
-# Auto-detect installed providers
+# Auto-detect installed local providers
 csm provider list
+
+# Scan for web providers with browser auth
+csm harvest scan --web
 ```
 
 ### Configure a Provider

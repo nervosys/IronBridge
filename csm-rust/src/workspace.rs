@@ -19,6 +19,27 @@ pub fn get_workspace_storage_path() -> Result<PathBuf> {
     path.ok_or(CsmError::StorageNotFound)
 }
 
+/// Get the VS Code globalStorage path based on the operating system
+pub fn get_global_storage_path() -> Result<PathBuf> {
+    let path = if cfg!(target_os = "windows") {
+        dirs::config_dir().map(|p| p.join("Code").join("User").join("globalStorage"))
+    } else if cfg!(target_os = "macos") {
+        dirs::home_dir().map(|p| p.join("Library/Application Support/Code/User/globalStorage"))
+    } else {
+        // Linux
+        dirs::home_dir().map(|p| p.join(".config/Code/User/globalStorage"))
+    };
+
+    path.ok_or(CsmError::StorageNotFound)
+}
+
+/// Get the path to empty window chat sessions (ALL SESSIONS in VS Code)
+/// These are chat sessions not tied to any specific workspace
+pub fn get_empty_window_sessions_path() -> Result<PathBuf> {
+    let global_storage = get_global_storage_path()?;
+    Ok(global_storage.join("emptyWindowChatSessions"))
+}
+
 /// Decode a workspace folder URI to a path
 pub fn decode_workspace_folder(folder_uri: &str) -> String {
     let mut folder = folder_uri.to_string();

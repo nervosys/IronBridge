@@ -5,9 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2024-12-09
+## [0.2.0] - 2025-12-09
 
 ### Added
+
+- **VS Code ALL SESSIONS Support** - Access workspace-independent sessions
+  - `csm list workspaces` now shows "Empty window sessions (ALL SESSIONS)" count
+  - `csm list sessions` includes ALL SESSIONS with "(ALL SESSIONS)" as project path
+  - Sessions from VS Code's empty window are now discoverable and manageable
 
 - **Harvest System** - Unified database for collecting sessions from all providers
   - `csm harvest init` - Initialize the harvest database
@@ -60,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema consistency between database.rs and harvest.rs
 - Foreign key constraint issues in checkpoint tests
 
-## [0.1.0] - 2024-11-15
+## [0.1.0] - 2025-11-15
 
 ### Added
 

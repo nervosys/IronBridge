@@ -2,7 +2,7 @@
 
 use crate::error::{CsmError, Result};
 use crate::models::{ChatSession, ChatSessionIndex, ChatSessionIndexEntry};
-use crate::workspace::get_workspace_storage_path;
+use crate::workspace::{get_empty_window_sessions_path, get_workspace_storage_path};
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use sysinfo::System;
@@ -203,4 +203,101 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+// =============================================================================
+// Empty Window Sessions (ALL SESSIONS)
+// =============================================================================
+
+/// Read all empty window chat sessions (not tied to any workspace)
+/// These appear in VS Code's "ALL SESSIONS" panel
+pub fn read_empty_window_sessions() -> Result<Vec<ChatSession>> {
+    let sessions_path = get_empty_window_sessions_path()?;
+
+    if !sessions_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut sessions = Vec::new();
+
+    for entry in std::fs::read_dir(&sessions_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().map_or(false, |e| e == "json") {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(session) = serde_json::from_str::<ChatSession>(&content) {
+                    sessions.push(session);
+                }
+            }
+        }
+    }
+
+    // Sort by last message date (most recent first)
+    sessions.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
+
+    Ok(sessions)
+}
+
+/// Get a specific empty window session by ID
+#[allow(dead_code)]
+pub fn get_empty_window_session(session_id: &str) -> Result<Option<ChatSession>> {
+    let sessions_path = get_empty_window_sessions_path()?;
+    let session_path = sessions_path.join(format!("{}.json", session_id));
+
+    if !session_path.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(&session_path)?;
+    let session: ChatSession = serde_json::from_str(&content)
+        .map_err(|e| CsmError::InvalidSessionFormat(e.to_string()))?;
+
+    Ok(Some(session))
+}
+
+/// Write an empty window session
+#[allow(dead_code)]
+pub fn write_empty_window_session(session: &ChatSession) -> Result<PathBuf> {
+    let sessions_path = get_empty_window_sessions_path()?;
+
+    // Create directory if it doesn't exist
+    std::fs::create_dir_all(&sessions_path)?;
+
+    let session_id = session.session_id.as_deref().unwrap_or("unknown");
+    let session_path = sessions_path.join(format!("{}.json", session_id));
+    let content = serde_json::to_string_pretty(session)?;
+    std::fs::write(&session_path, content)?;
+
+    Ok(session_path)
+}
+
+/// Delete an empty window session
+#[allow(dead_code)]
+pub fn delete_empty_window_session(session_id: &str) -> Result<bool> {
+    let sessions_path = get_empty_window_sessions_path()?;
+    let session_path = sessions_path.join(format!("{}.json", session_id));
+
+    if session_path.exists() {
+        std::fs::remove_file(&session_path)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Count empty window sessions
+pub fn count_empty_window_sessions() -> Result<usize> {
+    let sessions_path = get_empty_window_sessions_path()?;
+
+    if !sessions_path.exists() {
+        return Ok(0);
+    }
+
+    let count = std::fs::read_dir(&sessions_path)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+        .count();
+
+    Ok(count)
 }
