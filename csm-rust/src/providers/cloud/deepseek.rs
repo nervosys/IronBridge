@@ -1,14 +1,17 @@
 //! DeepSeek cloud provider
 //!
 //! Fetches conversation history from DeepSeek web interface.
-//! 
+//!
 //! ## Authentication
-//! 
+//!
 //! Requires either:
 //! - API key via `DEEPSEEK_API_KEY` environment variable
 //! - Session token for web interface access
 
-use super::common::{CloudConversation, CloudMessage, CloudProvider, FetchOptions, HttpClientConfig, build_http_client};
+use super::common::{
+    build_http_client, CloudConversation, CloudMessage, CloudProvider, FetchOptions,
+    HttpClientConfig,
+};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
@@ -31,7 +34,7 @@ impl DeepSeekProvider {
             client: None,
         }
     }
-    
+
     fn ensure_client(&mut self) -> Result<&reqwest::blocking::Client> {
         if self.client.is_none() {
             let config = HttpClientConfig::default();
@@ -66,43 +69,43 @@ impl CloudProvider for DeepSeekProvider {
     fn name(&self) -> &'static str {
         "DeepSeek"
     }
-    
+
     fn api_base_url(&self) -> &str {
         DEEPSEEK_WEB_API
     }
-    
+
     fn is_authenticated(&self) -> bool {
         self.api_key.is_some() || self.session_token.is_some()
     }
-    
+
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>) {
         self.api_key = api_key;
         self.session_token = session_token;
     }
-    
+
     fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
         if !self.is_authenticated() {
             return Err(anyhow!(
                 "DeepSeek requires authentication. Set DEEPSEEK_API_KEY or provide a session token."
             ));
         }
-        
+
         eprintln!("Note: DeepSeek conversation history requires web session authentication.");
         eprintln!("The DeepSeek API is stateless and doesn't store conversation history.");
-        
+
         Ok(vec![])
     }
-    
+
     fn fetch_conversation(&self, _id: &str) -> Result<CloudConversation> {
         if !self.is_authenticated() {
             return Err(anyhow!("DeepSeek requires authentication"));
         }
-        
+
         Err(anyhow!(
             "Fetching DeepSeek conversations requires web session authentication."
         ))
     }
-    
+
     fn api_key_env_var(&self) -> &'static str {
         "DEEPSEEK_API_KEY"
     }
@@ -111,26 +114,29 @@ impl CloudProvider for DeepSeekProvider {
 /// Parse DeepSeek export data
 pub fn parse_deepseek_export(json_data: &str) -> Result<Vec<CloudConversation>> {
     let conversations: Vec<DeepSeekConversation> = serde_json::from_str(json_data)?;
-    
-    Ok(conversations.into_iter().map(|conv| {
-        CloudConversation {
+
+    Ok(conversations
+        .into_iter()
+        .map(|conv| CloudConversation {
             id: conv.id,
             title: conv.title,
             created_at: timestamp_millis_to_datetime(conv.created_at),
             updated_at: Some(timestamp_millis_to_datetime(conv.updated_at)),
             model: conv.model,
-            messages: conv.messages.into_iter().map(|msg| {
-                CloudMessage {
+            messages: conv
+                .messages
+                .into_iter()
+                .map(|msg| CloudMessage {
                     id: Some(msg.id),
                     role: msg.role,
                     content: msg.content,
                     timestamp: Some(timestamp_millis_to_datetime(msg.created_at)),
                     model: None,
-                }
-            }).collect(),
+                })
+                .collect(),
             metadata: None,
-        }
-    }).collect())
+        })
+        .collect())
 }
 
 fn timestamp_millis_to_datetime(ts: i64) -> DateTime<Utc> {
@@ -142,26 +148,26 @@ fn timestamp_millis_to_datetime(ts: i64) -> DateTime<Utc> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_deepseek_provider_new() {
         let provider = DeepSeekProvider::new(Some("test-key".to_string()));
         assert_eq!(provider.name(), "DeepSeek");
         assert!(provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_deepseek_provider_unauthenticated() {
         let provider = DeepSeekProvider::new(None);
         assert!(!provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_api_key_env_var() {
         let provider = DeepSeekProvider::new(None);
         assert_eq!(provider.api_key_env_var(), "DEEPSEEK_API_KEY");
     }
-    
+
     #[test]
     fn test_timestamp_millis_to_datetime() {
         let ts = 1700000000000i64;

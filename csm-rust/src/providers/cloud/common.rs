@@ -1,6 +1,6 @@
 //! Common types and traits for cloud providers
 
-use crate::models::{ChatSession, ChatMessage, ChatRequest};
+use crate::models::{ChatMessage, ChatRequest, ChatSession};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -58,13 +58,13 @@ impl CloudConversation {
     /// Convert to a ChatSession for import (VS Code format)
     pub fn to_chat_session(&self, provider_name: &str) -> ChatSession {
         use uuid::Uuid;
-        
+
         // Generate requests from message pairs
         let mut requests = Vec::new();
         let mut i = 0;
         while i < self.messages.len() {
             let msg = &self.messages[i];
-            
+
             if msg.role == "user" {
                 // Create a request with the user message
                 let mut request = ChatRequest {
@@ -87,7 +87,7 @@ impl CloudConversation {
                     response_markdown_info: None,
                     source_session: Some(format!("{}:{}", provider_name, self.id)),
                 };
-                
+
                 // Check if next message is assistant response
                 if i + 1 < self.messages.len() && self.messages[i + 1].role == "assistant" {
                     let assistant_msg = &self.messages[i + 1];
@@ -100,10 +100,15 @@ impl CloudConversation {
                             }
                         }
                     }));
-                    request.response_id = Some(assistant_msg.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string()));
+                    request.response_id = Some(
+                        assistant_msg
+                            .id
+                            .clone()
+                            .unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    );
                     i += 1;
                 }
-                
+
                 requests.push(request);
             } else if msg.role == "system" {
                 // Skip system messages or add as metadata
@@ -111,12 +116,13 @@ impl CloudConversation {
             }
             i += 1;
         }
-        
+
         ChatSession {
             version: 3,
             session_id: Some(format!("{}:{}", provider_name, self.id)),
             creation_date: self.created_at.timestamp_millis(),
-            last_message_date: self.updated_at
+            last_message_date: self
+                .updated_at
                 .unwrap_or(self.created_at)
                 .timestamp_millis(),
             is_imported: true,
@@ -135,27 +141,27 @@ impl CloudConversation {
 pub trait CloudProvider: Send + Sync {
     /// Get the provider name
     fn name(&self) -> &'static str;
-    
+
     /// Get the API base URL
     fn api_base_url(&self) -> &str;
-    
+
     /// Check if the provider is authenticated
     fn is_authenticated(&self) -> bool;
-    
+
     /// Set the API key or session token
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>);
-    
+
     /// List available conversations
     fn list_conversations(&self, options: &FetchOptions) -> Result<Vec<CloudConversation>>;
-    
+
     /// Fetch a single conversation by ID
     fn fetch_conversation(&self, id: &str) -> Result<CloudConversation>;
-    
+
     /// Fetch all conversations (with messages)
     fn fetch_all_conversations(&self, options: &FetchOptions) -> Result<Vec<ChatSession>> {
         let conversations = self.list_conversations(options)?;
         let mut sessions = Vec::new();
-        
+
         for conv in conversations {
             // If messages are already populated, use them directly
             if !conv.messages.is_empty() {
@@ -170,13 +176,13 @@ pub trait CloudProvider: Send + Sync {
                 }
             }
         }
-        
+
         Ok(sessions)
     }
-    
+
     /// Get the environment variable name for the API key
     fn api_key_env_var(&self) -> &'static str;
-    
+
     /// Attempt to load API key from environment
     fn load_api_key_from_env(&self) -> Option<String> {
         std::env::var(self.api_key_env_var()).ok()
@@ -204,7 +210,7 @@ impl Default for HttpClientConfig {
 /// Build a configured HTTP client
 pub fn build_http_client(config: &HttpClientConfig) -> Result<reqwest::blocking::Client> {
     use std::time::Duration;
-    
+
     reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(config.timeout_secs))
         .user_agent(&config.user_agent)

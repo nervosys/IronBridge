@@ -2,8 +2,8 @@
 //!
 //! Run with: cargo run --example basic_usage
 
-use csm::workspace::{discover_workspaces, find_workspace_by_path};
 use csm::models::ChatSession;
+use csm::workspace::{discover_workspaces, find_workspace_by_path};
 
 fn main() -> anyhow::Result<()> {
     println!("=== CSM Basic Usage Examples ===\n");
@@ -12,10 +12,11 @@ fn main() -> anyhow::Result<()> {
     println!("1. Discovering all VS Code workspaces...");
     let workspaces = discover_workspaces()?;
     println!("   Found {} workspaces", workspaces.len());
-    
+
     // Show first 5 workspaces
     for ws in workspaces.iter().take(5) {
-        println!("   - {} | {} sessions | {}",
+        println!(
+            "   - {} | {} sessions | {}",
             &ws.hash[..12],
             ws.chat_session_count,
             ws.project_path.as_deref().unwrap_or("(none)")
@@ -27,10 +28,14 @@ fn main() -> anyhow::Result<()> {
 
     // Example 2: Find workspaces by pattern
     println!("\n2. Finding workspaces matching 'copilot'...");
-    let matches: Vec<_> = workspaces.iter()
-        .filter(|ws| ws.project_path.as_deref()
-            .map(|p| p.to_lowercase().contains("copilot"))
-            .unwrap_or(false))
+    let matches: Vec<_> = workspaces
+        .iter()
+        .filter(|ws| {
+            ws.project_path
+                .as_deref()
+                .map(|p| p.to_lowercase().contains("copilot"))
+                .unwrap_or(false)
+        })
         .collect();
     println!("   Found {} matching workspaces", matches.len());
     for ws in &matches {
@@ -77,7 +82,7 @@ fn main() -> anyhow::Result<()> {
     println!("   Title: {}", session.title());
     println!("   Messages: {}", session.request_count());
     println!("   Empty: {}", session.is_empty());
-    
+
     if let Some((first, last)) = session.timestamp_range() {
         println!("   Timestamp range: {} - {}", first, last);
     }

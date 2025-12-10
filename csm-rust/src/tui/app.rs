@@ -1,6 +1,6 @@
 //! Application state for the TUI
 
-use crate::models::{Workspace, ChatSession};
+use crate::models::{ChatSession, Workspace};
 use crate::workspace::{discover_workspaces, get_chat_sessions_from_workspace};
 use std::path::PathBuf;
 
@@ -59,7 +59,7 @@ impl App {
     pub fn new() -> anyhow::Result<Self> {
         let workspaces = discover_workspaces()?;
         let filtered_indices: Vec<usize> = (0..workspaces.len()).collect();
-        
+
         let app = Self {
             mode: AppMode::Workspaces,
             previous_mode: AppMode::Workspaces,
@@ -73,7 +73,7 @@ impl App {
             filtered_indices,
             status_message: None,
         };
-        
+
         Ok(app)
     }
 
@@ -95,11 +95,12 @@ impl App {
     pub fn load_sessions_for_current_workspace(&mut self) {
         self.sessions.clear();
         self.session_index = 0;
-        
+
         if let Some(ws) = self.current_workspace() {
             if let Ok(session_list) = get_chat_sessions_from_workspace(&ws.workspace_path) {
                 for swp in session_list {
-                    let modified = swp.path
+                    let modified = swp
+                        .path
                         .metadata()
                         .ok()
                         .and_then(|m| m.modified().ok())
@@ -108,13 +109,14 @@ impl App {
                             datetime.format("%Y-%m-%d %H:%M").to_string()
                         })
                         .unwrap_or_else(|| "unknown".to_string());
-                    
+
                     let msg_count = swp.session.request_count();
-                    let filename = swp.path
+                    let filename = swp
+                        .path
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_else(|| "unknown".to_string());
-                    
+
                     self.sessions.push(SessionInfo {
                         filename,
                         path: swp.path,
@@ -133,7 +135,8 @@ impl App {
             self.filtered_indices = (0..self.workspaces.len()).collect();
         } else {
             let query = self.filter_query.to_lowercase();
-            self.filtered_indices = self.workspaces
+            self.filtered_indices = self
+                .workspaces
                 .iter()
                 .enumerate()
                 .filter(|(_, ws)| {
@@ -146,12 +149,12 @@ impl App {
                 .map(|(i, _)| i)
                 .collect();
         }
-        
+
         // Reset selection if out of bounds
         if self.workspace_index >= self.filtered_indices.len() {
             self.workspace_index = 0;
         }
-        
+
         // Reload sessions for new selection
         self.load_sessions_for_current_workspace();
     }
@@ -361,7 +364,10 @@ impl App {
 
     /// Get count of workspaces with chats
     pub fn workspaces_with_chats(&self) -> usize {
-        self.workspaces.iter().filter(|w| w.has_chat_sessions).count()
+        self.workspaces
+            .iter()
+            .filter(|w| w.has_chat_sessions)
+            .count()
     }
 
     /// Get total session count

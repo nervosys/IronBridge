@@ -37,47 +37,47 @@ pub struct ChatSession {
     /// Session format version
     #[serde(default = "default_version")]
     pub version: u32,
-    
+
     /// Unique session identifier (may not be present in file, use filename)
     #[serde(default)]
     pub session_id: Option<String>,
-    
+
     /// Creation timestamp (milliseconds)
     #[serde(default)]
     pub creation_date: i64,
-    
+
     /// Last message timestamp (milliseconds)
     #[serde(default)]
     pub last_message_date: i64,
-    
+
     /// Whether this session was imported
     #[serde(default)]
     pub is_imported: bool,
-    
+
     /// Initial location (panel, terminal, notebook, editor)
     #[serde(default = "default_location")]
     pub initial_location: String,
-    
+
     /// Custom title set by user
     #[serde(default)]
     pub custom_title: Option<String>,
-    
+
     /// Requester username
     #[serde(default)]
     pub requester_username: Option<String>,
-    
+
     /// Requester avatar URI
     #[serde(default)]
     pub requester_avatar_icon_uri: Option<serde_json::Value>,
-    
+
     /// Responder username
     #[serde(default)]
     pub responder_username: Option<String>,
-    
+
     /// Responder avatar URI
     #[serde(default)]
     pub responder_avatar_icon_uri: Option<serde_json::Value>,
-    
+
     /// Chat requests/messages
     #[serde(default)]
     pub requests: Vec<ChatRequest>,
@@ -98,59 +98,59 @@ pub struct ChatRequest {
     /// Request timestamp (milliseconds)
     #[serde(default)]
     pub timestamp: Option<i64>,
-    
+
     /// The user's message
     #[serde(default)]
     pub message: Option<ChatMessage>,
-    
+
     /// The AI's response (complex structure - use Value for flexibility)
     #[serde(default)]
     pub response: Option<serde_json::Value>,
-    
+
     /// Variable data (context, files, etc.)
     #[serde(default)]
     pub variable_data: Option<serde_json::Value>,
-    
+
     /// Request ID
     #[serde(default)]
     pub request_id: Option<String>,
-    
+
     /// Response ID
     #[serde(default)]
     pub response_id: Option<String>,
-    
+
     /// Model ID
     #[serde(default)]
     pub model_id: Option<String>,
-    
+
     /// Agent information
     #[serde(default)]
     pub agent: Option<serde_json::Value>,
-    
+
     /// Result metadata
     #[serde(default)]
     pub result: Option<serde_json::Value>,
-    
+
     /// Follow-up suggestions
     #[serde(default)]
     pub followups: Option<Vec<serde_json::Value>>,
-    
+
     /// Whether canceled
     #[serde(default)]
     pub is_canceled: Option<bool>,
-    
+
     /// Content references
     #[serde(default)]
     pub content_references: Option<Vec<serde_json::Value>>,
-    
+
     /// Code citations
     #[serde(default)]
     pub code_citations: Option<Vec<serde_json::Value>>,
-    
+
     /// Response markdown info
     #[serde(default)]
     pub response_markdown_info: Option<Vec<serde_json::Value>>,
-    
+
     /// Source session for merged requests
     #[serde(rename = "_sourceSession", skip_serializing_if = "Option::is_none")]
     pub source_session: Option<String>,
@@ -163,7 +163,7 @@ pub struct ChatMessage {
     /// Message text
     #[serde(alias = "content")]
     pub text: Option<String>,
-    
+
     /// Message parts (for complex messages)
     #[serde(default)]
     pub parts: Option<Vec<serde_json::Value>>,
@@ -184,11 +184,11 @@ pub struct ChatResponse {
     /// Response text
     #[serde(alias = "content")]
     pub text: Option<String>,
-    
+
     /// Response parts
     #[serde(default)]
     pub parts: Option<Vec<serde_json::Value>>,
-    
+
     /// Result metadata
     #[serde(default)]
     pub result: Option<serde_json::Value>,
@@ -200,7 +200,7 @@ pub struct ChatSessionIndex {
     /// Index version
     #[serde(default = "default_index_version")]
     pub version: u32,
-    
+
     /// Session entries keyed by session ID
     #[serde(default)]
     pub entries: HashMap<String, ChatSessionIndexEntry>,
@@ -225,21 +225,21 @@ impl Default for ChatSessionIndex {
 pub struct ChatSessionIndexEntry {
     /// Session ID
     pub session_id: String,
-    
+
     /// Session title
     pub title: String,
-    
+
     /// Last message timestamp (milliseconds)
     pub last_message_date: i64,
-    
+
     /// Whether this session was imported
     #[serde(default)]
     pub is_imported: bool,
-    
+
     /// Initial location (panel, terminal, etc.)
     #[serde(default = "default_location")]
     pub initial_location: String,
-    
+
     /// Whether the session is empty
     #[serde(default)]
     pub is_empty: bool,
@@ -256,12 +256,12 @@ impl SessionWithPath {
     /// Get the session ID from the session data or from the filename
     #[allow(dead_code)]
     pub fn get_session_id(&self) -> String {
-        self.session.session_id.clone()
-            .unwrap_or_else(|| {
-                self.path.file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
-            })
+        self.session.session_id.clone().unwrap_or_else(|| {
+            self.path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+        })
     }
 }
 
@@ -269,9 +269,11 @@ impl ChatSession {
     /// Get the session ID (from field or will need to be set from filename)
     #[allow(dead_code)]
     pub fn get_session_id(&self) -> String {
-        self.session_id.clone().unwrap_or_else(|| "unknown".to_string())
+        self.session_id
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string())
     }
-    
+
     /// Get the title for this session (from custom_title or first message)
     pub fn title(&self) -> String {
         // First try custom_title
@@ -280,7 +282,7 @@ impl ChatSession {
                 return title.clone();
             }
         }
-        
+
         // Try to extract from first message
         if let Some(first_req) = self.requests.first() {
             if let Some(msg) = &first_req.message {
@@ -296,35 +298,32 @@ impl ChatSession {
                 }
             }
         }
-        
+
         "Untitled".to_string()
     }
-    
+
     /// Check if this session is empty
     pub fn is_empty(&self) -> bool {
         self.requests.is_empty()
     }
-    
+
     /// Get the request count
     pub fn request_count(&self) -> usize {
         self.requests.len()
     }
-    
+
     /// Get the timestamp range of requests
     pub fn timestamp_range(&self) -> Option<(i64, i64)> {
         if self.requests.is_empty() {
             return None;
         }
-        
-        let timestamps: Vec<i64> = self.requests
-            .iter()
-            .filter_map(|r| r.timestamp)
-            .collect();
-        
+
+        let timestamps: Vec<i64> = self.requests.iter().filter_map(|r| r.timestamp).collect();
+
         if timestamps.is_empty() {
             return None;
         }
-        
+
         let min = *timestamps.iter().min().unwrap();
         let max = *timestamps.iter().max().unwrap();
         Some((min, max))

@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example storage_operations
 
-use csm::storage::{read_chat_session_index, is_vscode_running};
+use csm::storage::{is_vscode_running, read_chat_session_index};
 use csm::workspace::discover_workspaces;
 use std::path::PathBuf;
 
@@ -26,22 +26,19 @@ fn main() -> anyhow::Result<()> {
     // Example 3: Read session index from database
     println!("\n3. Reading session index from workspace database...");
     let workspaces = discover_workspaces()?;
-    
+
     // Find a workspace with sessions
     if let Some(ws) = workspaces.iter().find(|w| w.chat_session_count > 0) {
         let db_path = storage_path.join(&ws.hash).join("state.vscdb");
-        
+
         if db_path.exists() {
             println!("   Database: {}", db_path.display());
-            
+
             match read_chat_session_index(&db_path) {
                 Ok(index) => {
                     println!("   Sessions in index: {}", index.entries.len());
                     for (id, entry) in index.entries.iter().take(3) {
-                        println!("     - {} ({})",
-                            &id[..16.min(id.len())],
-                            &entry.title
-                        );
+                        println!("     - {} ({})", &id[..16.min(id.len())], &entry.title);
                     }
                 }
                 Err(e) => {
@@ -57,10 +54,13 @@ fn main() -> anyhow::Result<()> {
     println!("\n4. Examining workspace structure...");
     if let Some(ws) = workspaces.iter().find(|w| w.chat_session_count > 0) {
         let ws_path = storage_path.join(&ws.hash);
-        
+
         println!("   Workspace hash: {}", ws.hash);
-        println!("   Project path: {}", ws.project_path.as_deref().unwrap_or("(none)"));
-        
+        println!(
+            "   Project path: {}",
+            ws.project_path.as_deref().unwrap_or("(none)")
+        );
+
         // List files in workspace directory
         println!("   Contents:");
         for entry in std::fs::read_dir(&ws_path)? {
@@ -69,14 +69,15 @@ fn main() -> anyhow::Result<()> {
             let metadata = entry.metadata()?;
             let size = metadata.len();
             let is_dir = metadata.is_dir();
-            
-            println!("     {} {} ({} bytes)",
+
+            println!(
+                "     {} {} ({} bytes)",
                 if is_dir { "📁" } else { "📄" },
                 name.to_string_lossy(),
                 size
             );
         }
-        
+
         // Check chatSessions directory
         let sessions_dir = ws_path.join("chatSessions");
         if sessions_dir.exists() {
@@ -96,11 +97,9 @@ fn main() -> anyhow::Result<()> {
         if db_path.exists() {
             match rusqlite::Connection::open(&db_path) {
                 Ok(conn) => {
-                    match conn.query_row(
-                        "SELECT COUNT(*) FROM ItemTable",
-                        [],
-                        |row| row.get::<_, i64>(0)
-                    ) {
+                    match conn.query_row("SELECT COUNT(*) FROM ItemTable", [], |row| {
+                        row.get::<_, i64>(0)
+                    }) {
                         Ok(_) => valid_dbs += 1,
                         Err(_) => corrupted_dbs += 1,
                     }
@@ -112,7 +111,10 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    println!("   Checked: {} workspaces", valid_dbs + missing_dbs + corrupted_dbs);
+    println!(
+        "   Checked: {} workspaces",
+        valid_dbs + missing_dbs + corrupted_dbs
+    );
     println!("   Valid databases: {}", valid_dbs);
     println!("   Missing databases: {}", missing_dbs);
     println!("   Corrupted databases: {}", corrupted_dbs);
@@ -124,17 +126,17 @@ fn main() -> anyhow::Result<()> {
 /// Get the OS-specific workspace storage path
 fn get_workspace_storage_path() -> PathBuf {
     let home = dirs::home_dir().expect("Could not find home directory");
-    
+
     #[cfg(target_os = "windows")]
     {
         home.join("AppData/Roaming/Code/User/workspaceStorage")
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         home.join("Library/Application Support/Code/User/workspaceStorage")
     }
-    
+
     #[cfg(target_os = "linux")]
     {
         home.join(".config/Code/User/workspaceStorage")

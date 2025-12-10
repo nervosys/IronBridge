@@ -1,14 +1,17 @@
 //! Google Gemini cloud provider
 //!
 //! Fetches conversation history from Google Gemini (formerly Bard).
-//! 
+//!
 //! ## Authentication
-//! 
+//!
 //! Requires either:
 //! - API key via `GOOGLE_API_KEY` or `GEMINI_API_KEY` environment variable
 //! - Session token for web interface access
 
-use super::common::{CloudConversation, CloudMessage, CloudProvider, FetchOptions, HttpClientConfig, build_http_client};
+use super::common::{
+    build_http_client, CloudConversation, CloudMessage, CloudProvider, FetchOptions,
+    HttpClientConfig,
+};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -31,7 +34,7 @@ impl GeminiProvider {
             client: None,
         }
     }
-    
+
     fn ensure_client(&mut self) -> Result<&reqwest::blocking::Client> {
         if self.client.is_none() {
             let config = HttpClientConfig::default();
@@ -80,47 +83,47 @@ impl CloudProvider for GeminiProvider {
     fn name(&self) -> &'static str {
         "Gemini"
     }
-    
+
     fn api_base_url(&self) -> &str {
         GEMINI_API
     }
-    
+
     fn is_authenticated(&self) -> bool {
         self.api_key.is_some() || self.session_token.is_some()
     }
-    
+
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>) {
         self.api_key = api_key;
         self.session_token = session_token;
     }
-    
+
     fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
         if !self.is_authenticated() {
             return Err(anyhow!(
                 "Gemini requires authentication. Set GOOGLE_API_KEY or GEMINI_API_KEY, or provide a session token."
             ));
         }
-        
+
         eprintln!("Note: Gemini conversation history requires web session authentication.");
         eprintln!("The Gemini API is stateless and doesn't store conversation history.");
-        
+
         Ok(vec![])
     }
-    
+
     fn fetch_conversation(&self, _id: &str) -> Result<CloudConversation> {
         if !self.is_authenticated() {
             return Err(anyhow!("Gemini requires authentication"));
         }
-        
+
         Err(anyhow!(
             "Fetching Gemini conversations requires web session authentication."
         ))
     }
-    
+
     fn api_key_env_var(&self) -> &'static str {
         "GOOGLE_API_KEY"
     }
-    
+
     fn load_api_key_from_env(&self) -> Option<String> {
         std::env::var("GOOGLE_API_KEY")
             .or_else(|_| std::env::var("GEMINI_API_KEY"))
@@ -132,33 +135,46 @@ impl CloudProvider for GeminiProvider {
 pub fn parse_gemini_export(json_data: &str) -> Result<Vec<CloudConversation>> {
     // Google Takeout exports Bard/Gemini data in a specific format
     let conversations: Vec<GeminiExportConversation> = serde_json::from_str(json_data)?;
-    
-    Ok(conversations.into_iter().map(|conv| {
-        CloudConversation {
+
+    Ok(conversations
+        .into_iter()
+        .map(|conv| CloudConversation {
             id: conv.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             title: conv.title,
-            created_at: conv.created_at
+            created_at: conv
+                .created_at
                 .and_then(|s| parse_iso_timestamp(&s).ok())
                 .unwrap_or_else(Utc::now),
             updated_at: conv.updated_at.and_then(|s| parse_iso_timestamp(&s).ok()),
             model: Some("gemini".to_string()),
-            messages: conv.messages.into_iter().map(|msg| {
-                let content = msg.content.parts.iter()
-                    .filter_map(|p| p.text.clone())
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                
-                CloudMessage {
-                    id: msg.id,
-                    role: if msg.role == "model" { "assistant".to_string() } else { msg.role },
-                    content,
-                    timestamp: msg.created_at.and_then(|s| parse_iso_timestamp(&s).ok()),
-                    model: Some("gemini".to_string()),
-                }
-            }).collect(),
+            messages: conv
+                .messages
+                .into_iter()
+                .map(|msg| {
+                    let content = msg
+                        .content
+                        .parts
+                        .iter()
+                        .filter_map(|p| p.text.clone())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    CloudMessage {
+                        id: msg.id,
+                        role: if msg.role == "model" {
+                            "assistant".to_string()
+                        } else {
+                            msg.role
+                        },
+                        content,
+                        timestamp: msg.created_at.and_then(|s| parse_iso_timestamp(&s).ok()),
+                        model: Some("gemini".to_string()),
+                    }
+                })
+                .collect(),
             metadata: None,
-        }
-    }).collect())
+        })
+        .collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -206,20 +222,20 @@ fn parse_iso_timestamp(s: &str) -> Result<DateTime<Utc>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_gemini_provider_new() {
         let provider = GeminiProvider::new(Some("test-key".to_string()));
         assert_eq!(provider.name(), "Gemini");
         assert!(provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_gemini_provider_unauthenticated() {
         let provider = GeminiProvider::new(None);
         assert!(!provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_api_key_env_var() {
         let provider = GeminiProvider::new(None);

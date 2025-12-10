@@ -1,9 +1,9 @@
 //! ChatGPT (OpenAI) cloud provider
 //!
 //! Fetches conversation history from ChatGPT web interface.
-//! 
+//!
 //! ## Authentication
-//! 
+//!
 //! Requires either:
 //! - API key via `OPENAI_API_KEY` environment variable (for API access)
 //! - Session token for web interface access (retrieved from browser cookies)
@@ -11,7 +11,10 @@
 //! Note: The official API doesn't provide conversation history access.
 //! Web scraping requires a session token from browser cookies.
 
-use super::common::{CloudConversation, CloudMessage, CloudProvider, FetchOptions, HttpClientConfig, build_http_client};
+use super::common::{
+    build_http_client, CloudConversation, CloudMessage, CloudProvider, FetchOptions,
+    HttpClientConfig,
+};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -34,7 +37,7 @@ impl ChatGPTProvider {
             client: None,
         }
     }
-    
+
     fn ensure_client(&mut self) -> Result<&reqwest::blocking::Client> {
         if self.client.is_none() {
             let config = HttpClientConfig::default();
@@ -42,7 +45,7 @@ impl ChatGPTProvider {
         }
         Ok(self.client.as_ref().unwrap())
     }
-    
+
     fn get_auth_header(&self) -> Option<String> {
         if let Some(ref token) = self.session_token {
             Some(format!("Bearer {}", token))
@@ -140,24 +143,24 @@ impl CloudProvider for ChatGPTProvider {
     fn name(&self) -> &'static str {
         "ChatGPT"
     }
-    
+
     fn api_base_url(&self) -> &str {
         CHATGPT_API_BASE
     }
-    
+
     fn is_authenticated(&self) -> bool {
         self.api_key.is_some() || self.session_token.is_some()
     }
-    
+
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>) {
         self.api_key = api_key;
         self.session_token = session_token;
     }
-    
+
     fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
         // Note: This requires a session token from ChatGPT web interface
         // The official API doesn't expose conversation history
-        
+
         if !self.is_authenticated() {
             return Err(anyhow!(
                 "ChatGPT requires authentication. Set OPENAI_API_KEY or provide a session token.\n\
@@ -165,32 +168,32 @@ impl CloudProvider for ChatGPTProvider {
                 For web conversations, you'll need to extract your session token from browser cookies."
             ));
         }
-        
+
         // For now, return an empty list with a helpful message
         // Full implementation would require session token authentication
         eprintln!("Note: ChatGPT conversation history requires web session authentication.");
         eprintln!("The official OpenAI API doesn't provide access to ChatGPT web conversations.");
-        
+
         // In a real implementation, we would:
         // 1. Use the session token to authenticate
         // 2. Call GET /backend-api/conversations?offset=0&limit=50
         // 3. Parse and return the results
-        
+
         Ok(vec![])
     }
-    
+
     fn fetch_conversation(&self, _id: &str) -> Result<CloudConversation> {
         if !self.is_authenticated() {
             return Err(anyhow!("ChatGPT requires authentication"));
         }
-        
+
         // Placeholder - would call GET /backend-api/conversation/{id}
         Err(anyhow!(
             "Fetching individual ChatGPT conversations requires web session authentication. \
             Please export your conversations using ChatGPT's built-in export feature."
         ))
     }
-    
+
     fn api_key_env_var(&self) -> &'static str {
         "OPENAI_API_KEY"
     }
@@ -199,25 +202,33 @@ impl CloudProvider for ChatGPTProvider {
 /// Parse a ChatGPT export file (JSON format from "Export data" feature)
 pub fn parse_chatgpt_export(json_data: &str) -> Result<Vec<CloudConversation>> {
     let conversations: Vec<ChatGPTExportConversation> = serde_json::from_str(json_data)?;
-    
-    Ok(conversations.into_iter().map(|conv| {
-        CloudConversation {
+
+    Ok(conversations
+        .into_iter()
+        .map(|conv| CloudConversation {
             id: conv.id,
             title: conv.title,
             created_at: timestamp_to_datetime(conv.create_time),
             updated_at: conv.update_time.map(timestamp_to_datetime),
             model: None,
-            messages: conv.mapping.into_iter()
+            messages: conv
+                .mapping
+                .into_iter()
                 .filter_map(|(_, node)| {
                     node.message.map(|msg| {
-                        let content = msg.content.parts
-                            .map(|parts| parts.into_iter()
-                                .filter_map(|p| p.as_str().map(String::from))
-                                .collect::<Vec<_>>()
-                                .join("\n"))
+                        let content = msg
+                            .content
+                            .parts
+                            .map(|parts| {
+                                parts
+                                    .into_iter()
+                                    .filter_map(|p| p.as_str().map(String::from))
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
+                            })
                             .or(msg.content.text)
                             .unwrap_or_default();
-                        
+
                         CloudMessage {
                             id: Some(msg.id),
                             role: msg.author.role,
@@ -230,8 +241,8 @@ pub fn parse_chatgpt_export(json_data: &str) -> Result<Vec<CloudConversation>> {
                 .filter(|m| !m.content.is_empty() && m.role != "system")
                 .collect(),
             metadata: None,
-        }
-    }).collect())
+        })
+        .collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -279,20 +290,20 @@ fn timestamp_to_datetime(ts: f64) -> DateTime<Utc> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_chatgpt_provider_new() {
         let provider = ChatGPTProvider::new(Some("test-key".to_string()));
         assert_eq!(provider.name(), "ChatGPT");
         assert!(provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_chatgpt_provider_unauthenticated() {
         let provider = ChatGPTProvider::new(None);
         assert!(!provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_timestamp_to_datetime() {
         let ts = 1700000000.123;

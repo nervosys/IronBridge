@@ -186,7 +186,7 @@ mod workspace_storage_path_tests {
     fn test_get_workspace_storage_path() {
         let result = get_workspace_storage_path();
         assert!(result.is_ok());
-        
+
         let path = result.unwrap();
         // Should contain "workspaceStorage" in path
         assert!(path.to_string_lossy().contains("workspaceStorage"));
@@ -196,7 +196,7 @@ mod workspace_storage_path_tests {
     fn test_workspace_storage_path_platform_specific() {
         let path = get_workspace_storage_path().unwrap();
         let path_str = path.to_string_lossy();
-        
+
         if cfg!(target_os = "windows") {
             assert!(path_str.contains("Code") || path_str.contains("AppData"));
         } else if cfg!(target_os = "macos") {
@@ -212,7 +212,6 @@ mod workspace_storage_path_tests {
 // ============================================================================
 
 mod workspace_discovery_tests {
-    use super::*;
     use csm::workspace::discover_workspaces;
 
     #[test]
@@ -221,7 +220,7 @@ mod workspace_discovery_tests {
         assert!(result.is_ok());
         // Returns a vector (may be empty if no workspaces exist)
         let workspaces = result.unwrap();
-        assert!(workspaces.len() >= 0); // Just verify it's a valid vec
+        assert!(!workspaces.is_empty() || workspaces.is_empty()); // Just verify it's a valid vec
     }
 
     #[test]
@@ -232,7 +231,9 @@ mod workspace_discovery_tests {
                 // Hash should not be empty
                 assert!(!ws.hash.is_empty());
                 // Workspace path should exist
-                assert!(ws.workspace_path.exists() || !ws.workspace_path.to_string_lossy().is_empty());
+                assert!(
+                    ws.workspace_path.exists() || !ws.workspace_path.to_string_lossy().is_empty()
+                );
             }
         }
     }
@@ -328,7 +329,7 @@ mod find_workspace_by_path_tests {
         let result = find_workspace_by_path("/some/path");
         assert!(result.is_ok());
         // If found, should return (hash, path, project_path)
-        if let Some((hash, dir, project)) = result.unwrap() {
+        if let Some((hash, dir, _project)) = result.unwrap() {
             assert!(!hash.is_empty());
             assert!(dir.exists());
         }
@@ -388,7 +389,7 @@ mod get_chat_sessions_from_workspace_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         let result = get_chat_sessions_from_workspace(temp_dir.path());
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -399,7 +400,7 @@ mod get_chat_sessions_from_workspace_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         // Create a valid session file
         let session_json = r#"{
             "version": 3,
@@ -408,7 +409,7 @@ mod get_chat_sessions_from_workspace_tests {
             "requests": []
         }"#;
         fs::write(chat_sessions.join("test-session.json"), session_json).unwrap();
-        
+
         let result = get_chat_sessions_from_workspace(temp_dir.path());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 1);
@@ -419,10 +420,10 @@ mod get_chat_sessions_from_workspace_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         // Create an invalid JSON file (should be skipped)
         fs::write(chat_sessions.join("invalid.json"), "not valid json").unwrap();
-        
+
         let result = get_chat_sessions_from_workspace(temp_dir.path());
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty()); // Invalid files should be skipped
@@ -433,7 +434,7 @@ mod get_chat_sessions_from_workspace_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         // Valid session
         let valid_json = r#"{
             "version": 3,
@@ -442,13 +443,13 @@ mod get_chat_sessions_from_workspace_tests {
             "requests": []
         }"#;
         fs::write(chat_sessions.join("valid.json"), valid_json).unwrap();
-        
+
         // Invalid session (wrong structure)
         fs::write(chat_sessions.join("invalid.json"), "{}").unwrap();
-        
+
         // Non-JSON file (should be ignored)
         fs::write(chat_sessions.join("readme.txt"), "This is a readme").unwrap();
-        
+
         let result = get_chat_sessions_from_workspace(temp_dir.path());
         assert!(result.is_ok());
         // Only valid JSON files with correct structure should be returned
@@ -459,21 +460,22 @@ mod get_chat_sessions_from_workspace_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         let session_json = r#"{
             "version": 3,
             "creationDate": 1700000000000,
             "lastMessageDate": 1700000000000,
             "requests": []
         }"#;
-        
+
         for i in 0..5 {
             fs::write(
                 chat_sessions.join(format!("session-{}.json", i)),
                 session_json,
-            ).unwrap();
+            )
+            .unwrap();
         }
-        
+
         let result = get_chat_sessions_from_workspace(temp_dir.path());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 5);
@@ -505,10 +507,10 @@ mod workspace_integration_tests {
     fn test_workspace_json_parsing() {
         let temp_dir = TempDir::new().unwrap();
         create_workspace_structure(&temp_dir, "abc123", "/home/user/project");
-        
+
         let ws_json_path = temp_dir.path().join("abc123").join("workspace.json");
         let content = fs::read_to_string(&ws_json_path).unwrap();
-        
+
         let parsed: csm::models::WorkspaceJson = serde_json::from_str(&content).unwrap();
         assert!(parsed.folder.is_some());
         assert!(parsed.folder.unwrap().contains("project"));
@@ -518,7 +520,7 @@ mod workspace_integration_tests {
     fn test_workspace_sessions_path() {
         let temp_dir = TempDir::new().unwrap();
         let ws_dir = create_workspace_structure(&temp_dir, "def456", "/home/user/myproject");
-        
+
         let sessions_path = ws_dir.join("chatSessions");
         assert!(sessions_path.exists());
         assert!(sessions_path.is_dir());
@@ -528,10 +530,10 @@ mod workspace_integration_tests {
     fn test_workspace_with_special_chars_in_path() {
         let temp_dir = TempDir::new().unwrap();
         create_workspace_structure(&temp_dir, "special123", "/home/user/my project (v2)");
-        
+
         let ws_json_path = temp_dir.path().join("special123").join("workspace.json");
         let content = fs::read_to_string(&ws_json_path).unwrap();
-        
+
         // Should contain encoded spaces
         assert!(content.contains("%20") || content.contains(" "));
     }
@@ -539,7 +541,7 @@ mod workspace_integration_tests {
     #[test]
     fn test_multiple_workspaces() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         for i in 0..10 {
             create_workspace_structure(
                 &temp_dir,
@@ -547,12 +549,12 @@ mod workspace_integration_tests {
                 &format!("/home/user/project{}", i),
             );
         }
-        
+
         let entries: Vec<_> = fs::read_dir(temp_dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
             .collect();
-        
+
         assert_eq!(entries.len(), 10);
     }
 }
@@ -599,7 +601,7 @@ mod workspace_edge_cases {
         let temp_dir = TempDir::new().unwrap();
         let ws_dir = temp_dir.path().join("no_ws_json");
         fs::create_dir_all(&ws_dir).unwrap();
-        
+
         // Directory exists but no workspace.json
         assert!(ws_dir.exists());
         assert!(!ws_dir.join("workspace.json").exists());
@@ -611,7 +613,7 @@ mod workspace_edge_cases {
         let ws_dir = temp_dir.path().join("malformed");
         fs::create_dir_all(&ws_dir).unwrap();
         fs::write(ws_dir.join("workspace.json"), "{ malformed json }").unwrap();
-        
+
         // Should handle gracefully
         let ws_json_path = ws_dir.join("workspace.json");
         assert!(ws_json_path.exists());
@@ -623,7 +625,7 @@ mod workspace_edge_cases {
         let ws_dir = temp_dir.path().join("empty_json");
         fs::create_dir_all(&ws_dir).unwrap();
         fs::write(ws_dir.join("workspace.json"), "{}").unwrap();
-        
+
         let content = fs::read_to_string(ws_dir.join("workspace.json")).unwrap();
         let parsed: Result<csm::models::WorkspaceJson, _> = serde_json::from_str(&content);
         assert!(parsed.is_ok());
@@ -636,7 +638,7 @@ mod workspace_edge_cases {
         let ws_dir = temp_dir.path().join("null_folder");
         fs::create_dir_all(&ws_dir).unwrap();
         fs::write(ws_dir.join("workspace.json"), r#"{"folder": null}"#).unwrap();
-        
+
         let content = fs::read_to_string(ws_dir.join("workspace.json")).unwrap();
         let parsed: csm::models::WorkspaceJson = serde_json::from_str(&content).unwrap();
         assert!(parsed.folder.is_none());

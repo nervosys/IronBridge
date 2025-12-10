@@ -258,7 +258,8 @@ mod cli_tests {
 
     #[test]
     fn test_cli_list_sessions_command() {
-        let cli = Cli::try_parse_from(["csm", "list", "sessions", "--project-path", "/test/path"]).unwrap();
+        let cli = Cli::try_parse_from(["csm", "list", "sessions", "--project-path", "/test/path"])
+            .unwrap();
         assert!(matches!(cli.command, Commands::List { .. }));
     }
 
@@ -275,45 +276,44 @@ mod cli_tests {
     }
 
     #[test]
-    fn test_cli_history_show_command() {
-        let cli = Cli::try_parse_from(["csm", "history", "show", "/path/to/project"]).unwrap();
-        assert!(matches!(cli.command, Commands::History { .. }));
+    fn test_cli_show_path_command() {
+        let cli = Cli::try_parse_from(["csm", "show", "path", "/path/to/project"]).unwrap();
+        assert!(matches!(cli.command, Commands::Show { .. }));
     }
 
     #[test]
-    fn test_cli_history_fetch_command() {
-        let cli = Cli::try_parse_from(["csm", "history", "fetch", "/path/to/project"]).unwrap();
-        assert!(matches!(cli.command, Commands::History { .. }));
-    }
-
-    #[test]
-    fn test_cli_history_merge_command() {
-        let cli = Cli::try_parse_from(["csm", "history", "merge", "/path/to/project"]).unwrap();
-        assert!(matches!(cli.command, Commands::History { .. }));
-    }
-
-    #[test]
-    fn test_cli_fetch_shorthand() {
-        let cli = Cli::try_parse_from(["csm", "fetch", "/path/to/project"]).unwrap();
+    fn test_cli_fetch_path_command() {
+        let cli = Cli::try_parse_from(["csm", "fetch", "path", "/path/to/project"]).unwrap();
         assert!(matches!(cli.command, Commands::Fetch { .. }));
     }
 
     #[test]
-    fn test_cli_merge_shorthand() {
-        let cli = Cli::try_parse_from(["csm", "merge", "/path/to/project"]).unwrap();
+    fn test_cli_merge_path_command() {
+        let cli = Cli::try_parse_from(["csm", "merge", "path", "/path/to/project"]).unwrap();
         assert!(matches!(cli.command, Commands::Merge { .. }));
     }
 
     #[test]
-    fn test_cli_show_shorthand() {
-        let cli = Cli::try_parse_from(["csm", "show", "/path/to/project"]).unwrap();
+    fn test_cli_show_workspace_command() {
+        let cli = Cli::try_parse_from(["csm", "show", "workspace", "test-project"]).unwrap();
+        assert!(matches!(cli.command, Commands::Show { .. }));
+    }
+
+    #[test]
+    fn test_cli_show_session_command() {
+        let cli = Cli::try_parse_from(["csm", "show", "session", "session-id-123"]).unwrap();
         assert!(matches!(cli.command, Commands::Show { .. }));
     }
 
     #[test]
     fn test_cli_export_sessions_command() {
         let cli = Cli::try_parse_from([
-            "csm", "export", "sessions", "/dest/path", "--path", "/src/path",
+            "csm",
+            "export",
+            "sessions",
+            "/dest/path",
+            "session1",
+            "session2",
         ])
         .unwrap();
         assert!(matches!(cli.command, Commands::Export { .. }));
@@ -321,19 +321,14 @@ mod cli_tests {
 
     #[test]
     fn test_cli_import_sessions_command() {
-        let cli = Cli::try_parse_from([
-            "csm", "import", "sessions", "/src/path", "--path", "/dest/path",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["csm", "import", "sessions", "/src/path/session.json"]).unwrap();
         assert!(matches!(cli.command, Commands::Import { .. }));
     }
 
     #[test]
     fn test_cli_move_sessions_command() {
-        let cli = Cli::try_parse_from([
-            "csm", "move", "sessions", "abc123", "/dest/path",
-        ])
-        .unwrap();
+        let cli = Cli::try_parse_from(["csm", "move", "sessions", "abc123", "/dest/path"]).unwrap();
         assert!(matches!(cli.command, Commands::Move { .. }));
     }
 
@@ -358,23 +353,30 @@ mod cli_tests {
     #[test]
     fn test_cli_git_snapshot_command() {
         let cli = Cli::try_parse_from([
-            "csm", "git", "snapshot", "/path/to/project", "--message", "Test snapshot",
+            "csm",
+            "git",
+            "snapshot",
+            "/path/to/project",
+            "--message",
+            "Test snapshot",
         ])
         .unwrap();
         assert!(matches!(cli.command, Commands::Git { .. }));
     }
 
     #[test]
-    fn test_cli_create_migration_command() {
-        let cli = Cli::try_parse_from(["csm", "create-migration", "/output/path", "--all"]).unwrap();
-        assert!(matches!(cli.command, Commands::CreateMigration { .. }));
+    fn test_cli_migration_create_command() {
+        let cli =
+            Cli::try_parse_from(["csm", "migration", "create", "/output/path", "--all"]).unwrap();
+        assert!(matches!(cli.command, Commands::Migration { .. }));
     }
 
     #[test]
-    fn test_cli_restore_migration_command() {
-        let cli = Cli::try_parse_from(["csm", "restore-migration", "/package/path", "--dry-run"])
-            .unwrap();
-        assert!(matches!(cli.command, Commands::RestoreMigration { .. }));
+    fn test_cli_migration_restore_command() {
+        let cli =
+            Cli::try_parse_from(["csm", "migration", "restore", "/package/path", "--dry-run"])
+                .unwrap();
+        assert!(matches!(cli.command, Commands::Migration { .. }));
     }
 
     #[test]
@@ -392,7 +394,12 @@ mod cli_tests {
     #[test]
     fn test_cli_provider_config_command() {
         let cli = Cli::try_parse_from([
-            "csm", "provider", "config", "ollama", "--endpoint", "http://localhost:11434",
+            "csm",
+            "provider",
+            "config",
+            "ollama",
+            "--endpoint",
+            "http://localhost:11434",
         ])
         .unwrap();
         assert!(matches!(cli.command, Commands::Provider { .. }));
@@ -437,7 +444,7 @@ mod workspace_tests {
         // normalize_path preserves trailing slashes
         let with_slash = normalize_path("/home/user/project/");
         let without_slash = normalize_path("/home/user/project");
-        
+
         // Both should be non-empty valid paths
         assert!(!with_slash.is_empty());
         assert!(!without_slash.is_empty());

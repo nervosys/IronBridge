@@ -3,7 +3,7 @@
 //! Provides color-coded tables and interactive navigation for VS Code Copilot Chat sessions.
 
 mod app;
-mod ui;
 mod events;
+mod ui;
 
 pub use events::run_tui;

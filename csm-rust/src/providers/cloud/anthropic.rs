@@ -1,9 +1,9 @@
 //! Anthropic (Claude) cloud provider
 //!
 //! Fetches conversation history from Claude web interface.
-//! 
+//!
 //! ## Authentication
-//! 
+//!
 //! Requires either:
 //! - API key via `ANTHROPIC_API_KEY` environment variable
 //! - Session token for web interface access
@@ -11,7 +11,10 @@
 //! Note: The official Anthropic API is stateless and doesn't store conversations.
 //! Web conversation history requires session authentication.
 
-use super::common::{CloudConversation, CloudMessage, CloudProvider, FetchOptions, HttpClientConfig, build_http_client};
+use super::common::{
+    build_http_client, CloudConversation, CloudMessage, CloudProvider, FetchOptions,
+    HttpClientConfig,
+};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -34,7 +37,7 @@ impl AnthropicProvider {
             client: None,
         }
     }
-    
+
     fn ensure_client(&mut self) -> Result<&reqwest::blocking::Client> {
         if self.client.is_none() {
             let config = HttpClientConfig::default();
@@ -84,20 +87,20 @@ impl CloudProvider for AnthropicProvider {
     fn name(&self) -> &'static str {
         "Claude"
     }
-    
+
     fn api_base_url(&self) -> &str {
         ANTHROPIC_WEB_API
     }
-    
+
     fn is_authenticated(&self) -> bool {
         self.api_key.is_some() || self.session_token.is_some()
     }
-    
+
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>) {
         self.api_key = api_key;
         self.session_token = session_token;
     }
-    
+
     fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
         if !self.is_authenticated() {
             return Err(anyhow!(
@@ -105,28 +108,28 @@ impl CloudProvider for AnthropicProvider {
                 Note: The Anthropic API is stateless. For web conversations, extract your session token from browser cookies."
             ));
         }
-        
+
         eprintln!("Note: Claude conversation history requires web session authentication.");
         eprintln!("The Anthropic API is stateless and doesn't store conversation history.");
-        
+
         // In a real implementation:
         // 1. Use session token to call GET /api/organizations/{org_id}/chat_conversations
         // 2. Parse the conversation list
-        
+
         Ok(vec![])
     }
-    
+
     fn fetch_conversation(&self, _id: &str) -> Result<CloudConversation> {
         if !self.is_authenticated() {
             return Err(anyhow!("Claude requires authentication"));
         }
-        
+
         Err(anyhow!(
             "Fetching Claude conversations requires web session authentication. \
             The Anthropic API doesn't store conversation history."
         ))
     }
-    
+
     fn api_key_env_var(&self) -> &'static str {
         "ANTHROPIC_API_KEY"
     }
@@ -137,26 +140,33 @@ pub fn parse_claude_export(json_data: &str) -> Result<Vec<CloudConversation>> {
     // Claude doesn't have an official export format yet
     // This is a placeholder for when/if they add one
     let conversations: Vec<ClaudeExportConversation> = serde_json::from_str(json_data)?;
-    
-    Ok(conversations.into_iter().map(|conv| {
-        CloudConversation {
+
+    Ok(conversations
+        .into_iter()
+        .map(|conv| CloudConversation {
             id: conv.uuid,
             title: conv.name,
             created_at: parse_iso_timestamp(&conv.created_at).unwrap_or_else(|_| Utc::now()),
             updated_at: Some(parse_iso_timestamp(&conv.updated_at).unwrap_or_else(|_| Utc::now())),
             model: conv.model,
-            messages: conv.messages.into_iter().map(|msg| {
-                CloudMessage {
+            messages: conv
+                .messages
+                .into_iter()
+                .map(|msg| CloudMessage {
                     id: Some(msg.uuid),
-                    role: if msg.sender == "human" { "user".to_string() } else { "assistant".to_string() },
+                    role: if msg.sender == "human" {
+                        "user".to_string()
+                    } else {
+                        "assistant".to_string()
+                    },
                     content: msg.text,
                     timestamp: parse_iso_timestamp(&msg.created_at).ok(),
                     model: None,
-                }
-            }).collect(),
+                })
+                .collect(),
             metadata: None,
-        }
-    }).collect())
+        })
+        .collect())
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,20 +198,20 @@ fn parse_iso_timestamp(s: &str) -> Result<DateTime<Utc>> {
 mod tests {
     use super::*;
     use chrono::Datelike;
-    
+
     #[test]
     fn test_anthropic_provider_new() {
         let provider = AnthropicProvider::new(Some("test-key".to_string()));
         assert_eq!(provider.name(), "Claude");
         assert!(provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_anthropic_provider_unauthenticated() {
         let provider = AnthropicProvider::new(None);
         assert!(!provider.is_authenticated());
     }
-    
+
     #[test]
     fn test_parse_iso_timestamp() {
         let ts = "2024-01-15T10:30:00Z";

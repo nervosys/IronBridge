@@ -16,21 +16,17 @@ pub fn get_workspace_storage_db(workspace_id: &str) -> Result<PathBuf> {
 /// Read the chat session index from VS Code storage
 pub fn read_chat_session_index(db_path: &Path) -> Result<ChatSessionIndex> {
     let conn = Connection::open(db_path)?;
-    
+
     let result: std::result::Result<String, rusqlite::Error> = conn.query_row(
         "SELECT value FROM ItemTable WHERE key = ?",
         ["chat.ChatSessionStore.index"],
         |row| row.get(0),
     );
-    
+
     match result {
-        Ok(json_str) => {
-            serde_json::from_str(&json_str)
-                .map_err(|e| CsmError::InvalidSessionFormat(e.to_string()))
-        }
-        Err(rusqlite::Error::QueryReturnedNoRows) => {
-            Ok(ChatSessionIndex::default())
-        }
+        Ok(json_str) => serde_json::from_str(&json_str)
+            .map_err(|e| CsmError::InvalidSessionFormat(e.to_string())),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(ChatSessionIndex::default()),
         Err(e) => Err(CsmError::SqliteError(e)),
     }
 }
@@ -39,14 +35,14 @@ pub fn read_chat_session_index(db_path: &Path) -> Result<ChatSessionIndex> {
 pub fn write_chat_session_index(db_path: &Path, index: &ChatSessionIndex) -> Result<()> {
     let conn = Connection::open(db_path)?;
     let json_str = serde_json::to_string(index)?;
-    
+
     // Check if the key exists
     let exists: bool = conn.query_row(
         "SELECT COUNT(*) > 0 FROM ItemTable WHERE key = ?",
         ["chat.ChatSessionStore.index"],
         |row| row.get(0),
     )?;
-    
+
     if exists {
         conn.execute(
             "UPDATE ItemTable SET value = ? WHERE key = ?",
@@ -58,7 +54,7 @@ pub fn write_chat_session_index(db_path: &Path, index: &ChatSessionIndex) -> Res
             ["chat.ChatSessionStore.index", &json_str],
         )?;
     }
-    
+
     Ok(())
 }
 
@@ -73,7 +69,7 @@ pub fn add_session_to_index(
     is_empty: bool,
 ) -> Result<()> {
     let mut index = read_chat_session_index(db_path)?;
-    
+
     index.entries.insert(
         session_id.to_string(),
         ChatSessionIndexEntry {
@@ -85,7 +81,7 @@ pub fn add_session_to_index(
             is_empty,
         },
     );
-    
+
     write_chat_session_index(db_path, &index)
 }
 
@@ -96,41 +92,40 @@ pub fn register_all_sessions_from_directory(
     force: bool,
 ) -> Result<usize> {
     let db_path = get_workspace_storage_db(workspace_id)?;
-    
+
     if !db_path.exists() {
         return Err(CsmError::WorkspaceNotFound(format!(
             "Database not found: {}",
             db_path.display()
         )));
     }
-    
+
     // Check if VS Code is running
     if !force && is_vscode_running() {
         return Err(CsmError::VSCodeRunning);
     }
-    
+
     let mut registered = 0;
-    
+
     for entry in std::fs::read_dir(chat_sessions_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.extension().map(|e| e == "json").unwrap_or(false) {
             if let Ok(content) = std::fs::read_to_string(&path) {
                 if let Ok(session) = serde_json::from_str::<ChatSession>(&content) {
                     // Get session ID from the file - use filename (without .json) as ID
-                    let session_id = session.session_id.clone()
-                        .unwrap_or_else(|| {
-                            path.file_stem()
-                                .map(|s| s.to_string_lossy().to_string())
-                                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
-                        });
-                    
+                    let session_id = session.session_id.clone().unwrap_or_else(|| {
+                        path.file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+                    });
+
                     let title = session.title();
                     let is_empty = session.is_empty();
                     let last_message_date = session.last_message_date;
                     let initial_location = session.initial_location.clone();
-                    
+
                     add_session_to_index(
                         &db_path,
                         &session_id,
@@ -140,14 +135,18 @@ pub fn register_all_sessions_from_directory(
                         &initial_location,
                         is_empty,
                     )?;
-                    
-                    println!("[OK] Registered: {} ({}...)", title, &session_id[..12.min(session_id.len())]);
+
+                    println!(
+                        "[OK] Registered: {} ({}...)",
+                        title,
+                        &session_id[..12.min(session_id.len())]
+                    );
                     registered += 1;
                 }
             }
         }
     }
-    
+
     Ok(registered)
 }
 
@@ -155,53 +154,53 @@ pub fn register_all_sessions_from_directory(
 pub fn is_vscode_running() -> bool {
     let mut sys = System::new();
     sys.refresh_processes();
-    
+
     for (_pid, process) in sys.processes() {
         let name = process.name().to_lowercase();
         if name.contains("code") && !name.contains("codec") {
             return true;
         }
     }
-    
+
     false
 }
 
 /// Backup workspace sessions to a timestamped directory
 pub fn backup_workspace_sessions(workspace_dir: &Path) -> Result<Option<PathBuf>> {
     let chat_sessions_dir = workspace_dir.join("chatSessions");
-    
+
     if !chat_sessions_dir.exists() {
         return Ok(None);
     }
-    
+
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     let backup_dir = workspace_dir.join(format!("chatSessions-backup-{}", timestamp));
-    
+
     // Copy directory recursively
     copy_dir_all(&chat_sessions_dir, &backup_dir)?;
-    
+
     Ok(Some(backup_dir))
 }
 
 /// Recursively copy a directory
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
-    
+
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        
+
         if src_path.is_dir() {
             copy_dir_all(&src_path, &dst_path)?;
         } else {
             std::fs::copy(&src_path, &dst_path)?;
         }
     }
-    
+
     Ok(())
 }

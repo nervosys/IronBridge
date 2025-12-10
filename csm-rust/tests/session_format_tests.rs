@@ -9,7 +9,9 @@
 //! - Response text extraction
 
 use csm::models::{ChatMessage, ChatRequest, ChatSession};
-use csm::providers::session_format::{GenericMessage, GenericSession, session_to_markdown, markdown_to_session};
+use csm::providers::session_format::{
+    markdown_to_session, session_to_markdown, GenericMessage, GenericSession,
+};
 
 // ============================================================================
 // GenericMessage Tests
@@ -61,7 +63,7 @@ mod generic_message_tests {
             timestamp: Some(1700000000000),
             model: Some("model-x".to_string()),
         };
-        
+
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"role\":\"user\""));
         assert!(json.contains("\"content\":\"Test message\""));
@@ -75,7 +77,7 @@ mod generic_message_tests {
             "timestamp": 1700000000000,
             "model": "claude-3"
         }"#;
-        
+
         let msg: GenericMessage = serde_json::from_str(json).unwrap();
         assert_eq!(msg.role, "assistant");
         assert_eq!(msg.model, Some("claude-3".to_string()));
@@ -133,7 +135,7 @@ mod generic_message_tests {
             timestamp: None,
             model: None,
         };
-        
+
         let json = serde_json::to_string(&msg).unwrap();
         let restored: GenericMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.content, msg.content);
@@ -184,7 +186,7 @@ mod generic_session_tests {
     fn test_generic_session_serialization() {
         let session = create_test_generic_session();
         let json = serde_json::to_string(&session).unwrap();
-        
+
         assert!(json.contains("\"id\":\"test-session-123\""));
         assert!(json.contains("\"title\":\"Test Session\""));
         assert!(json.contains("\"messages\""));
@@ -203,7 +205,7 @@ mod generic_session_tests {
             "provider": "TestProvider",
             "model": "test-model"
         }"#;
-        
+
         let session: GenericSession = serde_json::from_str(json).unwrap();
         assert_eq!(session.id, "session-xyz");
         assert_eq!(session.messages.len(), 1);
@@ -238,7 +240,7 @@ mod generic_session_tests {
                 model: None,
             });
         }
-        
+
         let session = GenericSession {
             id: "many-messages".to_string(),
             title: None,
@@ -248,7 +250,7 @@ mod generic_session_tests {
             provider: None,
             model: None,
         };
-        
+
         assert_eq!(session.messages.len(), 100);
     }
 }
@@ -273,30 +275,28 @@ mod chat_session_to_generic_tests {
             requester_avatar_icon_uri: None,
             responder_username: Some("Copilot".to_string()),
             responder_avatar_icon_uri: None,
-            requests: vec![
-                ChatRequest {
-                    timestamp: Some(1700000000000),
-                    message: Some(ChatMessage {
-                        text: Some("What is Rust?".to_string()),
-                        parts: None,
-                    }),
-                    response: Some(serde_json::json!({
-                        "value": [{"value": "Rust is a systems programming language."}]
-                    })),
-                    variable_data: None,
-                    request_id: Some("req-1".to_string()),
-                    response_id: Some("resp-1".to_string()),
-                    model_id: Some("gpt-4".to_string()),
-                    agent: None,
-                    result: None,
-                    followups: None,
-                    is_canceled: Some(false),
-                    content_references: None,
-                    code_citations: None,
-                    response_markdown_info: None,
-                    source_session: None,
-                },
-            ],
+            requests: vec![ChatRequest {
+                timestamp: Some(1700000000000),
+                message: Some(ChatMessage {
+                    text: Some("What is Rust?".to_string()),
+                    parts: None,
+                }),
+                response: Some(serde_json::json!({
+                    "value": [{"value": "Rust is a systems programming language."}]
+                })),
+                variable_data: None,
+                request_id: Some("req-1".to_string()),
+                response_id: Some("resp-1".to_string()),
+                model_id: Some("gpt-4".to_string()),
+                agent: None,
+                result: None,
+                followups: None,
+                is_canceled: Some(false),
+                content_references: None,
+                code_citations: None,
+                response_markdown_info: None,
+                source_session: None,
+            }],
         }
     }
 
@@ -318,7 +318,7 @@ mod chat_session_to_generic_tests {
     fn test_conversion_creates_message_pairs() {
         let chat_session = create_chat_session_for_conversion();
         let generic: GenericSession = chat_session.into();
-        
+
         // Should have user message + assistant response
         assert_eq!(generic.messages.len(), 2);
         assert_eq!(generic.messages[0].role, "user");
@@ -329,7 +329,7 @@ mod chat_session_to_generic_tests {
     fn test_conversion_preserves_timestamps() {
         let chat_session = create_chat_session_for_conversion();
         let generic: GenericSession = chat_session.into();
-        
+
         assert_eq!(generic.created_at, Some(1700000000000));
         assert_eq!(generic.updated_at, Some(1700000010000));
     }
@@ -345,7 +345,7 @@ mod chat_session_to_generic_tests {
     fn test_conversion_without_session_id() {
         let mut chat_session = create_chat_session_for_conversion();
         chat_session.session_id = None;
-        
+
         let generic: GenericSession = chat_session.into();
         // Should generate a UUID
         assert!(!generic.id.is_empty());
@@ -356,7 +356,7 @@ mod chat_session_to_generic_tests {
     fn test_conversion_empty_requests() {
         let mut chat_session = create_chat_session_for_conversion();
         chat_session.requests.clear();
-        
+
         let generic: GenericSession = chat_session.into();
         assert!(generic.messages.is_empty());
     }
@@ -365,7 +365,7 @@ mod chat_session_to_generic_tests {
     fn test_conversion_request_without_response() {
         let mut chat_session = create_chat_session_for_conversion();
         chat_session.requests[0].response = None;
-        
+
         let generic: GenericSession = chat_session.into();
         // Should only have user message, no assistant response
         assert_eq!(generic.messages.len(), 1);
@@ -376,7 +376,7 @@ mod chat_session_to_generic_tests {
     fn test_conversion_request_without_message() {
         let mut chat_session = create_chat_session_for_conversion();
         chat_session.requests[0].message = None;
-        
+
         let generic: GenericSession = chat_session.into();
         // No user message, but assistant response should still be present
         assert_eq!(generic.messages.len(), 1);
@@ -448,10 +448,10 @@ mod generic_to_chat_session_tests {
     fn test_conversion_to_chat_session_requests() {
         let generic = create_generic_for_conversion();
         let chat_session: ChatSession = generic.into();
-        
+
         // User+Assistant pair should create one request
         assert_eq!(chat_session.requests.len(), 1);
-        
+
         let request = &chat_session.requests[0];
         assert!(request.message.is_some());
         assert!(request.response.is_some());
@@ -461,14 +461,17 @@ mod generic_to_chat_session_tests {
     fn test_conversion_preserves_responder_username() {
         let generic = create_generic_for_conversion();
         let chat_session: ChatSession = generic.into();
-        assert_eq!(chat_session.responder_username, Some("TestProvider".to_string()));
+        assert_eq!(
+            chat_session.responder_username,
+            Some("TestProvider".to_string())
+        );
     }
 
     #[test]
     fn test_conversion_creates_request_ids() {
         let generic = create_generic_for_conversion();
         let chat_session: ChatSession = generic.into();
-        
+
         let request = &chat_session.requests[0];
         assert!(request.request_id.is_some());
         assert!(request.response_id.is_some());
@@ -504,7 +507,7 @@ mod generic_to_chat_session_tests {
             provider: None,
             model: None,
         };
-        
+
         let chat_session: ChatSession = generic.into();
         // First user message is orphaned, second user + assistant form a pair
         // This depends on implementation - the conversion pairs consecutive user/assistant
@@ -535,7 +538,7 @@ mod generic_to_chat_session_tests {
             provider: None,
             model: None,
         };
-        
+
         let chat_session: ChatSession = generic.into();
         // No assistant responses means no complete pairs
         assert!(chat_session.requests.is_empty());
@@ -546,20 +549,18 @@ mod generic_to_chat_session_tests {
         let generic = GenericSession {
             id: "assistants-only".to_string(),
             title: None,
-            messages: vec![
-                GenericMessage {
-                    role: "assistant".to_string(),
-                    content: "Response without question".to_string(),
-                    timestamp: None,
-                    model: None,
-                },
-            ],
+            messages: vec![GenericMessage {
+                role: "assistant".to_string(),
+                content: "Response without question".to_string(),
+                timestamp: None,
+                model: None,
+            }],
             created_at: None,
             updated_at: None,
             provider: None,
             model: None,
         };
-        
+
         let chat_session: ChatSession = generic.into();
         // No user message to pair with
         assert!(chat_session.requests.is_empty());
@@ -586,30 +587,28 @@ mod session_to_markdown_tests {
             requester_avatar_icon_uri: None,
             responder_username: None,
             responder_avatar_icon_uri: None,
-            requests: vec![
-                ChatRequest {
-                    timestamp: Some(1700000000000),
-                    message: Some(ChatMessage {
-                        text: Some("What is Rust?".to_string()),
-                        parts: None,
-                    }),
-                    response: Some(serde_json::json!({
-                        "value": [{"value": "Rust is a systems programming language focused on safety."}]
-                    })),
-                    variable_data: None,
-                    request_id: None,
-                    response_id: None,
-                    model_id: Some("gpt-4".to_string()),
-                    agent: None,
-                    result: None,
-                    followups: None,
-                    is_canceled: None,
-                    content_references: None,
-                    code_citations: None,
-                    response_markdown_info: None,
-                    source_session: None,
-                },
-            ],
+            requests: vec![ChatRequest {
+                timestamp: Some(1700000000000),
+                message: Some(ChatMessage {
+                    text: Some("What is Rust?".to_string()),
+                    parts: None,
+                }),
+                response: Some(serde_json::json!({
+                    "value": [{"value": "Rust is a systems programming language focused on safety."}]
+                })),
+                variable_data: None,
+                request_id: None,
+                response_id: None,
+                model_id: Some("gpt-4".to_string()),
+                agent: None,
+                result: None,
+                followups: None,
+                is_canceled: None,
+                content_references: None,
+                code_citations: None,
+                response_markdown_info: None,
+                source_session: None,
+            }],
         }
     }
 
@@ -660,7 +659,7 @@ mod session_to_markdown_tests {
     fn test_markdown_empty_session() {
         let mut session = create_chat_session_for_markdown();
         session.requests.clear();
-        
+
         let md = session_to_markdown(&session);
         assert!(md.contains("# Markdown Test Session"));
         // Should still have header but no message sections
@@ -691,7 +690,7 @@ mod session_to_markdown_tests {
             response_markdown_info: None,
             source_session: None,
         });
-        
+
         let md = session_to_markdown(&session);
         assert!(md.contains("What is Rust?"));
         assert!(md.contains("Can you give an example?"));
@@ -704,7 +703,7 @@ mod session_to_markdown_tests {
         session.requests[0].response = Some(serde_json::json!({
             "value": [{"value": "```rust\nfn main() {}\n```"}]
         }));
-        
+
         let md = session_to_markdown(&session);
         assert!(md.contains("```rust"));
         assert!(md.contains("fn main()"));
@@ -739,7 +738,7 @@ Rust is a programming language.
 
 ---
 "#;
-        
+
         let session = markdown_to_session(md, Some("Test Session".to_string()));
         assert!(session.session_id.is_some());
         assert!(session.is_imported);
@@ -757,7 +756,7 @@ Hi there!
 
 ---
 "#;
-        
+
         let session = markdown_to_session(md, None);
         assert!(!session.requests.is_empty());
     }
@@ -784,7 +783,7 @@ Second answer
 
 ---
 "#;
-        
+
         let session = markdown_to_session(md, None);
         assert_eq!(session.requests.len(), 2);
     }
@@ -813,7 +812,7 @@ Second answer
     #[test]
     fn test_parse_markdown_only_user() {
         let md = "## User\n\nQuestion without answer\n\n---";
-        let session = markdown_to_session(md, None);
+        let _session = markdown_to_session(md, None);
         // User without assistant response - depends on implementation
     }
 
@@ -835,10 +834,10 @@ fn main() {
 
 ---
 "#;
-        
+
         let session = markdown_to_session(md, None);
         assert!(!session.requests.is_empty());
-        
+
         if let Some(response) = &session.requests[0].response {
             let text = response.to_string();
             assert!(text.contains("Hello") || text.contains("rust"));
@@ -920,7 +919,7 @@ mod roundtrip_tests {
         let original = create_complex_chat_session();
         let generic: GenericSession = original.clone().into();
         let restored: ChatSession = generic.into();
-        
+
         // Key properties should be preserved
         assert_eq!(restored.session_id, original.session_id);
         assert_eq!(restored.custom_title, original.custom_title);
@@ -950,10 +949,10 @@ mod roundtrip_tests {
             provider: Some("TestProvider".to_string()),
             model: Some("model-x".to_string()),
         };
-        
+
         let chat: ChatSession = original.clone().into();
         let restored: GenericSession = chat.into();
-        
+
         assert_eq!(restored.id, original.id);
         assert_eq!(restored.title, original.title);
     }
@@ -1003,8 +1002,8 @@ mod edge_case_tests {
                 source_session: None,
             }],
         };
-        
-        let generic: GenericSession = session.into();
+
+        let _generic: GenericSession = session.into();
         // Empty text should still be included or skipped gracefully
     }
 
@@ -1043,8 +1042,8 @@ mod edge_case_tests {
                 source_session: None,
             }],
         };
-        
-        let generic: GenericSession = session.into();
+
+        let _generic: GenericSession = session.into();
         // Should handle null response gracefully
     }
 
@@ -1085,7 +1084,7 @@ mod edge_case_tests {
                 source_session: None,
             }],
         };
-        
+
         let md = session_to_markdown(&session);
         assert!(md.contains("code"));
         assert!(md.contains("bold"));
@@ -1121,8 +1120,8 @@ mod edge_case_tests {
             provider: None,
             model: None,
         };
-        
-        let chat: ChatSession = generic.into();
+
+        let _chat: ChatSession = generic.into();
         // System message should be ignored in conversion
     }
 }

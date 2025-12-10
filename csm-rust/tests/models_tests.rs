@@ -13,8 +13,8 @@ use csm::models::{
     ChatMessage, ChatRequest, ChatSession, ChatSessionIndex, ChatSessionIndexEntry,
     SessionWithPath, Workspace, WorkspaceJson,
 };
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 // ============================================================================
 // ChatMessage Tests
@@ -54,7 +54,9 @@ mod chat_message_tests {
     fn test_chat_message_with_parts() {
         let msg = ChatMessage {
             text: Some("Main text".to_string()),
-            parts: Some(vec![serde_json::json!({"type": "text", "content": "part 1"})]),
+            parts: Some(vec![
+                serde_json::json!({"type": "text", "content": "part 1"}),
+            ]),
         };
         assert!(msg.parts.is_some());
         assert_eq!(msg.get_text(), "Main text");
@@ -93,7 +95,10 @@ mod chat_message_tests {
         };
         let cloned = msg.clone();
         assert_eq!(cloned.text, msg.text);
-        assert_eq!(cloned.parts.as_ref().unwrap().len(), msg.parts.as_ref().unwrap().len());
+        assert_eq!(
+            cloned.parts.as_ref().unwrap().len(),
+            msg.parts.as_ref().unwrap().len()
+        );
     }
 
     #[test]
@@ -186,7 +191,10 @@ mod chat_request_tests {
     fn test_chat_request_with_all_fields() {
         let req = ChatRequest {
             timestamp: Some(1700000000000),
-            message: Some(ChatMessage { text: Some("Test".to_string()), parts: None }),
+            message: Some(ChatMessage {
+                text: Some("Test".to_string()),
+                parts: None,
+            }),
             response: Some(serde_json::json!({"value": [{"value": "Response"}]})),
             variable_data: Some(serde_json::json!({"files": ["test.rs"]})),
             request_id: Some("req-full".to_string()),
@@ -201,11 +209,14 @@ mod chat_request_tests {
             response_markdown_info: Some(vec![serde_json::json!({"rendered": true})]),
             source_session: Some("source-session-123".to_string()),
         };
-        
+
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: ChatRequest = serde_json::from_str(&json).unwrap();
-        
-        assert_eq!(deserialized.source_session, Some("source-session-123".to_string()));
+
+        assert_eq!(
+            deserialized.source_session,
+            Some("source-session-123".to_string())
+        );
         assert!(deserialized.variable_data.is_some());
         assert!(deserialized.agent.is_some());
     }
@@ -375,7 +386,7 @@ mod chat_session_tests {
     fn test_chat_session_is_empty() {
         let mut session = create_test_session();
         assert!(!session.is_empty());
-        
+
         session.requests.clear();
         assert!(session.is_empty());
     }
@@ -436,7 +447,7 @@ mod chat_session_tests {
     fn test_chat_session_serialization() {
         let session = create_test_session();
         let json = serde_json::to_string(&session).unwrap();
-        
+
         // Check camelCase serialization
         assert!(json.contains("\"sessionId\""));
         assert!(json.contains("\"creationDate\""));
@@ -459,7 +470,7 @@ mod chat_session_tests {
             "responderUsername": "copilot",
             "requests": []
         }"#;
-        
+
         let session: ChatSession = serde_json::from_str(json).unwrap();
         assert_eq!(session.version, 3);
         assert_eq!(session.session_id, Some("session-xyz".to_string()));
@@ -502,7 +513,7 @@ mod chat_session_tests {
         let session = create_test_session();
         let json = serde_json::to_string_pretty(&session).unwrap();
         let restored: ChatSession = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(session.version, restored.version);
         assert_eq!(session.session_id, restored.session_id);
         assert_eq!(session.custom_title, restored.custom_title);
@@ -559,12 +570,12 @@ mod chat_session_index_tests {
                 is_empty: false,
             },
         );
-        
+
         let index = ChatSessionIndex {
             version: 1,
             entries,
         };
-        
+
         assert_eq!(index.entries.len(), 1);
         assert!(index.entries.contains_key("session-1"));
     }
@@ -583,10 +594,13 @@ mod chat_session_index_tests {
                 is_empty: false,
             },
         );
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         let json = serde_json::to_string(&index).unwrap();
-        
+
         assert!(json.contains("\"version\":1"));
         assert!(json.contains("\"entries\""));
         assert!(json.contains("sess-abc"));
@@ -607,11 +621,11 @@ mod chat_session_index_tests {
                 }
             }
         }"#;
-        
+
         let index: ChatSessionIndex = serde_json::from_str(json).unwrap();
         assert_eq!(index.version, 1);
         assert_eq!(index.entries.len(), 1);
-        
+
         let entry = index.entries.get("session-xyz").unwrap();
         assert_eq!(entry.title, "Test Session");
         assert_eq!(entry.is_imported, true);
@@ -635,7 +649,7 @@ mod chat_session_index_entry_tests {
             initial_location: "panel".to_string(),
             is_empty: false,
         };
-        
+
         assert_eq!(entry.session_id, "test-id");
         assert_eq!(entry.title, "Test Title");
     }
@@ -650,7 +664,7 @@ mod chat_session_index_entry_tests {
             initial_location: "editor".to_string(),
             is_empty: true,
         };
-        
+
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"sessionId\":\"entry-1\""));
         assert!(json.contains("\"lastMessageDate\""));
@@ -666,7 +680,7 @@ mod chat_session_index_entry_tests {
             "title": "Title",
             "lastMessageDate": 1000
         }"#;
-        
+
         let entry: ChatSessionIndexEntry = serde_json::from_str(json).unwrap();
         assert_eq!(entry.is_imported, false); // default
         assert_eq!(entry.initial_location, "panel"); // default
@@ -683,7 +697,7 @@ mod chat_session_index_entry_tests {
             initial_location: "terminal".to_string(),
             is_empty: false,
         };
-        
+
         let cloned = entry.clone();
         assert_eq!(cloned.session_id, entry.session_id);
         assert_eq!(cloned.is_imported, entry.is_imported);
@@ -895,10 +909,10 @@ mod edge_case_tests {
             responder_avatar_icon_uri: None,
             requests: vec![],
         };
-        
+
         // Custom title should be used as-is
         assert_eq!(session.title().len(), 10000);
-        
+
         // But if from message, should be truncated
         session.custom_title = None;
         session.requests.push(ChatRequest {
@@ -921,7 +935,7 @@ mod edge_case_tests {
             response_markdown_info: None,
             source_session: None,
         });
-        
+
         assert!(session.title().len() <= 53);
     }
 
@@ -941,7 +955,7 @@ mod edge_case_tests {
             responder_avatar_icon_uri: None,
             requests: vec![],
         };
-        
+
         for i in 0..1000 {
             session.requests.push(ChatRequest {
                 timestamp: Some(i),
@@ -964,7 +978,7 @@ mod edge_case_tests {
                 source_session: None,
             });
         }
-        
+
         assert_eq!(session.request_count(), 1000);
         let (min, max) = session.timestamp_range().unwrap();
         assert_eq!(min, 0);
@@ -1003,7 +1017,7 @@ mod edge_case_tests {
                 source_session: None,
             }],
         };
-        
+
         let range = session.timestamp_range();
         assert!(range.is_some());
         assert_eq!(range.unwrap(), (0, 0));
@@ -1042,7 +1056,7 @@ mod edge_case_tests {
                 source_session: None,
             }],
         };
-        
+
         let range = session.timestamp_range();
         assert!(range.is_some());
     }
@@ -1115,7 +1129,7 @@ mod edge_case_tests {
                 },
             ],
         };
-        
+
         let range = session.timestamp_range();
         assert!(range.is_some());
         let (min, max) = range.unwrap();

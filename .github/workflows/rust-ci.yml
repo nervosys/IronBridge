@@ -63,9 +63,22 @@ jobs:
         working-directory: csm-rust
         run: cargo build --release --all-features
 
-      - name: Run tests
+      - name: Run unit tests
         working-directory: csm-rust
         run: cargo test --release --all-features -- --nocapture
+
+      - name: Run CLI integration tests
+        working-directory: csm-rust
+        run: cargo test --test cli_integration_tests --release -- --nocapture
+
+      - name: Run browser tests
+        working-directory: csm-rust
+        run: cargo test --test browser_tests --release -- --nocapture
+        continue-on-error: true  # May have different browser availability
+
+      - name: Run harvest tests
+        working-directory: csm-rust
+        run: cargo test --test harvest_tests --release -- --nocapture
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4

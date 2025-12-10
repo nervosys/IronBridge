@@ -26,28 +26,33 @@
 //! - Configuration file (`~/.config/csm/config.json`)
 //! - Command-line arguments
 
-pub mod chatgpt;
+#![allow(dead_code)]
+
 pub mod anthropic;
-pub mod perplexity;
+pub mod chatgpt;
+pub mod common;
 pub mod deepseek;
 pub mod gemini;
 pub mod m365copilot;
-pub mod common;
+pub mod perplexity;
 
-pub use chatgpt::ChatGPTProvider;
 pub use anthropic::AnthropicProvider;
-pub use perplexity::PerplexityProvider;
+pub use chatgpt::ChatGPTProvider;
+pub use common::{CloudConversation, CloudMessage, CloudProvider, FetchOptions};
 pub use deepseek::DeepSeekProvider;
 pub use gemini::GeminiProvider;
 pub use m365copilot::M365CopilotProvider;
-pub use common::{CloudProvider, CloudConversation, CloudMessage, FetchOptions};
+pub use perplexity::PerplexityProvider;
 
 use super::config::ProviderType;
 use crate::models::ChatSession;
 use anyhow::Result;
 
 /// Get a cloud provider by type
-pub fn get_cloud_provider(provider_type: ProviderType, api_key: Option<String>) -> Option<Box<dyn CloudProvider>> {
+pub fn get_cloud_provider(
+    provider_type: ProviderType,
+    api_key: Option<String>,
+) -> Option<Box<dyn CloudProvider>> {
     match provider_type {
         ProviderType::M365Copilot => Some(Box::new(M365CopilotProvider::new(api_key))),
         ProviderType::ChatGPT => Some(Box::new(ChatGPTProvider::new(api_key))),
@@ -67,6 +72,6 @@ pub fn fetch_conversations(
 ) -> Result<Vec<ChatSession>> {
     let provider = get_cloud_provider(provider_type, api_key)
         .ok_or_else(|| anyhow::anyhow!("Unsupported cloud provider: {}", provider_type))?;
-    
+
     provider.fetch_all_conversations(options)
 }

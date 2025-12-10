@@ -6,6 +6,8 @@
 //! - Ollama format
 //! - Generic markdown format
 
+#![allow(dead_code)]
+
 use crate::models::{ChatMessage, ChatRequest, ChatSession};
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +41,7 @@ pub struct GenericSession {
 impl From<ChatSession> for GenericSession {
     fn from(session: ChatSession) -> Self {
         let mut messages = Vec::new();
-        
+
         for request in session.requests {
             // Add user message
             if let Some(msg) = &request.message {
@@ -52,7 +54,7 @@ impl From<ChatSession> for GenericSession {
                     });
                 }
             }
-            
+
             // Add assistant response
             if let Some(response) = &request.response {
                 if let Some(text) = extract_response_text(response) {
@@ -65,9 +67,11 @@ impl From<ChatSession> for GenericSession {
                 }
             }
         }
-        
+
         GenericSession {
-            id: session.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            id: session
+                .session_id
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             title: session.custom_title,
             messages,
             created_at: Some(session.creation_date),
@@ -81,10 +85,10 @@ impl From<ChatSession> for GenericSession {
 impl From<GenericSession> for ChatSession {
     fn from(generic: GenericSession) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
-        
+
         let mut requests = Vec::new();
         let mut user_msg: Option<(String, Option<i64>, Option<String>)> = None;
-        
+
         for msg in generic.messages {
             match msg.role.as_str() {
                 "user" => {
@@ -119,7 +123,7 @@ impl From<GenericSession> for ChatSession {
                 _ => {}
             }
         }
-        
+
         ChatSession {
             version: 3,
             session_id: Some(generic.id),
@@ -140,14 +144,14 @@ impl From<GenericSession> for ChatSession {
 /// Convert a session to markdown format
 pub fn session_to_markdown(session: &ChatSession) -> String {
     let mut md = String::new();
-    
+
     // Header
     md.push_str(&format!("# {}\n\n", session.title()));
-    
+
     if let Some(id) = &session.session_id {
         md.push_str(&format!("Session ID: `{}`\n\n", id));
     }
-    
+
     md.push_str(&format!(
         "Created: {}\n",
         format_timestamp(session.creation_date)
@@ -156,9 +160,9 @@ pub fn session_to_markdown(session: &ChatSession) -> String {
         "Last Updated: {}\n\n",
         format_timestamp(session.last_message_date)
     ));
-    
+
     md.push_str("---\n\n");
-    
+
     // Messages
     for (i, request) in session.requests.iter().enumerate() {
         // User message
@@ -169,23 +173,20 @@ pub fn session_to_markdown(session: &ChatSession) -> String {
                 md.push_str("\n\n");
             }
         }
-        
+
         // Assistant response
         if let Some(response) = &request.response {
             if let Some(text) = extract_response_text(response) {
-                let model = request
-                    .model_id
-                    .as_deref()
-                    .unwrap_or("Assistant");
+                let model = request.model_id.as_deref().unwrap_or("Assistant");
                 md.push_str(&format!("## {} ({})\n\n", model, i + 1));
                 md.push_str(&text);
                 md.push_str("\n\n");
             }
         }
-        
+
         md.push_str("---\n\n");
     }
-    
+
     md
 }
 
@@ -193,7 +194,7 @@ pub fn session_to_markdown(session: &ChatSession) -> String {
 pub fn markdown_to_session(markdown: &str, title: Option<String>) -> ChatSession {
     let now = chrono::Utc::now().timestamp_millis();
     let session_id = uuid::Uuid::new_v4().to_string();
-    
+
     // Simple parsing - look for ## User and ## Assistant sections
     let mut requests = Vec::new();
     let mut current_user: Option<String> = None;
@@ -201,7 +202,7 @@ pub fn markdown_to_session(markdown: &str, title: Option<String>) -> ChatSession
     let mut in_user = false;
     let mut in_assistant = false;
     let mut content = String::new();
-    
+
     for line in markdown.lines() {
         if line.starts_with("## User") {
             // Save previous pair
@@ -245,7 +246,7 @@ pub fn markdown_to_session(markdown: &str, title: Option<String>) -> ChatSession
             content.push('\n');
         }
     }
-    
+
     // Handle final pair
     if in_user {
         current_user = Some(content.trim().to_string());
@@ -260,7 +261,7 @@ pub fn markdown_to_session(markdown: &str, title: Option<String>) -> ChatSession
             None,
         ));
     }
-    
+
     ChatSession {
         version: 3,
         session_id: Some(session_id),
@@ -314,7 +315,7 @@ fn extract_response_text(response: &serde_json::Value) -> Option<String> {
     if let Some(text) = response.get("text").and_then(|v| v.as_str()) {
         return Some(text.to_string());
     }
-    
+
     // Try value array format (VS Code Copilot format)
     if let Some(value) = response.get("value").and_then(|v| v.as_array()) {
         let parts: Vec<String> = value
@@ -326,23 +327,23 @@ fn extract_response_text(response: &serde_json::Value) -> Option<String> {
             return Some(parts.join("\n"));
         }
     }
-    
+
     // Try content field (OpenAI format)
     if let Some(content) = response.get("content").and_then(|v| v.as_str()) {
         return Some(content.to_string());
     }
-    
+
     None
 }
 
 /// Format a timestamp for display
 fn format_timestamp(timestamp: i64) -> String {
     use chrono::{TimeZone, Utc};
-    
+
     if timestamp == 0 {
         return "Unknown".to_string();
     }
-    
+
     let dt = Utc.timestamp_millis_opt(timestamp);
     match dt {
         chrono::LocalResult::Single(dt) => dt.format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -353,7 +354,7 @@ fn format_timestamp(timestamp: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_session_to_markdown() {
         let session = ChatSession {
@@ -391,13 +392,13 @@ mod tests {
                 source_session: None,
             }],
         };
-        
+
         let md = session_to_markdown(&session);
         assert!(md.contains("# Test Session"));
         assert!(md.contains("Hello"));
         assert!(md.contains("Hi there!"));
     }
-    
+
     #[test]
     fn test_generic_session_conversion() {
         let session = ChatSession {
@@ -414,11 +415,11 @@ mod tests {
             responder_avatar_icon_uri: None,
             requests: vec![],
         };
-        
+
         let generic: GenericSession = session.clone().into();
         assert_eq!(generic.id, "test-123");
         assert_eq!(generic.title, Some("Test".to_string()));
-        
+
         let back: ChatSession = generic.into();
         assert_eq!(back.session_id, Some("test-123".to_string()));
     }

@@ -1,6 +1,6 @@
 [package]
 name = "csm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Chat Session Manager - Manage and merge chat sessions across workspaces"
 authors = ["Nervosys"]
@@ -54,13 +54,22 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # HTTP client for cloud API providers
-reqwest = { version = "0.11", features = ["json", "blocking"] }
+reqwest = { version = "0.11", features = ["json", "blocking", "cookies"] }
 
 # Base64 encoding for API requests
 base64 = "0.21"
 
+# AES decryption for browser cookies
+aes-gcm = "0.10"
+
+# Windows DPAPI for cookie decryption
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Security_Cryptography"] }
+
 [dev-dependencies]
 tempfile = "3.9"
+assert_cmd = "2.0"
+predicates = "3.0"
 
 [[bin]]
 name = "csm"

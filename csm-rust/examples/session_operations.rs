@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example session_operations
 
-use csm::models::{ChatSession, ChatRequest, ChatMessage};
+use csm::models::{ChatMessage, ChatRequest, ChatSession};
 use csm::workspace::{find_workspace_by_path, get_chat_sessions_from_workspace};
 use uuid::Uuid;
 
@@ -12,7 +12,10 @@ fn main() -> anyhow::Result<()> {
     // Example 1: Create a new chat session programmatically
     println!("1. Creating a new chat session...");
     let new_session = create_sample_session();
-    println!("   Session ID: {}", new_session.session_id.as_deref().unwrap_or("none"));
+    println!(
+        "   Session ID: {}",
+        new_session.session_id.as_deref().unwrap_or("none")
+    );
     println!("   Title: {}", new_session.title());
     println!("   Messages: {}", new_session.request_count());
 
@@ -31,9 +34,10 @@ fn main() -> anyhow::Result<()> {
             println!("   Found workspace: {}...", &hash[..16]);
             let sessions = get_chat_sessions_from_workspace(&ws_dir)?;
             println!("   Sessions in workspace: {}", sessions.len());
-            
+
             for (i, session_with_path) in sessions.iter().take(3).enumerate() {
-                println!("   [{}] {} ({} msgs)",
+                println!(
+                    "   [{}] {} ({} msgs)",
                     i + 1,
                     session_with_path.session.title(),
                     session_with_path.session.request_count()
@@ -50,26 +54,26 @@ fn main() -> anyhow::Result<()> {
 
     // Example 4: Merge multiple sessions
     println!("\n4. Merging sessions chronologically...");
-    let session1 = create_session_with_requests("Session 1", vec![
-        ("First message", 1000),
-        ("Third message", 3000),
-    ]);
-    let session2 = create_session_with_requests("Session 2", vec![
-        ("Second message", 2000),
-        ("Fourth message", 4000),
-    ]);
-    
+    let session1 = create_session_with_requests(
+        "Session 1",
+        vec![("First message", 1000), ("Third message", 3000)],
+    );
+    let session2 = create_session_with_requests(
+        "Session 2",
+        vec![("Second message", 2000), ("Fourth message", 4000)],
+    );
+
     let merged = merge_sessions(&[session1, session2]);
     println!("   Merged session: {} messages", merged.request_count());
     println!("   Title: {}", merged.title());
 
     // Example 5: Filter sessions by timestamp
     println!("\n5. Filtering by timestamp range...");
-    let sample_session = create_session_with_requests("Sample", vec![
-        ("Old message", 1000),
-        ("Recent message", 5000),
-    ]);
-    
+    let sample_session = create_session_with_requests(
+        "Sample",
+        vec![("Old message", 1000), ("Recent message", 5000)],
+    );
+
     if let Some((first, last)) = sample_session.timestamp_range() {
         println!("   Session spans: {} to {}", first, last);
         println!("   Duration: {} ms", last - first);
@@ -83,7 +87,7 @@ fn main() -> anyhow::Result<()> {
 fn create_sample_session() -> ChatSession {
     let session_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp_millis();
-    
+
     ChatSession {
         version: 3,
         session_id: Some(session_id),
@@ -96,30 +100,28 @@ fn create_sample_session() -> ChatSession {
         is_imported: false,
         custom_title: Some("Sample Session".to_string()),
         responder_avatar_icon_uri: None,
-        requests: vec![
-            ChatRequest {
-                timestamp: Some(now),
-                message: Some(ChatMessage {
-                    text: Some("Hello, how can I use CSM?".to_string()),
-                    parts: None,
-                }),
-                response: Some(serde_json::json!({
-                    "value": [{"value": "CSM helps you manage VS Code chat sessions!"}]
-                })),
-                request_id: Some(Uuid::new_v4().to_string()),
-                response_id: Some(Uuid::new_v4().to_string()),
-                model_id: Some("copilot/gpt-4".to_string()),
-                variable_data: None,
-                agent: None,
-                result: None,
-                followups: None,
-                is_canceled: None,
-                content_references: None,
-                code_citations: None,
-                response_markdown_info: None,
-                source_session: None,
-            },
-        ],
+        requests: vec![ChatRequest {
+            timestamp: Some(now),
+            message: Some(ChatMessage {
+                text: Some("Hello, how can I use CSM?".to_string()),
+                parts: None,
+            }),
+            response: Some(serde_json::json!({
+                "value": [{"value": "CSM helps you manage VS Code chat sessions!"}]
+            })),
+            request_id: Some(Uuid::new_v4().to_string()),
+            response_id: Some(Uuid::new_v4().to_string()),
+            model_id: Some("copilot/gpt-4".to_string()),
+            variable_data: None,
+            agent: None,
+            result: None,
+            followups: None,
+            is_canceled: None,
+            content_references: None,
+            code_citations: None,
+            response_markdown_info: None,
+            source_session: None,
+        }],
     }
 }
 
@@ -167,17 +169,15 @@ fn create_session_with_requests(title: &str, messages: Vec<(&str, i64)>) -> Chat
 
 /// Merge multiple sessions chronologically
 fn merge_sessions(sessions: &[ChatSession]) -> ChatSession {
-    let mut all_requests: Vec<ChatRequest> = sessions
-        .iter()
-        .flat_map(|s| s.requests.clone())
-        .collect();
-    
+    let mut all_requests: Vec<ChatRequest> =
+        sessions.iter().flat_map(|s| s.requests.clone()).collect();
+
     // Sort by timestamp
     all_requests.sort_by_key(|r| r.timestamp.unwrap_or(0));
-    
+
     let first_time = all_requests.first().and_then(|r| r.timestamp).unwrap_or(0);
     let last_time = all_requests.last().and_then(|r| r.timestamp).unwrap_or(0);
-    
+
     ChatSession {
         version: 3,
         session_id: Some(Uuid::new_v4().to_string()),

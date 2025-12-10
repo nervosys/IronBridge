@@ -11,13 +11,12 @@
 //!
 //! Run with: cargo run --example local_providers
 
-use csm::providers::{
-    ProviderType, ProviderConfig, CsmConfig, ChatProvider,
-    GenericSession, GenericMessage,
-};
 use csm::providers::discovery::discover_all_providers;
 use csm::providers::ollama::OllamaProvider;
 use csm::providers::openai_compat::OpenAICompatProvider;
+use csm::providers::{
+    ChatProvider, CsmConfig, GenericMessage, GenericSession, ProviderConfig, ProviderType,
+};
 use csm::workspace::discover_workspaces;
 
 fn main() -> anyhow::Result<()> {
@@ -27,33 +26,31 @@ fn main() -> anyhow::Result<()> {
     // Example 1: Discover all available local providers
     // ========================================================================
     println!("1. Discovering available local providers...");
-    
+
     let registry = discover_all_providers();
     let providers = registry.providers();
-    
+
     println!("   Found {} providers:", providers.len());
     for provider in providers {
-        let status = if provider.is_available() { "✓" } else { "✗" };
-        let endpoint = provider.sessions_path()
+        let status = if provider.is_available() {
+            "✓"
+        } else {
+            "✗"
+        };
+        let endpoint = provider
+            .sessions_path()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "(no path)".to_string());
-        println!("   {} {} - {}",
-            status,
-            provider.name(),
-            endpoint
-        );
+        println!("   {} {} - {}", status, provider.name(), endpoint);
     }
 
     // ========================================================================
     // Example 2: Check which providers use file storage vs API
     // ========================================================================
     println!("\n2. Provider storage types:");
-    
-    let file_based = vec![
-        ProviderType::Copilot,
-        ProviderType::Cursor,
-    ];
-    
+
+    let file_based = vec![ProviderType::Copilot, ProviderType::Cursor];
+
     let api_based = vec![
         ProviderType::Ollama,
         ProviderType::Vllm,
@@ -64,33 +61,44 @@ fn main() -> anyhow::Result<()> {
         ProviderType::Jan,
         ProviderType::Llamafile,
     ];
-    
+
     println!("   File-based (stores sessions locally):");
     for pt in &file_based {
-        println!("     - {} (uses: {})", pt.display_name(), 
-            if pt.uses_file_storage() { "file storage" } else { "API" });
+        println!(
+            "     - {} (uses: {})",
+            pt.display_name(),
+            if pt.uses_file_storage() {
+                "file storage"
+            } else {
+                "API"
+            }
+        );
     }
-    
+
     println!("   API-based (OpenAI compatible):");
     for pt in &api_based {
-        println!("     - {} @ {}", 
+        println!(
+            "     - {} @ {}",
             pt.display_name(),
-            pt.default_endpoint().unwrap_or("(no default)"));
+            pt.default_endpoint().unwrap_or("(no default)")
+        );
     }
 
     // ========================================================================
     // Example 3: Working with Copilot Chat sessions
     // ========================================================================
     println!("\n3. VS Code Copilot Chat sessions:");
-    
+
     let workspaces = discover_workspaces()?;
     let mut total_sessions = 0;
-    
+
     for ws in workspaces.iter().take(5) {
         if ws.chat_session_count > 0 {
-            println!("   {} - {} sessions",
+            println!(
+                "   {} - {} sessions",
                 ws.project_path.as_deref().unwrap_or(&ws.hash[..12]),
-                ws.chat_session_count);
+                ws.chat_session_count
+            );
             total_sessions += ws.chat_session_count;
         }
     }
@@ -100,22 +108,22 @@ fn main() -> anyhow::Result<()> {
     // Example 4: Create a provider configuration
     // ========================================================================
     println!("\n4. Creating provider configurations:");
-    
+
     // Ollama configuration
     let mut ollama_config = ProviderConfig::new(ProviderType::Ollama);
     ollama_config.endpoint = Some("http://localhost:11434".to_string());
     ollama_config.model = Some("llama2".to_string());
-    
+
     println!("   Ollama config:");
     println!("     Type: {:?}", ollama_config.provider_type);
     println!("     Endpoint: {:?}", ollama_config.endpoint);
     println!("     Model: {:?}", ollama_config.model);
-    
+
     // LM Studio configuration
     let mut lmstudio_config = ProviderConfig::new(ProviderType::LmStudio);
     lmstudio_config.endpoint = Some("http://localhost:1234/v1".to_string());
     lmstudio_config.model = Some("local-model".to_string());
-    
+
     println!("   LM Studio config:");
     println!("     Type: {:?}", lmstudio_config.provider_type);
     println!("     Endpoint: {:?}", lmstudio_config.endpoint);
@@ -124,13 +132,13 @@ fn main() -> anyhow::Result<()> {
     // Example 5: Discover and configure an Ollama provider
     // ========================================================================
     println!("\n5. Ollama provider setup:");
-    
+
     // Discover Ollama (checks if it's installed/running)
     if let Some(ollama) = OllamaProvider::discover() {
         println!("   Provider: {}", ollama.name());
         println!("   Type: {:?}", ollama.provider_type());
         println!("   Available: {}", ollama.is_available());
-        
+
         if ollama.is_available() {
             println!("   ✓ Ollama server is running");
         } else {
@@ -144,14 +152,14 @@ fn main() -> anyhow::Result<()> {
     // Example 6: OpenAI-compatible provider (works with many local servers)
     // ========================================================================
     println!("\n6. OpenAI-compatible provider setup:");
-    
+
     // This works with: LM Studio, vLLM, LocalAI, Ollama (with OpenAI mode), etc.
     let openai_compat = OpenAICompatProvider::new(
         ProviderType::LmStudio,
         "LM Studio",
-        "http://localhost:1234/v1"
+        "http://localhost:1234/v1",
     );
-    
+
     println!("   Provider: {}", openai_compat.name());
     println!("   Type: {:?}", openai_compat.provider_type());
     println!("   Compatible with:");
@@ -164,7 +172,7 @@ fn main() -> anyhow::Result<()> {
     // Example 7: Convert sessions to generic format for transfer
     // ========================================================================
     println!("\n7. Session format conversion:");
-    
+
     // Create a sample generic session (portable format)
     let generic_session = GenericSession {
         id: "local-session-001".to_string(),
@@ -188,12 +196,12 @@ fn main() -> anyhow::Result<()> {
         provider: Some("Ollama".to_string()),
         model: Some("llama2".to_string()),
     };
-    
+
     println!("   Generic session: {}", generic_session.id);
     println!("   Title: {:?}", generic_session.title);
     println!("   Messages: {}", generic_session.messages.len());
     println!("   Provider: {:?}", generic_session.provider);
-    
+
     // Convert to VS Code ChatSession format
     let chat_session: csm::models::ChatSession = generic_session.clone().into();
     println!("\n   Converted to ChatSession:");
@@ -205,14 +213,14 @@ fn main() -> anyhow::Result<()> {
     // Example 8: CSM configuration with multiple providers
     // ========================================================================
     println!("\n8. Multi-provider CSM configuration:");
-    
+
     let mut ollama_cfg = ProviderConfig::new(ProviderType::Ollama);
     ollama_cfg.endpoint = Some("http://localhost:11434".to_string());
     ollama_cfg.model = Some("codellama".to_string());
-    
+
     let mut lmstudio_cfg = ProviderConfig::new(ProviderType::LmStudio);
     lmstudio_cfg.endpoint = Some("http://localhost:1234/v1".to_string());
-    
+
     let config = CsmConfig {
         default_provider: Some(ProviderType::Copilot),
         providers: vec![
@@ -222,15 +230,17 @@ fn main() -> anyhow::Result<()> {
         ],
         auto_discover: true,
     };
-    
+
     println!("   Default provider: {:?}", config.default_provider);
     println!("   Configured providers:");
     for p in &config.providers {
-        println!("     - {} @ {}",
+        println!(
+            "     - {} @ {}",
             p.provider_type.display_name(),
-            p.endpoint.as_deref().unwrap_or("(default)"));
+            p.endpoint.as_deref().unwrap_or("(default)")
+        );
     }
-    
+
     // Serialize to JSON
     let config_json = serde_json::to_string_pretty(&config)?;
     println!("\n   Configuration JSON:");

@@ -1,5 +1,7 @@
 //! Provider configuration and types
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -10,16 +12,14 @@ pub enum ProviderType {
     // ========================================================================
     // Local/File-based Providers
     // ========================================================================
-    
     /// VS Code GitHub Copilot Chat (default)
     Copilot,
     /// Cursor IDE chat
     Cursor,
-    
+
     // ========================================================================
     // Local API Providers
     // ========================================================================
-    
     /// Ollama local models
     Ollama,
     /// vLLM server
@@ -41,11 +41,10 @@ pub enum ProviderType {
     Gpt4All,
     /// Llamafile
     Llamafile,
-    
+
     // ========================================================================
     // Cloud API Providers (with conversation history APIs)
     // ========================================================================
-    
     /// Microsoft 365 Copilot (enterprise)
     #[serde(rename = "m365copilot")]
     M365Copilot,
@@ -94,7 +93,7 @@ pub enum ProviderType {
     /// HuggingFace Inference API
     #[serde(rename = "huggingface")]
     HuggingFace,
-    
+
     /// Custom OpenAI-compatible endpoint
     Custom,
 }
@@ -136,7 +135,7 @@ impl ProviderType {
             Self::Custom => "Custom",
         }
     }
-    
+
     /// Get the default API endpoint for this provider
     pub fn default_endpoint(&self) -> Option<&'static str> {
         match self {
@@ -173,12 +172,12 @@ impl ProviderType {
             Self::Custom => None,
         }
     }
-    
+
     /// Check if this provider uses local file storage for sessions
     pub fn uses_file_storage(&self) -> bool {
         matches!(self, Self::Copilot | Self::Cursor)
     }
-    
+
     /// Check if this provider is a cloud-based service with conversation history API
     pub fn is_cloud_provider(&self) -> bool {
         matches!(
@@ -201,7 +200,7 @@ impl ProviderType {
                 | Self::HuggingFace
         )
     }
-    
+
     /// Check if this provider supports the OpenAI API format
     pub fn is_openai_compatible(&self) -> bool {
         matches!(
@@ -223,7 +222,7 @@ impl ProviderType {
                 | Self::Custom
         )
     }
-    
+
     /// Check if this provider requires an API key
     pub fn requires_api_key(&self) -> bool {
         self.is_cloud_provider()
@@ -241,26 +240,26 @@ impl std::fmt::Display for ProviderType {
 pub struct ProviderConfig {
     /// Provider type
     pub provider_type: ProviderType,
-    
+
     /// Whether this provider is enabled
     #[serde(default = "default_true")]
     pub enabled: bool,
-    
+
     /// API endpoint URL (for server-based providers)
     pub endpoint: Option<String>,
-    
+
     /// API key (if required)
     pub api_key: Option<String>,
-    
+
     /// Model to use (if configurable)
     pub model: Option<String>,
-    
+
     /// Custom name for this provider instance
     pub name: Option<String>,
-    
+
     /// Path to session storage (for file-based providers)
     pub storage_path: Option<PathBuf>,
-    
+
     /// Additional provider-specific settings
     #[serde(default)]
     pub extra: std::collections::HashMap<String, serde_json::Value>,
@@ -284,7 +283,7 @@ impl ProviderConfig {
             extra: std::collections::HashMap::new(),
         }
     }
-    
+
     /// Get the display name for this provider
     pub fn display_name(&self) -> String {
         self.name
@@ -299,10 +298,10 @@ pub struct CsmConfig {
     /// Configured providers
     #[serde(default)]
     pub providers: Vec<ProviderConfig>,
-    
+
     /// Default provider for new sessions
     pub default_provider: Option<ProviderType>,
-    
+
     /// Whether to auto-discover providers
     #[serde(default = "default_true")]
     pub auto_discover: bool,
@@ -322,7 +321,7 @@ impl CsmConfig {
     /// Load configuration from the default location
     pub fn load() -> anyhow::Result<Self> {
         let config_path = Self::config_path()?;
-        
+
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)?;
             let config: Self = serde_json::from_str(&content)?;
@@ -331,34 +330,34 @@ impl CsmConfig {
             Ok(Self::default())
         }
     }
-    
+
     /// Save configuration to the default location
     pub fn save(&self) -> anyhow::Result<()> {
         let config_path = Self::config_path()?;
-        
+
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         let content = serde_json::to_string_pretty(self)?;
         std::fs::write(&config_path, content)?;
         Ok(())
     }
-    
+
     /// Get the configuration file path
     pub fn config_path() -> anyhow::Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
         Ok(config_dir.join("csm").join("config.json"))
     }
-    
+
     /// Get a provider config by type
     pub fn get_provider(&self, provider_type: ProviderType) -> Option<&ProviderConfig> {
         self.providers
             .iter()
             .find(|p| p.provider_type == provider_type)
     }
-    
+
     /// Add or update a provider config
     pub fn set_provider(&mut self, config: ProviderConfig) {
         if let Some(existing) = self

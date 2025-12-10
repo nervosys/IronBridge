@@ -120,9 +120,9 @@ mod error_from_tests {
     #[test]
     fn test_from_sqlite_error() {
         // Create a SQLite error by trying to open a non-existent database in read-only mode
-        let sqlite_result: Result<rusqlite::Connection, rusqlite::Error> = 
+        let sqlite_result: Result<rusqlite::Connection, rusqlite::Error> =
             rusqlite::Connection::open_in_memory();
-        
+
         // This should succeed, but we can test the From implementation
         if let Ok(conn) = sqlite_result {
             // Try to execute invalid SQL
@@ -255,7 +255,9 @@ mod result_type_tests {
             if x > 0 {
                 Ok(x * 2)
             } else {
-                Err(CsmError::InvalidSessionFormat("negative number".to_string()))
+                Err(CsmError::InvalidSessionFormat(
+                    "negative number".to_string(),
+                ))
             }
         }
 
@@ -317,10 +319,10 @@ mod error_traits_tests {
     #[test]
     fn test_error_has_source() {
         use std::error::Error;
-        
+
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test");
         let csm_err: CsmError = io_err.into();
-        
+
         // IO errors should have a source
         // (thiserror handles this automatically with #[from])
         let _ = csm_err.source();

@@ -20,26 +20,26 @@ pub struct Colors;
 #[allow(dead_code)]
 impl Colors {
     // Background colors
-    pub const HEADER_BG: Color = Color::Rgb(26, 26, 36);      // Dark background
-    
+    pub const HEADER_BG: Color = Color::Rgb(26, 26, 36); // Dark background
+
     // Selection colors
-    pub const SELECTED_BG: Color = Color::Rgb(53, 53, 71);    // Muted selection background
-    pub const SELECTED_FG: Color = Color::Rgb(166, 226, 46);  // Monokai green
-    
+    pub const SELECTED_BG: Color = Color::Rgb(53, 53, 71); // Muted selection background
+    pub const SELECTED_FG: Color = Color::Rgb(166, 226, 46); // Monokai green
+
     // Border colors
-    pub const BORDER: Color = Color::Rgb(58, 58, 78);         // Muted border
+    pub const BORDER: Color = Color::Rgb(58, 58, 78); // Muted border
     pub const BORDER_FOCUSED: Color = Color::Rgb(253, 151, 31); // Monokai orange
-    
+
     // Text colors
-    pub const TEXT: Color = Color::Rgb(232, 232, 232);        // Light text
-    pub const TEXT_DIM: Color = Color::Rgb(117, 113, 94);     // Muted/comment color
-    
+    pub const TEXT: Color = Color::Rgb(232, 232, 232); // Light text
+    pub const TEXT_DIM: Color = Color::Rgb(117, 113, 94); // Muted/comment color
+
     // Accent colors (Monokai palette)
-    pub const ACCENT: Color = Color::Rgb(102, 217, 239);      // Monokai cyan
-    pub const SUCCESS: Color = Color::Rgb(166, 226, 46);      // Monokai green
-    pub const WARNING: Color = Color::Rgb(230, 219, 116);     // Monokai yellow
-    pub const INFO: Color = Color::Rgb(102, 217, 239);        // Monokai cyan
-    pub const PURPLE: Color = Color::Rgb(174, 129, 255);      // Monokai purple
+    pub const ACCENT: Color = Color::Rgb(102, 217, 239); // Monokai cyan
+    pub const SUCCESS: Color = Color::Rgb(166, 226, 46); // Monokai green
+    pub const WARNING: Color = Color::Rgb(230, 219, 116); // Monokai yellow
+    pub const INFO: Color = Color::Rgb(102, 217, 239); // Monokai cyan
+    pub const PURPLE: Color = Color::Rgb(174, 129, 255); // Monokai purple
 }
 
 /// Render the entire UI
@@ -47,9 +47,9 @@ pub fn render(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Min(0),     // Main content
-            Constraint::Length(3),  // Footer/status
+            Constraint::Length(3), // Header
+            Constraint::Min(0),    // Main content
+            Constraint::Length(3), // Footer/status
         ])
         .split(frame.area());
 
@@ -123,23 +123,27 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
     let header_cells = ["#", "Hash", "Project Path", "Sessions", "Status"]
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().fg(Colors::ACCENT).bold()));
-    
+
     let header = Row::new(header_cells)
         .style(Style::default().bg(Colors::HEADER_BG))
         .height(1);
 
-    let rows: Vec<Row> = app.filtered_indices
+    let rows: Vec<Row> = app
+        .filtered_indices
         .iter()
         .enumerate()
         .map(|(display_idx, &actual_idx)| {
             let ws = &app.workspaces[actual_idx];
             let is_selected = display_idx == app.workspace_index;
-            
+
             let hash = format!("{}...", &ws.hash[..8.min(ws.hash.len())]);
-            let path = ws.project_path.clone().unwrap_or_else(|| "(none)".to_string());
+            let path = ws
+                .project_path
+                .clone()
+                .unwrap_or_else(|| "(none)".to_string());
             let sessions = ws.chat_session_count.to_string();
             let status = if ws.has_chat_sessions { "[OK]" } else { "[-]" };
-            
+
             let status_style = if ws.has_chat_sessions {
                 Style::default().fg(Colors::SUCCESS)
             } else {
@@ -147,7 +151,9 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             let row_style = if is_selected {
-                Style::default().bg(Colors::SELECTED_BG).fg(Colors::SELECTED_FG)
+                Style::default()
+                    .bg(Colors::SELECTED_BG)
+                    .fg(Colors::SELECTED_FG)
             } else {
                 Style::default().fg(Colors::TEXT)
             };
@@ -180,7 +186,11 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
             .title(Span::styled(
-                format!(" Workspaces ({}/{}) ", app.workspace_index + 1, app.filtered_indices.len()),
+                format!(
+                    " Workspaces ({}/{}) ",
+                    app.workspace_index + 1,
+                    app.filtered_indices.len()
+                ),
                 Style::default().fg(Colors::ACCENT),
             )),
     )
@@ -189,7 +199,7 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut state = TableState::default();
     state.select(Some(app.workspace_index));
-    
+
     frame.render_stateful_widget(table, area, &mut state);
 }
 
@@ -198,7 +208,10 @@ fn render_session_preview(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Colors::BORDER))
-        .title(Span::styled(" Sessions Preview ", Style::default().fg(Colors::ACCENT)));
+        .title(Span::styled(
+            " Sessions Preview ",
+            Style::default().fg(Colors::ACCENT),
+        ));
 
     if app.sessions.is_empty() {
         let text = Paragraph::new(Text::styled(
@@ -210,7 +223,8 @@ fn render_session_preview(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    let items: Vec<ListItem> = app.sessions
+    let items: Vec<ListItem> = app
+        .sessions
         .iter()
         .enumerate()
         .map(|(i, s)| {
@@ -220,9 +234,12 @@ fn render_session_preview(frame: &mut Frame, app: &App, area: Rect) {
             } else {
                 Style::default().fg(Colors::TEXT)
             };
-            
+
             let content = Line::from(vec![
-                Span::styled(format!("{:2}. ", i + 1), Style::default().fg(Colors::TEXT_DIM)),
+                Span::styled(
+                    format!("{:2}. ", i + 1),
+                    Style::default().fg(Colors::TEXT_DIM),
+                ),
                 Span::styled(truncate_string(&title, 30), style),
                 Span::styled(
                     format!(" ({} msgs)", s.message_count),
@@ -256,7 +273,8 @@ fn render_sessions_view(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render session table
 fn render_session_table(frame: &mut Frame, app: &App, area: Rect) {
-    let ws_name = app.current_workspace()
+    let ws_name = app
+        .current_workspace()
         .and_then(|ws| ws.project_path.as_ref())
         .map(|p| truncate_path(p, 30))
         .unwrap_or_else(|| "(none)".to_string());
@@ -264,20 +282,23 @@ fn render_session_table(frame: &mut Frame, app: &App, area: Rect) {
     let header_cells = ["#", "Title", "Messages", "Modified"]
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().fg(Colors::ACCENT).bold()));
-    
+
     let header = Row::new(header_cells)
         .style(Style::default().bg(Colors::HEADER_BG))
         .height(1);
 
-    let rows: Vec<Row> = app.sessions
+    let rows: Vec<Row> = app
+        .sessions
         .iter()
         .enumerate()
         .map(|(i, s)| {
             let is_selected = i == app.session_index;
             let title = s.session.title();
-            
+
             let row_style = if is_selected {
-                Style::default().bg(Colors::SELECTED_BG).fg(Colors::SELECTED_FG)
+                Style::default()
+                    .bg(Colors::SELECTED_BG)
+                    .fg(Colors::SELECTED_FG)
             } else {
                 Style::default().fg(Colors::TEXT)
             };
@@ -317,7 +338,7 @@ fn render_session_table(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut state = TableState::default();
     state.select(Some(app.session_index));
-    
+
     frame.render_stateful_widget(table, area, &mut state);
 }
 
@@ -326,7 +347,10 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Colors::BORDER))
-        .title(Span::styled(" Message Preview ", Style::default().fg(Colors::ACCENT)));
+        .title(Span::styled(
+            " Message Preview ",
+            Style::default().fg(Colors::ACCENT),
+        ));
 
     let Some(session) = app.current_session() else {
         let text = Paragraph::new(Text::styled(
@@ -350,17 +374,15 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     let mut lines: Vec<Line> = Vec::new();
-    
+
     for (i, req) in requests.iter().take(10).enumerate() {
         // User message
         if let Some(msg) = &req.message {
             let text = msg.get_text();
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("{}. User: ", i + 1),
-                    Style::default().fg(Colors::SUCCESS).bold(),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("{}. User: ", i + 1),
+                Style::default().fg(Colors::SUCCESS).bold(),
+            )]));
             lines.push(Line::from(Span::styled(
                 truncate_string(&text, 60),
                 Style::default().fg(Colors::TEXT),
@@ -376,9 +398,7 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
         )));
     }
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, area);
 }
@@ -398,7 +418,10 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
     let info_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
-        .title(Span::styled(" Session Info ", Style::default().fg(Colors::ACCENT)));
+        .title(Span::styled(
+            " Session Info ",
+            Style::default().fg(Colors::ACCENT),
+        ));
 
     let title = session.session.title();
     let info_text = Text::from(vec![
@@ -412,7 +435,10 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("  |  Modified: ", Style::default().fg(Colors::TEXT_DIM)),
             Span::styled(&session.last_modified, Style::default().fg(Colors::INFO)),
             Span::styled("  |  Messages: ", Style::default().fg(Colors::TEXT_DIM)),
-            Span::styled(format!("{}", session.message_count), Style::default().fg(Colors::SUCCESS)),
+            Span::styled(
+                format!("{}", session.message_count),
+                Style::default().fg(Colors::SUCCESS),
+            ),
         ]),
     ]);
 
@@ -423,10 +449,13 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
     let msg_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Colors::BORDER))
-        .title(Span::styled(" Messages ", Style::default().fg(Colors::ACCENT)));
+        .title(Span::styled(
+            " Messages ",
+            Style::default().fg(Colors::ACCENT),
+        ));
 
     let mut lines: Vec<Line> = Vec::new();
-    
+
     for (i, req) in session.session.requests.iter().enumerate() {
         // Timestamp
         if let Some(ts) = req.timestamp {
@@ -442,12 +471,10 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
         // User message
         if let Some(msg) = &req.message {
             let text = msg.get_text();
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("[{}] User: ", i + 1),
-                    Style::default().fg(Colors::SUCCESS).bold(),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("[{}] User: ", i + 1),
+                Style::default().fg(Colors::SUCCESS).bold(),
+            )]));
             for line in text.lines() {
                 lines.push(Line::from(Span::styled(
                     format!("    {}", line),
@@ -470,14 +497,16 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
         .begin_symbol(Some("^"))
         .end_symbol(Some("v"));
-    
+
     let total_lines = session.session.requests.len() * 5; // Approximate
-    let mut scrollbar_state = ScrollbarState::new(total_lines)
-        .position(app.detail_scroll);
-    
+    let mut scrollbar_state = ScrollbarState::new(total_lines).position(app.detail_scroll);
+
     frame.render_stateful_widget(
         scrollbar,
-        chunks[1].inner(ratatui::layout::Margin { horizontal: 0, vertical: 1 }),
+        chunks[1].inner(ratatui::layout::Margin {
+            horizontal: 0,
+            vertical: 1,
+        }),
         &mut scrollbar_state,
     );
 }
@@ -487,7 +516,10 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
     let mode_hint = match app.mode {
         AppMode::Workspaces => {
             if app.filter_active {
-                format!("Filter: {}_ | [Enter] confirm | [Esc] cancel", app.filter_query)
+                format!(
+                    "Filter: {}_ | [Enter] confirm | [Esc] cancel",
+                    app.filter_query
+                )
             } else {
                 "[j/k] navigate | [Enter] view sessions | [/] filter | [r] refresh | [?] help | [q] quit".to_string()
             }
@@ -495,16 +527,12 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         AppMode::Sessions => {
             "[j/k] navigate | [Enter] view details | [Esc] back | [?] help | [q] quit".to_string()
         }
-        AppMode::SessionDetail => {
-            "[j/k] scroll | [Esc] back | [?] help | [q] quit".to_string()
-        }
-        AppMode::Help => {
-            "Press any key to close help".to_string()
-        }
+        AppMode::SessionDetail => "[j/k] scroll | [Esc] back | [?] help | [q] quit".to_string(),
+        AppMode::Help => "Press any key to close help".to_string(),
     };
 
     let status = app.status_message.as_deref().unwrap_or("");
-    
+
     let footer = Paragraph::new(Line::from(vec![
         Span::styled(" ", Style::default()),
         Span::styled(mode_hint, Style::default().fg(Colors::TEXT_DIM)),
@@ -524,15 +552,19 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
 /// Render help overlay
 fn render_help_overlay(frame: &mut Frame) {
     let area = centered_rect(60, 70, frame.area());
-    
+
     frame.render_widget(Clear, area);
-    
+
     let help_text = vec![
-        Line::from(Span::styled("Keyboard Shortcuts", Style::default().fg(Colors::ACCENT).bold())),
+        Line::from(Span::styled(
+            "Keyboard Shortcuts",
+            Style::default().fg(Colors::ACCENT).bold(),
+        )),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("Navigation", Style::default().fg(Colors::SUCCESS).bold()),
-        ]),
+        Line::from(vec![Span::styled(
+            "Navigation",
+            Style::default().fg(Colors::SUCCESS).bold(),
+        )]),
         Line::from(vec![
             Span::styled("  j / Down    ", Style::default().fg(Colors::PURPLE)),
             Span::styled("Move down", Style::default().fg(Colors::TEXT)),
@@ -554,9 +586,10 @@ fn render_help_overlay(frame: &mut Frame) {
             Span::styled("Page up/down", Style::default().fg(Colors::TEXT)),
         ]),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("Actions", Style::default().fg(Colors::SUCCESS).bold()),
-        ]),
+        Line::from(vec![Span::styled(
+            "Actions",
+            Style::default().fg(Colors::SUCCESS).bold(),
+        )]),
         Line::from(vec![
             Span::styled("  Enter       ", Style::default().fg(Colors::PURPLE)),
             Span::styled("Select / Enter view", Style::default().fg(Colors::TEXT)),
@@ -567,16 +600,20 @@ fn render_help_overlay(frame: &mut Frame) {
         ]),
         Line::from(vec![
             Span::styled("  /           ", Style::default().fg(Colors::PURPLE)),
-            Span::styled("Start filter (workspaces view)", Style::default().fg(Colors::TEXT)),
+            Span::styled(
+                "Start filter (workspaces view)",
+                Style::default().fg(Colors::TEXT),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  r           ", Style::default().fg(Colors::PURPLE)),
             Span::styled("Refresh data", Style::default().fg(Colors::TEXT)),
         ]),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("General", Style::default().fg(Colors::SUCCESS).bold()),
-        ]),
+        Line::from(vec![Span::styled(
+            "General",
+            Style::default().fg(Colors::SUCCESS).bold(),
+        )]),
         Line::from(vec![
             Span::styled("  ?           ", Style::default().fg(Colors::PURPLE)),
             Span::styled("Toggle this help", Style::default().fg(Colors::TEXT)),
@@ -595,7 +632,10 @@ fn render_help_overlay(frame: &mut Frame) {
     let help = Paragraph::new(help_text)
         .block(
             Block::default()
-                .title(Span::styled(" Help ", Style::default().fg(Colors::ACCENT).bold()))
+                .title(Span::styled(
+                    " Help ",
+                    Style::default().fg(Colors::ACCENT).bold(),
+                ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
                 .style(Style::default().bg(Color::Rgb(24, 24, 37))),
@@ -631,11 +671,11 @@ fn truncate_path(path: &str, max_len: usize) -> String {
     if path.len() <= max_len {
         return path.to_string();
     }
-    
+
     // Try to show the end of the path
     let parts: Vec<&str> = path.split(['/', '\\']).collect();
     let mut result = String::new();
-    
+
     for part in parts.iter().rev() {
         if result.is_empty() {
             result = part.to_string();
@@ -646,7 +686,7 @@ fn truncate_path(path: &str, max_len: usize) -> String {
             break;
         }
     }
-    
+
     result
 }
 

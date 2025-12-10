@@ -7,13 +7,13 @@
 //! - VS Code process detection
 //! - Backup functionality
 
+#[allow(unused_imports)]
+use csm::models::ChatSession;
+use csm::models::{ChatSessionIndex, ChatSessionIndexEntry};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use csm::models::{ChatSessionIndex, ChatSessionIndexEntry};
-#[allow(unused_imports)]
-use csm::models::ChatSession;
-use std::collections::HashMap;
 
 // ============================================================================
 // Test Database Setup Helpers
@@ -42,12 +42,11 @@ fn insert_into_db(path: &std::path::Path, key: &str, value: &str) -> rusqlite::R
 /// Read a value from the test database
 fn read_from_db(path: &std::path::Path, key: &str) -> rusqlite::Result<Option<String>> {
     let conn = rusqlite::Connection::open(path)?;
-    let result: rusqlite::Result<String> = conn.query_row(
-        "SELECT value FROM ItemTable WHERE key = ?",
-        [key],
-        |row| row.get(0),
-    );
-    
+    let result: rusqlite::Result<String> =
+        conn.query_row("SELECT value FROM ItemTable WHERE key = ?", [key], |row| {
+            row.get(0)
+        });
+
     match result {
         Ok(value) => Ok(Some(value)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -68,10 +67,10 @@ mod read_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let result = read_chat_session_index(&db_path);
         assert!(result.is_ok());
-        
+
         let index = result.unwrap();
         assert_eq!(index.version, 1); // Default version
         assert!(index.entries.is_empty());
@@ -82,7 +81,7 @@ mod read_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let index_json = r#"{
             "version": 1,
             "entries": {
@@ -96,12 +95,12 @@ mod read_chat_session_index_tests {
                 }
             }
         }"#;
-        
+
         insert_into_db(&db_path, "chat.ChatSessionStore.index", index_json).unwrap();
-        
+
         let result = read_chat_session_index(&db_path);
         assert!(result.is_ok());
-        
+
         let index = result.unwrap();
         assert_eq!(index.entries.len(), 1);
         assert!(index.entries.contains_key("session-123"));
@@ -112,7 +111,7 @@ mod read_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let mut entries = HashMap::new();
         for i in 0..10 {
             entries.insert(
@@ -127,12 +126,15 @@ mod read_chat_session_index_tests {
                 },
             );
         }
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         let json = serde_json::to_string(&index).unwrap();
-        
+
         insert_into_db(&db_path, "chat.ChatSessionStore.index", &json).unwrap();
-        
+
         let result = read_chat_session_index(&db_path);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().entries.len(), 10);
@@ -150,9 +152,9 @@ mod read_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         insert_into_db(&db_path, "chat.ChatSessionStore.index", "invalid json").unwrap();
-        
+
         let result = read_chat_session_index(&db_path);
         assert!(result.is_err());
     }
@@ -171,11 +173,11 @@ mod write_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let index = ChatSessionIndex::default();
         let result = write_chat_session_index(&db_path, &index);
         assert!(result.is_ok());
-        
+
         // Verify it was written
         let stored = read_from_db(&db_path, "chat.ChatSessionStore.index").unwrap();
         assert!(stored.is_some());
@@ -186,7 +188,7 @@ mod write_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let mut entries = HashMap::new();
         entries.insert(
             "test-session".to_string(),
@@ -199,10 +201,13 @@ mod write_chat_session_index_tests {
                 is_empty: false,
             },
         );
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         write_chat_session_index(&db_path, &index).unwrap();
-        
+
         // Read back and verify
         let read_index = read_chat_session_index(&db_path).unwrap();
         assert_eq!(read_index.entries.len(), 1);
@@ -214,7 +219,7 @@ mod write_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         // Write initial index
         let mut entries1 = HashMap::new();
         entries1.insert(
@@ -228,9 +233,16 @@ mod write_chat_session_index_tests {
                 is_empty: false,
             },
         );
-        
-        write_chat_session_index(&db_path, &ChatSessionIndex { version: 1, entries: entries1 }).unwrap();
-        
+
+        write_chat_session_index(
+            &db_path,
+            &ChatSessionIndex {
+                version: 1,
+                entries: entries1,
+            },
+        )
+        .unwrap();
+
         // Write new index
         let mut entries2 = HashMap::new();
         entries2.insert(
@@ -244,9 +256,16 @@ mod write_chat_session_index_tests {
                 is_empty: false,
             },
         );
-        
-        write_chat_session_index(&db_path, &ChatSessionIndex { version: 1, entries: entries2 }).unwrap();
-        
+
+        write_chat_session_index(
+            &db_path,
+            &ChatSessionIndex {
+                version: 1,
+                entries: entries2,
+            },
+        )
+        .unwrap();
+
         // Should only have the second entry
         let read_index = read_chat_session_index(&db_path).unwrap();
         assert_eq!(read_index.entries.len(), 1);
@@ -259,7 +278,7 @@ mod write_chat_session_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let mut entries = HashMap::new();
         for i in 0..5 {
             entries.insert(
@@ -269,19 +288,24 @@ mod write_chat_session_index_tests {
                     title: format!("Title {}", i),
                     last_message_date: 1700000000000 + i * 1000,
                     is_imported: i % 2 == 0,
-                    initial_location: ["panel", "editor", "terminal", "notebook", "inline"][i as usize % 5].to_string(),
+                    initial_location: ["panel", "editor", "terminal", "notebook", "inline"]
+                        [i as usize % 5]
+                        .to_string(),
                     is_empty: i == 0,
                 },
             );
         }
-        
-        let original = ChatSessionIndex { version: 1, entries };
+
+        let original = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         write_chat_session_index(&db_path, &original).unwrap();
-        
+
         let restored = read_chat_session_index(&db_path).unwrap();
         assert_eq!(restored.version, original.version);
         assert_eq!(restored.entries.len(), original.entries.len());
-        
+
         for (key, entry) in &restored.entries {
             let orig_entry = original.entries.get(key).unwrap();
             assert_eq!(entry.title, orig_entry.title);
@@ -303,7 +327,7 @@ mod add_session_to_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         let result = add_session_to_index(
             &db_path,
             "new-session-123",
@@ -314,11 +338,11 @@ mod add_session_to_index_tests {
             false,
         );
         assert!(result.is_ok());
-        
+
         let index = read_chat_session_index(&db_path).unwrap();
         assert_eq!(index.entries.len(), 1);
         assert!(index.entries.contains_key("new-session-123"));
-        
+
         let entry = index.entries.get("new-session-123").unwrap();
         assert_eq!(entry.title, "New Session");
         assert_eq!(entry.is_imported, false);
@@ -329,13 +353,31 @@ mod add_session_to_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         // Add first session
-        add_session_to_index(&db_path, "session-1", "First", 1700000000000, false, "panel", false).unwrap();
-        
+        add_session_to_index(
+            &db_path,
+            "session-1",
+            "First",
+            1700000000000,
+            false,
+            "panel",
+            false,
+        )
+        .unwrap();
+
         // Add second session
-        add_session_to_index(&db_path, "session-2", "Second", 1700000001000, true, "editor", false).unwrap();
-        
+        add_session_to_index(
+            &db_path,
+            "session-2",
+            "Second",
+            1700000001000,
+            true,
+            "editor",
+            false,
+        )
+        .unwrap();
+
         let index = read_chat_session_index(&db_path).unwrap();
         assert_eq!(index.entries.len(), 2);
         assert!(index.entries.contains_key("session-1"));
@@ -347,16 +389,34 @@ mod add_session_to_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         // Add session with initial title
-        add_session_to_index(&db_path, "session-1", "Original Title", 1700000000000, false, "panel", false).unwrap();
-        
+        add_session_to_index(
+            &db_path,
+            "session-1",
+            "Original Title",
+            1700000000000,
+            false,
+            "panel",
+            false,
+        )
+        .unwrap();
+
         // Update same session with new title
-        add_session_to_index(&db_path, "session-1", "Updated Title", 1700000001000, true, "terminal", true).unwrap();
-        
+        add_session_to_index(
+            &db_path,
+            "session-1",
+            "Updated Title",
+            1700000001000,
+            true,
+            "terminal",
+            true,
+        )
+        .unwrap();
+
         let index = read_chat_session_index(&db_path).unwrap();
         assert_eq!(index.entries.len(), 1);
-        
+
         let entry = index.entries.get("session-1").unwrap();
         assert_eq!(entry.title, "Updated Title");
         assert_eq!(entry.is_imported, true);
@@ -368,9 +428,18 @@ mod add_session_to_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
-        add_session_to_index(&db_path, "imported-123", "Imported Session", 1700000000000, true, "imported", false).unwrap();
-        
+
+        add_session_to_index(
+            &db_path,
+            "imported-123",
+            "Imported Session",
+            1700000000000,
+            true,
+            "imported",
+            false,
+        )
+        .unwrap();
+
         let index = read_chat_session_index(&db_path).unwrap();
         let entry = index.entries.get("imported-123").unwrap();
         assert!(entry.is_imported);
@@ -382,9 +451,18 @@ mod add_session_to_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
-        add_session_to_index(&db_path, "empty-session", "Empty", 1700000000000, false, "panel", true).unwrap();
-        
+
+        add_session_to_index(
+            &db_path,
+            "empty-session",
+            "Empty",
+            1700000000000,
+            false,
+            "panel",
+            true,
+        )
+        .unwrap();
+
         let index = read_chat_session_index(&db_path).unwrap();
         let entry = index.entries.get("empty-session").unwrap();
         assert!(entry.is_empty);
@@ -395,7 +473,7 @@ mod add_session_to_index_tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("state.vscdb");
         create_test_database(&db_path).unwrap();
-        
+
         for i in 0..100 {
             add_session_to_index(
                 &db_path,
@@ -405,9 +483,10 @@ mod add_session_to_index_tests {
                 i % 5 == 0,
                 "panel",
                 i % 10 == 0,
-            ).unwrap();
+            )
+            .unwrap();
         }
-        
+
         let index = read_chat_session_index(&db_path).unwrap();
         assert_eq!(index.entries.len(), 100);
     }
@@ -460,13 +539,15 @@ mod backup_workspace_sessions_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         let result = backup_workspace_sessions(temp_dir.path());
         assert!(result.is_ok());
-        
+
         if let Some(backup_path) = result.unwrap() {
             assert!(backup_path.exists());
-            assert!(backup_path.to_string_lossy().contains("chatSessions-backup"));
+            assert!(backup_path
+                .to_string_lossy()
+                .contains("chatSessions-backup"));
         }
     }
 
@@ -475,29 +556,35 @@ mod backup_workspace_sessions_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         // Create some session files
         for i in 0..5 {
-            let session_json = format!(r#"{{
+            let session_json = format!(
+                r#"{{
                 "version": 3,
                 "sessionId": "session-{}",
                 "creationDate": {},
                 "lastMessageDate": {},
                 "requests": []
-            }}"#, i, 1700000000000i64 + i as i64 * 1000, 1700000000000i64 + i as i64 * 1000);
-            
+            }}"#,
+                i,
+                1700000000000i64 + i as i64 * 1000,
+                1700000000000i64 + i as i64 * 1000
+            );
+
             fs::write(
                 chat_sessions.join(format!("session-{}.json", i)),
                 session_json,
-            ).unwrap();
+            )
+            .unwrap();
         }
-        
+
         let result = backup_workspace_sessions(temp_dir.path());
         assert!(result.is_ok());
-        
+
         let backup_path = result.unwrap().unwrap();
         assert!(backup_path.exists());
-        
+
         // Verify all files were copied
         let backup_entries: Vec<_> = fs::read_dir(&backup_path)
             .unwrap()
@@ -511,15 +598,15 @@ mod backup_workspace_sessions_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         // Create a subdirectory
         let subdir = chat_sessions.join("subdir");
         fs::create_dir(&subdir).unwrap();
         fs::write(subdir.join("file.txt"), "content").unwrap();
-        
+
         let result = backup_workspace_sessions(temp_dir.path());
         assert!(result.is_ok());
-        
+
         let backup_path = result.unwrap().unwrap();
         assert!(backup_path.join("subdir").exists());
         assert!(backup_path.join("subdir").join("file.txt").exists());
@@ -530,13 +617,13 @@ mod backup_workspace_sessions_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         let original_content = r#"{"version": 3, "sessionId": "test", "requests": []}"#;
         fs::write(chat_sessions.join("test.json"), original_content).unwrap();
-        
+
         let result = backup_workspace_sessions(temp_dir.path());
         let backup_path = result.unwrap().unwrap();
-        
+
         let backed_up_content = fs::read_to_string(backup_path.join("test.json")).unwrap();
         assert_eq!(original_content, backed_up_content);
     }
@@ -547,12 +634,12 @@ mod backup_workspace_sessions_tests {
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
         fs::write(chat_sessions.join("session.json"), "{}").unwrap();
-        
+
         // Create multiple backups
         let backup1 = backup_workspace_sessions(temp_dir.path()).unwrap().unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1100)); // Wait for different timestamp
         let backup2 = backup_workspace_sessions(temp_dir.path()).unwrap().unwrap();
-        
+
         // Both should exist and be different
         assert!(backup1.exists());
         assert!(backup2.exists());
@@ -571,7 +658,7 @@ mod get_workspace_storage_db_tests {
     fn test_get_db_path() {
         let result = get_workspace_storage_db("test-workspace-hash");
         assert!(result.is_ok());
-        
+
         let path = result.unwrap();
         assert!(path.to_string_lossy().contains("test-workspace-hash"));
         assert!(path.to_string_lossy().contains("state.vscdb"));
@@ -581,7 +668,7 @@ mod get_workspace_storage_db_tests {
     fn test_get_db_path_different_workspaces() {
         let path1 = get_workspace_storage_db("workspace-1").unwrap();
         let path2 = get_workspace_storage_db("workspace-2").unwrap();
-        
+
         assert_ne!(path1, path2);
     }
 
@@ -601,8 +688,10 @@ mod register_all_sessions_tests {
     use super::*;
     use csm::storage::register_all_sessions_from_directory;
 
+    #[allow(dead_code)]
     fn create_test_session_file(dir: &std::path::Path, session_id: &str, title: &str) {
-        let session_json = format!(r#"{{
+        let session_json = format!(
+            r#"{{
             "version": 3,
             "sessionId": "{}",
             "creationDate": 1700000000000,
@@ -616,8 +705,10 @@ mod register_all_sessions_tests {
                     "response": {{"value": [{{"value": "Test response"}}]}}
                 }}
             ]
-        }}"#, session_id, title);
-        
+        }}"#,
+            session_id, title
+        );
+
         fs::write(dir.join(format!("{}.json", session_id)), session_json).unwrap();
     }
 
@@ -629,7 +720,7 @@ mod register_all_sessions_tests {
         let temp_dir = TempDir::new().unwrap();
         let chat_sessions = temp_dir.path().join("chatSessions");
         fs::create_dir(&chat_sessions).unwrap();
-        
+
         // This should fail because the database doesn't exist
         let result = register_all_sessions_from_directory(
             "nonexistent-workspace-hash",
@@ -646,9 +737,9 @@ mod register_all_sessions_tests {
 
 mod storage_error_tests {
     use super::*;
-    use csm::storage::read_chat_session_index;
     #[allow(unused_imports)]
     use csm::error::CsmError;
+    use csm::storage::read_chat_session_index;
 
     #[test]
     fn test_read_from_directory() {
@@ -663,7 +754,7 @@ mod storage_error_tests {
         let temp_dir = TempDir::new().unwrap();
         let empty_file = temp_dir.path().join("empty.vscdb");
         fs::write(&empty_file, "").unwrap();
-        
+
         // Empty file is not a valid SQLite database
         let result = read_chat_session_index(&empty_file);
         assert!(result.is_err());
@@ -674,7 +765,7 @@ mod storage_error_tests {
         let temp_dir = TempDir::new().unwrap();
         let corrupt_file = temp_dir.path().join("corrupt.vscdb");
         fs::write(&corrupt_file, "not a sqlite database").unwrap();
-        
+
         let result = read_chat_session_index(&corrupt_file);
         assert!(result.is_err());
     }
@@ -701,10 +792,13 @@ mod index_serialization_tests {
                 is_empty: false,
             },
         );
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         let json = serde_json::to_string_pretty(&index).unwrap();
-        
+
         // Verify JSON structure
         assert!(json.contains("\"version\": 1"));
         assert!(json.contains("\"entries\""));
@@ -727,11 +821,14 @@ mod index_serialization_tests {
                 is_empty: false,
             },
         );
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         let json = serde_json::to_string(&index).unwrap();
         let restored: ChatSessionIndex = serde_json::from_str(&json).unwrap();
-        
+
         let entry = restored.entries.get("special-chars").unwrap();
         assert!(entry.title.contains("quotes"));
         assert!(entry.title.contains("backslashes"));
@@ -751,11 +848,14 @@ mod index_serialization_tests {
                 is_empty: false,
             },
         );
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         let json = serde_json::to_string(&index).unwrap();
         let restored: ChatSessionIndex = serde_json::from_str(&json).unwrap();
-        
+
         let entry = restored.entries.get("unicode").unwrap();
         assert!(entry.title.contains("日本語"));
         assert!(entry.title.contains("🚀"));
@@ -775,11 +875,14 @@ mod index_serialization_tests {
                 is_empty: true,
             },
         );
-        
-        let index = ChatSessionIndex { version: 1, entries };
+
+        let index = ChatSessionIndex {
+            version: 1,
+            entries,
+        };
         let json = serde_json::to_string(&index).unwrap();
         let restored: ChatSessionIndex = serde_json::from_str(&json).unwrap();
-        
+
         let entry = restored.entries.get("empty-title").unwrap();
         assert!(entry.title.is_empty());
     }

@@ -34,7 +34,7 @@ mod cloud_provider_type_tests {
         assert!(ProviderType::Fireworks.is_cloud_provider());
         assert!(ProviderType::Replicate.is_cloud_provider());
         assert!(ProviderType::HuggingFace.is_cloud_provider());
-        
+
         // Local providers should NOT be cloud
         assert!(!ProviderType::Copilot.is_cloud_provider());
         assert!(!ProviderType::Cursor.is_cloud_provider());
@@ -52,7 +52,10 @@ mod cloud_provider_type_tests {
 
     #[test]
     fn test_cloud_provider_display_names() {
-        assert_eq!(ProviderType::M365Copilot.display_name(), "Microsoft 365 Copilot");
+        assert_eq!(
+            ProviderType::M365Copilot.display_name(),
+            "Microsoft 365 Copilot"
+        );
         assert_eq!(ProviderType::ChatGPT.display_name(), "ChatGPT");
         assert_eq!(ProviderType::Anthropic.display_name(), "Anthropic Claude");
         assert_eq!(ProviderType::Perplexity.display_name(), "Perplexity AI");
@@ -72,26 +75,74 @@ mod cloud_provider_type_tests {
     #[test]
     fn test_cloud_provider_endpoints() {
         // Microsoft Graph API
-        assert_eq!(ProviderType::M365Copilot.default_endpoint(), Some("https://graph.microsoft.com/v1.0"));
-        
+        assert_eq!(
+            ProviderType::M365Copilot.default_endpoint(),
+            Some("https://graph.microsoft.com/v1.0")
+        );
+
         // ChatGPT web interface
-        assert_eq!(ProviderType::ChatGPT.default_endpoint(), Some("https://chat.openai.com"));
-        
+        assert_eq!(
+            ProviderType::ChatGPT.default_endpoint(),
+            Some("https://chat.openai.com")
+        );
+
         // Standard API endpoints
-        assert_eq!(ProviderType::OpenAI.default_endpoint(), Some("https://api.openai.com/v1"));
-        assert_eq!(ProviderType::Anthropic.default_endpoint(), Some("https://api.anthropic.com/v1"));
-        assert_eq!(ProviderType::Perplexity.default_endpoint(), Some("https://api.perplexity.ai"));
-        assert_eq!(ProviderType::DeepSeek.default_endpoint(), Some("https://api.deepseek.com/v1"));
-        assert_eq!(ProviderType::Qwen.default_endpoint(), Some("https://dashscope.aliyuncs.com/api/v1"));
-        assert_eq!(ProviderType::Gemini.default_endpoint(), Some("https://generativelanguage.googleapis.com/v1beta"));
-        assert_eq!(ProviderType::Mistral.default_endpoint(), Some("https://api.mistral.ai/v1"));
-        assert_eq!(ProviderType::Cohere.default_endpoint(), Some("https://api.cohere.ai/v1"));
-        assert_eq!(ProviderType::Grok.default_endpoint(), Some("https://api.x.ai/v1"));
-        assert_eq!(ProviderType::Groq.default_endpoint(), Some("https://api.groq.com/openai/v1"));
-        assert_eq!(ProviderType::Together.default_endpoint(), Some("https://api.together.xyz/v1"));
-        assert_eq!(ProviderType::Fireworks.default_endpoint(), Some("https://api.fireworks.ai/inference/v1"));
-        assert_eq!(ProviderType::Replicate.default_endpoint(), Some("https://api.replicate.com/v1"));
-        assert_eq!(ProviderType::HuggingFace.default_endpoint(), Some("https://api-inference.huggingface.co"));
+        assert_eq!(
+            ProviderType::OpenAI.default_endpoint(),
+            Some("https://api.openai.com/v1")
+        );
+        assert_eq!(
+            ProviderType::Anthropic.default_endpoint(),
+            Some("https://api.anthropic.com/v1")
+        );
+        assert_eq!(
+            ProviderType::Perplexity.default_endpoint(),
+            Some("https://api.perplexity.ai")
+        );
+        assert_eq!(
+            ProviderType::DeepSeek.default_endpoint(),
+            Some("https://api.deepseek.com/v1")
+        );
+        assert_eq!(
+            ProviderType::Qwen.default_endpoint(),
+            Some("https://dashscope.aliyuncs.com/api/v1")
+        );
+        assert_eq!(
+            ProviderType::Gemini.default_endpoint(),
+            Some("https://generativelanguage.googleapis.com/v1beta")
+        );
+        assert_eq!(
+            ProviderType::Mistral.default_endpoint(),
+            Some("https://api.mistral.ai/v1")
+        );
+        assert_eq!(
+            ProviderType::Cohere.default_endpoint(),
+            Some("https://api.cohere.ai/v1")
+        );
+        assert_eq!(
+            ProviderType::Grok.default_endpoint(),
+            Some("https://api.x.ai/v1")
+        );
+        assert_eq!(
+            ProviderType::Groq.default_endpoint(),
+            Some("https://api.groq.com/openai/v1")
+        );
+        assert_eq!(
+            ProviderType::Together.default_endpoint(),
+            Some("https://api.together.xyz/v1")
+        );
+        assert_eq!(
+            ProviderType::Fireworks.default_endpoint(),
+            Some("https://api.fireworks.ai/inference/v1")
+        );
+        assert_eq!(
+            ProviderType::Replicate.default_endpoint(),
+            Some("https://api.replicate.com/v1")
+        );
+        assert_eq!(
+            ProviderType::HuggingFace.default_endpoint(),
+            Some("https://api-inference.huggingface.co")
+        );
     }
 
     #[test]
@@ -102,7 +153,7 @@ mod cloud_provider_type_tests {
         assert!(ProviderType::Groq.is_openai_compatible());
         assert!(ProviderType::Together.is_openai_compatible());
         assert!(ProviderType::Fireworks.is_openai_compatible());
-        
+
         // These have their own API formats
         assert!(!ProviderType::ChatGPT.is_openai_compatible()); // Web interface
         assert!(!ProviderType::Anthropic.is_openai_compatible());
@@ -123,7 +174,7 @@ mod cloud_provider_type_tests {
         assert!(ProviderType::Perplexity.requires_api_key());
         assert!(ProviderType::DeepSeek.requires_api_key());
         assert!(ProviderType::Gemini.requires_api_key());
-        
+
         // Local providers should not require API keys
         assert!(!ProviderType::Copilot.requires_api_key());
         assert!(!ProviderType::Cursor.requires_api_key());
@@ -144,25 +195,25 @@ mod cloud_provider_serialization_tests {
         // Test kebab-case serialization
         let m365copilot = serde_json::to_string(&ProviderType::M365Copilot).unwrap();
         assert_eq!(m365copilot, "\"m365copilot\"");
-        
+
         let chatgpt = serde_json::to_string(&ProviderType::ChatGPT).unwrap();
         assert_eq!(chatgpt, "\"chatgpt\"");
-        
+
         let anthropic = serde_json::to_string(&ProviderType::Anthropic).unwrap();
         assert_eq!(anthropic, "\"anthropic\"");
-        
+
         let perplexity = serde_json::to_string(&ProviderType::Perplexity).unwrap();
         assert_eq!(perplexity, "\"perplexity\"");
-        
+
         let deepseek = serde_json::to_string(&ProviderType::DeepSeek).unwrap();
         assert_eq!(deepseek, "\"deepseek\"");
-        
+
         let qwen = serde_json::to_string(&ProviderType::Qwen).unwrap();
         assert_eq!(qwen, "\"qwen\"");
-        
+
         let gemini = serde_json::to_string(&ProviderType::Gemini).unwrap();
         assert_eq!(gemini, "\"gemini\"");
-        
+
         let groq = serde_json::to_string(&ProviderType::Groq).unwrap();
         assert_eq!(groq, "\"groq\"");
     }
@@ -171,19 +222,19 @@ mod cloud_provider_serialization_tests {
     fn test_cloud_provider_type_deserialization() {
         let m365copilot: ProviderType = serde_json::from_str("\"m365copilot\"").unwrap();
         assert_eq!(m365copilot, ProviderType::M365Copilot);
-        
+
         let chatgpt: ProviderType = serde_json::from_str("\"chatgpt\"").unwrap();
         assert_eq!(chatgpt, ProviderType::ChatGPT);
-        
+
         let anthropic: ProviderType = serde_json::from_str("\"anthropic\"").unwrap();
         assert_eq!(anthropic, ProviderType::Anthropic);
-        
+
         let perplexity: ProviderType = serde_json::from_str("\"perplexity\"").unwrap();
         assert_eq!(perplexity, ProviderType::Perplexity);
-        
+
         let deepseek: ProviderType = serde_json::from_str("\"deepseek\"").unwrap();
         assert_eq!(deepseek, ProviderType::DeepSeek);
-        
+
         let gemini: ProviderType = serde_json::from_str("\"gemini\"").unwrap();
         assert_eq!(gemini, ProviderType::Gemini);
     }
@@ -194,13 +245,13 @@ mod cloud_provider_serialization_tests {
 // ============================================================================
 
 mod cloud_provider_trait_tests {
-    use csm::providers::cloud::chatgpt::ChatGPTProvider;
     use csm::providers::cloud::anthropic::AnthropicProvider;
-    use csm::providers::cloud::perplexity::PerplexityProvider;
+    use csm::providers::cloud::chatgpt::ChatGPTProvider;
+    use csm::providers::cloud::common::CloudProvider;
     use csm::providers::cloud::deepseek::DeepSeekProvider;
     use csm::providers::cloud::gemini::GeminiProvider;
     use csm::providers::cloud::m365copilot::M365CopilotProvider;
-    use csm::providers::cloud::common::CloudProvider;
+    use csm::providers::cloud::perplexity::PerplexityProvider;
 
     #[test]
     fn test_m365_copilot_provider_creation() {
@@ -274,8 +325,8 @@ mod cloud_provider_trait_tests {
 // ============================================================================
 
 mod cloud_conversation_tests {
-    use csm::providers::cloud::common::{CloudConversation, CloudMessage};
     use chrono::Utc;
+    use csm::providers::cloud::common::{CloudConversation, CloudMessage};
 
     #[test]
     fn test_cloud_conversation_to_chat_session() {
@@ -305,7 +356,7 @@ mod cloud_conversation_tests {
         };
 
         let session = conv.to_chat_session("ChatGPT");
-        
+
         assert!(session.session_id.is_some());
         assert!(session.session_id.as_ref().unwrap().starts_with("ChatGPT:"));
         assert_eq!(session.custom_title, Some("Test Conversation".to_string()));
@@ -348,7 +399,7 @@ mod cloud_conversation_tests {
         };
 
         let session = conv.to_chat_session("TestProvider");
-        
+
         assert!(session.requests.is_empty());
         assert_eq!(session.custom_title, None);
     }
@@ -359,13 +410,13 @@ mod cloud_conversation_tests {
 // ============================================================================
 
 mod fetch_options_tests {
-    use csm::providers::cloud::common::FetchOptions;
     use chrono::Utc;
+    use csm::providers::cloud::common::FetchOptions;
 
     #[test]
     fn test_fetch_options_default() {
         let options = FetchOptions::default();
-        
+
         assert!(options.limit.is_none());
         assert!(options.after.is_none());
         assert!(options.before.is_none());
@@ -383,7 +434,7 @@ mod fetch_options_tests {
             include_archived: true,
             session_token: Some("token123".to_string()),
         };
-        
+
         assert_eq!(options.limit, Some(100));
         assert_eq!(options.after, Some(now));
         assert!(options.include_archived);
@@ -401,7 +452,7 @@ mod http_client_tests {
     #[test]
     fn test_http_client_config_default() {
         let config = HttpClientConfig::default();
-        
+
         assert_eq!(config.timeout_secs, 30);
         assert!(config.user_agent.starts_with("csm/"));
         assert!(!config.accept_invalid_certs);
@@ -414,7 +465,7 @@ mod http_client_tests {
             user_agent: "custom-agent/1.0".to_string(),
             accept_invalid_certs: true,
         };
-        
+
         assert_eq!(config.timeout_secs, 60);
         assert_eq!(config.user_agent, "custom-agent/1.0");
         assert!(config.accept_invalid_certs);
@@ -460,10 +511,14 @@ mod provider_registry_cloud_tests {
             ProviderType::HuggingFace,
             ProviderType::Custom,
         ];
-        
+
         for provider in types {
             let name = provider.display_name();
-            assert!(!name.is_empty(), "Provider {:?} has empty display name", provider);
+            assert!(
+                !name.is_empty(),
+                "Provider {:?} has empty display name",
+                provider
+            );
         }
     }
 
@@ -487,10 +542,14 @@ mod provider_registry_cloud_tests {
             ProviderType::Replicate,
             ProviderType::HuggingFace,
         ];
-        
+
         for provider in cloud_types {
             let endpoint = provider.default_endpoint();
-            assert!(endpoint.is_some(), "Cloud provider {:?} should have an endpoint", provider);
+            assert!(
+                endpoint.is_some(),
+                "Cloud provider {:?} should have an endpoint",
+                provider
+            );
             assert!(
                 endpoint.unwrap().starts_with("https://"),
                 "Cloud provider {:?} should have HTTPS endpoint",
@@ -505,9 +564,7 @@ mod provider_registry_cloud_tests {
 // ============================================================================
 
 mod m365_copilot_export_tests {
-    use csm::providers::cloud::m365copilot::{
-        parse_m365_copilot_export, get_friendly_app_name,
-    };
+    use csm::providers::cloud::m365copilot::{get_friendly_app_name, parse_m365_copilot_export};
 
     #[test]
     fn test_parse_empty_array() {
@@ -575,12 +632,15 @@ mod m365_copilot_export_tests {
 
         let result = parse_m365_copilot_export(json).unwrap();
         assert_eq!(result.len(), 1);
-        
+
         let conv = &result[0];
         assert_eq!(conv.messages.len(), 2);
         assert_eq!(conv.messages[0].role, "user");
         assert_eq!(conv.messages[1].role, "assistant");
-        assert_eq!(conv.messages[1].model, Some("Microsoft 365 Chat".to_string()));
+        assert_eq!(
+            conv.messages[1].model,
+            Some("Microsoft 365 Chat".to_string())
+        );
     }
 
     #[test]
@@ -634,10 +694,7 @@ mod m365_copilot_export_tests {
             get_friendly_app_name("IPM.SkypeTeams.Message.Copilot.Outlook"),
             "Copilot in Outlook"
         );
-        assert_eq!(
-            get_friendly_app_name("unknown"),
-            "Microsoft 365 Copilot"
-        );
+        assert_eq!(get_friendly_app_name("unknown"), "Microsoft 365 Copilot");
     }
 
     #[test]
@@ -668,7 +725,7 @@ mod m365_copilot_export_tests {
 
         let result = parse_m365_copilot_export(json).unwrap();
         assert_eq!(result.len(), 1);
-        
+
         let conv = &result[0];
         assert_eq!(conv.messages.len(), 2);
         // Messages should be sorted by timestamp
@@ -691,7 +748,7 @@ mod m365_copilot_export_tests {
 
         let result = parse_m365_copilot_export(json).unwrap();
         assert_eq!(result.len(), 1);
-        
+
         let title = result[0].title.as_ref().unwrap();
         assert!(title.contains("Copilot in Teams"));
         assert!(title.contains("2024-11-15"));
@@ -703,13 +760,13 @@ mod m365_copilot_export_tests {
 // ============================================================================
 
 mod extended_cloud_provider_tests {
-    use csm::providers::cloud::chatgpt::ChatGPTProvider;
     use csm::providers::cloud::anthropic::AnthropicProvider;
-    use csm::providers::cloud::perplexity::PerplexityProvider;
+    use csm::providers::cloud::chatgpt::ChatGPTProvider;
+    use csm::providers::cloud::common::CloudProvider;
     use csm::providers::cloud::deepseek::DeepSeekProvider;
     use csm::providers::cloud::gemini::GeminiProvider;
     use csm::providers::cloud::m365copilot::M365CopilotProvider;
-    use csm::providers::cloud::common::CloudProvider;
+    use csm::providers::cloud::perplexity::PerplexityProvider;
 
     // ChatGPT Extended Tests
     #[test]
@@ -795,8 +852,8 @@ mod extended_cloud_provider_tests {
 // ============================================================================
 
 mod cloud_conversation_edge_cases {
-    use csm::providers::cloud::common::{CloudConversation, CloudMessage};
     use chrono::Utc;
+    use csm::providers::cloud::common::{CloudConversation, CloudMessage};
 
     #[test]
     fn test_conversation_with_single_message() {
@@ -806,15 +863,13 @@ mod cloud_conversation_edge_cases {
             created_at: Utc::now(),
             updated_at: None,
             model: None,
-            messages: vec![
-                CloudMessage {
-                    id: None,
-                    role: "user".to_string(),
-                    content: "Only user message".to_string(),
-                    timestamp: None,
-                    model: None,
-                },
-            ],
+            messages: vec![CloudMessage {
+                id: None,
+                role: "user".to_string(),
+                content: "Only user message".to_string(),
+                timestamp: None,
+                model: None,
+            }],
             metadata: None,
         };
 
@@ -1003,7 +1058,11 @@ mod provider_type_methods_tests {
 
         for pt in cloud_types {
             assert!(pt.is_cloud_provider(), "{:?} should be cloud provider", pt);
-            assert!(pt.default_endpoint().is_some(), "{:?} should have endpoint", pt);
+            assert!(
+                pt.default_endpoint().is_some(),
+                "{:?} should have endpoint",
+                pt
+            );
             assert!(pt.requires_api_key(), "{:?} should require API key", pt);
         }
     }
@@ -1022,9 +1081,21 @@ mod provider_type_methods_tests {
         ];
 
         for pt in local_types {
-            assert!(!pt.is_cloud_provider(), "{:?} should not be cloud provider", pt);
-            assert!(pt.is_openai_compatible(), "{:?} should be OpenAI compatible", pt);
-            assert!(!pt.requires_api_key(), "{:?} should not require API key", pt);
+            assert!(
+                !pt.is_cloud_provider(),
+                "{:?} should not be cloud provider",
+                pt
+            );
+            assert!(
+                pt.is_openai_compatible(),
+                "{:?} should be OpenAI compatible",
+                pt
+            );
+            assert!(
+                !pt.requires_api_key(),
+                "{:?} should not require API key",
+                pt
+            );
         }
     }
 
@@ -1032,7 +1103,7 @@ mod provider_type_methods_tests {
     fn test_file_storage_providers() {
         assert!(ProviderType::Copilot.uses_file_storage());
         assert!(ProviderType::Cursor.uses_file_storage());
-        
+
         // API providers don't use file storage
         assert!(!ProviderType::Ollama.uses_file_storage());
         assert!(!ProviderType::ChatGPT.uses_file_storage());
@@ -1044,13 +1115,13 @@ mod provider_type_methods_tests {
 // ============================================================================
 
 mod cloud_stress_tests {
-    use csm::providers::cloud::common::{CloudConversation, CloudMessage};
     use chrono::Utc;
+    use csm::providers::cloud::common::{CloudConversation, CloudMessage};
 
     #[test]
     fn test_many_conversations() {
         let mut conversations = Vec::new();
-        
+
         for i in 0..100 {
             conversations.push(CloudConversation {
                 id: format!("conv-{}", i),
@@ -1088,7 +1159,7 @@ mod cloud_stress_tests {
     #[test]
     fn test_conversation_with_many_messages() {
         let mut messages = Vec::new();
-        
+
         for i in 0..500 {
             messages.push(CloudMessage {
                 id: Some(format!("{}", i)),

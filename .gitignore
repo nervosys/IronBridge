@@ -3,7 +3,7 @@
 # Rust build artifacts
 csm-rust/target/
 **/*.rs.bk
-Cargo.lock
+# Note: Cargo.lock IS committed for reproducible builds (this is a binary, not a library)
 
 # IDE
 .vscode/
@@ -23,6 +23,12 @@ archive/
 *.log
 *.tmp
 *.bak
+
+# Database files (may contain private chat data)
+*.db
+*.sqlite
+*.sqlite3
+chat_sessions.db
 
 # Demo exports
 /exports/

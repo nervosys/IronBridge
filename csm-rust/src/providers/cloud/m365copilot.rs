@@ -132,7 +132,7 @@ struct GraphResponse<T> {
 /// AI Interaction from Microsoft Graph API
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AiInteraction {
+pub(crate) struct AiInteraction {
     /// Unique identifier
     id: String,
     /// Session ID (conversation thread)
@@ -234,7 +234,7 @@ impl CloudProvider for M365CopilotProvider {
         self.access_token = api_key;
     }
 
-    fn list_conversations(&self, options: &FetchOptions) -> Result<Vec<CloudConversation>> {
+    fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
         if !self.is_authenticated() {
             return Err(anyhow!(
                 "Microsoft 365 Copilot requires authentication. Provide an Azure AD access token \
@@ -251,7 +251,9 @@ impl CloudProvider for M365CopilotProvider {
         // Note: This is a placeholder since we need mutable self for ensure_client
         // The actual implementation would need to be adjusted for the trait bounds
         eprintln!("Note: Microsoft 365 Copilot requires:");
-        eprintln!("  1. Azure AD app registration with AiEnterpriseInteraction.Read.All permission");
+        eprintln!(
+            "  1. Azure AD app registration with AiEnterpriseInteraction.Read.All permission"
+        );
         eprintln!("  2. Admin consent for the permission");
         eprintln!("  3. A valid access token");
         eprintln!("  4. The target user's Azure AD object ID");
@@ -280,7 +282,7 @@ impl CloudProvider for M365CopilotProvider {
 }
 
 /// Group AI interactions by session ID into conversations
-pub fn group_interactions_into_conversations(
+pub(crate) fn group_interactions_into_conversations(
     interactions: Vec<AiInteraction>,
 ) -> Vec<CloudConversation> {
     // Group by session_id
