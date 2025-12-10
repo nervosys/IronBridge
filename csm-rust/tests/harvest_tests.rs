@@ -404,13 +404,14 @@ mod stats_tests {
 
     #[test]
     fn test_harvest_stats_tracking() {
-        let mut stats = HarvestStats::default();
-
-        stats.providers_scanned = 5;
-        stats.sessions_found = 100;
-        stats.sessions_added = 80;
-        stats.sessions_updated = 15;
-        stats.sessions_skipped = 5;
+        let mut stats = HarvestStats {
+            providers_scanned: 5,
+            sessions_found: 100,
+            sessions_added: 80,
+            sessions_updated: 15,
+            sessions_skipped: 5,
+            ..Default::default()
+        };
         stats.errors.push("Test error".to_string());
 
         assert_eq!(

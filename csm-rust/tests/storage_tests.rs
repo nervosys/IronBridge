@@ -345,7 +345,7 @@ mod add_session_to_index_tests {
 
         let entry = index.entries.get("new-session-123").unwrap();
         assert_eq!(entry.title, "New Session");
-        assert_eq!(entry.is_imported, false);
+        assert!(!entry.is_imported);
     }
 
     #[test]
@@ -419,8 +419,8 @@ mod add_session_to_index_tests {
 
         let entry = index.entries.get("session-1").unwrap();
         assert_eq!(entry.title, "Updated Title");
-        assert_eq!(entry.is_imported, true);
-        assert_eq!(entry.is_empty, true);
+        assert!(entry.is_imported);
+        assert!(entry.is_empty);
     }
 
     #[test]
@@ -502,8 +502,8 @@ mod vscode_running_tests {
     #[test]
     fn test_is_vscode_running_returns_bool() {
         // This test just verifies the function runs without panicking
-        let result = is_vscode_running();
-        assert!(result == true || result == false);
+        let _result = is_vscode_running();
+        // Function always returns a bool, which is what we want
     }
 
     #[test]
@@ -922,8 +922,7 @@ mod empty_window_sessions_tests {
 
     /// Helper to create a temp directory simulating emptyWindowChatSessions
     fn setup_test_sessions_dir() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
-        temp_dir
+        TempDir::new().unwrap()
     }
 
     #[test]
@@ -970,7 +969,7 @@ mod empty_window_sessions_tests {
         let count = fs::read_dir(temp_dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
             .count();
 
         assert_eq!(count, 3);
@@ -995,7 +994,7 @@ mod empty_window_sessions_tests {
 
     #[test]
     fn test_empty_window_session_sorting_by_date() {
-        let mut sessions = vec![
+        let mut sessions = [
             {
                 let mut s = create_test_session("old", "Old Session");
                 s.last_message_date = 1000;
@@ -1090,7 +1089,7 @@ mod empty_window_sessions_tests {
         let json_count = fs::read_dir(temp_dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
             .count();
 
         assert_eq!(json_count, 1);

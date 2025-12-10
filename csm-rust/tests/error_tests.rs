@@ -222,11 +222,15 @@ mod result_type_tests {
     use super::*;
     use csm::error::Result;
 
+    fn make_ok() -> Result<i32> {
+        Ok(42)
+    }
+
     #[test]
     fn test_result_ok() {
-        let result: Result<i32> = Ok(42);
+        let result = make_ok();
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 42);
+        assert_eq!(result.expect("should be ok"), 42);
     }
 
     #[test]
@@ -239,7 +243,7 @@ mod result_type_tests {
     fn test_result_map() {
         let result: Result<i32> = Ok(21);
         let doubled = result.map(|x| x * 2);
-        assert_eq!(doubled.unwrap(), 42);
+        assert_eq!(doubled.expect("should be ok"), 42);
     }
 
     #[test]
@@ -272,11 +276,15 @@ mod result_type_tests {
 
     #[test]
     fn test_result_unwrap_or() {
-        let ok_result: Result<i32> = Ok(42);
-        assert_eq!(ok_result.unwrap_or(0), 42);
+        fn make_ok() -> Result<i32> {
+            Ok(42)
+        }
+        fn make_err() -> Result<i32> {
+            Err(CsmError::StorageNotFound)
+        }
 
-        let err_result: Result<i32> = Err(CsmError::StorageNotFound);
-        assert_eq!(err_result.unwrap_or(0), 0);
+        assert_eq!(make_ok().unwrap_or(0), 42);
+        assert_eq!(make_err().unwrap_or(0), 0);
     }
 
     #[test]

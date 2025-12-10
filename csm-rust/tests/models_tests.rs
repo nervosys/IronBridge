@@ -474,7 +474,7 @@ mod chat_session_tests {
         let session: ChatSession = serde_json::from_str(json).unwrap();
         assert_eq!(session.version, 3);
         assert_eq!(session.session_id, Some("session-xyz".to_string()));
-        assert_eq!(session.is_imported, true);
+        assert!(session.is_imported);
         assert_eq!(session.initial_location, "editor");
     }
 
@@ -628,7 +628,7 @@ mod chat_session_index_tests {
 
         let entry = index.entries.get("session-xyz").unwrap();
         assert_eq!(entry.title, "Test Session");
-        assert_eq!(entry.is_imported, true);
+        assert!(entry.is_imported);
     }
 }
 
@@ -682,9 +682,9 @@ mod chat_session_index_entry_tests {
         }"#;
 
         let entry: ChatSessionIndexEntry = serde_json::from_str(json).unwrap();
-        assert_eq!(entry.is_imported, false); // default
+        assert!(!entry.is_imported); // default
         assert_eq!(entry.initial_location, "panel"); // default
-        assert_eq!(entry.is_empty, false); // default
+        assert!(!entry.is_empty); // default
     }
 
     #[test]

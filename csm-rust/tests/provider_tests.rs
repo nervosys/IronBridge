@@ -182,7 +182,7 @@ mod provider_type_tests {
     #[test]
     fn test_provider_type_clone() {
         let original = ProviderType::Foundry;
-        let cloned = original.clone();
+        let cloned = original; // ProviderType is Copy
         assert_eq!(original, cloned);
     }
 
@@ -323,8 +323,10 @@ mod csm_config_tests {
 
     #[test]
     fn test_csm_config_serialization() {
-        let mut config = CsmConfig::default();
-        config.default_provider = Some(ProviderType::Ollama);
+        let mut config = CsmConfig {
+            default_provider: Some(ProviderType::Ollama),
+            ..Default::default()
+        };
         config
             .providers
             .push(ProviderConfig::new(ProviderType::Ollama));
@@ -1149,8 +1151,10 @@ mod integration_tests {
     #[test]
     fn test_provider_config_integration() {
         // Create a complete configuration
-        let mut config = CsmConfig::default();
-        config.default_provider = Some(ProviderType::Ollama);
+        let mut config = CsmConfig {
+            default_provider: Some(ProviderType::Ollama),
+            ..Default::default()
+        };
 
         let mut ollama_config = ProviderConfig::new(ProviderType::Ollama);
         ollama_config.model = Some("llama3.2".to_string());

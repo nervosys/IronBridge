@@ -181,7 +181,7 @@ mod git_status_tests {
         let status_chars = &line[0..2];
         let filename = line[3..].trim().to_string();
 
-        let status = match status_chars.chars().nth(0)? {
+        let status = match status_chars.chars().next()? {
             'A' | '?' => FileStatus::Added,
             'M' => FileStatus::Modified,
             'D' => FileStatus::Deleted,
@@ -493,7 +493,7 @@ mod session_commit_tests {
         fn add_commit(&mut self, session_id: &str, commit_hash: &str) {
             self.associations
                 .entry(session_id.to_string())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(commit_hash.to_string());
         }
 
@@ -648,7 +648,7 @@ mod track_command_tests {
 
     #[test]
     fn test_track_multiple_files() {
-        let files = vec!["file1.rs", "file2.rs", "src/file3.rs"];
+        let files = ["file1.rs", "file2.rs", "src/file3.rs"];
 
         assert_eq!(files.len(), 3);
         assert!(files.contains(&"src/file3.rs"));
@@ -691,7 +691,7 @@ mod link_command_tests {
 
         links.remove("session-123");
 
-        assert!(links.get("session-123").is_none());
+        assert!(!links.contains_key("session-123"));
     }
 }
 
@@ -713,13 +713,13 @@ mod error_tests {
 
         // Should either fail or have non-zero exit code
         if let Ok(output) = result {
-            assert!(!output.status.success() || output.stderr.len() > 0);
+            assert!(!output.status.success() || !output.stderr.is_empty());
         }
     }
 
     #[test]
     fn test_invalid_session_id() {
-        let session_id = "";
+        let session_id: String = String::new();
         assert!(session_id.is_empty());
     }
 

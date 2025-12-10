@@ -79,7 +79,7 @@ mod provider_detection_tests {
     fn test_provider_registry_creation() {
         let registry = ProviderRegistry::new();
         // Registry should be created successfully
-        assert!(registry.providers().len() > 0);
+        assert!(!registry.providers().is_empty());
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod provider_detection_tests {
         let registry = ProviderRegistry::new();
 
         // Test that at least some local providers exist
-        let local_providers = vec![
+        let local_providers = [
             ProviderType::Ollama,
             ProviderType::Vllm,
             ProviderType::LmStudio,
@@ -134,7 +134,7 @@ mod provider_detection_tests {
 
         let found_count = local_providers
             .iter()
-            .filter(|pt| registry.get_provider((*pt).clone()).is_some())
+            .filter(|pt| registry.get_provider(**pt).is_some())
             .count();
 
         // At least some providers should be registered
@@ -619,7 +619,7 @@ mod session_sorting_tests {
         let s2 = create_session_with_timestamp(3000);
         let s3 = create_session_with_timestamp(2000);
 
-        let mut sessions = vec![
+        let mut sessions = [
             ("p1".to_string(), s1),
             ("p2".to_string(), s2),
             ("p3".to_string(), s3),
@@ -684,7 +684,7 @@ mod filter_tests {
     #[test]
     fn test_session_id_filter() {
         let filter = "abc123";
-        let session_ids = vec!["session-abc123-def", "session-xyz789-ghi", "abc123-session"];
+        let session_ids = ["session-abc123-def", "session-xyz789-ghi", "abc123-session"];
 
         let matches: Vec<_> = session_ids
             .iter()
@@ -707,10 +707,7 @@ mod error_handling_tests {
         // Should not panic on invalid paths
         let result = find_workspace_by_path("\0invalid");
         // Either succeeds with None or returns an error, but no panic
-        match result {
-            Ok(_) => {}
-            Err(_) => {}
-        }
+        let _ = result; // Result is either Ok or Err, both are fine
     }
 
     #[test]

@@ -10,6 +10,7 @@ use predicates::prelude::*;
 // Helper Functions
 // =============================================================================
 
+#[allow(deprecated)] // cargo_bin is still the standard way to test CLI binaries
 fn csm_cmd() -> Command {
     Command::cargo_bin("csm").unwrap()
 }

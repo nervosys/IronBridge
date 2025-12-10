@@ -110,7 +110,7 @@ mod provider_merge_type_tests {
     #[test]
     fn test_provider_type_clone() {
         let pt = ProviderType::Ollama;
-        let cloned = pt.clone();
+        let cloned = pt; // ProviderType is Copy
         assert_eq!(pt, cloned);
     }
 }
@@ -225,7 +225,7 @@ mod title_generation_tests {
 
     #[test]
     fn test_cross_provider_title() {
-        let providers = vec!["copilot", "cursor", "ollama"];
+        let providers = ["copilot", "cursor", "ollama"];
         let auto_title = format!("Cross-provider merge: {}", providers.join(", "));
         assert_eq!(auto_title, "Cross-provider merge: copilot, cursor, ollama");
     }
@@ -239,19 +239,23 @@ mod title_generation_tests {
 
     #[test]
     fn test_custom_title_overrides_auto() {
-        let custom_title = Some("My Custom Title");
+        fn get_custom() -> Option<&'static str> {
+            Some("My Custom Title")
+        }
         let auto_title = "Auto Generated Title";
 
-        let final_title = custom_title.unwrap_or(auto_title);
+        let final_title = get_custom().unwrap_or(auto_title);
         assert_eq!(final_title, "My Custom Title");
     }
 
     #[test]
     fn test_auto_title_when_no_custom() {
-        let custom_title: Option<&str> = None;
+        fn get_custom() -> Option<&'static str> {
+            None
+        }
         let auto_title = "Auto Generated Title";
 
-        let final_title = custom_title.unwrap_or(auto_title);
+        let final_title = get_custom().unwrap_or(auto_title);
         assert_eq!(final_title, "Auto Generated Title");
     }
 }
@@ -313,7 +317,7 @@ mod merge_filter_tests {
 
     #[test]
     fn test_session_id_filter() {
-        let ids = vec!["session-abc-123", "session-def-456", "abc-session-789"];
+        let ids = ["session-abc-123", "session-def-456", "abc-session-789"];
         let filter = "abc";
 
         let filtered: Vec<_> = ids
@@ -395,7 +399,7 @@ mod provider_list_tests {
             "llamafile",
         ];
 
-        let result = parse_providers(&all_names.iter().map(|s| *s).collect::<Vec<_>>());
+        let result = parse_providers(&all_names.to_vec());
 
         for (i, pt) in result.iter().enumerate() {
             assert!(pt.is_some(), "Provider {} should be valid", all_names[i]);
@@ -404,10 +408,10 @@ mod provider_list_tests {
 
     #[test]
     fn test_filter_valid_providers() {
-        let names = vec!["copilot", "unknown1", "cursor", "unknown2", "ollama"];
+        let names = ["copilot", "unknown1", "cursor", "unknown2", "ollama"];
         let result = parse_providers(&names);
 
-        let valid: Vec<_> = result.iter().filter_map(|x| x.clone()).collect();
+        let valid: Vec<_> = result.iter().filter_map(|x| *x).collect();
         assert_eq!(valid.len(), 3);
     }
 }
@@ -419,7 +423,7 @@ mod provider_list_tests {
 mod session_count_tests {
     #[test]
     fn test_total_sessions_across_providers() {
-        let provider_sessions = vec![("Copilot", 5), ("Cursor", 3), ("Ollama", 10)];
+        let provider_sessions = [("Copilot", 5), ("Cursor", 3), ("Ollama", 10)];
 
         let total: usize = provider_sessions.iter().map(|(_, count)| count).sum();
         assert_eq!(total, 18);
@@ -427,7 +431,7 @@ mod session_count_tests {
 
     #[test]
     fn test_providers_with_sessions_count() {
-        let provider_sessions = vec![("Copilot", 5), ("Cursor", 0), ("Ollama", 10), ("vLLM", 0)];
+        let provider_sessions = [("Copilot", 5), ("Cursor", 0), ("Ollama", 10), ("vLLM", 0)];
 
         let with_sessions: Vec<_> = provider_sessions
             .iter()
@@ -528,7 +532,7 @@ mod merge_error_tests {
             }
         }
 
-        let names = vec!["unknown1", "unknown2"];
+        let names = ["unknown1", "unknown2"];
         let valid: Vec<_> = names.iter().filter_map(|n| parse_provider(n)).collect();
 
         assert!(valid.is_empty());
@@ -643,7 +647,7 @@ mod merge_integration_tests {
 mod deduplication_tests {
     #[test]
     fn test_session_id_uniqueness() {
-        let session_ids = vec![
+        let session_ids = [
             "session-001",
             "session-002",
             "session-001", // Duplicate
@@ -656,7 +660,7 @@ mod deduplication_tests {
 
     #[test]
     fn test_provider_deduplication() {
-        let providers = vec!["copilot", "cursor", "copilot", "ollama", "cursor"];
+        let providers = ["copilot", "cursor", "copilot", "ollama", "cursor"];
 
         let unique: std::collections::HashSet<_> = providers.iter().collect();
         assert_eq!(unique.len(), 3);

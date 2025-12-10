@@ -2,10 +2,6 @@
 //!
 //! Tests for browser detection and cookie scanning functionality.
 
-use std::collections::HashMap;
-use std::fs;
-use tempfile::TempDir;
-
 // Note: We can't directly import from csm crate in integration tests
 // These tests verify the external behavior through the CLI
 
@@ -17,6 +13,7 @@ mod browser_detection {
     use assert_cmd::Command;
     use predicates::prelude::*;
 
+    #[allow(deprecated)] // cargo_bin is still the standard way to test CLI binaries
     fn csm_cmd() -> Command {
         Command::cargo_bin("csm").unwrap()
     }
@@ -78,6 +75,7 @@ mod web_provider_scanning {
     use assert_cmd::Command;
     use predicates::prelude::*;
 
+    #[allow(deprecated)] // cargo_bin is still the standard way to test CLI binaries
     fn csm_cmd() -> Command {
         Command::cargo_bin("csm").unwrap()
     }
