@@ -171,26 +171,26 @@ pub enum ListCommands {
 
 #[derive(Subcommand)]
 pub enum FindCommands {
-    /// Find workspaces by search pattern
+    /// Find workspaces by search pattern (defaults to current directory name)
     Workspace {
-        /// Search pattern (case-insensitive)
-        pattern: String,
+        /// Search pattern (case-insensitive, defaults to current directory name)
+        pattern: Option<String>,
     },
 
-    /// Find sessions by search pattern
+    /// Find sessions by search pattern (defaults to current directory name)
     Session {
-        /// Search pattern (case-insensitive)
-        pattern: String,
+        /// Search pattern (case-insensitive, defaults to current directory name)
+        pattern: Option<String>,
 
         /// Filter by project path
         #[arg(long)]
         project_path: Option<String>,
     },
 
-    /// Find sessions in a specific project path
+    /// Find sessions in a specific project path (defaults to current directory)
     Path {
-        /// Search pattern (case-insensitive)
-        pattern: String,
+        /// Search pattern (case-insensitive, defaults to current directory name)
+        pattern: Option<String>,
 
         /// Project path (default: current directory)
         #[arg(long)]

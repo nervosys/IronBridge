@@ -21,6 +21,14 @@ use cli::{
     MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
 };
 
+/// Get the current directory name as a default pattern
+fn get_current_dir_name() -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_else(|| ".".to_string())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -43,19 +51,28 @@ fn main() -> Result<()> {
         // Find Commands
         // ====================================================================
         Commands::Find { command } => match command {
-            Some(FindCommands::Workspace { pattern }) => commands::find_workspaces(&pattern),
+            Some(FindCommands::Workspace { pattern }) => {
+                let pattern = pattern.unwrap_or_else(|| get_current_dir_name());
+                commands::find_workspaces(&pattern)
+            }
             Some(FindCommands::Session {
                 pattern,
                 project_path,
-            }) => commands::find_sessions(&pattern, project_path.as_deref()),
+            }) => {
+                let pattern = pattern.unwrap_or_else(|| get_current_dir_name());
+                commands::find_sessions(&pattern, project_path.as_deref())
+            }
             Some(FindCommands::Path {
                 pattern,
                 project_path,
-            }) => commands::find_sessions(&pattern, project_path.as_deref()),
+            }) => {
+                let pattern = pattern.unwrap_or_else(|| get_current_dir_name());
+                commands::find_sessions(&pattern, project_path.as_deref())
+            }
             None => {
-                eprintln!("Usage: csm find <workspace|session|path> <pattern>");
-                eprintln!("Run 'csm find --help' for more information.");
-                Ok(())
+                // Default to finding workspaces matching current directory
+                let pattern = get_current_dir_name();
+                commands::find_workspaces(&pattern)
             }
         },
 
