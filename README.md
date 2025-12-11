@@ -300,6 +300,27 @@ csm harvest checkpoints my-session-id
 csm harvest restore my-session-id checkpoint-id
 ```
 
+#### Harvest Git Tracking
+
+Version control for the harvest database:
+
+```bash
+# Initialize git tracking for the harvest database
+csm harvest git init
+
+# Commit current state of the harvest database
+csm harvest git commit -m "Added new sessions"
+
+# View commit history
+csm harvest git log
+
+# Show changes since last commit
+csm harvest git diff
+
+# Restore to a previous commit
+csm harvest git restore <commit-hash>
+```
+
 ## All Commands
 
 | Command                                  | Description                                      |
@@ -358,6 +379,11 @@ csm harvest restore my-session-id checkpoint-id
 | `csm harvest checkpoints <session>`      | List session checkpoints                         |
 | `csm harvest restore <session> <cp>`     | Restore session to checkpoint                    |
 | `csm harvest search <query>`             | Full-text search across sessions                 |
+| `csm harvest git init`                   | Initialize git tracking for harvest DB           |
+| `csm harvest git commit`                 | Commit changes to the harvest DB                 |
+| `csm harvest git log`                    | Show git log for harvest DB                      |
+| `csm harvest git diff`                   | Show changes to harvest DB                       |
+| `csm harvest git restore`                | Restore harvest DB from a commit                 |
 | `csm migration create <output>`          | Create migration package                         |
 | `csm migration restore <package>`        | Restore from migration                           |
 | `csm run tui`                            | Launch interactive TUI                           |
