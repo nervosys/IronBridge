@@ -568,4 +568,4 @@ RUST_LOG=debug cargo run -- ls
 
 ## License
 
-MIT
+Apache 2.0
