@@ -1,4 +1,4 @@
-# Chat Session Manager (csm)
+# Chat Session Manager (csm) 😼
 
 A fast, cross-platform CLI tool for managing chat sessions across workspaces and LLM providers.
 
