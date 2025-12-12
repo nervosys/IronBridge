@@ -547,9 +547,9 @@ fn print_banner() {
      ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
     "#;
     
-    let subtitle = "      CHat session mAnager for Scattered Memories";
-    let tagline = "        Your AI conversations, unified.";
-    let version = format!("                  v{}", env!("CARGO_PKG_VERSION"));
+    let subtitle = "CHAt Session Manager (Chasm) for Bridging LLM Providers";
+    let tagline  = "     Your AI providers and chat sessions, unified";
+    let version  = format!("                       v{}", env!("CARGO_PKG_VERSION"));
     
     println!("{}", banner.cyan().bold());
     println!("{}", subtitle.white().bold());

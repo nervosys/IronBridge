@@ -3,32 +3,75 @@ import {
     LayoutDashboard,
     FolderOpen,
     MessageSquare,
+    MessagesSquare,
+    Users,
+    Scale,
     Server,
     Database,
+    Activity,
+    Plug,
+    Key,
     Moon,
     Sun,
+    SunMoon,
     Menu,
     X,
+    Code,
+    BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import chasmIcon from '/chasm.svg';
+
+type ThemeMode = 'light' | 'neutral' | 'dark';
 
 interface LayoutProps {
     children: ReactNode;
-    darkMode: boolean;
-    setDarkMode: (value: boolean) => void;
+    theme: ThemeMode;
+    setTheme: (value: ThemeMode) => void;
 }
 
 const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/chat', icon: MessagesSquare, label: 'Chat' },
+    { path: '/agents', icon: Activity, label: 'Agents' },
+    { path: '/swarms', icon: Users, label: 'Swarms' },
+    { path: '/harvest', icon: Database, label: 'Harvest' },
+    { path: '/', icon: LayoutDashboard, label: 'Overview' },
     { path: '/workspaces', icon: FolderOpen, label: 'Workspaces' },
     { path: '/sessions', icon: MessageSquare, label: 'Sessions' },
+    { path: '/protocols', icon: Plug, label: 'Protocols' },
+    { path: '/developer', icon: Code, label: 'Developer' },
+    { path: '/research', icon: BookOpen, label: 'Research' },
+    { path: '/comparison', icon: Scale, label: 'Comparison' },
     { path: '/providers', icon: Server, label: 'Providers' },
-    { path: '/harvest', icon: Database, label: 'Harvest' },
+    { path: '/accounts', icon: Key, label: 'Accounts' },
 ];
 
-export default function Layout({ children, darkMode, setDarkMode }: LayoutProps) {
+export default function Layout({ children, theme, setTheme }: LayoutProps) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    const cycleTheme = () => {
+        const order: ThemeMode[] = ['dark', 'neutral', 'light'];
+        const currentIndex = order.indexOf(theme);
+        const nextIndex = (currentIndex + 1) % order.length;
+        setTheme(order[nextIndex]);
+    };
+
+    const getThemeIcon = () => {
+        switch (theme) {
+            case 'dark': return <Moon size={20} />;
+            case 'neutral': return <SunMoon size={20} />;
+            case 'light': return <Sun size={20} />;
+        }
+    };
+
+    const getThemeLabel = () => {
+        switch (theme) {
+            case 'dark': return 'Neutral Mode';
+            case 'neutral': return 'Light Mode';
+            case 'light': return 'Dark Mode';
+        }
+    };
 
     return (
         <div className="flex min-h-screen">
@@ -39,13 +82,16 @@ export default function Layout({ children, darkMode, setDarkMode }: LayoutProps)
             >
                 {/* Logo */}
                 <div className="h-16 flex items-center justify-between px-4 border-b">
-                    {sidebarOpen && (
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-[hsl(var(--primary))] rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">CSM</span>
+                    {sidebarOpen ? (
+                        <div className="flex items-center gap-3">
+                            <img src={chasmIcon} alt="Chasm" className="w-10 h-10" />
+                            <div className="flex flex-col">
+                                <span className="font-bold text-lg text-[hsl(var(--foreground))] leading-tight">Chasm</span>
+                                <span className="text-xs text-[hsl(var(--muted-foreground))]">Chat Session Manager</span>
                             </div>
-                            <span className="font-semibold text-[hsl(var(--foreground))]">Chat Session Manager</span>
                         </div>
+                    ) : (
+                        <img src={chasmIcon} alt="Chasm" className="w-8 h-8 mx-auto" />
                     )}
                     <button
                         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -77,11 +123,11 @@ export default function Layout({ children, darkMode, setDarkMode }: LayoutProps)
                 {/* Theme Toggle */}
                 <div className="p-4 border-t">
                     <button
-                        onClick={() => setDarkMode(!darkMode)}
+                        onClick={cycleTheme}
                         className="flex items-center gap-3 px-3 py-2 rounded-lg w-full text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-colors"
                     >
-                        {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-                        {sidebarOpen && <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+                        {getThemeIcon()}
+                        {sidebarOpen && <span>{getThemeLabel()}</span>}
                     </button>
                 </div>
             </aside>

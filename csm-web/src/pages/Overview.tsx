@@ -73,12 +73,12 @@ function StatCard({ icon: Icon, label, value, change, changeType }: StatCardProp
     );
 }
 
-export default function Dashboard() {
+export default function Overview() {
     return (
         <div className="space-y-8">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold">Dashboard</h1>
+                <h1 className="text-3xl font-bold">Overview</h1>
                 <p className="text-[hsl(var(--muted-foreground))] mt-1">
                     Overview of your chat sessions across all providers
                 </p>
@@ -187,10 +187,11 @@ export default function Dashboard() {
                                     data={providerData}
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={70}
+                                    innerRadius={45}
+                                    outerRadius={85}
                                     paddingAngle={2}
                                     dataKey="sessions"
+                                    stroke="none"
                                 >
                                     {providerData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
