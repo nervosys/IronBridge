@@ -105,13 +105,17 @@ Sessions from VS Code's "ALL SESSIONS" window appear with `(ALL SESSIONS)` as th
 ### Find a Workspace
 
 ```bash
+# Find workspace by name (defaults to current directory)
+csm find workspace
 csm find workspace my_project
 ```
 
 ### View Chat History
 
 ```bash
-csm history show /path/to/project
+# Show chat history timeline (defaults to current directory)
+csm show path
+csm show path /path/to/project
 ```
 
 ### Merge Workspace Histories
@@ -120,10 +124,10 @@ When you've moved a project and want to recover old chat conversations:
 
 ```bash
 # Fetch sessions from old workspaces into current
-csm history fetch /path/to/project
+csm fetch path /path/to/project
 
 # Or merge all into a single unified session
-csm history merge /path/to/project
+csm merge path /path/to/project
 ```
 
 > **⚠️ Important: Application Restart May Be Required**
