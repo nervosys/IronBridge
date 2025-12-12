@@ -118,6 +118,31 @@ csm show path
 csm show path /path/to/project
 ```
 
+### Recover Historical Sessions
+
+When you've moved a project or reopened it in a new location, your old chat sessions may be scattered across multiple VS Code workspaces. Here's how to find and consolidate them:
+
+```bash
+# 1. Find all workspaces matching your project name
+csm find workspace my_project
+
+# Output shows all matching workspaces with session paths:
+# ┌──────────────────┬─────────────────────────────────┬──────────┐
+# │ Hash             │ Project Path                    │ Sessions │
+# │ a5dafce48e3e...  │ C:\old\path\my_project          │ 5        │
+# │ b7c2f1a89d4e...  │ D:\new\location\my_project      │ 3        │
+# └──────────────────┴─────────────────────────────────┴──────────┘
+# Sessions for C:\old\path\my_project:
+#   C:\Users\...\workspaceStorage\a5dafce48e3e...\chatSessions\abc123.json
+#   ...
+
+# 2. Merge all sessions from matching workspaces into one unified session
+csm merge workspace my_project --title "My Project - Complete History"
+
+# Or merge from multiple specific workspace patterns
+csm merge workspaces my_project old_project --title "Combined History"
+```
+
 ### Merge Workspace Histories
 
 When you've moved a project and want to recover old chat conversations:
