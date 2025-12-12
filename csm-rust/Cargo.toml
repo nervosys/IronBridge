@@ -80,6 +80,10 @@ predicates = "3.0"
 name = "csm"
 path = "src/main.rs"
 
+[[bin]]
+name = "chasm"
+path = "src/main.rs"
+
 [profile.release]
 lto = true
 codegen-units = 1

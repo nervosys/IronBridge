@@ -539,17 +539,17 @@ fn print_banner() {
     use colored::Colorize;
     
     let banner = r#"
-     ██████╗███████╗███╗   ███╗
-    ██╔════╝██╔════╝████╗ ████║
-    ██║     ███████╗██╔████╔██║
-    ██║     ╚════██║██║╚██╔╝██║
-    ╚██████╗███████║██║ ╚═╝ ██║
-     ╚═════╝╚══════╝╚═╝     ╚═╝
+     ██████╗██╗  ██╗ █████╗ ███████╗███╗   ███╗
+    ██╔════╝██║  ██║██╔══██╗██╔════╝████╗ ████║
+    ██║     ███████║███████║███████╗██╔████╔██║
+    ██║     ██╔══██║██╔══██║╚════██║██║╚██╔╝██║
+    ╚██████╗██║  ██║██║  ██║███████║██║ ╚═╝ ██║
+     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
     "#;
     
-    let subtitle = "   Chat Session Manager";
-    let tagline = "  Your AI conversations, unified.";
-    let version = format!("          v{}", env!("CARGO_PKG_VERSION"));
+    let subtitle = "      CHat session mAnager for Scattered Memories";
+    let tagline = "        Your AI conversations, unified.";
+    let version = format!("                  v{}", env!("CARGO_PKG_VERSION"));
     
     println!("{}", banner.cyan().bold());
     println!("{}", subtitle.white().bold());
@@ -567,6 +567,7 @@ fn print_banner() {
         "⚡ Faster than scrolling through old chats",
         "🌐 From VS Code to the cloud and back",
         "🔧 Built with Rust, powered by caffeine",
+        "🕳️ Bridging the chasm between your chat sessions",
     ];
     
     let idx = std::time::SystemTime::now()
