@@ -7,6 +7,7 @@ mod harvest;
 mod history;
 mod migration;
 mod providers;
+mod register;
 mod workspace_cmds;
 
 pub use detect::*;
@@ -16,4 +17,5 @@ pub use harvest::*;
 pub use history::*;
 pub use migration::*;
 pub use providers::*;
+pub use register::*;
 pub use workspace_cmds::*;

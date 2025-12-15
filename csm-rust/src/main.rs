@@ -44,6 +44,7 @@ fn main() -> Result<()> {
             Some(ListCommands::Path { project_path }) => {
                 commands::list_sessions(project_path.as_deref())
             }
+            Some(ListCommands::Orphaned { path }) => commands::list_orphaned(path.as_deref()),
             None => commands::list_workspaces(), // Default to workspaces
         },
 
@@ -523,6 +524,21 @@ fn main() -> Result<()> {
                     commands::harvest_git_restore(path.as_deref(), &commit)
                 }
             },
+        },
+
+        // ====================================================================
+        // Register Commands
+        // ====================================================================
+        Commands::Register { command } => match command {
+            cli::RegisterCommands::All { path, merge, force } => {
+                commands::register_all(path.as_deref(), merge, force)
+            }
+            cli::RegisterCommands::Session {
+                ids,
+                title,
+                path,
+                force,
+            } => commands::register_sessions(&ids, title.as_deref(), path.as_deref(), force),
         },
 
         // ====================================================================

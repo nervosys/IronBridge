@@ -133,6 +133,15 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Register Commands
+    // ============================================================================
+    /// Register chat sessions in VS Code's index so they appear in "Show Chats..."
+    Register {
+        #[command(subcommand)]
+        command: RegisterCommands,
+    },
+
+    // ============================================================================
     // Harvest Commands
     // ============================================================================
     /// Harvest chat sessions from all providers into a unified database
@@ -169,6 +178,13 @@ pub enum ListCommands {
     Path {
         /// Project path (default: current directory)
         project_path: Option<String>,
+    },
+
+    /// List sessions that are on disk but not in VS Code's index
+    Orphaned {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
     },
 }
 
@@ -858,6 +874,47 @@ pub enum DetectCommands {
         /// Show detailed information
         #[arg(long)]
         verbose: bool,
+    },
+}
+
+// ============================================================================
+// Register Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum RegisterCommands {
+    /// Register all sessions from a workspace into VS Code's index
+    All {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Merge all sessions into one before registering
+        #[arg(long, short)]
+        merge: bool,
+
+        /// Force registration even if VS Code is running
+        #[arg(long, short)]
+        force: bool,
+    },
+
+    /// Register specific sessions by ID or title
+    Session {
+        /// Session IDs or filenames (without .json extension)
+        #[arg(required_unless_present = "title")]
+        ids: Vec<String>,
+
+        /// Match sessions by title instead of ID
+        #[arg(long, short, num_args = 1.., value_delimiter = ' ')]
+        title: Option<Vec<String>>,
+
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Force registration even if VS Code is running
+        #[arg(long, short)]
+        force: bool,
     },
 }
 

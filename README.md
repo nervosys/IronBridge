@@ -1,4 +1,4 @@
-# Chat System Manager (csm|chasm) 📚
+# Chat System Manager (chasm|csm) 📚
 
 A fast, cross-platform CLI tool for managing chat sessions across workspaces and LLM providers.
 
@@ -192,6 +192,46 @@ csm merge path /path/to/project --force
 | macOS    | `Cmd+Q` (closing windows alone leaves the app running in the menu bar)                        |
 | Linux    | `pkill code` / `pkill cursor`, or verify with `pgrep -l <app>`                                |
 
+### Register Sessions in VS Code's Index
+
+VS Code only shows chat sessions that are registered in its internal index (`chat.ChatSessionStore.index` in `state.vscdb`). Sessions can exist on disk but be invisible if they're not indexed. Use the `register` commands to make orphaned sessions visible:
+
+```bash
+# List sessions on disk that aren't in VS Code's index
+csm list orphaned --path /path/to/project
+
+# Register all sessions from a workspace into the index
+csm register all --path /path/to/project --force
+
+# Merge all sessions into one and register it
+csm register all --merge --force
+
+# Register specific sessions by ID (supports multiple IDs)
+csm register session abc123-def456 789xyz-012abc --force
+
+# Register sessions by title (partial match, case-insensitive)
+csm register session --title "Project History" "Bug Fix" --force
+```
+
+#### Register Command Options
+
+| Command                                | Description                                          |
+| -------------------------------------- | ---------------------------------------------------- |
+| `csm list orphaned [--path <p>]`       | List sessions on disk that aren't in VS Code's index |
+| `csm register all [--force]`           | Register all sessions from the workspace             |
+| `csm register all --merge [--force]`   | Merge all sessions into one, then register           |
+| `csm register session <id1> <id2> ...` | Register specific sessions by ID                     |
+| `csm register session -t <title1> ...` | Register sessions matching titles (partial match)    |
+
+> **💡 Why sessions become orphaned:**
+>
+> - Sessions imported from other machines or backups
+> - Sessions recovered from old workspace directories
+> - Sessions created by third-party tools
+> - Corrupted index after VS Code crash
+>
+> After registering, sessions appear immediately in VS Code's "Show Chats..." dropdown.
+
 ### Export/Import Sessions
 
 ```bash
@@ -352,75 +392,79 @@ csm harvest git restore <commit-hash>
 
 ## All Commands
 
-| Command                                  | Description                                      |
-| ---------------------------------------- | ------------------------------------------------ |
-| `csm list workspaces`                    | List all VS Code workspaces + ALL SESSIONS count |
-| `csm list sessions`                      | List all chat sessions (incl. ALL SESSIONS)      |
-| `csm list path [<path>]`                 | List sessions for a project path                 |
-| `csm find workspace <pattern>`           | Find workspaces matching pattern                 |
-| `csm find session <pattern>`             | Find sessions by content                         |
-| `csm find path <pattern>`                | Find sessions in a path                          |
-| `csm show workspace <name>`              | Show workspace details                           |
-| `csm show session <id>`                  | Show session details                             |
-| `csm show path [<path>]`                 | Show chat history timeline                       |
-| `csm fetch workspace <name>`             | Fetch sessions from workspace                    |
-| `csm fetch session <id1> <id2> ...`      | Fetch specific sessions                          |
-| `csm fetch path [<path>]`                | Fetch sessions from old workspaces               |
-| `csm merge workspace <name>`             | Merge sessions by workspace name                 |
-| `csm merge workspaces <n1> <n2> ...`     | Merge from multiple workspace names              |
-| `csm merge sessions <id1> <id2> ...`     | Merge specific sessions by ID                    |
-| `csm merge path [<path>]`                | Merge all sessions into one                      |
-| `csm merge provider <name>`              | Merge sessions from a provider                   |
-| `csm merge providers <p1> <p2> ...`      | Merge from multiple providers                    |
-| `csm merge all`                          | Merge all sessions from all providers            |
-| `csm export workspace <dest> <hash>`     | Export sessions from workspace                   |
-| `csm export sessions <dest> <ids...>`    | Export specific sessions                         |
-| `csm export path <dest> [<path>]`        | Export sessions from path                        |
-| `csm import workspace <src> <hash>`      | Import sessions into workspace                   |
-| `csm import sessions <files...>`         | Import specific session files                    |
-| `csm import path <src> [<target>]`       | Import sessions into path                        |
-| `csm move workspace <src_hash> <target>` | Move all sessions from workspace                 |
-| `csm move sessions <ids...> <target>`    | Move specific sessions                           |
-| `csm move path <src> <target>`           | Move sessions between paths                      |
-| `csm git config --name <n> --email <e>`  | Configure git user                               |
-| `csm git init <path>`                    | Initialize git for chat sessions                 |
-| `csm git add <path>`                     | Stage chat session changes                       |
-| `csm git status <path>`                  | Show git status of sessions                      |
-| `csm git snapshot <path>`                | Create a tagged snapshot                         |
-| `csm git track <path>`                   | Track sessions with file changes                 |
-| `csm git log <path>`                     | Show chat session commit history                 |
-| `csm git diff <path>`                    | Diff sessions between commits                    |
-| `csm detect`                             | Auto-detect workspace and providers              |
-| `csm detect workspace [<path>]`          | Detect workspace for a path                      |
-| `csm detect providers`                   | Detect available providers                       |
-| `csm detect session <id>`                | Detect which provider owns a session             |
-| `csm detect all [<path>]`                | Full detection report                            |
-| `csm harvest init`                       | Initialize harvest database                      |
-| `csm harvest scan`                       | Scan for local providers and sessions            |
-| `csm harvest scan --web`                 | Scan for web LLM providers (ChatGPT, etc.)       |
-| `csm harvest run`                        | Collect sessions from all providers              |
-| `csm harvest status`                     | Show harvest database statistics                 |
-| `csm harvest list`                       | List harvested sessions                          |
-| `csm harvest export`                     | Export sessions from harvest DB                  |
-| `csm harvest share <url>`                | Import a shared chat URL                         |
-| `csm harvest shares`                     | List pending/imported share links                |
-| `csm harvest checkpoint <session>`       | Create session checkpoint                        |
-| `csm harvest checkpoints <session>`      | List session checkpoints                         |
-| `csm harvest restore <session> <cp>`     | Restore session to checkpoint                    |
-| `csm harvest search <query>`             | Full-text search across sessions                 |
-| `csm harvest git init`                   | Initialize git tracking for harvest DB           |
-| `csm harvest git commit`                 | Commit changes to the harvest DB                 |
-| `csm harvest git log`                    | Show git log for harvest DB                      |
-| `csm harvest git diff`                   | Show changes to harvest DB                       |
-| `csm harvest git restore`                | Restore harvest DB from a commit                 |
-| `csm migration create <output>`          | Create migration package                         |
-| `csm migration restore <package>`        | Restore from migration                           |
-| `csm run tui`                            | Launch interactive TUI                           |
-| `csm provider list`                      | List available LLM providers                     |
-| `csm provider info <name>`               | Show provider details                            |
-| `csm provider config <name>`             | Configure a provider                             |
-| `csm provider import --from <name>`      | Import sessions from provider                    |
-| `csm provider test <name>`               | Test provider connection                         |
+| Command                                   | Description                                      |
+| ----------------------------------------- | ------------------------------------------------ |
+| `csm list workspaces`                     | List all VS Code workspaces + ALL SESSIONS count |
+| `csm list sessions`                       | List all chat sessions (incl. ALL SESSIONS)      |
+| `csm list path [<path>]`                  | List sessions for a project path                 |
+| `csm list orphaned [--path <p>]`          | List sessions on disk but not in VS Code's index |
+| `csm find workspace <pattern>`            | Find workspaces matching pattern                 |
+| `csm find session <pattern>`              | Find sessions by content                         |
+| `csm find path <pattern>`                 | Find sessions in a path                          |
+| `csm show workspace <name>`               | Show workspace details                           |
+| `csm show session <id>`                   | Show session details                             |
+| `csm show path [<path>]`                  | Show chat history timeline                       |
+| `csm fetch workspace <name>`              | Fetch sessions from workspace                    |
+| `csm fetch session <id1> <id2> ...`       | Fetch specific sessions                          |
+| `csm fetch path [<path>]`                 | Fetch sessions from old workspaces               |
+| `csm merge workspace <name>`              | Merge sessions by workspace name                 |
+| `csm merge workspaces <n1> <n2> ...`      | Merge from multiple workspace names              |
+| `csm merge sessions <id1> <id2> ...`      | Merge specific sessions by ID                    |
+| `csm merge path [<path>]`                 | Merge all sessions into one                      |
+| `csm merge provider <name>`               | Merge sessions from a provider                   |
+| `csm merge providers <p1> <p2> ...`       | Merge from multiple providers                    |
+| `csm merge all`                           | Merge all sessions from all providers            |
+| `csm export workspace <dest> <hash>`      | Export sessions from workspace                   |
+| `csm export sessions <dest> <ids...>`     | Export specific sessions                         |
+| `csm export path <dest> [<path>]`         | Export sessions from path                        |
+| `csm import workspace <src> <hash>`       | Import sessions into workspace                   |
+| `csm import sessions <files...>`          | Import specific session files                    |
+| `csm import path <src> [<target>]`        | Import sessions into path                        |
+| `csm move workspace <src_hash> <target>`  | Move all sessions from workspace                 |
+| `csm move sessions <ids...> <target>`     | Move specific sessions                           |
+| `csm move path <src> <target>`            | Move sessions between paths                      |
+| `csm git config --name <n> --email <e>`   | Configure git user                               |
+| `csm git init <path>`                     | Initialize git for chat sessions                 |
+| `csm git add <path>`                      | Stage chat session changes                       |
+| `csm git status <path>`                   | Show git status of sessions                      |
+| `csm git snapshot <path>`                 | Create a tagged snapshot                         |
+| `csm git track <path>`                    | Track sessions with file changes                 |
+| `csm git log <path>`                      | Show chat session commit history                 |
+| `csm git diff <path>`                     | Diff sessions between commits                    |
+| `csm detect`                              | Auto-detect workspace and providers              |
+| `csm detect workspace [<path>]`           | Detect workspace for a path                      |
+| `csm detect providers`                    | Detect available providers                       |
+| `csm detect session <id>`                 | Detect which provider owns a session             |
+| `csm detect all [<path>]`                 | Full detection report                            |
+| `csm register all [--merge] [--force]`    | Register (or merge) all sessions in index        |
+| `csm register session <ids...> [--force]` | Register specific sessions by ID                 |
+| `csm register session -t <titles...>`     | Register sessions matching titles                |
+| `csm harvest init`                        | Initialize harvest database                      |
+| `csm harvest scan`                        | Scan for local providers and sessions            |
+| `csm harvest scan --web`                  | Scan for web LLM providers (ChatGPT, etc.)       |
+| `csm harvest run`                         | Collect sessions from all providers              |
+| `csm harvest status`                      | Show harvest database statistics                 |
+| `csm harvest list`                        | List harvested sessions                          |
+| `csm harvest export`                      | Export sessions from harvest DB                  |
+| `csm harvest share <url>`                 | Import a shared chat URL                         |
+| `csm harvest shares`                      | List pending/imported share links                |
+| `csm harvest checkpoint <session>`        | Create session checkpoint                        |
+| `csm harvest checkpoints <session>`       | List session checkpoints                         |
+| `csm harvest restore <session> <cp>`      | Restore session to checkpoint                    |
+| `csm harvest search <query>`              | Full-text search across sessions                 |
+| `csm harvest git init`                    | Initialize git tracking for harvest DB           |
+| `csm harvest git commit`                  | Commit changes to the harvest DB                 |
+| `csm harvest git log`                     | Show git log for harvest DB                      |
+| `csm harvest git diff`                    | Show changes to harvest DB                       |
+| `csm harvest git restore`                 | Restore harvest DB from a commit                 |
+| `csm migration create <output>`           | Create migration package                         |
+| `csm migration restore <package>`         | Restore from migration                           |
+| `csm run tui`                             | Launch interactive TUI                           |
+| `csm provider list`                       | List available LLM providers                     |
+| `csm provider info <name>`                | Show provider details                            |
+| `csm provider config <name>`              | Configure a provider                             |
+| `csm provider import --from <name>`       | Import sessions from provider                    |
+| `csm provider test <name>`                | Test provider connection                         |
 
 ## Project Structure
 
