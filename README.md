@@ -152,22 +152,22 @@ When you've moved a project and want to recover old chat conversations:
 csm fetch path /path/to/project
 
 # Or merge all into a single unified session
-csm merge path /path/to/project
+csm merge path /path/to/project --force
 ```
 
-> **⚠️ Important: Application Restart May Be Required**
+> **💡 Tip: Use `--force` when VS Code is running**
 >
-> After running `csm merge` or other commands that modify chat session storage, you may need to restart the application for changes to appear.
+> By default, CSM skips writing to VS Code's session index when VS Code is running. Use `--force` to register sessions immediately:
+>
+> ```bash
+> csm merge path /path/to/project --force
+> ```
+>
+> With `--force`, merged sessions appear in VS Code's "Show Chats..." dropdown immediately—no restart required. Just refresh the chat panel or switch tabs.
 
-#### Why is a restart needed?
-
-Applications like VS Code and Cursor store chat session indexes in SQLite databases and cache them in memory. Even though CSM successfully writes to the database:
-
-- The application holds locks on the database and uses its in-memory cached version
-- A simple window reload only refreshes the UI, not the database cache
-- Chat extensions only fully reload their session list on startup
-
-The `--force` flag bypasses "application is running" warnings but cannot force an app to refresh its internal cache—only a full restart can do that.
+> **⚠️ Note: Some applications may require a restart**
+>
+> While VS Code supports concurrent SQLite writes (WAL mode), other applications may cache session data in memory. If sessions don't appear after using `--force`, try restarting the application.
 
 #### Restart requirements by application
 

@@ -229,13 +229,21 @@ pub fn history_fetch(project_path: Option<&str>, force: bool, no_register: bool)
             "[#]".blue()
         );
 
-        let registered =
-            register_all_sessions_from_directory(&current_ws_id, &chat_sessions_dir, true)?;
-        println!(
-            "{} Registered {} sessions in index",
-            "[OK]".green(),
-            registered
-        );
+        if is_vscode_running() && !force {
+            println!(
+                "{} VS Code is running. Sessions may not appear until restart.",
+                "[!]".yellow()
+            );
+            println!("   Run 'csm history fetch --force' after closing VS Code to register.");
+        } else {
+            let registered =
+                register_all_sessions_from_directory(&current_ws_id, &chat_sessions_dir, true)?;
+            println!(
+                "{} Registered {} sessions in index",
+                "[OK]".green(),
+                registered
+            );
+        }
     }
 
     println!(
@@ -407,17 +415,24 @@ pub fn history_merge(
     // Register in VS Code index
     println!("\n{} Registering in VS Code index...", "[#]".blue());
 
-    let db_path = get_workspace_storage_db(&current_ws_id)?;
-    add_session_to_index(
-        &db_path,
-        &merged_session_id,
-        &merged_title,
-        last_time,
-        false,
-        "panel",
-        false,
-    )?;
-    println!("   {} Registered in index", "[OK]".green());
+    if is_vscode_running() && !force {
+        println!(
+            "{} VS Code is running. Close it and run again, or use --force",
+            "[!]".yellow()
+        );
+    } else {
+        let db_path = get_workspace_storage_db(&current_ws_id)?;
+        add_session_to_index(
+            &db_path,
+            &merged_session_id,
+            &merged_title,
+            last_time,
+            false,
+            "panel",
+            false,
+        )?;
+        println!("   {} Registered in index", "[OK]".green());
+    }
 
     println!("\n{}", "=".repeat(70));
     println!("{} MERGE COMPLETE!", "[OK]".green().bold());
@@ -771,17 +786,24 @@ fn merge_sessions_internal(
     // Register in VS Code index
     println!("\n{} Registering in VS Code index...", "[#]".blue());
 
-    let db_path = get_workspace_storage_db(target_ws_id)?;
-    add_session_to_index(
-        &db_path,
-        &merged_session_id,
-        &merged_title,
-        last_time,
-        false,
-        "panel",
-        false,
-    )?;
-    println!("   {} Registered in index", "[OK]".green());
+    if is_vscode_running() && !force {
+        println!(
+            "{} VS Code is running. Close it and run again, or use --force",
+            "[!]".yellow()
+        );
+    } else {
+        let db_path = get_workspace_storage_db(target_ws_id)?;
+        add_session_to_index(
+            &db_path,
+            &merged_session_id,
+            &merged_title,
+            last_time,
+            false,
+            "panel",
+            false,
+        )?;
+        println!("   {} Registered in index", "[OK]".green());
+    }
 
     println!("\n{}", "=".repeat(70));
     println!("{} MERGE COMPLETE!", "[OK]".green().bold());
