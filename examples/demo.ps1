@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# Demo script for Chat Session Manager (csm)
+# Demo script for Chat System Manager (csm)
 # Demonstrates the Rust CLI with the demo_project
 
 $ErrorActionPreference = "Continue"

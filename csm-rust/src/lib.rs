@@ -1,4 +1,4 @@
-//! Chat Session Manager (CSM) - Library
+//! Chat System Manager (CSM) - Library
 //!
 //! A library for managing and merging chat sessions across workspaces and LLM providers.
 //!

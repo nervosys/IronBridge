@@ -1,4 +1,4 @@
-//! Chat Session Manager (csm) - Main entry point
+//! Chat System Manager (csm) - Main entry point
 //!
 //! A CLI tool to manage and merge chat sessions across workspaces.
 
@@ -547,7 +547,7 @@ fn print_banner() {
      ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
     "#;
     
-    let subtitle = "CHAt Session Manager (Chasm) for Bridging LLM Providers";
+    let subtitle = "CHAt System Manager (Chasm) for Bridging LLM Providers";
     let tagline  = "     Your AI providers and chat sessions, unified";
     let version  = format!("                       v{}", env!("CARGO_PKG_VERSION"));
     

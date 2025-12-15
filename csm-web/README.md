@@ -1,6 +1,6 @@
 # CSM Web Interface
 
-A reactive GUI web interface for Chat Session Manager (CSM) built with React, TypeScript, Vite, and Recharts. Connects to the CSM Rust backend via REST API.
+A reactive GUI web interface for Chat System Manager (CSM) built with React, TypeScript, Vite, and Recharts. Connects to the CSM Rust backend via REST API.
 
 ## Features
 

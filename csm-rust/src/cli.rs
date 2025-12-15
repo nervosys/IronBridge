@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 
-/// Chat Session Manager (csm) - Manage and merge chat sessions across workspaces
+/// Chat System Manager (csm) - Manage and merge chat sessions across workspaces
 #[derive(Parser)]
 #[command(name = "csm")]
 #[command(author = "Nervosys")]

@@ -2,7 +2,7 @@
 name = "csm"
 version = "0.2.0"
 edition = "2021"
-description = "Chat Session Manager - Manage and merge chat sessions across workspaces"
+description = "Chat System Manager - Manage and merge chat sessions across workspaces"
 authors = ["Nervosys"]
 license = "MIT"
 repository = "https://github.com/nervosys/chat-session-manager"

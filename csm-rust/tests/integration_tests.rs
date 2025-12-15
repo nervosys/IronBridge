@@ -1,4 +1,4 @@
-//! Integration tests for Chat Session Manager (csm)
+//! Integration tests for Chat System Manager (csm)
 //!
 //! These tests validate the CLI, workspace operations, and end-to-end functionality.
 

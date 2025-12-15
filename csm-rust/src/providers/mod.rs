@@ -1,4 +1,4 @@
-//! LLM Provider integrations for Chat Session Manager
+//! LLM Provider integrations for Chat System Manager
 //!
 //! Supports multiple chat providers:
 //!

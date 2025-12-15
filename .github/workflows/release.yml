@@ -158,7 +158,7 @@ jobs:
           files: |
             release/*
           body: |
-            ## Chat Session Manager (CSM) ${{ steps.version.outputs.version }}
+            ## Chat System Manager (CSM) ${{ steps.version.outputs.version }}
 
             ### Downloads
 

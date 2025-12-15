@@ -120,7 +120,7 @@ export default function Layout({ children, theme, setTheme }: LayoutProps) {
                             <img src={chasmIcon} alt="Chasm" className="w-10 h-10" />
                             <div className="flex flex-col">
                                 <span className="font-bold text-lg text-[hsl(var(--foreground))] leading-tight">Chasm</span>
-                                <span className="text-xs text-[hsl(var(--muted-foreground))]">Chat Session Manager</span>
+                                <span className="text-xs text-[hsl(var(--muted-foreground))]">Chat System Manager</span>
                             </div>
                         </div>
                     ) : (

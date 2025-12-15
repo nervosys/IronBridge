@@ -1,4 +1,4 @@
-# Chat Session Manager (CSM)
+# Chat System Manager (CSM)
 
 A VS Code extension that provides a graphical interface for managing VS Code chat sessions across workspaces.
 
@@ -38,7 +38,7 @@ npm run compile
 
 ### Tree Views
 
-The extension adds a "Chat Session Manager" view container in the activity bar with two views:
+The extension adds a "Chat System Manager" view container in the activity bar with two views:
 
 - **Workspaces**: Lists all VS Code workspaces with chat sessions
 - **Sessions**: Shows chat sessions for the selected workspace

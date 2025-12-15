@@ -1,6 +1,6 @@
 # Change Log
 
-All notable changes to the "Copilot Chat Session Manager" extension will be documented in this file.
+All notable changes to the "Copilot Chat System Manager" extension will be documented in this file.
 
 ## [0.1.0] - 2024-12-06
 

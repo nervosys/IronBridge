@@ -1,5 +1,5 @@
 // CSM VS Code Extension - Main Entry Point
-// GUI interface for Chat Session Manager
+// GUI interface for Chat System Manager
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
@@ -200,7 +200,7 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
 export function activate(context: vscode.ExtensionContext) {
     // Create output channel
     outputChannel = vscode.window.createOutputChannel('CSM');
-    outputChannel.appendLine('Chat Session Manager activated');
+    outputChannel.appendLine('Chat System Manager activated');
 
     // Initialize executor with extension path for bundled binary lookup
     executor = new CsmExecutor(outputChannel, context.extensionPath);

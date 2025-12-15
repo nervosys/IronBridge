@@ -1,4 +1,4 @@
-# Quick examples for Chat Session Manager (csm)
+# Quick examples for Chat System Manager (csm)
 # Run individual examples by copying commands to your terminal
 
 $projectRoot = Split-Path $PSScriptRoot -Parent
@@ -7,7 +7,7 @@ if (-not (Test-Path $csm)) {
     $csm = "csm"  # Try PATH
 }
 
-Write-Host "Chat Session Manager (csm) Examples" -ForegroundColor Cyan
+Write-Host "Chat System Manager (csm) Examples" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
 

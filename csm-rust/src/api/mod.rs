@@ -1,4 +1,4 @@
-//! HTTP API Server for Chat Session Manager
+//! HTTP API Server for Chat System Manager
 //!
 //! Provides a REST API for the web frontend to interact with CSM.
 //! Uses Actix-web for the HTTP server.

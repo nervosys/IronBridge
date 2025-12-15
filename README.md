@@ -1,4 +1,4 @@
-# Chat Session Manager (csm|chasm) 📚
+# Chat System Manager (csm|chasm) 📚
 
 A fast, cross-platform CLI tool for managing chat sessions across workspaces and LLM providers.
 
@@ -163,7 +163,7 @@ csm merge path /path/to/project --force
 > csm merge path /path/to/project --force
 > ```
 >
-> With `--force`, merged sessions appear in VS Code's "Show Chats..." dropdown immediately—no restart required. Just refresh the chat panel or switch tabs.
+> With `--force`, merged sessions appear in VS Code's "Show Chats..." dropdown immediately, no restart required. Just refresh the chat panel or switch tabs.
 
 > **⚠️ Note: Some applications may require a restart**
 >

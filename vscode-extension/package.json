@@ -1,6 +1,6 @@
 {
     "name": "chat-session-manager",
-    "displayName": "Chat Session Manager",
+    "displayName": "Chat System Manager",
     "description": "GUI interface for managing chat sessions across workspaces",
     "version": "0.1.0",
     "publisher": "nervosys",
@@ -23,7 +23,7 @@
     "main": "./out/extension.js",
     "contributes": {
         "configuration": {
-            "title": "Chat Session Manager",
+            "title": "Chat System Manager",
             "properties": {
                 "csm.binaryPath": {
                     "type": "string",
@@ -158,7 +158,7 @@
             "activitybar": [
                 {
                     "id": "csm",
-                    "title": "Chat Session Manager",
+                    "title": "Chat System Manager",
                     "icon": "$(comment-discussion)"
                 }
             ]
