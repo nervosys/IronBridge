@@ -6,16 +6,17 @@ use serde_json::json;
 /// Get the list of available resources
 pub fn list_resources() -> Vec<Resource> {
     vec![
+        // VS Code workspace resources
         Resource {
             uri: "csm://workspaces".to_string(),
-            name: "Workspaces".to_string(),
+            name: "VS Code Workspaces".to_string(),
             description: Some("All VS Code workspaces with chat sessions".to_string()),
             mime_type: Some("application/json".to_string()),
         },
         Resource {
             uri: "csm://sessions".to_string(),
-            name: "Sessions".to_string(),
-            description: Some("All chat sessions across all workspaces".to_string()),
+            name: "VS Code Sessions".to_string(),
+            description: Some("All chat sessions from VS Code workspaces".to_string()),
             mime_type: Some("application/json".to_string()),
         },
         Resource {
@@ -30,24 +31,51 @@ pub fn list_resources() -> Vec<Resource> {
             description: Some("Available LLM providers".to_string()),
             mime_type: Some("application/json".to_string()),
         },
+        // CSM Database resources (csm-web)
+        Resource {
+            uri: "csm://db/workspaces".to_string(),
+            name: "CSM-Web Workspaces".to_string(),
+            description: Some("Workspaces from the csm-web database".to_string()),
+            mime_type: Some("application/json".to_string()),
+        },
+        Resource {
+            uri: "csm://db/sessions".to_string(),
+            name: "CSM-Web Sessions".to_string(),
+            description: Some("Chat sessions from the csm-web database".to_string()),
+            mime_type: Some("application/json".to_string()),
+        },
+        Resource {
+            uri: "csm://db/stats".to_string(),
+            name: "CSM-Web Statistics".to_string(),
+            description: Some("Database statistics and session counts by provider".to_string()),
+            mime_type: Some("application/json".to_string()),
+        },
     ]
 }
 
 /// Read a resource by URI
 pub fn read_resource(uri: &str) -> ReadResourceResult {
     match uri {
+        // VS Code workspace resources
         "csm://workspaces" => read_workspaces_resource(),
         "csm://sessions" => read_sessions_resource(),
         "csm://orphaned" => read_orphaned_resource(),
         "csm://providers" => read_providers_resource(),
+        // CSM Database resources (csm-web)
+        "csm://db/workspaces" => read_db_workspaces_resource(),
+        "csm://db/sessions" => read_db_sessions_resource(),
+        "csm://db/stats" => read_db_stats_resource(),
         _ => {
-            // Try to parse workspace-specific or session-specific URIs
+            // Try to parse dynamic URIs
             if uri.starts_with("csm://workspace/") {
                 let hash = &uri["csm://workspace/".len()..];
                 read_workspace_resource(hash)
             } else if uri.starts_with("csm://session/") {
                 let id = &uri["csm://session/".len()..];
                 read_session_resource(id)
+            } else if uri.starts_with("csm://db/session/") {
+                let id = &uri["csm://db/session/".len()..];
+                read_db_session_resource(id)
             } else {
                 ReadResourceResult {
                     contents: vec![ResourceContent {
@@ -320,6 +348,251 @@ fn read_session_resource(session_id: &str) -> ReadResourceResult {
         Err(e) => ReadResourceResult {
             contents: vec![ResourceContent {
                 uri: format!("csm://session/{}", session_id),
+                mime_type: Some("text/plain".to_string()),
+                text: Some(format!("Error: {}", e)),
+                blob: None,
+            }],
+        },
+    }
+}
+
+// ============================================================================
+// CSM Database Resource Implementations (csm-web integration)
+// ============================================================================
+
+fn read_db_workspaces_resource() -> ReadResourceResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: "csm://db/workspaces".to_string(),
+                mime_type: Some("application/json".to_string()),
+                text: Some(json!({
+                    "error": "CSM database not found",
+                    "message": "Initialize csm-web database first",
+                    "db_path": db::get_csm_db_path().display().to_string()
+                }).to_string()),
+                blob: None,
+            }],
+        };
+    }
+
+    match db::list_db_workspaces() {
+        Ok(workspaces) => {
+            let infos: Vec<serde_json::Value> = workspaces
+                .iter()
+                .map(|ws| {
+                    json!({
+                        "id": ws.id,
+                        "name": ws.name,
+                        "path": ws.path,
+                        "provider": ws.provider,
+                        "created_at": ws.created_at,
+                        "updated_at": ws.updated_at
+                    })
+                })
+                .collect();
+
+            ReadResourceResult {
+                contents: vec![ResourceContent {
+                    uri: "csm://db/workspaces".to_string(),
+                    mime_type: Some("application/json".to_string()),
+                    text: Some(serde_json::to_string_pretty(&json!({
+                        "workspaces": infos,
+                        "total": infos.len(),
+                        "source": "csm-web database"
+                    })).unwrap_or_default()),
+                    blob: None,
+                }],
+            }
+        }
+        Err(e) => ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: "csm://db/workspaces".to_string(),
+                mime_type: Some("text/plain".to_string()),
+                text: Some(format!("Error: {}", e)),
+                blob: None,
+            }],
+        },
+    }
+}
+
+fn read_db_sessions_resource() -> ReadResourceResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: "csm://db/sessions".to_string(),
+                mime_type: Some("application/json".to_string()),
+                text: Some(json!({
+                    "error": "CSM database not found"
+                }).to_string()),
+                blob: None,
+            }],
+        };
+    }
+
+    match db::list_db_sessions(None, None, 100) {
+        Ok(sessions) => {
+            let infos: Vec<serde_json::Value> = sessions
+                .iter()
+                .map(|s| {
+                    json!({
+                        "id": s.id,
+                        "workspace_id": s.workspace_id,
+                        "provider": s.provider,
+                        "title": s.title,
+                        "model": s.model,
+                        "message_count": s.message_count,
+                        "created_at": s.created_at,
+                        "updated_at": s.updated_at
+                    })
+                })
+                .collect();
+
+            ReadResourceResult {
+                contents: vec![ResourceContent {
+                    uri: "csm://db/sessions".to_string(),
+                    mime_type: Some("application/json".to_string()),
+                    text: Some(serde_json::to_string_pretty(&json!({
+                        "sessions": infos,
+                        "total": infos.len(),
+                        "source": "csm-web database"
+                    })).unwrap_or_default()),
+                    blob: None,
+                }],
+            }
+        }
+        Err(e) => ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: "csm://db/sessions".to_string(),
+                mime_type: Some("text/plain".to_string()),
+                text: Some(format!("Error: {}", e)),
+                blob: None,
+            }],
+        },
+    }
+}
+
+fn read_db_stats_resource() -> ReadResourceResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: "csm://db/stats".to_string(),
+                mime_type: Some("application/json".to_string()),
+                text: Some(json!({
+                    "error": "CSM database not found",
+                    "db_path": db::get_csm_db_path().display().to_string()
+                }).to_string()),
+                blob: None,
+            }],
+        };
+    }
+
+    match db::count_sessions_by_provider() {
+        Ok(counts) => {
+            let provider_counts: serde_json::Value = counts
+                .iter()
+                .map(|(provider, count)| (provider.clone(), *count))
+                .collect();
+
+            let total: i64 = counts.iter().map(|(_, c)| c).sum();
+
+            ReadResourceResult {
+                contents: vec![ResourceContent {
+                    uri: "csm://db/stats".to_string(),
+                    mime_type: Some("application/json".to_string()),
+                    text: Some(serde_json::to_string_pretty(&json!({
+                        "total_sessions": total,
+                        "by_provider": provider_counts,
+                        "db_path": db::get_csm_db_path().display().to_string(),
+                        "source": "csm-web database"
+                    })).unwrap_or_default()),
+                    blob: None,
+                }],
+            }
+        }
+        Err(e) => ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: "csm://db/stats".to_string(),
+                mime_type: Some("text/plain".to_string()),
+                text: Some(format!("Error: {}", e)),
+                blob: None,
+            }],
+        },
+    }
+}
+
+fn read_db_session_resource(session_id: &str) -> ReadResourceResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: format!("csm://db/session/{}", session_id),
+                mime_type: Some("application/json".to_string()),
+                text: Some(json!({
+                    "error": "CSM database not found"
+                }).to_string()),
+                blob: None,
+            }],
+        };
+    }
+
+    match db::get_db_session(session_id) {
+        Ok(Some(session)) => {
+            let messages = db::get_db_messages(session_id).unwrap_or_default();
+
+            let message_infos: Vec<serde_json::Value> = messages
+                .iter()
+                .map(|m| {
+                    json!({
+                        "id": m.id,
+                        "role": m.role,
+                        "content": m.content,
+                        "model": m.model,
+                        "created_at": m.created_at
+                    })
+                })
+                .collect();
+
+            ReadResourceResult {
+                contents: vec![ResourceContent {
+                    uri: format!("csm://db/session/{}", session_id),
+                    mime_type: Some("application/json".to_string()),
+                    text: Some(serde_json::to_string_pretty(&json!({
+                        "session": {
+                            "id": session.id,
+                            "workspace_id": session.workspace_id,
+                            "provider": session.provider,
+                            "title": session.title,
+                            "model": session.model,
+                            "message_count": session.message_count,
+                            "created_at": session.created_at,
+                            "updated_at": session.updated_at
+                        },
+                        "messages": message_infos,
+                        "source": "csm-web database"
+                    })).unwrap_or_default()),
+                    blob: None,
+                }],
+            }
+        }
+        Ok(None) => ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: format!("csm://db/session/{}", session_id),
+                mime_type: Some("text/plain".to_string()),
+                text: Some(format!("Session not found: {}", session_id)),
+                blob: None,
+            }],
+        },
+        Err(e) => ReadResourceResult {
+            contents: vec![ResourceContent {
+                uri: format!("csm://db/session/{}", session_id),
                 mime_type: Some("text/plain".to_string()),
                 text: Some(format!("Error: {}", e)),
                 blob: None,

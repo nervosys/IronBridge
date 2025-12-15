@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-01-10
+
+### Added
+
+- **MCP Server - CSM Database Integration** - Access csm-web database sessions
+  - 5 new `csm_db_*` tools for csm-web database access:
+    - `csm_db_list_workspaces` - List workspaces from CSM database
+    - `csm_db_list_sessions` - List sessions with provider/workspace filters
+    - `csm_db_get_session` - Get session with all messages
+    - `csm_db_search` - Search sessions by title
+    - `csm_db_stats` - Database statistics by provider
+  - 3 new `csm://db/*` resources:
+    - `csm://db/workspaces` - Workspaces resource
+    - `csm://db/sessions` - Sessions resource  
+    - `csm://db/stats` - Statistics resource
+    - `csm://db/session/{id}` - Individual session resource
+
+### Changed
+
+- MCP server now supports both VS Code workspace storage AND csm-web database
+
 ## [0.2.0] - 2025-12-09
 
 ### Added

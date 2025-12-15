@@ -200,6 +200,79 @@ pub fn list_tools() -> Vec<Tool> {
                 "required": []
             }),
         },
+        // CSM Database Tools (for csm-web integration)
+        Tool {
+            name: "csm_db_list_workspaces".to_string(),
+            description: Some("List all workspaces from the CSM database (csm-web)".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
+        Tool {
+            name: "csm_db_list_sessions".to_string(),
+            description: Some("List chat sessions from the CSM database (csm-web)".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "workspace_id": {
+                        "type": "string",
+                        "description": "Filter by workspace ID"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "description": "Filter by provider (e.g., 'copilot', 'ollama', 'chatgpt')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results (default: 100)"
+                    }
+                },
+                "required": []
+            }),
+        },
+        Tool {
+            name: "csm_db_get_session".to_string(),
+            description: Some("Get a specific session with all its messages from CSM database".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID to retrieve"
+                    }
+                },
+                "required": ["session_id"]
+            }),
+        },
+        Tool {
+            name: "csm_db_search".to_string(),
+            description: Some("Search sessions in CSM database by title".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for session titles"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results (default: 20)"
+                    }
+                },
+                "required": ["query"]
+            }),
+        },
+        Tool {
+            name: "csm_db_stats".to_string(),
+            description: Some("Get statistics about the CSM database (session counts by provider)".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
     ]
 }
 
@@ -293,6 +366,38 @@ pub fn call_tool(name: &str, arguments: &HashMap<String, serde_json::Value>) -> 
             let path = arguments.get("path").and_then(|v| v.as_str());
             execute_detect(path)
         }
+        // CSM Database tools (csm-web integration)
+        "csm_db_list_workspaces" => execute_db_list_workspaces(),
+        "csm_db_list_sessions" => {
+            let workspace_id = arguments.get("workspace_id").and_then(|v| v.as_str());
+            let provider = arguments.get("provider").and_then(|v| v.as_str());
+            let limit = arguments
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize)
+                .unwrap_or(100);
+            execute_db_list_sessions(workspace_id, provider, limit)
+        }
+        "csm_db_get_session" => {
+            let session_id = arguments
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            execute_db_get_session(session_id)
+        }
+        "csm_db_search" => {
+            let query = arguments
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let limit = arguments
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize)
+                .unwrap_or(20);
+            execute_db_search(query, limit)
+        }
+        "csm_db_stats" => execute_db_stats(),
         _ => CallToolResult {
             content: vec![ToolContent::Text {
                 text: format!("Unknown tool: {}", name),
@@ -672,6 +777,293 @@ fn execute_detect(path: Option<&str>) -> CallToolResult {
         Err(e) => CallToolResult {
             content: vec![ToolContent::Text {
                 text: format!("Error detecting: {}", e),
+            }],
+            is_error: Some(true),
+        },
+    }
+}
+
+// ============================================================================
+// CSM Database Tool Implementations (csm-web integration)
+// ============================================================================
+
+fn execute_db_list_workspaces() -> CallToolResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return CallToolResult {
+            content: vec![ToolContent::Text {
+                text: json!({
+                    "error": "CSM database not found",
+                    "message": "The csm-web database has not been initialized. Run 'csm api' to start the API server first.",
+                    "db_path": db::get_csm_db_path().display().to_string()
+                }).to_string(),
+            }],
+            is_error: Some(true),
+        };
+    }
+
+    match db::list_db_workspaces() {
+        Ok(workspaces) => {
+            let infos: Vec<serde_json::Value> = workspaces
+                .iter()
+                .map(|ws| {
+                    json!({
+                        "id": ws.id,
+                        "name": ws.name,
+                        "path": ws.path,
+                        "provider": ws.provider,
+                        "created_at": ws.created_at,
+                        "updated_at": ws.updated_at
+                    })
+                })
+                .collect();
+
+            CallToolResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&json!({
+                        "workspaces": infos,
+                        "total": infos.len(),
+                        "source": "csm-web database"
+                    }))
+                    .unwrap_or_default(),
+                }],
+                is_error: None,
+            }
+        }
+        Err(e) => CallToolResult {
+            content: vec![ToolContent::Text {
+                text: format!("Error listing workspaces from CSM database: {}", e),
+            }],
+            is_error: Some(true),
+        },
+    }
+}
+
+fn execute_db_list_sessions(
+    workspace_id: Option<&str>,
+    provider: Option<&str>,
+    limit: usize,
+) -> CallToolResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return CallToolResult {
+            content: vec![ToolContent::Text {
+                text: json!({
+                    "error": "CSM database not found",
+                    "message": "The csm-web database has not been initialized."
+                }).to_string(),
+            }],
+            is_error: Some(true),
+        };
+    }
+
+    match db::list_db_sessions(workspace_id, provider, limit) {
+        Ok(sessions) => {
+            let infos: Vec<serde_json::Value> = sessions
+                .iter()
+                .map(|s| {
+                    json!({
+                        "id": s.id,
+                        "workspace_id": s.workspace_id,
+                        "provider": s.provider,
+                        "title": s.title,
+                        "model": s.model,
+                        "message_count": s.message_count,
+                        "created_at": s.created_at,
+                        "updated_at": s.updated_at,
+                        "archived": s.archived
+                    })
+                })
+                .collect();
+
+            CallToolResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&json!({
+                        "sessions": infos,
+                        "total": infos.len(),
+                        "filters": {
+                            "workspace_id": workspace_id,
+                            "provider": provider,
+                            "limit": limit
+                        },
+                        "source": "csm-web database"
+                    }))
+                    .unwrap_or_default(),
+                }],
+                is_error: None,
+            }
+        }
+        Err(e) => CallToolResult {
+            content: vec![ToolContent::Text {
+                text: format!("Error listing sessions from CSM database: {}", e),
+            }],
+            is_error: Some(true),
+        },
+    }
+}
+
+fn execute_db_get_session(session_id: &str) -> CallToolResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return CallToolResult {
+            content: vec![ToolContent::Text {
+                text: json!({
+                    "error": "CSM database not found"
+                }).to_string(),
+            }],
+            is_error: Some(true),
+        };
+    }
+
+    match db::get_db_session(session_id) {
+        Ok(Some(session)) => {
+            // Also fetch messages
+            let messages = db::get_db_messages(session_id).unwrap_or_default();
+
+            let message_infos: Vec<serde_json::Value> = messages
+                .iter()
+                .map(|m| {
+                    json!({
+                        "id": m.id,
+                        "role": m.role,
+                        "content": m.content,
+                        "model": m.model,
+                        "created_at": m.created_at
+                    })
+                })
+                .collect();
+
+            CallToolResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&json!({
+                        "session": {
+                            "id": session.id,
+                            "workspace_id": session.workspace_id,
+                            "provider": session.provider,
+                            "title": session.title,
+                            "model": session.model,
+                            "message_count": session.message_count,
+                            "created_at": session.created_at,
+                            "updated_at": session.updated_at,
+                            "archived": session.archived
+                        },
+                        "messages": message_infos,
+                        "source": "csm-web database"
+                    }))
+                    .unwrap_or_default(),
+                }],
+                is_error: None,
+            }
+        }
+        Ok(None) => CallToolResult {
+            content: vec![ToolContent::Text {
+                text: format!("Session not found: {}", session_id),
+            }],
+            is_error: Some(true),
+        },
+        Err(e) => CallToolResult {
+            content: vec![ToolContent::Text {
+                text: format!("Error getting session: {}", e),
+            }],
+            is_error: Some(true),
+        },
+    }
+}
+
+fn execute_db_search(query: &str, limit: usize) -> CallToolResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return CallToolResult {
+            content: vec![ToolContent::Text {
+                text: json!({
+                    "error": "CSM database not found"
+                }).to_string(),
+            }],
+            is_error: Some(true),
+        };
+    }
+
+    match db::search_db_sessions(query, limit) {
+        Ok(sessions) => {
+            let infos: Vec<serde_json::Value> = sessions
+                .iter()
+                .map(|s| {
+                    json!({
+                        "id": s.id,
+                        "title": s.title,
+                        "provider": s.provider,
+                        "message_count": s.message_count,
+                        "updated_at": s.updated_at
+                    })
+                })
+                .collect();
+
+            CallToolResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&json!({
+                        "query": query,
+                        "results": infos,
+                        "total": infos.len(),
+                        "source": "csm-web database"
+                    }))
+                    .unwrap_or_default(),
+                }],
+                is_error: None,
+            }
+        }
+        Err(e) => CallToolResult {
+            content: vec![ToolContent::Text {
+                text: format!("Error searching: {}", e),
+            }],
+            is_error: Some(true),
+        },
+    }
+}
+
+fn execute_db_stats() -> CallToolResult {
+    use super::db;
+
+    if !db::csm_db_exists() {
+        return CallToolResult {
+            content: vec![ToolContent::Text {
+                text: json!({
+                    "error": "CSM database not found",
+                    "db_path": db::get_csm_db_path().display().to_string()
+                }).to_string(),
+            }],
+            is_error: Some(true),
+        };
+    }
+
+    match db::count_sessions_by_provider() {
+        Ok(counts) => {
+            let provider_counts: serde_json::Value = counts
+                .iter()
+                .map(|(provider, count)| (provider.clone(), *count))
+                .collect();
+
+            let total: i64 = counts.iter().map(|(_, c)| c).sum();
+
+            CallToolResult {
+                content: vec![ToolContent::Text {
+                    text: serde_json::to_string_pretty(&json!({
+                        "total_sessions": total,
+                        "by_provider": provider_counts,
+                        "db_path": db::get_csm_db_path().display().to_string(),
+                        "source": "csm-web database"
+                    }))
+                    .unwrap_or_default(),
+                }],
+                is_error: None,
+            }
+        }
+        Err(e) => CallToolResult {
+            content: vec![ToolContent::Text {
+                text: format!("Error getting stats: {}", e),
             }],
             is_error: Some(true),
         },
