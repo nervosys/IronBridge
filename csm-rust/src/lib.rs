@@ -21,6 +21,7 @@ pub mod cli;
 pub mod commands;
 pub mod database;
 pub mod error;
+pub mod mcp;
 pub mod models;
 pub mod providers;
 pub mod storage;

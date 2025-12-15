@@ -313,6 +313,83 @@ csm run tui
 
 Navigate with arrow keys or `j`/`k`, press `Enter` to drill down, `?` for help.
 
+### MCP Server (AI Agent Integration)
+
+CSM includes an MCP (Model Context Protocol) server that enables AI agents and autonomous assistants to programmatically interact with chat session management.
+
+#### Installation
+
+The MCP server is built alongside CSM:
+
+```bash
+cd csm-rust
+cargo build --release
+# Binary: target/release/csm-mcp or csm-mcp.exe
+```
+
+#### Configuration
+
+Add to your MCP client configuration (e.g., Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "csm": {
+      "command": "csm-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Or for VS Code Copilot agent mode (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "csm": {
+      "command": "csm-mcp"
+    }
+  }
+}
+```
+
+#### Available Tools
+
+| Tool                    | Description                                        |
+| ----------------------- | -------------------------------------------------- |
+| `csm_list_workspaces`   | List all VS Code workspaces with chat sessions     |
+| `csm_find_workspace`    | Find workspaces matching a pattern                 |
+| `csm_list_sessions`     | List all chat sessions (optionally filter by path) |
+| `csm_list_orphaned`     | Find orphaned sessions not in VS Code's index      |
+| `csm_register_all`      | Register all sessions (with optional merge)        |
+| `csm_register_sessions` | Register specific sessions by ID or title          |
+| `csm_show_session`      | Show details of a specific session                 |
+| `csm_show_history`      | Show chat history timeline for a project           |
+| `csm_merge_sessions`    | Merge multiple sessions into one                   |
+| `csm_search`            | Full-text search across harvested sessions         |
+| `csm_detect`            | Auto-detect workspace and providers                |
+
+#### Available Resources
+
+| Resource URI             | Description                            |
+| ------------------------ | -------------------------------------- |
+| `csm://workspaces`       | List of all registered workspaces      |
+| `csm://sessions`         | List of all sessions across workspaces |
+| `csm://orphaned`         | List of orphaned session files         |
+| `csm://providers`        | List of supported chat providers       |
+| `csm://workspace/{hash}` | Details of a specific workspace        |
+| `csm://session/{id}`     | Full content of a specific session     |
+
+#### Example Usage
+
+AI agents can use these tools to:
+
+- **Discover context**: Find relevant chat sessions from past coding conversations
+- **Recover sessions**: Register orphaned sessions that were lost after project moves
+- **Merge histories**: Consolidate scattered chat history into unified sessions
+- **Search knowledge**: Full-text search across all AI conversations for relevant context
+
 ### Harvest System
 
 Collect and unify chat sessions from all providers into a single searchable database:

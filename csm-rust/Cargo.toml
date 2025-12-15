@@ -84,6 +84,10 @@ path = "src/main.rs"
 name = "chasm"
 path = "src/main.rs"
 
+[[bin]]
+name = "csm-mcp"
+path = "src/mcp/main.rs"
+
 [profile.release]
 lto = true
 codegen-units = 1
