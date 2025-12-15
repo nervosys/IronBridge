@@ -1,61 +1,47 @@
-import { useState } from 'react';
-import { Search, FolderOpen, MessageSquare, ExternalLink, MoreVertical } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, FolderOpen, MessageSquare, ExternalLink, MoreVertical, AlertCircle, Loader2 } from 'lucide-react';
+import { useApi } from '../context/ApiContext';
 
-// Mock data
-const workspacesData = [
-    {
-        id: '1',
-        hash: 'a5dafce48e3e...',
-        projectPath: 'C:\\Users\\dev\\projects\\chat-session-manager',
-        sessions: 8,
-        lastActive: '2024-12-11 14:30',
-        hasChats: true,
-    },
-    {
-        id: '2',
-        hash: 'b7c2f1a89d4e...',
-        projectPath: 'C:\\Users\\dev\\projects\\web-app',
-        sessions: 15,
-        lastActive: '2024-12-11 12:15',
-        hasChats: true,
-    },
-    {
-        id: '3',
-        hash: 'c9d3e2b1f5a6...',
-        projectPath: 'C:\\Users\\dev\\projects\\api-server',
-        sessions: 23,
-        lastActive: '2024-12-10 18:45',
-        hasChats: true,
-    },
-    {
-        id: '4',
-        hash: 'd4e5f6a7b8c9...',
-        projectPath: 'C:\\Users\\dev\\projects\\mobile-app',
-        sessions: 5,
-        lastActive: '2024-12-09 09:20',
-        hasChats: true,
-    },
-    {
-        id: '5',
-        hash: 'e8f9a0b1c2d3...',
-        projectPath: 'C:\\Users\\dev\\projects\\data-pipeline',
-        sessions: 12,
-        lastActive: '2024-12-08 16:00',
-        hasChats: true,
-    },
-    {
-        id: '6',
-        hash: 'f0a1b2c3d4e5...',
-        projectPath: '(ALL SESSIONS)',
-        sessions: 34,
-        lastActive: '2024-12-11 15:00',
-        hasChats: true,
-    },
-];
+// Format timestamp to readable date
+function formatDate(timestamp: number): string {
+    return new Date(timestamp).toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
 
 export default function Workspaces() {
+    const { workspaces, sessions, isLoading, error } = useApi();
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'sessions' | 'lastActive' | 'path'>('lastActive');
+
+    // Compute session counts per workspace
+    const sessionCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        sessions.forEach((s) => {
+            if (s.workspaceId) {
+                counts.set(s.workspaceId, (counts.get(s.workspaceId) || 0) + 1);
+            }
+        });
+        return counts;
+    }, [sessions]);
+
+    // Transform workspaces for display
+    const workspacesData = useMemo(() => {
+        return workspaces.map((ws) => ({
+            id: ws.id,
+            hash: ws.id.substring(0, 12) + '...',
+            projectPath: ws.path || ws.name || ws.id,
+            sessions: ws.sessionCount || sessionCounts.get(ws.id) || 0,
+            lastActive: formatDate(ws.updatedAt),
+            lastActiveTimestamp: ws.updatedAt,
+            hasChats: (ws.sessionCount || sessionCounts.get(ws.id) || 0) > 0,
+            provider: ws.provider,
+        }));
+    }, [workspaces, sessionCounts]);
 
     const filteredWorkspaces = workspacesData
         .filter((ws) =>
@@ -65,17 +51,37 @@ export default function Workspaces() {
         .sort((a, b) => {
             if (sortBy === 'sessions') return b.sessions - a.sessions;
             if (sortBy === 'path') return a.projectPath.localeCompare(b.projectPath);
-            return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
+            return b.lastActiveTimestamp - a.lastActiveTimestamp;
         });
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Failed to Load Workspaces</h3>
+                    <p className="text-[hsl(var(--muted-foreground))]">{error.message}</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold">Workspaces</h1>
-                <p className="text-[hsl(var(--muted-foreground))] mt-1">
-                    Manage VS Code workspaces and their chat sessions
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Workspaces</h1>
+                    <p className="text-[hsl(var(--muted-foreground))] mt-1">
+                        Manage VS Code workspaces and their chat sessions
+                    </p>
+                </div>
+                {isLoading && (
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Updating...</span>
+                    </div>
+                )}
             </div>
 
             {/* Filters */}
@@ -106,50 +112,62 @@ export default function Workspaces() {
 
             {/* Workspaces Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredWorkspaces.map((workspace) => (
-                    <div
-                        key={workspace.id}
-                        className="bg-[hsl(var(--card))] rounded-xl p-5 border hover:border-[hsl(var(--primary))] transition-colors cursor-pointer group"
-                    >
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="w-10 h-10 bg-[hsl(var(--primary)/0.1)] rounded-lg flex items-center justify-center">
-                                <FolderOpen className="text-[hsl(var(--primary))]" size={20} />
-                            </div>
-                            <button className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[hsl(var(--muted))] transition-all">
-                                <MoreVertical size={18} className="text-[hsl(var(--muted-foreground))]" />
-                            </button>
-                        </div>
-
-                        <h3 className="font-semibold text-sm truncate mb-1" title={workspace.projectPath}>
-                            {workspace.projectPath.split('\\').pop() || workspace.projectPath}
-                        </h3>
-                        <p
-                            className="text-xs text-[hsl(var(--muted-foreground))] truncate mb-4"
-                            title={workspace.projectPath}
+                {filteredWorkspaces.length > 0 ? (
+                    filteredWorkspaces.map((workspace) => (
+                        <div
+                            key={workspace.id}
+                            className="bg-[hsl(var(--card))] rounded-xl p-5 border hover:border-[hsl(var(--primary))] transition-colors cursor-pointer group"
                         >
-                            {workspace.projectPath}
-                        </p>
-
-                        <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-1 text-[hsl(var(--muted-foreground))]">
-                                <MessageSquare size={14} />
-                                <span>{workspace.sessions} sessions</span>
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-10 h-10 bg-[hsl(var(--primary)/0.1)] rounded-lg flex items-center justify-center">
+                                    <FolderOpen className="text-[hsl(var(--primary))]" size={20} />
+                                </div>
+                                <button className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[hsl(var(--muted))] transition-all">
+                                    <MoreVertical size={18} className="text-[hsl(var(--muted-foreground))]" />
+                                </button>
                             </div>
-                            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                                {workspace.lastActive}
-                            </span>
-                        </div>
 
-                        <div className="mt-4 pt-4 border-t flex gap-2">
-                            <button className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.9)] transition-colors">
-                                View Sessions
-                            </button>
-                            <button className="px-3 py-1.5 rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
-                                <ExternalLink size={16} />
-                            </button>
+                            <h3 className="font-semibold text-sm truncate mb-1" title={workspace.projectPath}>
+                                {workspace.projectPath.split(/[/\\]/).pop() || workspace.projectPath}
+                            </h3>
+                            <p
+                                className="text-xs text-[hsl(var(--muted-foreground))] truncate mb-4"
+                                title={workspace.projectPath}
+                            >
+                                {workspace.projectPath}
+                            </p>
+
+                            <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-1 text-[hsl(var(--muted-foreground))]">
+                                    <MessageSquare size={14} />
+                                    <span>{workspace.sessions} sessions</span>
+                                </div>
+                                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                    {workspace.lastActive}
+                                </span>
+                            </div>
+
+                            <div className="mt-4 pt-4 border-t flex gap-2">
+                                <button className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.9)] transition-colors">
+                                    View Sessions
+                                </button>
+                                <button className="px-3 py-1.5 rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
+                                    <ExternalLink size={16} />
+                                </button>
+                            </div>
                         </div>
+                    ))
+                ) : (
+                    <div className="col-span-full text-center py-16 bg-[hsl(var(--card))] rounded-xl border">
+                        <FolderOpen className="w-12 h-12 mx-auto mb-4 text-[hsl(var(--muted-foreground))] opacity-50" />
+                        <h3 className="text-lg font-semibold mb-2">No Workspaces Found</h3>
+                        <p className="text-[hsl(var(--muted-foreground))]">
+                            {searchQuery
+                                ? 'Try adjusting your search criteria'
+                                : 'Open VS Code projects to see workspaces here'}
+                        </p>
                     </div>
-                ))}
+                )}
             </div>
 
             {/* Summary */}

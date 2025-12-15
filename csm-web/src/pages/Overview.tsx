@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
     AreaChart,
     Area,
@@ -12,34 +13,39 @@ import {
     Pie,
     Cell,
 } from 'recharts';
-import { MessageSquare, FolderOpen, Server, Database, TrendingUp, Clock } from 'lucide-react';
+import { MessageSquare, FolderOpen, Server, Database, TrendingUp, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { useApi } from '../context/ApiContext';
 
-// Mock data for charts
-const sessionActivityData = [
-    { date: 'Mon', sessions: 12, messages: 145 },
-    { date: 'Tue', sessions: 19, messages: 234 },
-    { date: 'Wed', sessions: 15, messages: 189 },
-    { date: 'Thu', sessions: 23, messages: 312 },
-    { date: 'Fri', sessions: 28, messages: 398 },
-    { date: 'Sat', sessions: 8, messages: 87 },
-    { date: 'Sun', sessions: 11, messages: 124 },
-];
+// Provider colors for consistent styling
+const PROVIDER_COLORS: Record<string, string> = {
+    'github-copilot': '#0ea5e9',
+    'copilot': '#0ea5e9',
+    'chatgpt': '#10b981',
+    'openai': '#10b981',
+    'claude': '#f59e0b',
+    'anthropic': '#f59e0b',
+    'ollama': '#8b5cf6',
+    'cursor': '#ec4899',
+    'default': '#64748b',
+};
 
-const providerData = [
-    { name: 'GitHub Copilot', sessions: 156, color: '#0ea5e9' },
-    { name: 'ChatGPT', sessions: 89, color: '#10b981' },
-    { name: 'Claude', sessions: 67, color: '#f59e0b' },
-    { name: 'Ollama', sessions: 45, color: '#8b5cf6' },
-    { name: 'Cursor', sessions: 34, color: '#ec4899' },
-];
+function getProviderColor(provider: string): string {
+    const normalized = provider.toLowerCase().replace(/\s+/g, '-');
+    return PROVIDER_COLORS[normalized] || PROVIDER_COLORS.default;
+}
 
-const recentSessions = [
-    { id: '1', title: 'Implementing auth flow', provider: 'GitHub Copilot', time: '5 min ago', messages: 23 },
-    { id: '2', title: 'Debug API endpoint', provider: 'ChatGPT', time: '1 hour ago', messages: 15 },
-    { id: '3', title: 'React component help', provider: 'Claude', time: '2 hours ago', messages: 31 },
-    { id: '4', title: 'Database optimization', provider: 'Ollama', time: '3 hours ago', messages: 8 },
-    { id: '5', title: 'CSS layout issues', provider: 'Cursor', time: '5 hours ago', messages: 12 },
-];
+function formatRelativeTime(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+}
 
 interface StatCardProps {
     icon: React.ElementType;
@@ -74,14 +80,91 @@ function StatCard({ icon: Icon, label, value, change, changeType }: StatCardProp
 }
 
 export default function Overview() {
+    const { statistics, sessions, providers, workspaces, isLoading, error } = useApi();
+
+    // Derive data from API
+    const sessionActivityData = useMemo(() => {
+        if (statistics?.messagesByDay) {
+            return statistics.messagesByDay.map((day) => ({
+                date: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' }),
+                sessions: day.sessions,
+                messages: day.messages,
+            }));
+        }
+        // Fallback for when data is loading
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        return days.map((date) => ({ date, sessions: 0, messages: 0 }));
+    }, [statistics]);
+
+    const providerData = useMemo(() => {
+        if (statistics?.sessionsByProvider) {
+            return statistics.sessionsByProvider.map((p) => ({
+                name: p.provider,
+                sessions: p.count,
+                color: p.color || getProviderColor(p.provider),
+            }));
+        }
+        // Derive from sessions if statistics not available
+        const providerCounts = new Map<string, number>();
+        sessions.forEach((s) => {
+            const count = providerCounts.get(s.provider) || 0;
+            providerCounts.set(s.provider, count + 1);
+        });
+        return Array.from(providerCounts.entries()).map(([name, count]) => ({
+            name,
+            sessions: count,
+            color: getProviderColor(name),
+        }));
+    }, [statistics, sessions]);
+
+    const recentSessions = useMemo(() => {
+        return [...sessions]
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .slice(0, 5)
+            .map((s) => ({
+                id: s.id,
+                title: s.title || 'Untitled Session',
+                provider: s.provider,
+                time: formatRelativeTime(s.updatedAt),
+                messages: s.messageCount,
+            }));
+    }, [sessions]);
+
+    // Calculate stats
+    const totalSessions = statistics?.totalSessions ?? sessions.length;
+    const totalWorkspaces = statistics?.totalWorkspaces ?? workspaces.length;
+    const totalMessages = statistics?.totalMessages ?? sessions.reduce((sum, s) => sum + s.messageCount, 0);
+    const activeProviders = providers.filter((p) => p.status === 'connected').length || providers.length;
+    const sessionsThisWeek = statistics?.sessionsThisWeek ?? 0;
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Failed to Load Data</h3>
+                    <p className="text-[hsl(var(--muted-foreground))]">{error.message}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold">Overview</h1>
-                <p className="text-[hsl(var(--muted-foreground))] mt-1">
-                    Overview of your chat sessions across all providers
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Overview</h1>
+                    <p className="text-[hsl(var(--muted-foreground))] mt-1">
+                        Overview of your chat sessions across all providers
+                    </p>
+                </div>
+                {isLoading && (
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Updating...</span>
+                    </div>
+                )}
             </div>
 
             {/* Stats Grid */}
@@ -89,28 +172,24 @@ export default function Overview() {
                 <StatCard
                     icon={MessageSquare}
                     label="Total Sessions"
-                    value="391"
-                    change="+12% from last week"
+                    value={totalSessions.toLocaleString()}
+                    change={sessionsThisWeek > 0 ? `+${sessionsThisWeek} this week` : undefined}
                     changeType="positive"
                 />
                 <StatCard
                     icon={FolderOpen}
                     label="Workspaces"
-                    value="24"
-                    change="+3 new"
-                    changeType="positive"
+                    value={totalWorkspaces.toLocaleString()}
                 />
                 <StatCard
                     icon={Server}
                     label="Active Providers"
-                    value="5"
+                    value={activeProviders}
                 />
                 <StatCard
                     icon={Database}
-                    label="Harvested Messages"
-                    value="4,892"
-                    change="+234 today"
-                    changeType="positive"
+                    label="Total Messages"
+                    value={totalMessages.toLocaleString()}
                 />
             </div>
 
@@ -233,23 +312,30 @@ export default function Overview() {
                         <Clock size={20} className="text-[hsl(var(--muted-foreground))]" />
                     </div>
                     <div className="space-y-4">
-                        {recentSessions.map((session) => (
-                            <div
-                                key={session.id}
-                                className="flex items-center justify-between p-3 rounded-lg bg-[hsl(var(--muted)/0.5)] hover:bg-[hsl(var(--muted))] transition-colors cursor-pointer"
-                            >
-                                <div>
-                                    <p className="font-medium">{session.title}</p>
-                                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                                        {session.provider} · {session.time}
-                                    </p>
+                        {recentSessions.length > 0 ? (
+                            recentSessions.map((session) => (
+                                <div
+                                    key={session.id}
+                                    className="flex items-center justify-between p-3 rounded-lg bg-[hsl(var(--muted)/0.5)] hover:bg-[hsl(var(--muted))] transition-colors cursor-pointer"
+                                >
+                                    <div>
+                                        <p className="font-medium">{session.title}</p>
+                                        <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                            {session.provider} · {session.time}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))]">
+                                        <MessageSquare size={14} />
+                                        <span>{session.messages}</span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))]">
-                                    <MessageSquare size={14} />
-                                    <span>{session.messages}</span>
-                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-[hsl(var(--muted-foreground))]">
+                                <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                <p>No sessions yet</p>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
 

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
     FolderOpen,
@@ -18,6 +18,8 @@ import {
     X,
     Code,
     BookOpen,
+    ChevronDown,
+    ChevronRight,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -31,24 +33,55 @@ interface LayoutProps {
     setTheme: (value: ThemeMode) => void;
 }
 
-const navItems = [
+interface NavItem {
+    path: string;
+    icon: typeof MessagesSquare;
+    label: string;
+    children?: NavItem[];
+}
+
+const navItems: NavItem[] = [
     { path: '/chat', icon: MessagesSquare, label: 'Chat' },
     { path: '/agents', icon: Activity, label: 'Agents' },
-    { path: '/swarms', icon: Users, label: 'Swarms' },
+    {
+        path: '/swarms',
+        icon: Users,
+        label: 'Swarms',
+        children: [
+            { path: '/swarms/protocols', icon: Plug, label: 'Protocols' },
+        ]
+    },
     { path: '/harvest', icon: Database, label: 'Harvest' },
     { path: '/', icon: LayoutDashboard, label: 'Overview' },
     { path: '/workspaces', icon: FolderOpen, label: 'Workspaces' },
     { path: '/sessions', icon: MessageSquare, label: 'Sessions' },
-    { path: '/protocols', icon: Plug, label: 'Protocols' },
-    { path: '/developer', icon: Code, label: 'Developer' },
-    { path: '/research', icon: BookOpen, label: 'Research' },
     { path: '/comparison', icon: Scale, label: 'Comparison' },
+    { path: '/research', icon: BookOpen, label: 'Research' },
     { path: '/providers', icon: Server, label: 'Providers' },
     { path: '/accounts', icon: Key, label: 'Accounts' },
+    { path: '/developer', icon: Code, label: 'Developer' },
 ];
 
 export default function Layout({ children, theme, setTheme }: LayoutProps) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [expandedItems, setExpandedItems] = useState<string[]>(['/swarms']);
+    const location = useLocation();
+
+    const toggleExpanded = (path: string) => {
+        setExpandedItems(prev =>
+            prev.includes(path)
+                ? prev.filter(p => p !== path)
+                : [...prev, path]
+        );
+    };
+
+    const isPathActive = (path: string, children?: NavItem[]) => {
+        if (location.pathname === path) return true;
+        if (children) {
+            return children.some(child => location.pathname === child.path);
+        }
+        return false;
+    };
 
     const cycleTheme = () => {
         const order: ThemeMode[] = ['dark', 'neutral', 'light'];
@@ -102,21 +135,77 @@ export default function Layout({ children, theme, setTheme }: LayoutProps) {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 p-4 space-y-2">
-                    {navItems.map(({ path, icon: Icon, label }) => (
-                        <NavLink
-                            key={path}
-                            to={path}
-                            className={({ isActive }) =>
-                                `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive
-                                    ? 'bg-[hsl(var(--primary))] text-white'
-                                    : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
-                                }`
-                            }
-                        >
-                            <Icon size={20} />
-                            {sidebarOpen && <span>{label}</span>}
-                        </NavLink>
+                <nav className="flex-1 p-4 space-y-1">
+                    {navItems.map(({ path, icon: Icon, label, children }) => (
+                        <div key={path}>
+                            {children ? (
+                                // Parent item with children
+                                <>
+                                    <div
+                                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors cursor-pointer ${isPathActive(path, children)
+                                            ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                            : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
+                                            }`}
+                                        onClick={() => toggleExpanded(path)}
+                                    >
+                                        <Icon size={20} />
+                                        {sidebarOpen && (
+                                            <>
+                                                <span className="flex-1">{label}</span>
+                                                {expandedItems.includes(path) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                            </>
+                                        )}
+                                    </div>
+                                    {/* Child items */}
+                                    {sidebarOpen && expandedItems.includes(path) && (
+                                        <div className="ml-4 mt-1 space-y-1">
+                                            <NavLink
+                                                to={path}
+                                                end
+                                                className={({ isActive }) =>
+                                                    `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${isActive
+                                                        ? 'bg-[hsl(var(--primary))] text-white'
+                                                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
+                                                    }`
+                                                }
+                                            >
+                                                <Users size={16} />
+                                                <span>Overview</span>
+                                            </NavLink>
+                                            {children.map(({ path: childPath, icon: ChildIcon, label: childLabel }) => (
+                                                <NavLink
+                                                    key={childPath}
+                                                    to={childPath}
+                                                    className={({ isActive }) =>
+                                                        `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${isActive
+                                                            ? 'bg-[hsl(var(--primary))] text-white'
+                                                            : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
+                                                        }`
+                                                    }
+                                                >
+                                                    <ChildIcon size={16} />
+                                                    <span>{childLabel}</span>
+                                                </NavLink>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                // Regular nav item
+                                <NavLink
+                                    to={path}
+                                    className={({ isActive }) =>
+                                        `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive
+                                            ? 'bg-[hsl(var(--primary))] text-white'
+                                            : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
+                                        }`
+                                    }
+                                >
+                                    <Icon size={20} />
+                                    {sidebarOpen && <span>{label}</span>}
+                                </NavLink>
+                            )}
+                        </div>
                     ))}
                 </nav>
 

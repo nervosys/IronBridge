@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Bot,
     CheckCircle2,
@@ -10,12 +10,15 @@ import {
     PauseCircle,
     Play,
     RefreshCw,
-    Square,
     Terminal,
     Zap,
     AlertTriangle,
     ChevronDown,
     ChevronRight,
+    Network,
+    Settings,
+    Plus,
+    AlertCircle,
 } from 'lucide-react';
 import {
     XAxis,
@@ -26,81 +29,86 @@ import {
     AreaChart,
     Area,
 } from 'recharts';
+import { useApi } from '../context/ApiContext';
 
-// Mock data for active agents
-const mockAgents = [
-    {
-        id: 'agent-1',
-        name: 'Code Review Agent',
-        status: 'running',
-        provider: 'GitHub Copilot',
-        startTime: '2024-12-11T10:30:00',
-        tokens: 12450,
-        messages: 24,
-        currentTask: 'Analyzing pull request #142',
-        progress: 65,
-    },
-    {
-        id: 'agent-2',
-        name: 'Documentation Agent',
-        status: 'running',
-        provider: 'Claude',
-        startTime: '2024-12-11T09:15:00',
-        tokens: 28900,
-        messages: 56,
-        currentTask: 'Generating API documentation',
-        progress: 80,
-    },
-    {
-        id: 'agent-3',
-        name: 'Test Generator',
-        status: 'paused',
-        provider: 'GPT-4',
-        startTime: '2024-12-11T08:00:00',
-        tokens: 8200,
-        messages: 18,
-        currentTask: 'Writing unit tests for auth module',
-        progress: 45,
-    },
-    {
-        id: 'agent-4',
-        name: 'Bug Hunter',
-        status: 'completed',
-        provider: 'DeepSeek',
-        startTime: '2024-12-11T07:00:00',
-        tokens: 15600,
-        messages: 32,
-        currentTask: 'Completed security scan',
-        progress: 100,
-    },
-];
+// Helper to format relative time
+function formatRelativeTime(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
 
-// Mock token usage data
-const tokenUsageData = [
-    { time: '08:00', tokens: 2400 },
-    { time: '09:00', tokens: 5200 },
-    { time: '10:00', tokens: 8100 },
-    { time: '11:00', tokens: 12400 },
-    { time: '12:00', tokens: 18900 },
-    { time: '13:00', tokens: 24500 },
-    { time: '14:00', tokens: 31200 },
-    { time: 'Now', tokens: 38150 },
-];
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'just now';
+}
 
-// Mock activity log
-const activityLog = [
-    { time: '14:32', agent: 'Code Review Agent', action: 'Found 3 potential issues in utils.ts', type: 'warning' },
-    { time: '14:28', agent: 'Documentation Agent', action: 'Completed API reference for /users endpoint', type: 'success' },
-    { time: '14:25', agent: 'Code Review Agent', action: 'Started analyzing src/components/', type: 'info' },
-    { time: '14:20', agent: 'Test Generator', action: 'Paused - waiting for code review completion', type: 'pause' },
-    { time: '14:15', agent: 'Bug Hunter', action: 'Completed security scan - no critical issues', type: 'success' },
-    { time: '14:10', agent: 'Documentation Agent', action: 'Processing 42 source files', type: 'info' },
-];
+// Activity log type for tracking agent actions
+interface ActivityLogEntry {
+    time: string;
+    agent: string;
+    action: string;
+    type: 'success' | 'warning' | 'error' | 'info' | 'pause';
+}
 
 export default function Agents() {
-    const [agents] = useState(mockAgents);
+    const { agents, sessions, providers, isLoading, error, refetchAgents } = useApi();
     const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
     const [expandedLogs, setExpandedLogs] = useState(true);
+
+    // Transform API agents data for display
+    const agentsData = useMemo(() => {
+        return agents.map(agent => {
+            // Count sessions that might be associated with this agent's provider
+            const agentSessions = sessions.filter(s => s.provider === agent.provider);
+            const tokenCount = agentSessions.reduce((sum, s) => sum + (s.tokenCount || 0), 0);
+            const messageCount = agentSessions.reduce((sum, s) => sum + s.messageCount, 0);
+
+            return {
+                ...agent,
+                status: 'idle' as 'idle' | 'running' | 'paused' | 'completed' | 'error', // Agents from API are configurations
+                tokens: tokenCount,
+                messages: messageCount,
+                currentTask: agent.description || 'No active task',
+                progress: 0,
+                protocol: agent.tools.includes('mcp') ? 'mcp' : undefined,
+            };
+        });
+    }, [agents, sessions]);
+
+    // Generate token usage data from sessions
+    const tokenUsageData = useMemo(() => {
+        const now = new Date();
+        const data = [];
+        for (let i = 7; i >= 0; i--) {
+            const hour = new Date(now.getTime() - i * 3600000);
+            const hourStart = hour.getTime();
+            const hourEnd = hourStart + 3600000;
+            const hourSessions = sessions.filter(s =>
+                s.createdAt >= hourStart && s.createdAt < hourEnd
+            );
+            const tokens = hourSessions.reduce((sum, s) => sum + (s.tokenCount || 0), 0);
+            data.push({
+                time: i === 0 ? 'Now' : hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                tokens,
+            });
+        }
+        return data;
+    }, [sessions]);
+
+    // Generate activity log from recent sessions
+    const activityLog = useMemo<ActivityLogEntry[]>(() => {
+        return sessions
+            .slice(0, 6)
+            .map(session => ({
+                time: new Date(session.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                agent: session.provider,
+                action: `Session "${session.title}" updated (${session.messageCount} messages)`,
+                type: 'info' as const,
+            }));
+    }, [sessions]);
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -147,9 +155,36 @@ export default function Agents() {
         }
     };
 
-    const totalTokens = agents.reduce((sum, a) => sum + a.tokens, 0);
-    const totalMessages = agents.reduce((sum, a) => sum + a.messages, 0);
-    const runningAgents = agents.filter(a => a.status === 'running').length;
+    // Calculate stats from real data
+    const totalTokens = agentsData.reduce((sum, a) => sum + a.tokens, 0);
+    const totalMessages = agentsData.reduce((sum, a) => sum + a.messages, 0);
+    const runningAgents = agentsData.filter(a => a.status === 'running').length;
+
+    // Loading state
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="animate-spin text-[hsl(var(--primary))]" size={32} />
+            </div>
+        );
+    }
+
+    // Error state
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 text-[hsl(var(--destructive))]">
+                <AlertCircle size={48} className="mb-4" />
+                <p className="text-lg font-medium">Error loading agents</p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">{error.message}</p>
+                <button
+                    onClick={() => refetchAgents()}
+                    className="mt-4 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -158,13 +193,20 @@ export default function Agents() {
                 <div>
                     <h1 className="text-3xl font-bold text-[hsl(var(--foreground))]">Agents</h1>
                     <p className="text-[hsl(var(--muted-foreground))] mt-1">
-                        Real-time monitoring of active agents and swarms
+                        Manage and monitor your AI agent configurations
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors">
+                    <button
+                        onClick={() => refetchAgents()}
+                        className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors"
+                    >
                         <RefreshCw size={18} />
                         Refresh
+                    </button>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors">
+                        <Plus size={18} />
+                        New Agent
                     </button>
                 </div>
             </div>
@@ -174,10 +216,10 @@ export default function Agents() {
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                         <Bot size={18} />
-                        <span className="text-sm">Active Agents</span>
+                        <span className="text-sm">Total Agents</span>
                     </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{runningAgents}</p>
-                    <p className="text-sm text-green-500">of {agents.length} total</p>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{agentsData.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">{runningAgents} active</p>
                 </div>
 
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
@@ -185,8 +227,10 @@ export default function Agents() {
                         <Zap size={18} />
                         <span className="text-sm">Tokens Used</span>
                     </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{(totalTokens / 1000).toFixed(1)}K</p>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">this session</p>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">
+                        {totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}K` : totalTokens}
+                    </p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">across all sessions</p>
                 </div>
 
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
@@ -201,10 +245,10 @@ export default function Agents() {
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                         <Cpu size={18} />
-                        <span className="text-sm">Avg Response</span>
+                        <span className="text-sm">Providers</span>
                     </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">1.2s</p>
-                    <p className="text-sm text-green-500">-0.3s vs avg</p>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{providers.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">connected</p>
                 </div>
             </div>
 
@@ -212,76 +256,105 @@ export default function Agents() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Agent List */}
                 <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Active Agents</h2>
-                    {agents.map(agent => (
-                        <div
-                            key={agent.id}
-                            onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}
-                            className={`bg-[hsl(var(--card))] rounded-xl p-4 border cursor-pointer transition-all hover:border-[hsl(var(--primary))] ${selectedAgent === agent.id ? 'border-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary))]' : ''
-                                }`}
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-[hsl(var(--muted))] rounded-lg">
-                                        <Bot size={20} className="text-[hsl(var(--primary))]" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-[hsl(var(--foreground))]">{agent.name}</span>
-                                            <span className={`px-2 py-0.5 rounded-full text-xs border ${getStatusColor(agent.status)}`}>
-                                                {getStatusIcon(agent.status)}
-                                                <span className="ml-1">{agent.status}</span>
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-[hsl(var(--muted-foreground))]">{agent.provider}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {agent.status === 'running' && (
-                                        <button className="p-2 rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors">
-                                            <PauseCircle size={18} />
-                                        </button>
-                                    )}
-                                    {agent.status === 'paused' && (
-                                        <button className="p-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors">
-                                            <Play size={18} />
-                                        </button>
-                                    )}
-                                    <button className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors">
-                                        <Square size={18} />
-                                    </button>
-                                </div>
-                            </div>
+                    <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Agent Configurations</h2>
 
-                            <div className="mt-4">
-                                <div className="flex items-center justify-between text-sm mb-1">
-                                    <span className="text-[hsl(var(--muted-foreground))]">{agent.currentTask}</span>
-                                    <span className="text-[hsl(var(--foreground))]">{agent.progress}%</span>
-                                </div>
-                                <div className="h-2 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-[hsl(var(--primary))] rounded-full transition-all"
-                                        style={{ width: `${agent.progress}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-4 flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
-                                <span className="flex items-center gap-1">
-                                    <Zap size={14} />
-                                    {(agent.tokens / 1000).toFixed(1)}K tokens
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <MessageSquare size={14} />
-                                    {agent.messages} messages
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <Clock size={14} />
-                                    Started {new Date(agent.startTime).toLocaleTimeString()}
-                                </span>
-                            </div>
+                    {agentsData.length === 0 ? (
+                        <div className="bg-[hsl(var(--card))] rounded-xl p-8 border text-center">
+                            <Bot size={48} className="mx-auto text-[hsl(var(--muted-foreground))] mb-4" />
+                            <h3 className="text-lg font-medium text-[hsl(var(--foreground))]">No Agents Yet</h3>
+                            <p className="text-[hsl(var(--muted-foreground))] mt-2">
+                                Create your first agent to get started with automated tasks.
+                            </p>
+                            <button className="mt-4 flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors mx-auto">
+                                <Plus size={18} />
+                                Create Agent
+                            </button>
                         </div>
-                    ))}
+                    ) : (
+                        agentsData.map(agent => (
+                            <div
+                                key={agent.id}
+                                onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}
+                                className={`bg-[hsl(var(--card))] rounded-xl p-4 border cursor-pointer transition-all hover:border-[hsl(var(--primary))] ${selectedAgent === agent.id ? 'border-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary))]' : ''
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-[hsl(var(--muted))] rounded-lg">
+                                            <Bot size={20} className="text-[hsl(var(--primary))]" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-medium text-[hsl(var(--foreground))]">{agent.name}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs border ${getStatusColor(agent.status)}`}>
+                                                    {getStatusIcon(agent.status)}
+                                                    <span className="ml-1">{agent.status}</span>
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{agent.provider} • {agent.model}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {agent.status === 'running' && (
+                                            <button className="p-2 rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors">
+                                                <PauseCircle size={18} />
+                                            </button>
+                                        )}
+                                        {agent.status === 'paused' && (
+                                            <button className="p-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors">
+                                                <Play size={18} />
+                                            </button>
+                                        )}
+                                        <button className="p-2 rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/80 transition-colors">
+                                            <Settings size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4">
+                                    <p className="text-sm text-[hsl(var(--muted-foreground))]">{agent.currentTask}</p>
+                                </div>
+
+                                <div className="mt-4 flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                    <span className="flex items-center gap-1">
+                                        <Zap size={14} />
+                                        {agent.tokens > 1000 ? `${(agent.tokens / 1000).toFixed(1)}K` : agent.tokens} tokens
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <MessageSquare size={14} />
+                                        {agent.messages} messages
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Clock size={14} />
+                                        {formatRelativeTime(agent.updatedAt)}
+                                    </span>
+                                </div>
+
+                                {/* Tools Badge */}
+                                {agent.tools.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <Network size={14} className="text-[hsl(var(--primary))]" />
+                                            <span className="text-sm text-[hsl(var(--muted-foreground))]">Tools:</span>
+                                            {agent.tools.slice(0, 3).map(tool => (
+                                                <span
+                                                    key={tool}
+                                                    className="px-2 py-0.5 rounded-full text-xs bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-medium"
+                                                >
+                                                    {tool}
+                                                </span>
+                                            ))}
+                                            {agent.tools.length > 3 && (
+                                                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                                    +{agent.tools.length - 3} more
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
                 </div>
 
                 {/* Right Sidebar */}
@@ -319,21 +392,27 @@ export default function Agents() {
                         >
                             <h3 className="font-medium text-[hsl(var(--foreground))] flex items-center gap-2">
                                 <Terminal size={18} />
-                                Activity Log
+                                Recent Activity
                             </h3>
                             {expandedLogs ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </button>
                         {expandedLogs && (
                             <div className="mt-4 space-y-2 max-h-[300px] overflow-y-auto">
-                                {activityLog.map((log, i) => (
-                                    <div key={i} className="flex items-start gap-2 text-sm">
-                                        <span className="text-[hsl(var(--muted-foreground))] font-mono shrink-0">{log.time}</span>
-                                        <span className={getLogTypeColor(log.type)}>•</span>
-                                        <span className="text-[hsl(var(--foreground))]">
-                                            <span className="font-medium">{log.agent}:</span> {log.action}
-                                        </span>
-                                    </div>
-                                ))}
+                                {activityLog.length === 0 ? (
+                                    <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">
+                                        No recent activity
+                                    </p>
+                                ) : (
+                                    activityLog.map((log, i) => (
+                                        <div key={i} className="flex items-start gap-2 text-sm">
+                                            <span className="text-[hsl(var(--muted-foreground))] font-mono shrink-0">{log.time}</span>
+                                            <span className={getLogTypeColor(log.type)}>•</span>
+                                            <span className="text-[hsl(var(--foreground))]">
+                                                <span className="font-medium">{log.agent}:</span> {log.action}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         )}
                     </div>

@@ -14,6 +14,8 @@ import Protocols from './pages/Protocols';
 import Accounts from './pages/Accounts';
 import Developer from './pages/Developer';
 import Research from './pages/Research';
+import { ApiProvider } from './context';
+import { config } from './config';
 
 type ThemeMode = 'light' | 'neutral' | 'dark';
 
@@ -39,25 +41,27 @@ function App() {
   }, [theme]);
 
   return (
-    <BrowserRouter>
-      <Layout theme={theme} setTheme={setTheme}>
-        <Routes>
-          <Route path="/" element={<Overview />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/swarms" element={<Swarms />} />
-          <Route path="/comparison" element={<Comparison />} />
-          <Route path="/workspaces" element={<Workspaces />} />
-          <Route path="/sessions" element={<Sessions />} />
-          <Route path="/providers" element={<Providers />} />
-          <Route path="/harvest" element={<Harvest />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/protocols" element={<Protocols />} />
-          <Route path="/accounts" element={<Accounts />} />
-          <Route path="/developer" element={<Developer />} />
-          <Route path="/research" element={<Research />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <ApiProvider baseUrl={config.apiBaseUrl} autoConnect={config.enableWebSocket}>
+      <BrowserRouter>
+        <Layout theme={theme} setTheme={setTheme}>
+          <Routes>
+            <Route path="/" element={<Overview />} />
+            <Route path="/chat" element={<Chat />} />
+            <Route path="/swarms" element={<Swarms />} />
+            <Route path="/swarms/protocols" element={<Protocols />} />
+            <Route path="/comparison" element={<Comparison />} />
+            <Route path="/workspaces" element={<Workspaces />} />
+            <Route path="/sessions" element={<Sessions />} />
+            <Route path="/providers" element={<Providers />} />
+            <Route path="/harvest" element={<Harvest />} />
+            <Route path="/agents" element={<Agents />} />
+            <Route path="/accounts" element={<Accounts />} />
+            <Route path="/developer" element={<Developer />} />
+            <Route path="/research" element={<Research />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </ApiProvider>
   );
 }
 

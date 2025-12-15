@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
     Send,
     Bot,
@@ -14,8 +14,7 @@ import {
     ChevronDown,
     Filter,
     GitBranch,
-    GitCommit,
-    GitPullRequest,
+    GitCommit as GitCommitIcon,
     Code,
     FileText,
     Palette,
@@ -28,96 +27,80 @@ import {
     Type,
     MessageSquare,
     X,
+    Bookmark,
+    History,
+    Plus,
+    ChevronRight,
+    Clock,
+    MoreVertical,
+    AlertCircle,
+    Loader2,
 } from 'lucide-react';
 import hljs from 'highlight.js';
-// Custom syntax theme styles
 import '../styles/syntax-themes.css';
+import { useApi } from '../context/ApiContext';
+import {
+    useSessions,
+    useSessionWithMessages,
+    useCreateSession,
+    useDeleteSession,
+    useCreateMessage,
+    useSessionCheckpoints,
+    useSessionCommits,
+    useCreateCheckpoint,
+    useChatStream,
+} from '../hooks/useApi';
+// Types used via API context and hooks
 
-// Provider configurations with models
-const providers = [
-    { id: 'copilot', name: 'GitHub Copilot', icon: '🤖', color: '#0ea5e9', type: 'cloud', models: ['gpt-4o', 'gpt-4o-mini', 'claude-3.5-sonnet', 'o1-preview'] },
-    { id: 'openai', name: 'OpenAI', icon: '🧠', color: '#10a37f', type: 'cloud', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini', 'o3-mini'] },
-    { id: 'anthropic', name: 'Anthropic', icon: '🔮', color: '#d4a574', type: 'cloud', models: ['claude-4-opus', 'claude-4-sonnet', 'claude-3.5-sonnet', 'claude-3.5-haiku'] },
-    { id: 'google', name: 'Google AI', icon: '🌐', color: '#4285f4', type: 'cloud', models: ['gemini-2.0-flash', 'gemini-2.0-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'] },
-    { id: 'deepseek', name: 'DeepSeek', icon: '🔍', color: '#0066ff', type: 'cloud', models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'] },
-    { id: 'perplexity', name: 'Perplexity', icon: '🎯', color: '#20b2aa', type: 'cloud', models: ['sonar-pro', 'sonar-reasoning-pro', 'sonar'] },
-    { id: 'qwen', name: 'Qwen', icon: '🐼', color: '#ff6b35', type: 'cloud', models: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-coder'] },
-    { id: 'mistral', name: 'Mistral', icon: '💨', color: '#ff7000', type: 'cloud', models: ['mistral-large', 'mistral-medium', 'mistral-small', 'codestral'] },
-    { id: 'cohere', name: 'Cohere', icon: '🔗', color: '#d18ee2', type: 'cloud', models: ['command-r-plus', 'command-r', 'command'] },
-    { id: 'ollama', name: 'Ollama', icon: '🦙', color: '#ffffff', type: 'local', models: ['llama3.3:70b', 'llama3.2:3b', 'qwen2.5-coder:32b', 'deepseek-r1:32b', 'mistral:7b', 'phi4:14b', 'gemma2:27b'] },
-    { id: 'lmstudio', name: 'LM Studio', icon: '🎬', color: '#a855f7', type: 'local', models: ['Loaded Model'] },
-    { id: 'jan', name: 'Jan', icon: '🤝', color: '#3b82f6', type: 'local', models: ['llama3.2', 'mistral', 'phi-3'] },
-    { id: 'gpt4all', name: 'GPT4All', icon: '🌍', color: '#22c55e', type: 'local', models: ['mistral-7b-instruct', 'llama-3-8b', 'nous-hermes-2'] },
-    { id: 'llamafile', name: 'llamafile', icon: '📁', color: '#f59e0b', type: 'local', models: ['Active Model'] },
-    { id: 'vllm', name: 'vLLM', icon: '⚡', color: '#0e7490', type: 'local', models: ['llama-3.3-70b', 'qwen2.5-72b', 'mixtral-8x22b'] },
-    { id: 'llamacpp', name: 'llama.cpp', icon: '🔧', color: '#22c55e', type: 'local', models: ['Loaded GGUF'] },
-    { id: 'localai', name: 'LocalAI', icon: '🏠', color: '#8b5cf6', type: 'local', models: ['gpt-3.5-turbo', 'llama-3-8b', 'phi-3'] },
-];
-
-// Syntax themes
+// Syntax themes for code blocks
 const syntaxThemes = [
-    { id: 'github-dark', name: 'GitHub Dark' },
-    { id: 'monokai', name: 'Monokai' },
-    { id: 'nord', name: 'Nord' },
-    { id: 'one-dark', name: 'One Dark' },
+    { id: 'github-dark', name: 'GitHub Dark', type: 'dark' },
+    { id: 'monokai', name: 'Monokai', type: 'dark' },
+    { id: 'ayu-monokai', name: 'Ayu Monokai', type: 'dark' },
+    { id: 'nord', name: 'Nord', type: 'dark' },
+    { id: 'one-dark', name: 'One Dark', type: 'dark' },
+    { id: 'github-light', name: 'GitHub Light', type: 'light' },
+    { id: 'one-light', name: 'One Light', type: 'light' },
+    { id: 'solarized-light', name: 'Solarized Light', type: 'light' },
+    { id: 'vs-light', name: 'VS Light', type: 'light' },
 ];
 
-interface Message {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-    provider?: string;
+// Helper to format timestamps
+function formatTime(timestamp: number): string {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
-
-interface Session {
-    id: string;
-    title: string;
-    provider: string;
-    messages: Message[];
-    createdAt: Date;
-    updatedAt: Date;
-    workspace?: string;
-    gitBranch?: string;
-}
-
-// Demo sessions
-const demoSessions: Session[] = [
-    {
-        id: '1',
-        title: 'React Component Help',
-        provider: 'copilot',
-        messages: [
-            { id: '1', role: 'user', content: 'How do I create a custom hook for fetching data?', timestamp: new Date(Date.now() - 3600000) },
-            { id: '2', role: 'assistant', content: 'Here\'s a custom hook for data fetching:\n\n```typescript\nimport { useState, useEffect } from \'react\';\n\nfunction useFetch<T>(url: string) {\n  const [data, setData] = useState<T | null>(null);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState<Error | null>(null);\n\n  useEffect(() => {\n    fetch(url)\n      .then(res => res.json())\n      .then(setData)\n      .catch(setError)\n      .finally(() => setLoading(false));\n  }, [url]);\n\n  return { data, loading, error };\n}\n```\n\nThis hook handles loading states, errors, and returns the fetched data.', timestamp: new Date(Date.now() - 3500000), provider: 'copilot' },
-        ],
-        createdAt: new Date(Date.now() - 3600000),
-        updatedAt: new Date(Date.now() - 3500000),
-        workspace: 'my-react-app',
-        gitBranch: 'feature/data-hooks',
-    },
-    {
-        id: '2',
-        title: 'Python API Design',
-        provider: 'anthropic',
-        messages: [
-            { id: '1', role: 'user', content: 'Design a REST API for a task management system', timestamp: new Date(Date.now() - 7200000) },
-            { id: '2', role: 'assistant', content: 'Here\'s a RESTful API design for task management:\n\n```python\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\nfrom typing import Optional, List\nfrom datetime import datetime\n\napp = FastAPI()\n\nclass Task(BaseModel):\n    id: Optional[int] = None\n    title: str\n    description: Optional[str] = None\n    status: str = "pending"\n    due_date: Optional[datetime] = None\n\n@app.get("/tasks", response_model=List[Task])\nasync def list_tasks():\n    return tasks_db\n\n@app.post("/tasks", response_model=Task)\nasync def create_task(task: Task):\n    task.id = len(tasks_db) + 1\n    tasks_db.append(task)\n    return task\n```', timestamp: new Date(Date.now() - 7100000), provider: 'anthropic' },
-        ],
-        createdAt: new Date(Date.now() - 7200000),
-        updatedAt: new Date(Date.now() - 7100000),
-        workspace: 'task-api',
-        gitBranch: 'main',
-    },
-];
 
 export default function Chat() {
-    const [sessions, setSessions] = useState<Session[]>(demoSessions);
-    const [activeSession, setActiveSession] = useState<Session | null>(demoSessions[0]);
+    // API context data
+    const { providers, providerHealth, isLoading: contextLoading, error: contextError } = useApi();
+
+    // Session list - limit to recent 50
+    const { data: sessionsData, refetch: refetchSessions } = useSessions({ limit: 50, sortBy: 'updatedAt', sortOrder: 'desc' });
+    const sessions = sessionsData?.items ?? [];
+
+    // Selected session state
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const { data: activeSessionData, refetch: refetchActiveSession } = useSessionWithMessages(activeSessionId);
+
+    // Session checkpoints and commits
+    const { data: checkpointsData } = useSessionCheckpoints(activeSessionId);
+    const { data: commitsData } = useSessionCommits(activeSessionId);
+    const checkpoints = checkpointsData ?? [];
+    const commits = commitsData ?? [];
+
+    // Mutations
+    const createSessionMutation = useCreateSession();
+    const deleteSessionMutation = useDeleteSession();
+    const createMessageMutation = useCreateMessage();
+    const createCheckpointMutation = useCreateCheckpoint();
+
+    // Streaming chat
+    const chatStream = useChatStream();
+
+    // Local UI state
     const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [selectedProvider, setSelectedProvider] = useState(providers[0]);
-    const [selectedModel, setSelectedModel] = useState(providers[0].models[0]);
+    const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+    const [selectedModel, setSelectedModel] = useState<string | null>(null);
     const [showProviderDropdown, setShowProviderDropdown] = useState(false);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -128,19 +111,45 @@ export default function Chat() {
     const [showTimestamps, setShowTimestamps] = useState(true);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [streamResponses, setStreamResponses] = useState(true);
-    const settingsRef = useRef<HTMLDivElement>(null);
     const [filterProvider, setFilterProvider] = useState<string | null>(null);
     const [showGitPanel, setShowGitPanel] = useState(false);
+    const [gitPanelTab, setGitPanelTab] = useState<'commits' | 'checkpoints'>('commits');
+    const [showCheckpointModal, setShowCheckpointModal] = useState(false);
+    const [checkpointName, setCheckpointName] = useState('');
+    const [checkpointDesc, setCheckpointDesc] = useState('');
+    const [checkpointTags, setCheckpointTags] = useState('');
+
+    // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const settingsRef = useRef<HTMLDivElement>(null);
 
-    const scrollToBottom = () => {
+    // Get active providers (connected)
+    const activeProviders = providers.filter(p => {
+        const health = providerHealth.find(h => h.providerId === p.id);
+        return health?.status === 'connected' || p.status === 'connected';
+    });
+
+    // Selected provider object
+    const selectedProvider = providers.find(p => p.id === selectedProviderId) ?? activeProviders[0] ?? providers[0];
+
+    // Initialize selected provider/model when providers load
+    useEffect(() => {
+        if (!selectedProviderId && providers.length > 0) {
+            const defaultProvider = activeProviders[0] ?? providers[0];
+            setSelectedProviderId(defaultProvider?.id ?? null);
+            setSelectedModel(defaultProvider?.models?.[0] ?? null);
+        }
+    }, [providers, activeProviders, selectedProviderId]);
+
+    // Scroll to bottom when messages change
+    const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+    }, []);
 
     useEffect(() => {
         scrollToBottom();
-    }, [activeSession?.messages]);
+    }, [activeSessionData?.messages, chatStream.content, scrollToBottom]);
 
     // Close settings popup when clicking outside
     useEffect(() => {
@@ -158,22 +167,19 @@ export default function Chat() {
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            // ⌘K or Ctrl+K to show keyboard shortcuts
             if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
                 event.preventDefault();
                 setShowKeyboardShortcuts(true);
             }
-            // Escape to close modals
             if (event.key === 'Escape') {
                 setShowKeyboardShortcuts(false);
                 setShowSettings(false);
+                setShowCheckpointModal(false);
             }
-            // ⌘N or Ctrl+N for new chat
             if ((event.metaKey || event.ctrlKey) && event.key === 'n') {
                 event.preventDefault();
                 newChat();
             }
-            // ⌘/ or Ctrl+/ to focus input
             if ((event.metaKey || event.ctrlKey) && event.key === '/') {
                 event.preventDefault();
                 inputRef.current?.focus();
@@ -183,62 +189,101 @@ export default function Chat() {
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // Handle sending a message
     const handleSend = async () => {
-        if (!input.trim() || isLoading) return;
+        if (!input.trim() || chatStream.isStreaming) return;
+        if (!selectedProvider) return;
 
-        const userMessage: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: input.trim(),
-            timestamp: new Date(),
-        };
+        const userContent = input.trim();
+        setInput('');
 
-        if (activeSession) {
-            const updatedSession = {
-                ...activeSession,
-                messages: [...activeSession.messages, userMessage],
-                updatedAt: new Date(),
-            };
-            setActiveSession(updatedSession);
-            setSessions(prev => prev.map(s => s.id === activeSession.id ? updatedSession : s));
-        } else {
-            const newSession: Session = {
-                id: Date.now().toString(),
-                title: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
+        let sessionId = activeSessionId;
+
+        // Create a new session if none selected
+        if (!sessionId) {
+            const newSession = await createSessionMutation.mutate({
+                title: userContent.slice(0, 50) + (userContent.length > 50 ? '...' : ''),
                 provider: selectedProvider.id,
-                messages: [userMessage],
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            };
-            setSessions(prev => [newSession, ...prev]);
-            setActiveSession(newSession);
+                model: selectedModel,
+            });
+            if (newSession) {
+                sessionId = newSession.id;
+                setActiveSessionId(sessionId);
+                await refetchSessions();
+            } else {
+                return;
+            }
         }
 
-        setInput('');
-        setIsLoading(true);
+        // Add user message
+        await createMessageMutation.mutate({
+            sessionId,
+            data: {
+                role: 'user',
+                content: userContent,
+            },
+        });
 
-        // Simulate AI response
-        setTimeout(() => {
-            const assistantMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: `This is a simulated response from ${selectedProvider.name}. In a real implementation, this would connect to the actual provider API.\n\n\`\`\`typescript\n// Example code\nconst response = await fetch('/api/chat', {\n  method: 'POST',\n  body: JSON.stringify({ message: '${input.slice(0, 30)}...' })\n});\n\`\`\``,
-                timestamp: new Date(),
-                provider: selectedProvider.id,
-            };
+        // Refresh session to show user message
+        await refetchActiveSession();
 
-            setActiveSession(prev => {
-                if (!prev) return prev;
-                const updated = {
-                    ...prev,
-                    messages: [...prev.messages, assistantMessage],
-                    updatedAt: new Date(),
-                };
-                setSessions(sessions => sessions.map(s => s.id === prev.id ? updated : s));
-                return updated;
+        // Build message history for chat completion
+        const messageHistory = activeSessionData?.messages?.map(m => ({
+            role: m.role as 'user' | 'assistant' | 'system',
+            content: m.content,
+        })) ?? [];
+
+        messageHistory.push({ role: 'user', content: userContent });
+
+        // Send to AI
+        if (streamResponses) {
+            // Streaming response
+            const fullResponse = await chatStream.startStream(
+                {
+                    provider: selectedProvider.id,
+                    model: selectedModel ?? selectedProvider.models?.[0] ?? '',
+                    messages: messageHistory,
+                    sessionId,
+                },
+                undefined,
+                async (content) => {
+                    // On complete, save the assistant message
+                    await createMessageMutation.mutate({
+                        sessionId: sessionId!,
+                        data: {
+                            role: 'assistant',
+                            content,
+                            model: selectedModel,
+                        },
+                    });
+                    chatStream.reset();
+                    await refetchActiveSession();
+                }
+            );
+
+            if (!fullResponse && chatStream.error) {
+                // Handle error - still save error message
+                await createMessageMutation.mutate({
+                    sessionId: sessionId!,
+                    data: {
+                        role: 'assistant',
+                        content: `Error: ${chatStream.error.message}`,
+                    },
+                });
+                await refetchActiveSession();
+            }
+        } else {
+            // TODO: Non-streaming completion via useChatCompletion
+            // For now, just show a placeholder
+            await createMessageMutation.mutate({
+                sessionId: sessionId!,
+                data: {
+                    role: 'assistant',
+                    content: 'Non-streaming responses not yet implemented. Enable "Stream Responses" in settings.',
+                },
             });
-            setIsLoading(false);
-        }, 1500);
+            await refetchActiveSession();
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -255,17 +300,41 @@ export default function Chat() {
     };
 
     const newChat = () => {
-        setActiveSession(null);
+        setActiveSessionId(null);
         setInput('');
+        chatStream.reset();
     };
 
-    const deleteSession = (id: string) => {
-        setSessions(prev => prev.filter(s => s.id !== id));
-        if (activeSession?.id === id) {
-            setActiveSession(sessions.find(s => s.id !== id) || null);
+    const deleteSession = async (id: string) => {
+        await deleteSessionMutation.mutate(id);
+        if (activeSessionId === id) {
+            setActiveSessionId(null);
         }
+        await refetchSessions();
     };
 
+    const handleCreateCheckpoint = async () => {
+        if (!checkpointName.trim() || !activeSessionId) return;
+
+        const messages = activeSessionData?.messages ?? [];
+        const lastMessage = messages[messages.length - 1];
+
+        await createCheckpointMutation.mutate({
+            sessionId: activeSessionId,
+            data: {
+                name: checkpointName.trim(),
+                description: checkpointDesc.trim() || null,
+                messageId: lastMessage?.id ?? null,
+            },
+        });
+
+        setCheckpointName('');
+        setCheckpointDesc('');
+        setCheckpointTags('');
+        setShowCheckpointModal(false);
+    };
+
+    // Render code blocks with syntax highlighting
     const renderMessage = (content: string) => {
         const parts = content.split(/(```[\s\S]*?```)/g);
         return parts.map((part, index) => {
@@ -302,9 +371,36 @@ export default function Chat() {
         });
     };
 
+    // Filter sessions by provider
     const filteredSessions = filterProvider
         ? sessions.filter(s => s.provider === filterProvider)
         : sessions;
+
+    // Loading/error states
+    if (contextError) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-4rem)] -m-8">
+                <div className="text-center">
+                    <AlertCircle size={48} className="mx-auto mb-4 text-red-500" />
+                    <h2 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-2">Connection Error</h2>
+                    <p className="text-[hsl(var(--muted-foreground))]">{contextError.message}</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (contextLoading && providers.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-4rem)] -m-8">
+                <div className="text-center">
+                    <Loader2 size={48} className="mx-auto mb-4 text-[hsl(var(--primary))] animate-spin" />
+                    <p className="text-[hsl(var(--muted-foreground))]">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const activeMessages = activeSessionData?.messages ?? [];
 
     return (
         <div className="flex h-[calc(100vh-4rem)] -m-8">
@@ -339,48 +435,47 @@ export default function Chat() {
 
                 {/* Sessions List */}
                 <div className="flex-1 overflow-y-auto">
-                    {filteredSessions.map(session => {
-                        const provider = providers.find(p => p.id === session.provider);
-                        return (
-                            <div
-                                key={session.id}
-                                onClick={() => setActiveSession(session)}
-                                className={`p-3 border-b cursor-pointer hover:bg-[hsl(var(--muted))] transition-colors ${activeSession?.id === session.id ? 'bg-[hsl(var(--muted))]' : ''
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span>{provider?.icon}</span>
-                                            <span className="font-medium text-sm text-[hsl(var(--foreground))] truncate">
-                                                {session.title}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                                                {session.messages.length} messages
-                                            </span>
-                                            {session.gitBranch && (
-                                                <span className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1">
-                                                    <GitBranch size={10} />
-                                                    {session.gitBranch}
+                    {filteredSessions.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                            No sessions yet
+                        </div>
+                    ) : (
+                        filteredSessions.map(session => {
+                            const provider = providers.find(p => p.id === session.provider);
+                            return (
+                                <div
+                                    key={session.id}
+                                    onClick={() => setActiveSessionId(session.id)}
+                                    className={`p-3 border-b cursor-pointer hover:bg-[hsl(var(--muted))] transition-colors ${activeSessionId === session.id ? 'bg-[hsl(var(--muted))]' : ''}`}
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span>{provider?.icon || '💬'}</span>
+                                                <span className="font-medium text-sm text-[hsl(var(--foreground))] truncate">
+                                                    {session.title || 'Untitled'}
                                                 </span>
-                                            )}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                                    {session.messageCount} messages
+                                                </span>
+                                            </div>
                                         </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteSession(session.id);
+                                            }}
+                                            className="p-1 text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteSession(session.id);
-                                        }}
-                                        className="p-1 text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })
+                    )}
                 </div>
             </div>
 
@@ -389,10 +484,10 @@ export default function Chat() {
                 {/* Chat Header */}
                 <div className="h-14 px-4 border-b flex items-center justify-between bg-[hsl(var(--card))]">
                     <div className="flex items-center gap-3">
-                        {activeSession?.workspace && (
+                        {activeSessionData && (
                             <span className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-1">
                                 <FileText size={14} />
-                                {activeSession.workspace}
+                                {activeSessionData.title || 'Untitled'}
                             </span>
                         )}
                     </div>
@@ -403,8 +498,8 @@ export default function Chat() {
                                 onClick={() => setShowProviderDropdown(!showProviderDropdown)}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors"
                             >
-                                <span>{selectedProvider.icon}</span>
-                                <span className="text-sm font-medium text-[hsl(var(--foreground))]">{selectedProvider.name}</span>
+                                <span>{selectedProvider?.icon || '🤖'}</span>
+                                <span className="text-sm font-medium text-[hsl(var(--foreground))]">{selectedProvider?.name || 'Select Provider'}</span>
                                 <ChevronDown size={16} className="text-[hsl(var(--muted-foreground))]" />
                             </button>
                             {showProviderDropdown && (
@@ -416,13 +511,13 @@ export default function Chat() {
                                         <button
                                             key={provider.id}
                                             onClick={() => {
-                                                setSelectedProvider(provider);
-                                                setSelectedModel(provider.models[0]);
+                                                setSelectedProviderId(provider.id);
+                                                setSelectedModel(provider.models?.[0] ?? null);
                                                 setShowProviderDropdown(false);
                                             }}
-                                            className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-[hsl(var(--muted))] transition-colors ${selectedProvider.id === provider.id ? 'bg-[hsl(var(--muted))]' : ''}`}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-[hsl(var(--muted))] transition-colors ${selectedProviderId === provider.id ? 'bg-[hsl(var(--muted))]' : ''}`}
                                         >
-                                            <span>{provider.icon}</span>
+                                            <span>{provider.icon || '🤖'}</span>
                                             <span className="text-sm text-[hsl(var(--foreground))]">{provider.name}</span>
                                         </button>
                                     ))}
@@ -433,19 +528,20 @@ export default function Chat() {
                                         <button
                                             key={provider.id}
                                             onClick={() => {
-                                                setSelectedProvider(provider);
-                                                setSelectedModel(provider.models[0]);
+                                                setSelectedProviderId(provider.id);
+                                                setSelectedModel(provider.models?.[0] ?? null);
                                                 setShowProviderDropdown(false);
                                             }}
-                                            className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-[hsl(var(--muted))] transition-colors ${selectedProvider.id === provider.id ? 'bg-[hsl(var(--muted))]' : ''}`}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-[hsl(var(--muted))] transition-colors ${selectedProviderId === provider.id ? 'bg-[hsl(var(--muted))]' : ''}`}
                                         >
-                                            <span>{provider.icon}</span>
+                                            <span>{provider.icon || '🦙'}</span>
                                             <span className="text-sm text-[hsl(var(--foreground))]">{provider.name}</span>
                                         </button>
                                     ))}
                                 </div>
                             )}
                         </div>
+
                         {/* Model Selector */}
                         <div className="relative">
                             <button
@@ -453,15 +549,15 @@ export default function Chat() {
                                 className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors"
                             >
                                 <Cpu size={14} className="text-[hsl(var(--muted-foreground))]" />
-                                <span className="text-sm text-[hsl(var(--foreground))]">{selectedModel}</span>
+                                <span className="text-sm text-[hsl(var(--foreground))]">{selectedModel || 'Select Model'}</span>
                                 <ChevronDown size={16} className="text-[hsl(var(--muted-foreground))]" />
                             </button>
-                            {showModelDropdown && (
+                            {showModelDropdown && selectedProvider && (
                                 <div className="absolute top-full left-0 mt-1 w-56 bg-[hsl(var(--card))] border rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                                     <div className="p-2 border-b">
                                         <span className="text-xs text-[hsl(var(--muted-foreground))] font-medium">Available Models</span>
                                     </div>
-                                    {selectedProvider.models.map(model => (
+                                    {(selectedProvider.models ?? []).map(model => (
                                         <button
                                             key={model}
                                             onClick={() => {
@@ -477,12 +573,16 @@ export default function Chat() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Git Panel Toggle */}
                         <button
                             onClick={() => setShowGitPanel(!showGitPanel)}
                             className={`p-2 rounded-lg transition-colors ${showGitPanel ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`}
                         >
                             <GitBranch size={18} />
                         </button>
+
+                        {/* Settings */}
                         <div className="relative" ref={settingsRef}>
                             <button
                                 onClick={() => setShowSettings(!showSettings)}
@@ -491,15 +591,11 @@ export default function Chat() {
                                 <Settings size={18} />
                             </button>
 
-                            {/* Settings Popup Menu */}
                             {showSettings && (
                                 <div className="absolute right-0 top-full mt-2 w-80 bg-[hsl(var(--card))] border rounded-xl shadow-xl z-50 overflow-hidden">
                                     <div className="flex items-center justify-between p-3 border-b bg-[hsl(var(--muted))]/50">
                                         <span className="font-medium text-[hsl(var(--foreground))]">Chat Settings</span>
-                                        <button
-                                            onClick={() => setShowSettings(false)}
-                                            className="p-1 rounded hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
-                                        >
+                                        <button onClick={() => setShowSettings(false)} className="p-1 rounded hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
                                             <X size={16} />
                                         </button>
                                     </div>
@@ -626,29 +722,128 @@ export default function Chat() {
                 </div>
 
                 {/* Git Panel */}
-                {showGitPanel && activeSession && (
-                    <div className="p-4 bg-[hsl(var(--muted))] border-b">
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <GitBranch size={16} className="text-green-500" />
-                                <span className="text-sm text-[hsl(var(--foreground))]">{activeSession.gitBranch || 'main'}</span>
+                {showGitPanel && activeSessionId && (
+                    <div className="bg-[hsl(var(--card))] border-b">
+                        <div className="flex items-center justify-between px-4 py-2 border-b bg-[hsl(var(--muted))]/50">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <GitBranch size={16} className="text-green-500" />
+                                    <span className="text-sm font-medium text-[hsl(var(--foreground))]">main</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <GitCommitIcon size={14} className="text-[hsl(var(--muted-foreground))]" />
+                                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{commits.length} commits</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Bookmark size={14} className="text-[hsl(var(--muted-foreground))]" />
+                                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{checkpoints.length} checkpoints</span>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <GitCommit size={16} className="text-[hsl(var(--muted-foreground))]" />
-                                <span className="text-sm text-[hsl(var(--muted-foreground))]">3 commits ahead</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <GitPullRequest size={16} className="text-purple-500" />
-                                <span className="text-sm text-[hsl(var(--muted-foreground))]">PR #42 open</span>
-                            </div>
+                            <button
+                                onClick={() => setShowCheckpointModal(true)}
+                                className="flex items-center gap-1 px-2 py-1 text-xs bg-[hsl(var(--primary))] text-white rounded hover:opacity-90"
+                            >
+                                <Plus size={12} />
+                                Checkpoint
+                            </button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b">
+                            <button
+                                onClick={() => setGitPanelTab('commits')}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm border-b-2 transition-colors ${gitPanelTab === 'commits' ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'}`}
+                            >
+                                <GitCommitIcon size={14} />
+                                Commits
+                            </button>
+                            <button
+                                onClick={() => setGitPanelTab('checkpoints')}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm border-b-2 transition-colors ${gitPanelTab === 'checkpoints' ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : 'border-transparent text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'}`}
+                            >
+                                <Bookmark size={14} />
+                                Checkpoints
+                            </button>
+                        </div>
+
+                        {/* Panel Content */}
+                        <div className="max-h-48 overflow-y-auto">
+                            {gitPanelTab === 'commits' && (
+                                <div className="divide-y">
+                                    {commits.length === 0 ? (
+                                        <div className="p-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                                            No linked commits yet.
+                                        </div>
+                                    ) : (
+                                        commits.map((commit, idx) => (
+                                            <div key={commit.hash} className="flex items-start gap-3 px-4 py-2 hover:bg-[hsl(var(--muted))]/50">
+                                                <div className="flex flex-col items-center">
+                                                    <div className={`w-3 h-3 rounded-full border-2 ${commit.messageId ? 'bg-green-500 border-green-500' : 'bg-[hsl(var(--card))] border-[hsl(var(--muted-foreground))]'}`} />
+                                                    {idx < commits.length - 1 && <div className="w-0.5 h-full bg-[hsl(var(--border))] mt-1" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <code className="text-xs font-mono text-[hsl(var(--primary))]">{commit.shortHash}</code>
+                                                        <span className="text-sm text-[hsl(var(--foreground))] truncate">{commit.message}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 mt-0.5">
+                                                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{commit.author}</span>
+                                                        <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                                            {formatTime(commit.timestamp)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button className="p-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                                                    <MoreVertical size={14} />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+
+                            {gitPanelTab === 'checkpoints' && (
+                                <div className="divide-y">
+                                    {checkpoints.length === 0 ? (
+                                        <div className="p-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                                            No checkpoints yet. Create one to mark important conversation points.
+                                        </div>
+                                    ) : (
+                                        checkpoints.map((cp) => (
+                                            <div key={cp.id} className="flex items-start gap-3 px-4 py-2 hover:bg-[hsl(var(--muted))]/50">
+                                                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                                                    <Bookmark size={16} className="text-purple-500" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">{cp.name}</span>
+                                                    </div>
+                                                    {cp.description && (
+                                                        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{cp.description}</p>
+                                                    )}
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Clock size={10} className="text-[hsl(var(--muted-foreground))]" />
+                                                        <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                                            {formatTime(cp.createdAt)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button className="p-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" title="Go to message">
+                                                    <ChevronRight size={14} />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {activeSession?.messages.map(message => {
-                        const msgProvider = message.provider ? providers.find(p => p.id === message.provider) : selectedProvider;
+                    {activeMessages.map(message => {
+                        const msgProvider = providers.find(p => p.id === activeSessionData?.provider);
                         return (
                             <div
                                 key={message.id}
@@ -657,7 +852,7 @@ export default function Chat() {
                                 {message.role === 'assistant' && (
                                     <div
                                         className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
-                                        style={{ backgroundColor: msgProvider?.color + '20' }}
+                                        style={{ backgroundColor: (msgProvider?.color ?? '#888') + '20' }}
                                     >
                                         {msgProvider?.icon || <Bot size={18} />}
                                     </div>
@@ -671,7 +866,7 @@ export default function Chat() {
                                     <div style={{ fontSize: `${fontSize}px` }}>{renderMessage(message.content)}</div>
                                     {showTimestamps && (
                                         <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-white/70' : 'text-[hsl(var(--muted-foreground))]'}`}>
-                                            {message.timestamp.toLocaleTimeString()}
+                                            {formatTime(message.createdAt)}
                                         </div>
                                     )}
                                 </div>
@@ -683,13 +878,30 @@ export default function Chat() {
                             </div>
                         );
                     })}
-                    {isLoading && (
+
+                    {/* Streaming message */}
+                    {chatStream.isStreaming && chatStream.content && (
+                        <div className="flex gap-3 justify-start">
+                            <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+                                style={{ backgroundColor: (selectedProvider?.color ?? '#888') + '20' }}
+                            >
+                                {selectedProvider?.icon || <Bot size={18} />}
+                            </div>
+                            <div className="max-w-[70%] rounded-2xl px-4 py-3 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]">
+                                <div style={{ fontSize: `${fontSize}px` }}>{renderMessage(chatStream.content)}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Loading indicator */}
+                    {chatStream.isStreaming && !chatStream.content && (
                         <div className="flex gap-3">
                             <div
                                 className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
-                                style={{ backgroundColor: selectedProvider.color + '20' }}
+                                style={{ backgroundColor: (selectedProvider?.color ?? '#888') + '20' }}
                             >
-                                {selectedProvider.icon}
+                                {selectedProvider?.icon || <Bot size={18} />}
                             </div>
                             <div className="bg-[hsl(var(--muted))] rounded-2xl px-4 py-3">
                                 <div className="flex gap-1">
@@ -700,7 +912,9 @@ export default function Chat() {
                             </div>
                         </div>
                     )}
-                    {!activeSession && !isLoading && (
+
+                    {/* Empty state */}
+                    {!activeSessionId && !chatStream.isStreaming && (
                         <div className="flex flex-col items-center justify-center h-full text-center">
                             <Code size={48} className="text-[hsl(var(--muted-foreground))] mb-4" />
                             <h2 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-2">Start a new conversation</h2>
@@ -721,7 +935,7 @@ export default function Chat() {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder={`Message ${selectedProvider.name}...`}
+                                placeholder={`Message ${selectedProvider?.name ?? 'AI'}...`}
                                 className="w-full px-4 py-3 pr-24 bg-[hsl(var(--muted))] rounded-xl resize-none text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
                                 rows={1}
                                 style={{ minHeight: '48px', maxHeight: '200px' }}
@@ -737,14 +951,87 @@ export default function Chat() {
                         </div>
                         <button
                             onClick={handleSend}
-                            disabled={!input.trim() || isLoading}
+                            disabled={!input.trim() || chatStream.isStreaming}
                             className="p-3 bg-[hsl(var(--primary))] text-white rounded-xl hover:bg-[hsl(var(--primary))]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isLoading ? <StopCircle size={20} /> : <Send size={20} />}
+                            {chatStream.isStreaming ? <StopCircle size={20} /> : <Send size={20} />}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Checkpoint Creation Modal */}
+            {showCheckpointModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCheckpointModal(false)}>
+                    <div className="bg-[hsl(var(--card))] rounded-xl border shadow-xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-4 border-b">
+                            <div className="flex items-center gap-2">
+                                <Bookmark size={18} className="text-purple-500" />
+                                <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Create Checkpoint</h2>
+                            </div>
+                            <button
+                                onClick={() => setShowCheckpointModal(false)}
+                                className="p-1 rounded hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Name *</label>
+                                <input
+                                    type="text"
+                                    value={checkpointName}
+                                    onChange={(e) => setCheckpointName(e.target.value)}
+                                    placeholder="e.g., Working implementation"
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Description</label>
+                                <textarea
+                                    value={checkpointDesc}
+                                    onChange={(e) => setCheckpointDesc(e.target.value)}
+                                    placeholder="Optional notes about this checkpoint..."
+                                    rows={2}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] resize-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Tags</label>
+                                <input
+                                    type="text"
+                                    value={checkpointTags}
+                                    onChange={(e) => setCheckpointTags(e.target.value)}
+                                    placeholder="e.g., milestone, bugfix, feature (comma separated)"
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                />
+                            </div>
+                            <div className="bg-[hsl(var(--muted))]/50 rounded-lg p-3">
+                                <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+                                    <History size={14} />
+                                    <span>This checkpoint will be linked to the current conversation state</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 p-4 border-t bg-[hsl(var(--muted))]/50">
+                            <button
+                                onClick={() => setShowCheckpointModal(false)}
+                                className="px-4 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] rounded-lg"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateCheckpoint}
+                                disabled={!checkpointName.trim()}
+                                className="px-4 py-2 text-sm bg-[hsl(var(--primary))] text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Create Checkpoint
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Keyboard Shortcuts Modal */}
             {showKeyboardShortcuts && (
@@ -782,37 +1069,8 @@ export default function Chat() {
                                 </div>
                             </div>
                             <div className="border-t pt-4">
-                                <h3 className="text-sm font-medium text-[hsl(var(--muted-foreground))] mb-2">Navigation</h3>
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between py-1">
-                                        <span className="text-sm text-[hsl(var(--foreground))]">Previous session</span>
-                                        <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + ↑</kbd>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1">
-                                        <span className="text-sm text-[hsl(var(--foreground))]">Next session</span>
-                                        <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + ↓</kbd>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1">
-                                        <span className="text-sm text-[hsl(var(--foreground))]">Toggle sidebar</span>
-                                        <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + B</kbd>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="border-t pt-4">
                                 <h3 className="text-sm font-medium text-[hsl(var(--muted-foreground))] mb-2">Actions</h3>
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between py-1">
-                                        <span className="text-sm text-[hsl(var(--foreground))]">Copy last response</span>
-                                        <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + Shift + C</kbd>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1">
-                                        <span className="text-sm text-[hsl(var(--foreground))]">Regenerate response</span>
-                                        <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + Shift + R</kbd>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1">
-                                        <span className="text-sm text-[hsl(var(--foreground))]">Open settings</span>
-                                        <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + ,</kbd>
-                                    </div>
                                     <div className="flex items-center justify-between py-1">
                                         <span className="text-sm text-[hsl(var(--foreground))]">Show shortcuts</span>
                                         <kbd className="px-2 py-1 bg-[hsl(var(--muted))] rounded text-xs font-mono">⌘ + K</kbd>

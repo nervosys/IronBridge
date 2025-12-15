@@ -126,6 +126,65 @@ pre code.hljs {
     color: #f92672;
 }
 
+/* Ayu Monokai Theme */
+[data-syntax-theme="ayu-monokai"] pre code.hljs {
+    background: #0b0e14;
+    color: #bfbdb6;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-keyword {
+    color: #ff8f40;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-string {
+    color: #aad94c;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-number {
+    color: #d2a6ff;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-function {
+    color: #ffb454;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-title {
+    color: #ffb454;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-comment {
+    color: #626a73;
+    font-style: italic;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-variable {
+    color: #f29668;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-built_in {
+    color: #e6b450;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-type {
+    color: #59c2ff;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-params {
+    color: #bfbdb6;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-attr {
+    color: #ffb454;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-selector-class {
+    color: #59c2ff;
+}
+
+[data-syntax-theme="ayu-monokai"] .hljs-selector-tag {
+    color: #ff8f40;
+}
+
 /* Nord Theme */
 [data-syntax-theme="nord"] pre code.hljs {
     background: #2e3440;
@@ -241,4 +300,240 @@ pre code.hljs {
 
 [data-syntax-theme="one-dark"] .hljs-selector-tag {
     color: #e06c75;
+}
+
+/* ===== LIGHT THEMES ===== */
+
+/* GitHub Light Theme */
+[data-syntax-theme="github-light"] pre code.hljs {
+    background: #ffffff;
+    color: #24292f;
+}
+
+[data-syntax-theme="github-light"] .hljs-keyword {
+    color: #cf222e;
+}
+
+[data-syntax-theme="github-light"] .hljs-string {
+    color: #0a3069;
+}
+
+[data-syntax-theme="github-light"] .hljs-number {
+    color: #0550ae;
+}
+
+[data-syntax-theme="github-light"] .hljs-function {
+    color: #8250df;
+}
+
+[data-syntax-theme="github-light"] .hljs-title {
+    color: #8250df;
+}
+
+[data-syntax-theme="github-light"] .hljs-comment {
+    color: #6e7781;
+}
+
+[data-syntax-theme="github-light"] .hljs-variable {
+    color: #953800;
+}
+
+[data-syntax-theme="github-light"] .hljs-built_in {
+    color: #953800;
+}
+
+[data-syntax-theme="github-light"] .hljs-type {
+    color: #cf222e;
+}
+
+[data-syntax-theme="github-light"] .hljs-params {
+    color: #24292f;
+}
+
+[data-syntax-theme="github-light"] .hljs-attr {
+    color: #0550ae;
+}
+
+[data-syntax-theme="github-light"] .hljs-selector-class {
+    color: #116329;
+}
+
+[data-syntax-theme="github-light"] .hljs-selector-tag {
+    color: #116329;
+}
+
+/* One Light Theme */
+[data-syntax-theme="one-light"] pre code.hljs {
+    background: #fafafa;
+    color: #383a42;
+}
+
+[data-syntax-theme="one-light"] .hljs-keyword {
+    color: #a626a4;
+}
+
+[data-syntax-theme="one-light"] .hljs-string {
+    color: #50a14f;
+}
+
+[data-syntax-theme="one-light"] .hljs-number {
+    color: #986801;
+}
+
+[data-syntax-theme="one-light"] .hljs-function {
+    color: #4078f2;
+}
+
+[data-syntax-theme="one-light"] .hljs-title {
+    color: #4078f2;
+}
+
+[data-syntax-theme="one-light"] .hljs-comment {
+    color: #a0a1a7;
+    font-style: italic;
+}
+
+[data-syntax-theme="one-light"] .hljs-variable {
+    color: #e45649;
+}
+
+[data-syntax-theme="one-light"] .hljs-built_in {
+    color: #c18401;
+}
+
+[data-syntax-theme="one-light"] .hljs-type {
+    color: #c18401;
+}
+
+[data-syntax-theme="one-light"] .hljs-params {
+    color: #383a42;
+}
+
+[data-syntax-theme="one-light"] .hljs-attr {
+    color: #986801;
+}
+
+[data-syntax-theme="one-light"] .hljs-selector-class {
+    color: #c18401;
+}
+
+[data-syntax-theme="one-light"] .hljs-selector-tag {
+    color: #e45649;
+}
+
+/* Solarized Light Theme */
+[data-syntax-theme="solarized-light"] pre code.hljs {
+    background: #fdf6e3;
+    color: #657b83;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-keyword {
+    color: #859900;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-string {
+    color: #2aa198;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-number {
+    color: #d33682;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-function {
+    color: #268bd2;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-title {
+    color: #268bd2;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-comment {
+    color: #93a1a1;
+    font-style: italic;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-variable {
+    color: #cb4b16;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-built_in {
+    color: #b58900;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-type {
+    color: #b58900;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-params {
+    color: #657b83;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-attr {
+    color: #2aa198;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-selector-class {
+    color: #268bd2;
+}
+
+[data-syntax-theme="solarized-light"] .hljs-selector-tag {
+    color: #859900;
+}
+
+/* VS Light Theme (Visual Studio) */
+[data-syntax-theme="vs-light"] pre code.hljs {
+    background: #ffffff;
+    color: #000000;
+}
+
+[data-syntax-theme="vs-light"] .hljs-keyword {
+    color: #0000ff;
+}
+
+[data-syntax-theme="vs-light"] .hljs-string {
+    color: #a31515;
+}
+
+[data-syntax-theme="vs-light"] .hljs-number {
+    color: #098658;
+}
+
+[data-syntax-theme="vs-light"] .hljs-function {
+    color: #795e26;
+}
+
+[data-syntax-theme="vs-light"] .hljs-title {
+    color: #795e26;
+}
+
+[data-syntax-theme="vs-light"] .hljs-comment {
+    color: #008000;
+}
+
+[data-syntax-theme="vs-light"] .hljs-variable {
+    color: #001080;
+}
+
+[data-syntax-theme="vs-light"] .hljs-built_in {
+    color: #267f99;
+}
+
+[data-syntax-theme="vs-light"] .hljs-type {
+    color: #267f99;
+}
+
+[data-syntax-theme="vs-light"] .hljs-params {
+    color: #000000;
+}
+
+[data-syntax-theme="vs-light"] .hljs-attr {
+    color: #ff0000;
+}
+
+[data-syntax-theme="vs-light"] .hljs-selector-class {
+    color: #800000;
+}
+
+[data-syntax-theme="vs-light"] .hljs-selector-tag {
+    color: #800000;
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     BarChart3,
     TrendingUp,
@@ -12,7 +12,10 @@ import {
     RefreshCw,
     Info,
     Cpu,
+    Loader2,
+    AlertCircle,
 } from 'lucide-react';
+import { useProviders, useProviderHealth, useStatistics } from '../hooks/useApi';
 import {
     BarChart,
     Bar,
@@ -95,6 +98,11 @@ type ModelCategory = 'all' | 'chat' | 'reasoning' | 'code' | 'search';
 type ProviderType = 'all' | 'cloud' | 'local';
 
 export default function Comparison() {
+    // API Data
+    const { data: apiProviders, isLoading: providersLoading, refetch: refetchProviders } = useProviders();
+    const { data: providerHealthData } = useProviderHealth();
+    const { data: statistics } = useStatistics();
+
     const [selectedProviders, setSelectedProviders] = useState<string[]>(['OpenAI', 'Anthropic', 'Google', 'DeepSeek']);
     const [selectedModels, setSelectedModels] = useState<string[]>([]);
     const [compareMetric, setCompareMetric] = useState<CompareMetric>('value');
@@ -102,16 +110,77 @@ export default function Comparison() {
     const [providerType, setProviderType] = useState<ProviderType>('all');
     const [showDetails, setShowDetails] = useState(true);
 
+    // Merge API providers with benchmark reference data
+    const enhancedModels = useMemo(() => {
+        // Start with benchmark reference data
+        const models = [...providerModels];
+
+        // Add any providers from API that aren't in benchmark data
+        if (apiProviders) {
+            for (const provider of apiProviders) {
+                const existingProvider = models.find(m =>
+                    m.provider.toLowerCase() === provider.name.toLowerCase()
+                );
+
+                if (!existingProvider && provider.models) {
+                    // Add models from API provider
+                    for (const modelName of provider.models) {
+                        const isLocal = provider.type === 'local' ||
+                            ['ollama', 'lm-studio', 'vllm', 'llama.cpp', 'llamafile', 'localai', 'gpt4all', 'jan']
+                                .includes(provider.name.toLowerCase());
+
+                        models.push({
+                            provider: provider.name,
+                            model: modelName,
+                            type: isLocal ? 'local' : 'cloud',
+                            category: 'chat' as const,
+                            inputCost: isLocal ? 0 : 1.00,  // Default pricing for unknown models
+                            outputCost: isLocal ? 0 : 3.00,
+                            latency: isLocal ? 500 : 600,
+                            tokensPerSec: isLocal ? 50 : 80,
+                            accuracy: 85,
+                            contextWindow: 32000,
+                            mmlu: 80,
+                            humaneval: 80,
+                            reasoning: 80,
+                            coding: 80,
+                            creative: 80,
+                        });
+                    }
+                }
+            }
+        }
+
+        return models;
+    }, [apiProviders]);
+
     // Filter models based on selections
-    const filteredModels = providerModels.filter(m => {
+    const filteredModels = enhancedModels.filter(m => {
         if (providerType !== 'all' && m.type !== providerType) return false;
         if (modelCategory !== 'all' && m.category !== modelCategory) return false;
         if (selectedProviders.length > 0 && !selectedProviders.includes(m.provider)) return false;
         return true;
     });
 
-    // Get unique providers
-    const allProviders = [...new Set(providerModels.map(m => m.provider))];
+    // Get unique providers (combine static + API)
+    const allProviders = useMemo(() => {
+        const providers = new Set(providerModels.map(m => m.provider));
+        if (apiProviders) {
+            apiProviders.forEach(p => providers.add(p.name));
+        }
+        return [...providers];
+    }, [apiProviders]);
+
+    // Provider health status for display
+    const providerStatus = useMemo(() => {
+        const status: Record<string, boolean> = {};
+        if (providerHealthData) {
+            providerHealthData.forEach(h => {
+                status[h.providerId] = h.status === 'connected';
+            });
+        }
+        return status;
+    }, [providerHealthData]);
 
     // Cost comparison data
     const costData = filteredModels.map(m => ({
@@ -188,6 +257,18 @@ export default function Comparison() {
     const mostAccurate = [...filteredModels].sort((a, b) => b.accuracy - a.accuracy)[0];
     const bestValue = valueData[0];
 
+    // Loading state
+    if (providersLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 size={32} className="animate-spin text-[hsl(var(--primary))]" />
+                    <p className="text-[hsl(var(--muted-foreground))]">Loading provider data...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -196,19 +277,61 @@ export default function Comparison() {
                     <h1 className="text-3xl font-bold text-[hsl(var(--foreground))]">Model Comparison</h1>
                     <p className="text-[hsl(var(--muted-foreground))] mt-1">
                         Compare provider and model performance, cost, and value
+                        {apiProviders && (
+                            <span className="ml-2 text-xs">
+                                ({apiProviders.length} connected providers)
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {statistics && (
+                        <div className="text-sm text-[hsl(var(--muted-foreground))] mr-4">
+                            <span className="font-medium">{statistics.totalSessions}</span> sessions tracked
+                        </div>
+                    )}
                     <button className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors">
                         <Download size={18} />
                         Export
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors">
+                    <button
+                        onClick={() => refetchProviders()}
+                        className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                    >
                         <RefreshCw size={18} />
                         Refresh Data
                     </button>
                 </div>
             </div>
+
+            {/* Connected Providers Status */}
+            {apiProviders && apiProviders.length > 0 && (
+                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                    <div className="flex items-center gap-2 mb-3">
+                        <AlertCircle size={18} className="text-[hsl(var(--muted-foreground))]" />
+                        <span className="font-medium text-[hsl(var(--foreground))]">Connected Providers</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {apiProviders.map(provider => (
+                            <div
+                                key={provider.id}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[hsl(var(--muted))]"
+                            >
+                                <span
+                                    className={`w-2 h-2 rounded-full ${providerStatus[provider.id] ? 'bg-green-500' : 'bg-red-500'
+                                        }`}
+                                />
+                                <span className="text-sm text-[hsl(var(--foreground))]">{provider.name}</span>
+                                {provider.models && (
+                                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                        ({provider.models.length} models)
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
@@ -653,9 +776,14 @@ export default function Comparison() {
             <div className="flex items-start gap-2 text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))]/50 rounded-lg p-4">
                 <Info size={16} className="mt-0.5 shrink-0" />
                 <p>
-                    Pricing and performance data are approximate and may vary. Local model performance depends on hardware.
-                    Cost is shown per 1 million tokens. Value score = (Accuracy / Avg Cost) × 10 for cloud models,
-                    Accuracy × 10 for local models (free). Data updated December 2024.
+                    Benchmark data is from reference sources and may vary. Connected providers are shown with live status.
+                    Local model performance depends on hardware. Cost is shown per 1 million tokens.
+                    Value score = (Accuracy / Avg Cost) × 10 for cloud models, Accuracy × 10 for local models (free).
+                    {apiProviders && apiProviders.length > 0 && (
+                        <span className="ml-1">
+                            Currently tracking {apiProviders.length} live provider{apiProviders.length !== 1 ? 's' : ''}.
+                        </span>
+                    )}
                 </p>
             </div>
         </div>

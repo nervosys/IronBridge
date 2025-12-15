@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Download,
     Database,
@@ -43,7 +43,6 @@ import {
     Code,
     Terminal,
     FileCode,
-    Globe,
     Sparkles,
     Camera,
     Cog,
@@ -53,8 +52,15 @@ import {
     Factory,
     Building2,
     Gamepad2,
+    Bot,
+    Compass,
+    Hand,
+    Radar,
+    Activity,
+    Cloud,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useProviders, useProviderHealth } from '../hooks/useApi';
 
 // Mock data for models
 const pretrainedModels = [
@@ -462,13 +468,115 @@ const dataAugmentations = [
     { id: 'pose', name: 'Pose Variations', description: '6-DoF object and camera poses' },
 ];
 
-type Tab = 'models' | 'datasets' | 'training' | 'optimization' | 'deployment' | 'rag' | 'tools' | 'multimodal' | 'simulation';
+// Robotics Data
+const roboticsPlatforms = [
+    {
+        id: 'ros2',
+        name: 'ROS 2 Humble',
+        type: 'Middleware',
+        status: 'connected',
+        description: 'Robot Operating System 2 - Industry standard robotics middleware',
+        features: ['DDS communication', 'Lifecycle nodes', 'QoS policies', 'Real-time support'],
+        nodes: 24,
+        topics: 156,
+        services: 42,
+    },
+    {
+        id: 'moveit2',
+        name: 'MoveIt 2',
+        type: 'Motion Planning',
+        status: 'connected',
+        description: 'Motion planning framework for manipulation',
+        features: ['OMPL planners', 'Collision detection', 'Kinematics', 'Trajectory execution'],
+        nodes: 8,
+        topics: 45,
+        services: 18,
+    },
+    {
+        id: 'nav2',
+        name: 'Nav2',
+        type: 'Navigation',
+        status: 'connected',
+        description: 'Navigation stack for autonomous mobile robots',
+        features: ['Path planning', 'Behavior trees', 'Costmaps', 'Recovery behaviors'],
+        nodes: 12,
+        topics: 78,
+        services: 24,
+    },
+    {
+        id: 'micro-ros',
+        name: 'micro-ROS',
+        type: 'Embedded',
+        status: 'disconnected',
+        description: 'ROS 2 for microcontrollers (ARM Cortex-M, ESP32)',
+        features: ['RTOS integration', 'DDS-XRCE', 'Memory efficient', 'Real-time'],
+        nodes: 0,
+        topics: 0,
+        services: 0,
+    },
+];
+
+const robotHardware = [
+    { id: 'ur5e', name: 'Universal Robots UR5e', type: 'Manipulator', dof: 6, payload: '5 kg', reach: '850 mm', status: 'connected' },
+    { id: 'franka', name: 'Franka Emika Panda', type: 'Manipulator', dof: 7, payload: '3 kg', reach: '855 mm', status: 'disconnected' },
+    { id: 'turtlebot4', name: 'TurtleBot 4', type: 'Mobile Base', dof: 2, payload: '9 kg', reach: 'N/A', status: 'connected' },
+    { id: 'spot', name: 'Boston Dynamics Spot', type: 'Quadruped', dof: 12, payload: '14 kg', reach: 'N/A', status: 'disconnected' },
+    { id: 'sawyer', name: 'Rethink Sawyer', type: 'Manipulator', dof: 7, payload: '4 kg', reach: '1260 mm', status: 'disconnected' },
+    { id: 'husky', name: 'Clearpath Husky', type: 'Mobile Base', dof: 4, payload: '75 kg', reach: 'N/A', status: 'connected' },
+];
+
+const robotSensors = [
+    { id: 'realsense-d455', name: 'Intel RealSense D455', type: 'RGB-D Camera', interface: 'USB 3.0', fps: 90, status: 'active' },
+    { id: 'velodyne-vlp16', name: 'Velodyne VLP-16', type: 'LiDAR', interface: 'Ethernet', fps: 20, status: 'active' },
+    { id: 'robotiq-ft300', name: 'Robotiq FT 300', type: 'Force/Torque', interface: 'USB', fps: 100, status: 'active' },
+    { id: 'imu-bno085', name: 'BNO085 IMU', type: 'IMU', interface: 'I2C', fps: 400, status: 'active' },
+    { id: 'ouster-os1', name: 'Ouster OS1-64', type: 'LiDAR', interface: 'Ethernet', fps: 20, status: 'inactive' },
+    { id: 'zed2i', name: 'Stereolabs ZED 2i', type: 'Stereo Camera', interface: 'USB 3.0', fps: 100, status: 'active' },
+];
+
+const robotTasks = [
+    { id: 'pick-place', name: 'Pick & Place', robot: 'UR5e', status: 'running', success: 94, attempts: 156, avgTime: '4.2s' },
+    { id: 'navigation', name: 'Warehouse Navigation', robot: 'Husky', status: 'running', success: 98, attempts: 89, avgTime: '45s' },
+    { id: 'inspection', name: 'Visual Inspection', robot: 'TurtleBot 4', status: 'paused', success: 87, attempts: 234, avgTime: '12s' },
+    { id: 'assembly', name: 'Assembly Task', robot: 'UR5e', status: 'completed', success: 91, attempts: 500, avgTime: '8.5s' },
+];
+
+type Tab = 'models' | 'datasets' | 'training' | 'optimization' | 'deployment' | 'rag' | 'tools' | 'multimodal' | 'simulation' | 'robotics';
 
 export default function Developer() {
+    // API Data - Connected providers for inference
+    const { data: connectedProviders } = useProviders();
+    const { data: providerHealth } = useProviderHealth();
+
     const [activeTab, setActiveTab] = useState<Tab>('models');
     const [modelSearch, setModelSearch] = useState('');
     const [datasetSearch, setDatasetSearch] = useState('');
     const [downloading, setDownloading] = useState<string | null>(null);
+
+    // Get provider health status
+    const getProviderStatus = useMemo(() => {
+        const status: Record<string, 'connected' | 'disconnected' | 'error'> = {};
+        if (providerHealth) {
+            providerHealth.forEach(h => {
+                status[h.providerId] = h.status === 'connected' ? 'connected' :
+                    h.status === 'error' ? 'error' : 'disconnected';
+            });
+        }
+        return status;
+    }, [providerHealth]);
+
+    // Connected inference endpoints
+    const inferenceEndpoints = useMemo(() => {
+        if (!connectedProviders) return [];
+        return connectedProviders.map(p => ({
+            id: p.id,
+            name: p.name,
+            type: p.type || 'cloud',
+            models: p.models || [],
+            status: getProviderStatus[p.id] || 'unknown',
+            endpoint: p.endpoint,
+        }));
+    }, [connectedProviders, getProviderStatus]);
 
     const handleDownload = (id: string) => {
         setDownloading(id);
@@ -505,6 +613,7 @@ export default function Developer() {
         { id: 'rag' as Tab, label: 'RAG', icon: BookOpen },
         { id: 'tools' as Tab, label: 'Tool Use', icon: Wrench },
         { id: 'multimodal' as Tab, label: 'Multi-Modal', icon: Sparkles },
+        { id: 'robotics' as Tab, label: 'Robotics', icon: Bot },
     ];
 
     return (
@@ -526,7 +635,17 @@ export default function Developer() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
+                        <Cloud size={18} />
+                        <span className="text-sm">Providers</span>
+                    </div>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{inferenceEndpoints.length}</p>
+                    <p className="text-sm text-green-500">
+                        {inferenceEndpoints.filter(e => e.status === 'connected').length} connected
+                    </p>
+                </div>
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                         <Box size={18} />
@@ -568,6 +687,44 @@ export default function Developer() {
                     <p className="text-sm text-orange-500">RTX 4090</p>
                 </div>
             </div>
+
+            {/* Connected Inference Providers */}
+            {inferenceEndpoints.length > 0 && (
+                <div className="bg-[hsl(var(--card))] rounded-xl border p-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+                            <Server size={18} />
+                            Connected Inference Providers
+                        </h3>
+                        <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                            {inferenceEndpoints.reduce((acc, e) => acc + e.models.length, 0)} total models available
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {inferenceEndpoints.map(endpoint => (
+                            <div key={endpoint.id} className="flex items-center justify-between p-3 bg-[hsl(var(--muted))]/50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <span className={`w-2 h-2 rounded-full ${endpoint.status === 'connected' ? 'bg-green-500' :
+                                            endpoint.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                                        }`} />
+                                    <div>
+                                        <p className="font-medium text-[hsl(var(--foreground))]">{endpoint.name}</p>
+                                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                                            {endpoint.models.length} models • {endpoint.type}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded ${endpoint.status === 'connected' ? 'bg-green-500/20 text-green-400' :
+                                        endpoint.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                                            'bg-yellow-500/20 text-yellow-400'
+                                    }`}>
+                                    {endpoint.status}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Tabs */}
             <div className="flex items-center gap-1 border-b">
@@ -1653,8 +1810,8 @@ export default function Developer() {
                                             </div>
                                         </div>
                                         <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${sim.status === 'connected'
-                                                ? 'bg-green-500/10 text-green-500'
-                                                : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
+                                            ? 'bg-green-500/10 text-green-500'
+                                            : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
                                             }`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${sim.status === 'connected' ? 'bg-green-500' : 'bg-[hsl(var(--muted-foreground))]'}`} />
                                             {sim.status}
@@ -1847,6 +2004,191 @@ export default function Developer() {
                                     Start Generation
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Robotics Tab */}
+            {activeTab === 'robotics' && (
+                <div className="space-y-6">
+                    {/* Robotics Platforms */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+                        {roboticsPlatforms.map((platform) => (
+                            <div key={platform.id} className="bg-[hsl(var(--card))] rounded-xl border p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-2 rounded-lg ${platform.status === 'connected' ? 'bg-green-500/10' : 'bg-gray-500/10'}`}>
+                                            <Compass size={20} className={platform.status === 'connected' ? 'text-green-500' : 'text-gray-500'} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-[hsl(var(--foreground))]">{platform.name}</h4>
+                                            <p className="text-xs text-[hsl(var(--muted-foreground))]">{platform.type}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-full text-xs ${platform.status === 'connected' ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}`}>
+                                        {platform.status}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-[hsl(var(--muted-foreground))] mb-3">{platform.description}</p>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="bg-[hsl(var(--muted))]/50 rounded p-2">
+                                        <p className="text-lg font-bold text-[hsl(var(--foreground))]">{platform.nodes}</p>
+                                        <p className="text-xs text-[hsl(var(--muted-foreground))]">Nodes</p>
+                                    </div>
+                                    <div className="bg-[hsl(var(--muted))]/50 rounded p-2">
+                                        <p className="text-lg font-bold text-[hsl(var(--foreground))]">{platform.topics}</p>
+                                        <p className="text-xs text-[hsl(var(--muted-foreground))]">Topics</p>
+                                    </div>
+                                    <div className="bg-[hsl(var(--muted))]/50 rounded p-2">
+                                        <p className="text-lg font-bold text-[hsl(var(--foreground))]">{platform.services}</p>
+                                        <p className="text-xs text-[hsl(var(--muted-foreground))]">Services</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Robot Hardware */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
+                        <div className="p-4 border-b flex items-center justify-between">
+                            <h3 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+                                <Hand size={20} className="text-[hsl(var(--primary))]" />
+                                Robot Hardware
+                            </h3>
+                            <button className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg text-sm hover:opacity-90">
+                                <Plus size={16} />
+                                Add Robot
+                            </button>
+                        </div>
+                        <table className="w-full">
+                            <thead className="bg-[hsl(var(--muted))]/30">
+                                <tr>
+                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Robot</th>
+                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Type</th>
+                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">DOF</th>
+                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Payload</th>
+                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Reach</th>
+                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Status</th>
+                                    <th className="text-right px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {robotHardware.map((robot) => (
+                                    <tr key={robot.id} className="border-b last:border-b-0 hover:bg-[hsl(var(--muted))]/30">
+                                        <td className="px-4 py-3">
+                                            <span className="font-medium text-[hsl(var(--foreground))]">{robot.name}</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{robot.type}</td>
+                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{robot.dof}</td>
+                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{robot.payload}</td>
+                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{robot.reach}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded-full text-xs ${robot.status === 'connected' ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}`}>
+                                                {robot.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button className="p-1.5 hover:bg-[hsl(var(--muted))] rounded" title="Connect">
+                                                    <RefreshCw size={16} className="text-[hsl(var(--muted-foreground))]" />
+                                                </button>
+                                                <button className="p-1.5 hover:bg-[hsl(var(--muted))] rounded" title="Settings">
+                                                    <Settings size={16} className="text-[hsl(var(--muted-foreground))]" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Sensors */}
+                        <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
+                            <div className="p-4 border-b flex items-center justify-between">
+                                <h3 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+                                    <Radar size={20} className="text-[hsl(var(--primary))]" />
+                                    Sensors
+                                </h3>
+                                <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                                    {robotSensors.filter(s => s.status === 'active').length}/{robotSensors.length} active
+                                </span>
+                            </div>
+                            <div className="divide-y">
+                                {robotSensors.map((sensor) => (
+                                    <div key={sensor.id} className="p-3 flex items-center justify-between hover:bg-[hsl(var(--muted))]/30">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-2 h-2 rounded-full ${sensor.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                            <div>
+                                                <p className="text-sm font-medium text-[hsl(var(--foreground))]">{sensor.name}</p>
+                                                <p className="text-xs text-[hsl(var(--muted-foreground))]">{sensor.type} • {sensor.interface}</p>
+                                            </div>
+                                        </div>
+                                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{sensor.fps} Hz</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Active Tasks */}
+                        <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
+                            <div className="p-4 border-b flex items-center justify-between">
+                                <h3 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+                                    <Zap size={20} className="text-[hsl(var(--primary))]" />
+                                    Robot Tasks
+                                </h3>
+                                <button className="text-sm text-[hsl(var(--primary))] hover:underline">View All</button>
+                            </div>
+                            <div className="divide-y">
+                                {robotTasks.map((task) => (
+                                    <div key={task.id} className="p-3 hover:bg-[hsl(var(--muted))]/30">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                {getStatusIcon(task.status)}
+                                                <span className="font-medium text-[hsl(var(--foreground))]">{task.name}</span>
+                                            </div>
+                                            <span className="text-xs text-[hsl(var(--muted-foreground))]">{task.robot}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-[hsl(var(--muted-foreground))]">
+                                                Success: <span className="text-green-500 font-medium">{task.success}%</span>
+                                            </span>
+                                            <span className="text-[hsl(var(--muted-foreground))]">
+                                                {task.attempts} attempts • Avg: {task.avgTime}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border p-6">
+                        <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">Quick Actions</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <button className="p-4 bg-[hsl(var(--muted))]/50 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-center">
+                                <Terminal size={24} className="mx-auto mb-2 text-[hsl(var(--primary))]" />
+                                <p className="text-sm font-medium text-[hsl(var(--foreground))]">ROS Terminal</p>
+                                <p className="text-xs text-[hsl(var(--muted-foreground))]">Open ROS 2 shell</p>
+                            </button>
+                            <button className="p-4 bg-[hsl(var(--muted))]/50 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-center">
+                                <Eye size={24} className="mx-auto mb-2 text-[hsl(var(--primary))]" />
+                                <p className="text-sm font-medium text-[hsl(var(--foreground))]">RViz</p>
+                                <p className="text-xs text-[hsl(var(--muted-foreground))]">3D visualization</p>
+                            </button>
+                            <button className="p-4 bg-[hsl(var(--muted))]/50 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-center">
+                                <GitBranch size={24} className="mx-auto mb-2 text-[hsl(var(--primary))]" />
+                                <p className="text-sm font-medium text-[hsl(var(--foreground))]">TF Tree</p>
+                                <p className="text-xs text-[hsl(var(--muted-foreground))]">Transform frames</p>
+                            </button>
+                            <button className="p-4 bg-[hsl(var(--muted))]/50 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-center">
+                                <Activity size={24} className="mx-auto mb-2 text-[hsl(var(--primary))]" />
+                                <p className="text-sm font-medium text-[hsl(var(--foreground))]">rqt Graph</p>
+                                <p className="text-xs text-[hsl(var(--muted-foreground))]">Node graph</p>
+                            </button>
                         </div>
                     </div>
                 </div>

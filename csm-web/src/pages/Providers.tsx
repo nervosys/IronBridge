@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Cloud,
     HardDrive,
@@ -7,136 +7,64 @@ import {
     RefreshCw,
     Settings,
     ExternalLink,
+    AlertCircle,
+    Loader2,
+    Server,
 } from 'lucide-react';
+import { useApi } from '../context/ApiContext';
+import type { Provider as ApiProvider, ProviderHealth } from '../api/types';
 
-interface Provider {
-    id: string;
-    name: string;
-    type: 'local' | 'cloud';
-    status: 'online' | 'offline' | 'unknown';
-    endpoint: string;
-    sessions: number;
-    icon: string;
-    description: string;
+// Provider icons mapping
+const PROVIDER_ICONS: Record<string, string> = {
+    'github-copilot': '🤖',
+    'copilot': '🤖',
+    'cursor': '⚡',
+    'ollama': '🦙',
+    'lm-studio': '🎛️',
+    'chatgpt': '💬',
+    'openai': '💬',
+    'claude': '🧠',
+    'anthropic': '🧠',
+    'gemini': '✨',
+    'google': '✨',
+    'perplexity': '🔍',
+    'jan': '🎯',
+    'gpt4all': '🌐',
+    'localai': '🖥️',
+    'llamafile': '📦',
+    'default': '🤖',
+};
+
+function getProviderIcon(name: string): string {
+    const normalized = name.toLowerCase().replace(/\s+/g, '-');
+    return PROVIDER_ICONS[normalized] || PROVIDER_ICONS.default;
 }
 
-const providersData: Provider[] = [
-    {
-        id: '1',
-        name: 'GitHub Copilot',
-        type: 'local',
-        status: 'online',
-        endpoint: 'VS Code Built-in',
-        sessions: 156,
-        icon: '🤖',
-        description: 'AI pair programmer integrated with VS Code',
-    },
-    {
-        id: '2',
-        name: 'Cursor',
-        type: 'local',
-        status: 'online',
-        endpoint: 'File-based',
-        sessions: 34,
-        icon: '⚡',
-        description: 'AI-first code editor with chat integration',
-    },
-    {
-        id: '3',
-        name: 'Ollama',
-        type: 'local',
-        status: 'online',
-        endpoint: 'http://localhost:11434',
-        sessions: 45,
-        icon: '🦙',
-        description: 'Run LLMs locally with easy model management',
-    },
-    {
-        id: '4',
-        name: 'LM Studio',
-        type: 'local',
-        status: 'offline',
-        endpoint: 'http://localhost:1234/v1',
-        sessions: 12,
-        icon: '🎛️',
-        description: 'Desktop app for running local LLMs',
-    },
-    {
-        id: '5',
-        name: 'ChatGPT',
-        type: 'cloud',
-        status: 'online',
-        endpoint: 'https://chat.openai.com',
-        sessions: 89,
-        icon: '💬',
-        description: 'OpenAI\'s conversational AI assistant',
-    },
-    {
-        id: '6',
-        name: 'Claude',
-        type: 'cloud',
-        status: 'online',
-        endpoint: 'https://claude.ai',
-        sessions: 67,
-        icon: '🧠',
-        description: 'Anthropic\'s helpful AI assistant',
-    },
-    {
-        id: '7',
-        name: 'Gemini',
-        type: 'cloud',
-        status: 'online',
-        endpoint: 'https://gemini.google.com',
-        sessions: 23,
-        icon: '✨',
-        description: 'Google\'s multimodal AI model',
-    },
-    {
-        id: '8',
-        name: 'Perplexity',
-        type: 'cloud',
-        status: 'online',
-        endpoint: 'https://www.perplexity.ai',
-        sessions: 15,
-        icon: '🔍',
-        description: 'AI-powered search and answer engine',
-    },
-    {
-        id: '9',
-        name: 'Jan.ai',
-        type: 'local',
-        status: 'offline',
-        endpoint: 'http://localhost:1337/v1',
-        sessions: 8,
-        icon: '🎯',
-        description: 'Open-source ChatGPT alternative',
-    },
-    {
-        id: '10',
-        name: 'GPT4All',
-        type: 'local',
-        status: 'offline',
-        endpoint: 'http://localhost:4891/v1',
-        sessions: 5,
-        icon: '🌐',
-        description: 'Free-to-use locally running LLMs',
-    },
-];
+interface ProviderCardProps {
+    provider: ApiProvider;
+    health?: ProviderHealth;
+    sessionCount: number;
+    onRefresh: () => void;
+}
 
-function ProviderCard({ provider }: { provider: Provider }) {
+function ProviderCard({ provider, health, sessionCount, onRefresh }: ProviderCardProps) {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
+        onRefresh();
         setTimeout(() => setIsRefreshing(false), 1000);
     };
+
+    const status = health?.status || provider.status || 'unknown';
+    const latency = health?.latency;
 
     return (
         <div className="bg-[hsl(var(--card))] rounded-xl p-5 border hover:border-[hsl(var(--primary)/0.5)] transition-colors">
             <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-[hsl(var(--muted))] rounded-xl flex items-center justify-center text-2xl">
-                        {provider.icon}
+                        {getProviderIcon(provider.name)}
                     </div>
                     <div>
                         <h3 className="font-semibold">{provider.name}</h3>
@@ -153,20 +81,25 @@ function ProviderCard({ provider }: { provider: Provider }) {
                                 </span>
                             )}
                             <span
-                                className={`flex items-center gap-1 text-xs ${provider.status === 'online'
+                                className={`flex items-center gap-1 text-xs ${status === 'connected'
                                         ? 'text-green-500'
-                                        : provider.status === 'offline'
+                                        : status === 'disconnected'
                                             ? 'text-red-500'
                                             : 'text-yellow-500'
                                     }`}
                             >
-                                {provider.status === 'online' ? (
+                                {status === 'connected' ? (
                                     <CheckCircle size={12} />
                                 ) : (
                                     <XCircle size={12} />
                                 )}
-                                {provider.status}
+                                {status}
                             </span>
+                            {latency && (
+                                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                    {latency}ms
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -179,25 +112,31 @@ function ProviderCard({ provider }: { provider: Provider }) {
                 </button>
             </div>
 
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mb-4">
-                {provider.description}
-            </p>
+            {provider.models && provider.models.length > 0 && (
+                <p className="text-sm text-[hsl(var(--muted-foreground))] mb-4">
+                    {provider.models.length} model{provider.models.length !== 1 ? 's' : ''} available
+                </p>
+            )}
 
-            <div className="text-xs text-[hsl(var(--muted-foreground))] mb-4 font-mono bg-[hsl(var(--muted))] px-2 py-1 rounded truncate">
-                {provider.endpoint}
-            </div>
+            {provider.endpoint && (
+                <div className="text-xs text-[hsl(var(--muted-foreground))] mb-4 font-mono bg-[hsl(var(--muted))] px-2 py-1 rounded truncate">
+                    {provider.endpoint}
+                </div>
+            )}
 
             <div className="flex items-center justify-between pt-4 border-t">
                 <span className="text-sm text-[hsl(var(--muted-foreground))]">
-                    {provider.sessions} sessions
+                    {sessionCount} sessions
                 </span>
                 <div className="flex gap-2">
                     <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors">
                         <Settings size={16} className="text-[hsl(var(--muted-foreground))]" />
                     </button>
-                    <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors">
-                        <ExternalLink size={16} className="text-[hsl(var(--muted-foreground))]" />
-                    </button>
+                    {provider.endpoint && (
+                        <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors">
+                            <ExternalLink size={16} className="text-[hsl(var(--muted-foreground))]" />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -205,27 +144,73 @@ function ProviderCard({ provider }: { provider: Provider }) {
 }
 
 export default function Providers() {
+    const { providers, providerHealth, sessions, isLoading, error, refetchProviders } = useApi();
     const [filter, setFilter] = useState<'all' | 'local' | 'cloud'>('all');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'connected' | 'disconnected'>('all');
 
-    const filteredProviders = providersData.filter((provider) => {
+    // Compute session counts per provider
+    const sessionCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        sessions.forEach((s) => {
+            counts.set(s.provider, (counts.get(s.provider) || 0) + 1);
+        });
+        return counts;
+    }, [sessions]);
+
+    // Create health lookup
+    const healthMap = useMemo(() => {
+        const map = new Map<string, ProviderHealth>();
+        providerHealth.forEach((h) => {
+            map.set(h.providerId, h);
+        });
+        return map;
+    }, [providerHealth]);
+
+    const filteredProviders = providers.filter((provider) => {
+        const health = healthMap.get(provider.id);
+        const status = health?.status || provider.status || 'unknown';
         const matchesType = filter === 'all' || provider.type === filter;
-        const matchesStatus = statusFilter === 'all' || provider.status === statusFilter;
+        const matchesStatus = statusFilter === 'all' ||
+            (statusFilter === 'connected' && status === 'connected') ||
+            (statusFilter === 'disconnected' && (status === 'disconnected' || status === 'error'));
         return matchesType && matchesStatus;
     });
 
-    const onlineCount = providersData.filter((p) => p.status === 'online').length;
-    const localCount = providersData.filter((p) => p.type === 'local').length;
-    const cloudCount = providersData.filter((p) => p.type === 'cloud').length;
+    const onlineCount = providers.filter((p) => {
+        const health = healthMap.get(p.id);
+        return (health?.status || p.status) === 'connected';
+    }).length;
+    const localCount = providers.filter((p) => p.type === 'local').length;
+    const cloudCount = providers.filter((p) => p.type === 'cloud').length;
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Failed to Load Providers</h3>
+                    <p className="text-[hsl(var(--muted-foreground))]">{error.message}</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold">Providers</h1>
-                <p className="text-[hsl(var(--muted-foreground))] mt-1">
-                    Manage your LLM providers and connections
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Providers</h1>
+                    <p className="text-[hsl(var(--muted-foreground))] mt-1">
+                        Manage your LLM providers and connections
+                    </p>
+                </div>
+                {isLoading && (
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Updating...</span>
+                    </div>
+                )}
             </div>
 
             {/* Stats */}
@@ -237,7 +222,7 @@ export default function Providers() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold">{onlineCount}</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">Online</p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">Connected</p>
                         </div>
                     </div>
                 </div>
@@ -282,7 +267,7 @@ export default function Providers() {
                     ))}
                 </div>
                 <div className="flex rounded-lg border overflow-hidden">
-                    {(['all', 'online', 'offline'] as const).map((status) => (
+                    {(['all', 'connected', 'disconnected'] as const).map((status) => (
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
@@ -299,14 +284,32 @@ export default function Providers() {
 
             {/* Providers Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredProviders.map((provider) => (
-                    <ProviderCard key={provider.id} provider={provider} />
-                ))}
+                {filteredProviders.length > 0 ? (
+                    filteredProviders.map((provider) => (
+                        <ProviderCard
+                            key={provider.id}
+                            provider={provider}
+                            health={healthMap.get(provider.id)}
+                            sessionCount={sessionCounts.get(provider.name) || 0}
+                            onRefresh={refetchProviders}
+                        />
+                    ))
+                ) : (
+                    <div className="col-span-full text-center py-16 bg-[hsl(var(--card))] rounded-xl border">
+                        <Server className="w-12 h-12 mx-auto mb-4 text-[hsl(var(--muted-foreground))] opacity-50" />
+                        <h3 className="text-lg font-semibold mb-2">No Providers Found</h3>
+                        <p className="text-[hsl(var(--muted-foreground))]">
+                            {filter !== 'all' || statusFilter !== 'all'
+                                ? 'Try adjusting your filters'
+                                : 'Configure providers to get started'}
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* Summary */}
             <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                Showing {filteredProviders.length} of {providersData.length} providers
+                Showing {filteredProviders.length} of {providers.length} providers
             </div>
         </div>
     );

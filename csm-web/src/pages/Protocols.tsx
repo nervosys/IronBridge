@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Server,
     Plus,
@@ -33,9 +34,11 @@ import {
     Target,
     Layers,
     Activity,
-    Link,
+    Link as LinkIcon,
     BookOpen,
     ExternalLink,
+    Users,
+    Bot,
 } from 'lucide-react';
 
 // Protocol categories for multi-agent systems
@@ -591,7 +594,7 @@ export default function Protocols() {
             case 'brain': return <Brain size={20} />;
             case 'layers': return <Layers size={20} />;
             case 'activity': return <Activity size={20} />;
-            case 'link': return <Link size={20} />;
+            case 'link': return <LinkIcon size={20} />;
             case 'zap': return <Zap size={20} />;
             default: return <Server size={20} />;
         }
@@ -764,6 +767,35 @@ export default function Protocols() {
                                 {protocolCategories.filter(p => ['Communication', 'Discovery & Coordination', 'Tool Integration'].includes(p.category)).length}
                             </p>
                             <p className="text-sm text-[hsl(var(--muted-foreground))]">protocols</p>
+                        </div>
+                    </div>
+
+                    {/* Integration Quick Links */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Zap size={18} className="text-[hsl(var(--primary))]" />
+                                <span className="font-medium text-[hsl(var(--foreground))]">Deploy Protocols</span>
+                            </div>
+                            <span className="text-xs text-[hsl(var(--muted-foreground))]">Configure protocols in your agents and swarms</span>
+                        </div>
+                        <div className="flex items-center gap-4 mt-3">
+                            <Link
+                                to="/agents"
+                                className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors group"
+                            >
+                                <Bot size={18} className="text-[hsl(var(--primary))] group-hover:scale-110 transition-transform" />
+                                <span className="text-sm text-[hsl(var(--foreground))]">Configure Agents</span>
+                                <ExternalLink size={14} className="text-[hsl(var(--muted-foreground))]" />
+                            </Link>
+                            <Link
+                                to="/swarms"
+                                className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors group"
+                            >
+                                <Users size={18} className="text-purple-500 group-hover:scale-110 transition-transform" />
+                                <span className="text-sm text-[hsl(var(--foreground))]">Configure Swarms</span>
+                                <ExternalLink size={14} className="text-[hsl(var(--muted-foreground))]" />
+                            </Link>
                         </div>
                     </div>
 

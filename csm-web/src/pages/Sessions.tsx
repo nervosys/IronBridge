@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, MessageSquare, Calendar, Bot, Filter } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, MessageSquare, Calendar, Bot, Filter, AlertCircle, Loader2, FileText } from 'lucide-react';
 import {
     LineChart,
     Line,
@@ -9,95 +9,121 @@ import {
     Tooltip,
     ResponsiveContainer,
 } from 'recharts';
+import { useApi } from '../context/ApiContext';
 
-// Mock timeline data
-const timelineData = [
-    { time: '00:00', messages: 2 },
-    { time: '04:00', messages: 0 },
-    { time: '08:00', messages: 8 },
-    { time: '10:00', messages: 15 },
-    { time: '12:00', messages: 12 },
-    { time: '14:00', messages: 23 },
-    { time: '16:00', messages: 18 },
-    { time: '18:00', messages: 9 },
-    { time: '20:00', messages: 14 },
-    { time: '22:00', messages: 6 },
-];
+// Format timestamp to readable date
+function formatDate(timestamp: number): string {
+    return new Date(timestamp).toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
 
-// Mock sessions data
-const sessionsData = [
-    {
-        id: 'abc123-def456',
-        title: 'Implementing authentication flow',
-        provider: 'GitHub Copilot',
-        workspace: 'chat-session-manager',
-        messages: 45,
-        lastModified: '2024-12-11 15:30',
-        preview: 'How can I implement JWT authentication with refresh tokens...',
-    },
-    {
-        id: 'ghi789-jkl012',
-        title: 'React component optimization',
-        provider: 'ChatGPT',
-        workspace: 'web-app',
-        messages: 23,
-        lastModified: '2024-12-11 14:15',
-        preview: "I'm having performance issues with my React component...",
-    },
-    {
-        id: 'mno345-pqr678',
-        title: 'Database schema design',
-        provider: 'Claude',
-        workspace: 'api-server',
-        messages: 67,
-        lastModified: '2024-12-11 12:00',
-        preview: 'What would be the best approach for designing a schema for...',
-    },
-    {
-        id: 'stu901-vwx234',
-        title: 'Rust error handling patterns',
-        provider: 'GitHub Copilot',
-        workspace: 'chat-session-manager',
-        messages: 31,
-        lastModified: '2024-12-11 10:45',
-        preview: 'How do I properly use the ? operator with custom error types...',
-    },
-    {
-        id: 'yza567-bcd890',
-        title: 'API endpoint debugging',
-        provider: 'Ollama',
-        workspace: 'api-server',
-        messages: 18,
-        lastModified: '2024-12-10 18:30',
-        preview: 'My POST endpoint is returning 500 errors when...',
-    },
-];
+// Get today's activity data from sessions
+function getTodayActivityData(sessions: { updatedAt: number }[]) {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-const providers = ['All', 'GitHub Copilot', 'ChatGPT', 'Claude', 'Ollama', 'Cursor'];
+    // Group sessions by hour
+    const hourlyData = new Map<string, number>();
+    for (let i = 0; i < 24; i += 2) {
+        const hour = i.toString().padStart(2, '0') + ':00';
+        hourlyData.set(hour, 0);
+    }
+
+    sessions.forEach((session) => {
+        if (session.updatedAt >= startOfDay) {
+            const hour = new Date(session.updatedAt).getHours();
+            const roundedHour = Math.floor(hour / 2) * 2;
+            const key = roundedHour.toString().padStart(2, '0') + ':00';
+            hourlyData.set(key, (hourlyData.get(key) || 0) + 1);
+        }
+    });
+
+    return Array.from(hourlyData.entries()).map(([time, messages]) => ({
+        time,
+        messages,
+    }));
+}
 
 export default function Sessions() {
+    const { sessions, workspaces, isLoading, error } = useApi();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedProvider, setSelectedProvider] = useState('All');
     const [selectedSession, setSelectedSession] = useState<string | null>(null);
 
+    // Get unique providers from sessions
+    const availableProviders = useMemo(() => {
+        const providerSet = new Set(sessions.map((s) => s.provider));
+        return ['All', ...Array.from(providerSet)];
+    }, [sessions]);
+
+    // Create workspace lookup map
+    const workspaceMap = useMemo(() => {
+        const map = new Map<string, string>();
+        workspaces.forEach((ws) => {
+            map.set(ws.id, ws.name || ws.path || ws.id);
+        });
+        return map;
+    }, [workspaces]);
+
+    // Transform sessions for display
+    const sessionsData = useMemo(() => {
+        return sessions.map((session) => ({
+            id: session.id,
+            title: session.title || 'Untitled Session',
+            provider: session.provider,
+            workspace: workspaceMap.get(session.workspaceId || '') || 'Unknown',
+            messages: session.messageCount,
+            lastModified: formatDate(session.updatedAt),
+            preview: '', // Would need to fetch first message
+            model: session.model,
+        }));
+    }, [sessions, workspaceMap]);
+
+    // Get timeline data
+    const timelineData = useMemo(() => getTodayActivityData(sessions), [sessions]);
+
     const filteredSessions = sessionsData.filter((session) => {
         const matchesSearch =
             session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            session.preview.toLowerCase().includes(searchQuery.toLowerCase()) ||
             session.workspace.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesProvider =
             selectedProvider === 'All' || session.provider === selectedProvider;
         return matchesSearch && matchesProvider;
     });
 
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Failed to Load Sessions</h3>
+                    <p className="text-[hsl(var(--muted-foreground))]">{error.message}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold">Sessions</h1>
-                <p className="text-[hsl(var(--muted-foreground))] mt-1">
-                    Browse and search your chat sessions
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Sessions</h1>
+                    <p className="text-[hsl(var(--muted-foreground))] mt-1">
+                        Browse and search your chat sessions
+                    </p>
+                </div>
+                {isLoading && (
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Updating...</span>
+                    </div>
+                )}
             </div>
 
             {/* Timeline Chart */}
@@ -151,7 +177,7 @@ export default function Sessions() {
                         onChange={(e) => setSelectedProvider(e.target.value)}
                         className="px-4 py-2 rounded-lg border bg-[hsl(var(--card))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
                     >
-                        {providers.map((provider) => (
+                        {availableProviders.map((provider) => (
                             <option key={provider} value={provider}>
                                 {provider}
                             </option>
@@ -162,57 +188,71 @@ export default function Sessions() {
 
             {/* Sessions List */}
             <div className="space-y-3">
-                {filteredSessions.map((session) => (
-                    <div
-                        key={session.id}
-                        onClick={() => setSelectedSession(session.id === selectedSession ? null : session.id)}
-                        className={`bg-[hsl(var(--card))] rounded-xl p-5 border cursor-pointer transition-all ${selectedSession === session.id
+                {filteredSessions.length > 0 ? (
+                    filteredSessions.map((session) => (
+                        <div
+                            key={session.id}
+                            onClick={() => setSelectedSession(session.id === selectedSession ? null : session.id)}
+                            className={`bg-[hsl(var(--card))] rounded-xl p-5 border cursor-pointer transition-all ${selectedSession === session.id
                                 ? 'border-[hsl(var(--primary))] ring-2 ring-[hsl(var(--primary)/0.2)]'
                                 : 'hover:border-[hsl(var(--primary)/0.5)]'
-                            }`}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <div className="flex-1">
-                                <h3 className="font-semibold mb-1">{session.title}</h3>
-                                <div className="flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
-                                    <span className="flex items-center gap-1">
-                                        <Bot size={14} />
-                                        {session.provider}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <MessageSquare size={14} />
-                                        {session.messages} messages
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <Calendar size={14} />
-                                        {session.lastModified}
-                                    </span>
+                                }`}
+                        >
+                            <div className="flex items-start justify-between mb-3">
+                                <div className="flex-1">
+                                    <h3 className="font-semibold mb-1">{session.title}</h3>
+                                    <div className="flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                        <span className="flex items-center gap-1">
+                                            <Bot size={14} />
+                                            {session.provider}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <MessageSquare size={14} />
+                                            {session.messages} messages
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <Calendar size={14} />
+                                            {session.lastModified}
+                                        </span>
+                                    </div>
                                 </div>
+                                <span className="text-xs px-2 py-1 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+                                    {session.workspace}
+                                </span>
                             </div>
-                            <span className="text-xs px-2 py-1 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
-                                {session.workspace}
-                            </span>
+
+                            {session.model && (
+                                <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">
+                                    Model: {session.model}
+                                </p>
+                            )}
+
+                            {selectedSession === session.id && (
+                                <div className="mt-4 pt-4 border-t flex gap-2">
+                                    <button className="px-4 py-2 text-sm rounded-lg bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.9)] transition-colors">
+                                        Open Session
+                                    </button>
+                                    <button className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
+                                        Export
+                                    </button>
+                                    <button className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
+                                        Merge
+                                    </button>
+                                </div>
+                            )}
                         </div>
-
-                        <p className="text-sm text-[hsl(var(--muted-foreground))] line-clamp-2">
-                            {session.preview}
+                    ))
+                ) : (
+                    <div className="text-center py-16 bg-[hsl(var(--card))] rounded-xl border">
+                        <FileText className="w-12 h-12 mx-auto mb-4 text-[hsl(var(--muted-foreground))] opacity-50" />
+                        <h3 className="text-lg font-semibold mb-2">No Sessions Found</h3>
+                        <p className="text-[hsl(var(--muted-foreground))]">
+                            {searchQuery || selectedProvider !== 'All'
+                                ? 'Try adjusting your search or filter criteria'
+                                : 'Start chatting to see your sessions here'}
                         </p>
-
-                        {selectedSession === session.id && (
-                            <div className="mt-4 pt-4 border-t flex gap-2">
-                                <button className="px-4 py-2 text-sm rounded-lg bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.9)] transition-colors">
-                                    Open Session
-                                </button>
-                                <button className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
-                                    Export
-                                </button>
-                                <button className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
-                                    Merge
-                                </button>
-                            </div>
-                        )}
                     </div>
-                ))}
+                )}
             </div>
 
             {/* Summary */}
