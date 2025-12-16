@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getSessions, Session } from '../api';
 import { RootStackParamList } from '../navigation/types';
 import { formatDate } from '../utils/formatDate';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = {
     route: RouteProp<RootStackParamList, 'WorkspaceSessions'>;
@@ -23,6 +24,7 @@ type Props = {
 
 export function WorkspaceSessionsScreen({ route, navigation }: Props) {
     const { workspaceId } = route.params;
+    const { colors } = useTheme();
 
     const {
         data: sessions,
@@ -37,7 +39,7 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
 
     const renderSession = ({ item }: { item: Session }) => (
         <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, { backgroundColor: colors.card }]}
             onPress={() =>
                 navigation.navigate('SessionDetail', {
                     sessionId: item.id,
@@ -45,16 +47,16 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
                 })
             }
         >
-            <Text style={styles.cardTitle} numberOfLines={2}>
+            <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>
                 {item.title || 'Untitled Session'}
             </Text>
-            <Text style={styles.modelText}>{item.model || item.provider}</Text>
+            <Text style={[styles.modelText, { color: colors.textSecondary }]}>{item.model || item.provider}</Text>
             <View style={styles.cardFooter}>
                 <View style={styles.statsContainer}>
-                    <Ionicons name="chatbubbles-outline" size={14} color="#8E8E93" />
-                    <Text style={styles.statsText}>{item.messageCount} messages</Text>
+                    <Ionicons name="chatbubbles-outline" size={14} color={colors.textTertiary} />
+                    <Text style={[styles.statsText, { color: colors.textTertiary }]}>{item.messageCount} messages</Text>
                 </View>
-                <Text style={styles.dateText}>
+                <Text style={[styles.dateText, { color: colors.textTertiary }]}>
                     {formatDate(item.updatedAt)}
                 </Text>
             </View>
@@ -63,18 +65,18 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
 
     if (isLoading) {
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#007AFF" />
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
 
     if (error) {
         return (
-            <View style={styles.centered}>
-                <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
-                <Text style={styles.errorText}>Failed to load sessions</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.text }]}>Failed to load sessions</Text>
+                <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={() => refetch()}>
                     <Text style={styles.retryText}>Retry</Text>
                 </TouchableOpacity>
             </View>
@@ -82,19 +84,19 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
     }
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <FlatList
                 data={sessions}
                 renderItem={renderSession}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.list}
                 refreshControl={
-                    <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+                    <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />
                 }
                 ListEmptyComponent={
                     <View style={styles.empty}>
-                        <Ionicons name="chatbubbles-outline" size={48} color="#8E8E93" />
-                        <Text style={styles.emptyText}>No sessions in this workspace</Text>
+                        <Ionicons name="chatbubbles-outline" size={48} color={colors.textTertiary} />
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No sessions in this workspace</Text>
                     </View>
                 }
             />
