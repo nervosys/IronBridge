@@ -1,58 +1,124 @@
-// API Types and Interfaces for CSM Backend
-// These types mirror the Rust backend models
+// =============================================================================
+// CSM Web - API Types
+// =============================================================================
+// Re-exports shared types from @csm/shared package
+
+// Re-export all shared types
+export type {
+    // Core data models
+    Workspace,
+    Session,
+    SessionWithMessages,
+    Message,
+    ToolInvocation,
+    FileChange,
+
+    // Provider types
+    Provider,
+    ProviderHealth,
+    ProviderStatus,
+
+    // API response types
+    ApiResponse,
+    ApiError,
+    PaginatedResponse,
+    SessionFilter,
+    WorkspaceFilter,
+    SearchResult,
+
+    // Statistics
+    Statistics,
+
+    // Chat/Completion types
+    ChatMessage,
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatChoice,
+    TokenUsage,
+    StreamChunk,
+    StreamDelta,
+
+    // Agent types
+    Agent,
+    AgentCapability,
+    AgentTask,
+    AgentMessage,
+    AgentRun,
+    Swarm,
+    SwarmAgent,
+
+    // MCP types
+    McpServer,
+    McpTool,
+    McpToolCall,
+    McpToolResult,
+    McpResource,
+    McpPrompt,
+    McpPromptArgument,
+
+    // Settings
+    ThemeMode,
+    AppSettings,
+} from '@csm/shared';
+
+// Re-export some as values if needed
+export { ThemeMode } from '@csm/shared';
 
 // =============================================================================
-// Core Data Models
+// Web-Specific Types (extend shared types if needed)
 // =============================================================================
 
 /**
- * Workspace representing a VS Code workspace or project directory
+ * WebSocket message for real-time updates
  */
-export interface Workspace {
-    id: string;
-    name: string;
-    path: string | null;
-    provider: string;
-    providerWorkspaceId: string | null;
-    createdAt: number; // Unix timestamp
-    updatedAt: number;
-    metadata: Record<string, unknown> | null;
-    // Computed fields from discovery
-    sessionCount?: number;
-    hasChats?: boolean;
+export interface WebSocketMessage {
+    type: 'session_update' | 'message_update' | 'workspace_update' | 'connection_status';
+    payload: unknown;
+    timestamp: number;
 }
 
 /**
- * Chat session containing messages
+ * UI state for session viewer
  */
-export interface Session {
-    id: string;
-    workspaceId: string | null;
-    provider: string;
-    providerSessionId: string | null;
-    title: string;
-    model: string | null;
-    messageCount: number;
-    tokenCount: number | null;
-    createdAt: number;
-    updatedAt: number;
-    archived: boolean;
-    metadata: Record<string, unknown> | null;
+export interface SessionViewState {
+    selectedMessageId?: string;
+    expandedMessages: Set<string>;
+    searchQuery?: string;
+    filterRole?: 'user' | 'assistant' | 'system';
 }
 
 /**
- * Message within a session
+ * UI state for workspace browser
  */
-export interface Message {
-    id: string;
-    sessionId: string;
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-    model: string | null;
-    tokenCount: number | null;
-    createdAt: number;
-    metadata: Record<string, unknown> | null;
+export interface WorkspaceBrowserState {
+    selectedWorkspaceId?: string;
+    expandedWorkspaces: Set<string>;
+    sortBy: 'name' | 'updated' | 'sessions';
+    sortOrder: 'asc' | 'desc';
 }
+
+/**
+ * Chart data point for visualizations
+ */
+export interface ChartDataPoint {
+    label: string;
+    value: number;
+    color?: string;
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * Time series data for activity charts
+ */
+export interface TimeSeriesPoint {
+    timestamp: number;
+    value: number;
+    label?: string;
+}
+
+// =============================================================================
+// Web-Specific Extended Types
+// =============================================================================
 
 /**
  * Checkpoint/snapshot of a session
@@ -83,28 +149,9 @@ export interface ShareLink {
 
 export type ShareLinkProvider = 'github_gist' | 'pastebin' | 'hastebin' | 'custom';
 
-// =============================================================================
-// Provider Models
-// =============================================================================
-
 /**
- * LLM provider configuration
+ * Provider settings (web-specific extended version)
  */
-export interface Provider {
-    id: string;
-    name: string;
-    type: 'local' | 'cloud';
-    icon: string;
-    color: string;
-    endpoint: string | null;
-    apiKey: string | null;
-    models: string[];
-    status: ProviderStatus;
-    settings: ProviderSettings;
-}
-
-export type ProviderStatus = 'connected' | 'disconnected' | 'error' | 'unknown';
-
 export interface ProviderSettings {
     enabled: boolean;
     priority: number;
@@ -114,60 +161,8 @@ export interface ProviderSettings {
 }
 
 /**
- * Provider health check result
+ * Swarm workflow types
  */
-export interface ProviderHealth {
-    providerId: string;
-    status: ProviderStatus;
-    latency: number | null;
-    lastChecked: number;
-    error: string | null;
-    version: string | null;
-    models: string[];
-}
-
-// =============================================================================
-// Agent & Swarm Models
-// =============================================================================
-
-/**
- * AI Agent configuration
- */
-export interface Agent {
-    id: string;
-    name: string;
-    description: string | null;
-    systemPrompt: string;
-    model: string;
-    provider: string;
-    tools: string[];
-    temperature: number;
-    maxTokens: number | null;
-    createdAt: number;
-    updatedAt: number;
-    metadata: Record<string, unknown> | null;
-}
-
-/**
- * Multi-agent swarm configuration
- */
-export interface Swarm {
-    id: string;
-    name: string;
-    description: string | null;
-    agents: SwarmAgent[];
-    workflow: SwarmWorkflow;
-    status: SwarmStatus;
-    createdAt: number;
-    updatedAt: number;
-}
-
-export interface SwarmAgent {
-    agentId: string;
-    role: string;
-    position: { x: number; y: number };
-}
-
 export interface SwarmWorkflow {
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
@@ -221,23 +216,8 @@ export interface GitRepository {
 }
 
 // =============================================================================
-// Statistics & Analytics Models
+// Statistics Extended Types
 // =============================================================================
-
-/**
- * Overview statistics
- */
-export interface Statistics {
-    totalSessions: number;
-    totalMessages: number;
-    totalWorkspaces: number;
-    totalProviders: number;
-    sessionsThisWeek: number;
-    messagesThisWeek: number;
-    sessionsByProvider: ProviderCount[];
-    messagesByDay: DayCount[];
-    topWorkspaces: WorkspaceStats[];
-}
 
 export interface ProviderCount {
     provider: string;
@@ -257,138 +237,6 @@ export interface WorkspaceStats {
     sessionCount: number;
     messageCount: number;
     lastActive: number;
-}
-
-// =============================================================================
-// Search & Filter Models
-// =============================================================================
-
-/**
- * Full-text search result
- */
-export interface SearchResult {
-    type: 'session' | 'message' | 'workspace';
-    id: string;
-    title: string;
-    snippet: string;
-    highlights: string[];
-    score: number;
-    timestamp: number;
-    provider?: string;
-    workspaceId?: string;
-    sessionId?: string;
-}
-
-/**
- * Session filter options
- */
-export interface SessionFilter {
-    workspaceId?: string;
-    provider?: string;
-    model?: string;
-    archived?: boolean;
-    dateFrom?: number;
-    dateTo?: number;
-    search?: string;
-    sortBy?: 'createdAt' | 'updatedAt' | 'messageCount' | 'title';
-    sortOrder?: 'asc' | 'desc';
-    limit?: number;
-    offset?: number;
-}
-
-/**
- * Workspace filter options
- */
-export interface WorkspaceFilter {
-    provider?: string;
-    hasChats?: boolean;
-    search?: string;
-    sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'sessionCount';
-    sortOrder?: 'asc' | 'desc';
-    limit?: number;
-    offset?: number;
-}
-
-// =============================================================================
-// API Request/Response Types
-// =============================================================================
-
-/**
- * Paginated response wrapper
- */
-export interface PaginatedResponse<T> {
-    items: T[];
-    total: number;
-    limit: number;
-    offset: number;
-    hasMore: boolean;
-}
-
-/**
- * API error response
- */
-export interface ApiError {
-    code: string;
-    message: string;
-    details?: Record<string, unknown>;
-}
-
-/**
- * Generic API response
- */
-export interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: ApiError;
-}
-
-// =============================================================================
-// Chat Completion Types (for streaming)
-// =============================================================================
-
-/**
- * Chat completion request
- */
-export interface ChatCompletionRequest {
-    provider: string;
-    model: string;
-    messages: ChatCompletionMessage[];
-    temperature?: number;
-    maxTokens?: number;
-    stream?: boolean;
-    sessionId?: string;
-}
-
-export interface ChatCompletionMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-}
-
-/**
- * Chat completion response (non-streaming)
- */
-export interface ChatCompletionResponse {
-    id: string;
-    provider: string;
-    model: string;
-    message: ChatCompletionMessage;
-    usage: TokenUsage;
-    finishReason: 'stop' | 'length' | 'tool_calls' | 'error';
-}
-
-export interface TokenUsage {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-}
-
-/**
- * Streaming chunk
- */
-export interface StreamChunk {
-    id: string;
-    delta: string;
-    finishReason?: 'stop' | 'length' | 'tool_calls' | 'error';
 }
 
 // =============================================================================
@@ -428,24 +276,8 @@ export interface ExportOptions {
 }
 
 // =============================================================================
-// Settings Types
+// Provider Account Types
 // =============================================================================
-
-/**
- * Application settings
- */
-export interface AppSettings {
-    theme: 'light' | 'neutral' | 'dark';
-    syntaxTheme: string;
-    fontSize: number;
-    showTimestamps: boolean;
-    soundEnabled: boolean;
-    streamResponses: boolean;
-    defaultProvider: string | null;
-    defaultModel: string | null;
-    autoSave: boolean;
-    harvestPath: string | null;
-}
 
 /**
  * Provider account
@@ -468,13 +300,7 @@ export interface ProviderAccount {
 // WebSocket Events
 // =============================================================================
 
-export type WebSocketEvent =
-    | { type: 'connected' }
-    | { type: 'disconnected' }
-    | { type: 'session_created'; session: Session }
-    | { type: 'session_updated'; session: Session }
-    | { type: 'session_deleted'; sessionId: string }
-    | { type: 'message_created'; message: Message }
+import type { Session, Message, ProviderStatus, ApiError } from '@csm/shared';
     | { type: 'provider_status'; provider: string; status: ProviderStatus }
     | { type: 'swarm_status'; swarmId: string; status: SwarmStatus }
     | { type: 'sync_progress'; progress: number; total: number }

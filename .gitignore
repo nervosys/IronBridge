@@ -49,6 +49,9 @@ __pycache__/
 .env.*
 venv/
 
+# Shared package dependencies (built artifacts stay)
+csm-shared/node_modules/
+
 # Secrets and credentials (never commit these)
 *.pem
 *.key
