@@ -30,7 +30,7 @@ import {
     Area,
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
-import { formatRelativeTime } from '@csm/shared';
+import { formatRelativeTime, formatTime } from '@csm/shared';
 
 // Activity log type for tracking agent actions
 interface ActivityLogEntry {
@@ -78,7 +78,7 @@ export default function Agents() {
             );
             const tokens = hourSessions.reduce((sum, s) => sum + (s.tokenCount || 0), 0);
             data.push({
-                time: i === 0 ? 'Now' : hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: i === 0 ? 'Now' : formatTime(hour),
                 tokens,
             });
         }
@@ -90,7 +90,7 @@ export default function Agents() {
         return sessions
             .slice(0, 6)
             .map(session => ({
-                time: new Date(session.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: formatTime(session.updatedAt),
                 agent: session.provider,
                 action: `Session "${session.title}" updated (${session.messageCount} messages)`,
                 type: 'info' as const,

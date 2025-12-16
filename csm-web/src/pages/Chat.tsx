@@ -37,6 +37,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import hljs from 'highlight.js';
+import { formatTime } from '@csm/shared';
 import '../styles/syntax-themes.css';
 import { useApi } from '../context/ApiContext';
 import {
@@ -64,11 +65,6 @@ const syntaxThemes = [
     { id: 'solarized-light', name: 'Solarized Light', type: 'light' },
     { id: 'vs-light', name: 'VS Light', type: 'light' },
 ];
-
-// Helper to format timestamps
-function formatTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
 export default function Chat() {
     // API context data

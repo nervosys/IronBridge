@@ -30,7 +30,7 @@ import {
     useStartSwarm,
     usePauseSwarm,
 } from '../hooks/useApi';
-import { formatRelativeTime } from '@csm/shared';
+import { formatRelativeTime, formatDate } from '@csm/shared';
 import type { Swarm } from '../api/types';
 
 // Agent role templates
@@ -337,7 +337,7 @@ export default function Swarms() {
                                 <div className="flex items-center gap-2 text-sm">
                                     <span className="text-[hsl(var(--muted-foreground))]">Created:</span>
                                     <span className="text-[hsl(var(--foreground))]">
-                                        {new Date(selectedSwarm.createdAt).toLocaleDateString()}
+                                        {formatDate(selectedSwarm.createdAt)}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm">
