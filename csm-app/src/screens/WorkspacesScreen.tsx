@@ -74,7 +74,7 @@ export function WorkspacesScreen({ navigation }: Props) {
                         <Text style={[styles.badgeText, { color: colors.primary }]}>{item.provider}</Text>
                     </View>
                     <View style={[styles.sessionBadge, { backgroundColor: isDark ? '#38383A' : '#F0F0F5' }]}>
-                        <Text style={[styles.sessionBadgeText, { color: colors.textSecondary }]}>{item.session_count} sessions</Text>
+                        <Text style={[styles.sessionBadgeText, { color: colors.textSecondary }]}>{item.sessionCount ?? 0} sessions</Text>
                     </View>
                 </View>
             </TouchableOpacity>
