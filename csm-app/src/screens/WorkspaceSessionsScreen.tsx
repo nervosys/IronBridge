@@ -52,10 +52,10 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
             <View style={styles.cardFooter}>
                 <View style={styles.statsContainer}>
                     <Ionicons name="chatbubbles-outline" size={14} color="#8E8E93" />
-                    <Text style={styles.statsText}>{item.message_count} messages</Text>
+                    <Text style={styles.statsText}>{item.messageCount} messages</Text>
                 </View>
                 <Text style={styles.dateText}>
-                    {formatDate(item.updated_at)}
+                    {formatDate(item.updatedAt)}
                 </Text>
             </View>
         </TouchableOpacity>

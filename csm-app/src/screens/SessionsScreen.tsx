@@ -95,10 +95,10 @@ export function SessionsScreen({ navigation }: Props) {
             <View style={styles.cardFooter}>
                 <View style={styles.statsContainer}>
                     <Ionicons name="chatbubbles-outline" size={14} color={colors.textTertiary} />
-                    <Text style={[styles.statsText, { color: colors.textTertiary }]}>{item.message_count} messages</Text>
+                    <Text style={[styles.statsText, { color: colors.textTertiary }]}>{item.messageCount} messages</Text>
                 </View>
                 <Text style={[styles.dateText, { color: colors.textTertiary }]}>
-                    {formatDate(item.updated_at)}
+                    {formatDate(item.updatedAt)}
                 </Text>
             </View>
         </TouchableOpacity>

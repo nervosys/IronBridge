@@ -64,10 +64,10 @@ export function SearchScreen({ navigation }: Props) {
             <View style={styles.resultMeta}>
                 <Text style={[styles.metaText, { color: colors.textTertiary }]}>{item.provider}</Text>
                 <Text style={[styles.metaText, { color: colors.textTertiary }]}>•</Text>
-                <Text style={[styles.metaText, { color: colors.textTertiary }]}>{item.message_count} messages</Text>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>{item.messageCount} messages</Text>
                 <Text style={[styles.metaText, { color: colors.textTertiary }]}>•</Text>
                 <Text style={[styles.metaText, { color: colors.textTertiary }]}>
-                    {new Date(item.updated_at).toLocaleDateString()}
+                    {new Date(item.updatedAt).toLocaleDateString()}
                 </Text>
             </View>
         </TouchableOpacity>

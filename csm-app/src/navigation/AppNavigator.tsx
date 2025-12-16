@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import {
+    OverviewScreen,
     WorkspacesScreen,
     SessionsScreen,
     SessionDetailScreen,
@@ -20,6 +21,35 @@ import { useTheme } from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
+
+function OverviewStack() {
+    return (
+        <Stack.Navigator>
+            <Stack.Screen
+                name="Overview"
+                component={OverviewScreen}
+                options={{ title: 'Overview' }}
+            />
+            <Stack.Screen
+                name="Sessions"
+                component={SessionsScreen}
+                options={{ title: 'All Sessions' }}
+            />
+            <Stack.Screen
+                name="Workspaces"
+                component={WorkspacesScreen}
+                options={{ title: 'Workspaces' }}
+            />
+            <Stack.Screen
+                name="SessionDetail"
+                component={SessionDetailScreen}
+                options={({ route }) => ({
+                    title: route.params.sessionTitle || 'Session',
+                })}
+            />
+        </Stack.Navigator>
+    );
+}
 
 function WorkspacesStack() {
     return (
@@ -157,6 +187,9 @@ export function AppNavigator() {
                         let iconName: keyof typeof Ionicons.glyphMap;
 
                         switch (route.name) {
+                            case 'OverviewTab':
+                                iconName = focused ? 'home' : 'home-outline';
+                                break;
                             case 'WorkspacesTab':
                                 iconName = focused ? 'folder' : 'folder-outline';
                                 break;
@@ -190,14 +223,9 @@ export function AppNavigator() {
                 })}
             >
                 <Tab.Screen
-                    name="WorkspacesTab"
-                    component={WorkspacesStack}
-                    options={{ title: 'Workspaces' }}
-                />
-                <Tab.Screen
-                    name="SessionsTab"
-                    component={SessionsStack}
-                    options={{ title: 'Sessions' }}
+                    name="OverviewTab"
+                    component={OverviewStack}
+                    options={{ title: 'Home' }}
                 />
                 <Tab.Screen
                     name="ChatTab"

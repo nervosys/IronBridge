@@ -77,24 +77,24 @@ const FileChangeCard = ({ change, index }: { change: FileChange; index: number }
     const [expanded, setExpanded] = useState(false);
 
     const fileType = typeof change.type === 'string' ? change.type : 'change';
-    const filePath = typeof change.file_path === 'string' ? change.file_path : '';
+    const filePath = typeof change.filePath === 'string' ? change.filePath : '';
     const fileName = getFileName(filePath);
 
     // Tool info for when path isn't available
-    const toolName = (change as any).tool_name as string | undefined;
+    const toolName = (change as any).toolName as string | undefined;
     const note = (change as any).note as string | undefined;
 
     // Get diff or content changes
-    const hasDiff = change.diff_unified || change.old_string || change.new_string || change.old_content || change.new_content;
-    const diffContent = change.diff_unified || '';
-    const oldContent = change.old_string || change.old_content || '';
-    const newContent = change.new_string || change.new_content || '';
+    const hasDiff = change.diffUnified || change.oldString || change.newString || change.oldContent || change.newContent;
+    const diffContent = change.diffUnified || '';
+    const oldContent = change.oldString || change.oldContent || '';
+    const newContent = change.newString || change.newContent || '';
 
     // Terminal command
     const commandStr = typeof change.command === 'string'
         ? change.command
         : (change.command as any)?.original || '';
-    const exitCode = change.exit_code;
+    const exitCode = change.exitCode;
 
     return (
         <View style={styles.fileChangeCard}>
@@ -218,15 +218,15 @@ export function SessionDetailScreen({ route }: Props) {
         }> = [];
 
         session.messages.forEach((msg, msgIdx) => {
-            if (msg.tool_invocations) {
-                msg.tool_invocations.forEach(tool => {
-                    if (tool.file_changes && tool.file_changes.length > 0) {
-                        tool.file_changes.forEach(fc => {
+            if (msg.toolInvocations) {
+                msg.toolInvocations.forEach(tool => {
+                    if (tool.fileChanges && tool.fileChanges.length > 0) {
+                        tool.fileChanges.forEach(fc => {
                             changes.push({
                                 messageIndex: msgIdx,
-                                timestamp: msg.created_at,
-                                toolName: tool.tool_name,
-                                toolCallId: tool.tool_call_id,
+                                timestamp: msg.createdAt,
+                                toolName: tool.toolName,
+                                toolCallId: tool.toolCallId,
                                 change: fc,
                             });
                         });
@@ -239,8 +239,8 @@ export function SessionDetailScreen({ route }: Props) {
     }, [session?.messages]);
 
     const renderToolInvocation = (tool: ToolInvocation, index: number) => {
-        const hasFileChanges = tool.file_changes && tool.file_changes.length > 0;
-        const toolData = tool.tool_specific_data;
+        const hasFileChanges = tool.fileChanges && tool.fileChanges.length > 0;
+        const toolData = tool.toolSpecificData;
 
         // Extract command for terminal tools
         let command = '';
@@ -257,7 +257,7 @@ export function SessionDetailScreen({ route }: Props) {
                 invocationMessage = tool.invocation_message;
             } else if (typeof tool.invocation_message === 'object') {
                 // Extract value from object, or stringify if needed
-                const msg = tool.invocation_message as any;
+                const msg = tool.invocationMessage as any;
                 invocationMessage = msg.value && typeof msg.value === 'string'
                     ? msg.value
                     : '';
@@ -268,12 +268,12 @@ export function SessionDetailScreen({ route }: Props) {
             <View key={index} style={styles.toolContainer}>
                 <View style={styles.toolHeader}>
                     <Ionicons
-                        name={getToolIcon(tool.tool_name)}
+                        name={getToolIcon(tool.toolName)}
                         size={14}
                         color="#8B5CF6"
                     />
-                    <Text style={styles.toolName}>{formatToolName(tool.tool_name)}</Text>
-                    {tool.is_complete && (
+                    <Text style={styles.toolName}>{formatToolName(tool.toolName)}</Text>
+                    {tool.isComplete && (
                         <Ionicons name="checkmark-circle" size={14} color="#10B981" />
                     )}
                 </View>
@@ -294,9 +294,9 @@ export function SessionDetailScreen({ route }: Props) {
                 {hasFileChanges && (
                     <View style={styles.fileChangesSection}>
                         <Text style={styles.fileChangesSectionTitle}>
-                            File Changes ({tool.file_changes!.length})
+                            File Changes ({tool.fileChanges!.length})
                         </Text>
-                        {tool.file_changes!.map((fc, fcIdx) => (
+                        {tool.fileChanges!.map((fc, fcIdx) => (
                             <FileChangeCard key={fcIdx} change={fc} index={fcIdx} />
                         ))}
                     </View>
@@ -308,7 +308,7 @@ export function SessionDetailScreen({ route }: Props) {
     const renderMessage = ({ item }: { item: Message }) => {
         const isUser = item.role === 'user';
         const isSystem = item.role === 'system';
-        const hasTools = item.tool_invocations && item.tool_invocations.length > 0;
+        const hasTools = item.toolInvocations && item.toolInvocations.length > 0;
 
         return (
             <View
@@ -345,30 +345,30 @@ export function SessionDetailScreen({ route }: Props) {
                         {hasTools && (
                             <View style={styles.toolBadge}>
                                 <Ionicons name="construct-outline" size={10} color="#8B5CF6" />
-                                <Text style={styles.toolBadgeText}>{item.tool_invocations!.length}</Text>
+                                <Text style={styles.toolBadgeText}>{item.toolInvocations!.length}</Text>
                             </View>
                         )}
-                        {(item.model || item.model_id) && (
-                            <Text style={styles.modelText}>{item.model || item.model_id}</Text>
+                        {(item.model || item.modelId) && (
+                            <Text style={styles.modelText}>{item.model || item.modelId}</Text>
                         )}
                     </View>
                 </View>
 
                 <Text style={styles.messageContent} selectable={true}>
-                    {item.content_raw || item.content}
+                    {item.contentRaw || item.content}
                 </Text>
 
                 {hasTools && (
                     <View style={styles.toolsSection}>
                         <Text style={styles.toolsSectionTitle}>
-                            Tool Invocations ({item.tool_invocations!.length})
+                            Tool Invocations ({item.toolInvocations!.length})
                         </Text>
-                        {item.tool_invocations!.map((tool, idx) => renderToolInvocation(tool, idx))}
+                        {item.toolInvocations!.map((tool, idx) => renderToolInvocation(tool, idx))}
                     </View>
                 )}
 
                 <Text style={styles.timestampText}>
-                    {formatDate(item.created_at ?? undefined)}
+                    {formatDate(item.createdAt ?? undefined)}
                 </Text>
             </View>
         );
@@ -378,9 +378,9 @@ export function SessionDetailScreen({ route }: Props) {
     const renderChangeItem = ({ item, index }: { item: typeof allFileChanges[0]; index: number }) => {
         const change = item.change;
         const fileType = typeof change.type === 'string' ? change.type.replace(/_/g, ' ') : 'change';
-        const filePath = typeof change.file_path === 'string' ? change.file_path : '';
+        const filePath = typeof change.filePath === 'string' ? change.filePath : '';
         const fileName = getFileName(filePath);
-        const toolName = (change as any).tool_name as string | undefined;
+        const toolName = (change as any).toolName as string | undefined;
         const note = (change as any).note as string | undefined;
         const commandStr = typeof change.command === 'string'
             ? change.command
@@ -488,10 +488,10 @@ export function SessionDetailScreen({ route }: Props) {
                 </Text>
                 <View style={styles.headerMeta}>
                     <Text style={styles.metaText}>
-                        {session.provider} • {session.message_count} messages
+                        {session.provider} • {session.messageCount} messages
                     </Text>
                     <Text style={styles.metaText}>
-                        {formatDate(session.created_at)}
+                        {formatDate(session.createdAt)}
                     </Text>
                 </View>
             </View>

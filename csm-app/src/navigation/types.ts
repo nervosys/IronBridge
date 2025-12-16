@@ -3,6 +3,7 @@ export type RootStackParamList = {
     Main: undefined;
 
     // Stack screens
+    Overview: undefined;
     Workspaces: undefined;
     WorkspaceSessions: {
         workspaceId: string;
@@ -11,7 +12,7 @@ export type RootStackParamList = {
     Sessions: undefined;
     SessionDetail: {
         sessionId: string;
-        sessionTitle: string;
+        sessionTitle?: string;
     };
     Search: undefined;
     Settings: undefined;
@@ -32,6 +33,7 @@ export type RootStackParamList = {
 };
 
 export type TabParamList = {
+    OverviewTab: undefined;
     WorkspacesTab: undefined;
     SessionsTab: undefined;
     ChatTab: undefined;
