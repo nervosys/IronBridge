@@ -8,18 +8,21 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Keyboard,
+    RefreshControl,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchSessions, Session } from '../api';
 import { RootStackParamList } from '../navigation/types';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Search'>;
 };
 
 export function SearchScreen({ navigation }: Props) {
+    const { colors, isDark } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
     const [submittedQuery, setSubmittedQuery] = useState('');
 
@@ -27,6 +30,8 @@ export function SearchScreen({ navigation }: Props) {
         data: results,
         isLoading,
         isFetching,
+        refetch,
+        isRefetching,
     } = useQuery({
         queryKey: ['search', submittedQuery],
         queryFn: () => searchSessions(submittedQuery, 50),
@@ -42,7 +47,7 @@ export function SearchScreen({ navigation }: Props) {
 
     const renderResult = ({ item }: { item: Session }) => (
         <TouchableOpacity
-            style={styles.resultCard}
+            style={[styles.resultCard, { backgroundColor: colors.card }]}
             onPress={() =>
                 navigation.navigate('SessionDetail', {
                     sessionId: item.id,
@@ -51,95 +56,145 @@ export function SearchScreen({ navigation }: Props) {
             }
         >
             <View style={styles.resultHeader}>
-                <Ionicons name="chatbubbles-outline" size={20} color="#007AFF" />
-                <Text style={styles.resultTitle} numberOfLines={2}>
+                <Ionicons name="chatbubbles-outline" size={20} color={colors.primary} />
+                <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={2}>
                     {item.title || 'Untitled Session'}
                 </Text>
             </View>
             <View style={styles.resultMeta}>
-                <Text style={styles.metaText}>{item.provider}</Text>
-                <Text style={styles.metaText}>•</Text>
-                <Text style={styles.metaText}>{item.message_count} messages</Text>
-                <Text style={styles.metaText}>•</Text>
-                <Text style={styles.metaText}>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>{item.provider}</Text>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>•</Text>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>{item.message_count} messages</Text>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>•</Text>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>
                     {new Date(item.updated_at).toLocaleDateString()}
                 </Text>
             </View>
         </TouchableOpacity>
     );
 
-    return (
-        <View style={styles.container}>
-            <View style={styles.searchContainer}>
-                <View style={styles.searchInputContainer}>
-                    <Ionicons
-                        name="search-outline"
-                        size={20}
-                        color="#8E8E93"
-                        style={styles.searchIcon}
-                    />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search sessions..."
-                        placeholderTextColor="#8E8E93"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onSubmitEditing={handleSearch}
-                        returnKeyType="search"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => {
-                                setSearchQuery('');
-                                setSubmittedQuery('');
-                            }}
-                        >
-                            <Ionicons name="close-circle" size={20} color="#8E8E93" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-                <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-                    <Text style={styles.searchButtonText}>Search</Text>
-                </TouchableOpacity>
-            </View>
+    // Show centered search when no query submitted yet
+    const showCenteredSearch = !submittedQuery && !isLoading && !isFetching;
 
-            {isLoading || isFetching ? (
-                <View style={styles.centered}>
-                    <ActivityIndicator size="large" color="#007AFF" />
-                    <Text style={styles.loadingText}>Searching...</Text>
-                </View>
-            ) : submittedQuery ? (
-                <FlatList
-                    data={results}
-                    renderItem={renderResult}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.resultsList}
-                    ListHeaderComponent={
-                        results && results.length > 0 ? (
-                            <Text style={styles.resultsCount}>
-                                {results.length} result{results.length !== 1 ? 's' : ''} for "{submittedQuery}"
-                            </Text>
-                        ) : null
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <Ionicons name="search-outline" size={48} color="#8E8E93" />
-                            <Text style={styles.emptyText}>No results found</Text>
-                            <Text style={styles.emptySubtext}>
-                                Try different keywords
-                            </Text>
-                        </View>
-                    }
-                />
-            ) : (
-                <View style={styles.centered}>
-                    <Ionicons name="search-outline" size={64} color="#C7C7CC" />
-                    <Text style={styles.placeholderText}>
+    return (
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            {showCenteredSearch ? (
+                // Centered search layout for initial state
+                <View style={styles.centeredSearchContainer}>
+                    <Ionicons name="search-outline" size={64} color={colors.iconSecondary} />
+                    <Text style={[styles.placeholderText, { color: colors.textTertiary }]}>
                         Search across all your chat sessions
                     </Text>
+                    <View style={[styles.centeredSearchBox, { backgroundColor: colors.card }]}>
+                        <View style={[styles.searchInputContainer, { backgroundColor: colors.searchBackground }]}>
+                            <Ionicons
+                                name="search-outline"
+                                size={20}
+                                color={colors.placeholder}
+                                style={styles.searchIcon}
+                            />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search sessions..."
+                                placeholderTextColor={colors.placeholder}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                onSubmitEditing={handleSearch}
+                                returnKeyType="search"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setSearchQuery('');
+                                        setSubmittedQuery('');
+                                    }}
+                                >
+                                    <Ionicons name="close-circle" size={20} color={colors.placeholder} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <TouchableOpacity style={[styles.searchButton, { backgroundColor: colors.primary }]} onPress={handleSearch}>
+                            <Text style={styles.searchButtonText}>Search</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
+            ) : (
+                // Top search bar with results
+                <>
+                    <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.divider }]}>
+                        <View style={[styles.searchInputContainer, { backgroundColor: colors.searchBackground }]}>
+                            <Ionicons
+                                name="search-outline"
+                                size={20}
+                                color={colors.placeholder}
+                                style={styles.searchIcon}
+                            />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search sessions..."
+                                placeholderTextColor={colors.placeholder}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                onSubmitEditing={handleSearch}
+                                returnKeyType="search"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setSearchQuery('');
+                                        setSubmittedQuery('');
+                                    }}
+                                >
+                                    <Ionicons name="close-circle" size={20} color={colors.placeholder} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <TouchableOpacity style={[styles.searchButton, { backgroundColor: colors.primary }]} onPress={handleSearch}>
+                            <Text style={styles.searchButtonText}>Search</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {isLoading ? (
+                        <View style={styles.centered}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={[styles.loadingText, { color: colors.textTertiary }]}>Searching...</Text>
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={results}
+                            renderItem={renderResult}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.resultsList}
+                            refreshControl={
+                                <RefreshControl
+                                    refreshing={isRefetching}
+                                    onRefresh={refetch}
+                                    tintColor={colors.primary}
+                                />
+                            }
+                            ListHeaderComponent={
+                                results && results.length > 0 ? (
+                                    <Text style={[styles.resultsCount, { color: colors.textTertiary }]}>
+                                        {results.length} result{results.length !== 1 ? 's' : ''} for "{submittedQuery}"
+                                    </Text>
+                                ) : null
+                            }
+                            ListEmptyComponent={
+                                <View style={styles.empty}>
+                                    <Ionicons name="search-outline" size={48} color={colors.textTertiary} />
+                                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No results found</Text>
+                                    <Text style={[styles.emptySubtext, { color: colors.textTertiary }]}>
+                                        Try different keywords
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    )}
+                </>
             )}
         </View>
     );
@@ -148,20 +203,30 @@ export function SearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F2F2F7',
+    },
+    centeredSearchContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    centeredSearchBox: {
+        flexDirection: 'row',
+        width: '100%',
+        marginTop: 24,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        padding: 12,
     },
     searchContainer: {
         flexDirection: 'row',
         padding: 16,
-        backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E5EA',
     },
     searchInputContainer: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F2F2F7',
         borderRadius: 10,
         paddingHorizontal: 12,
         marginRight: 12,
@@ -173,10 +238,8 @@ const styles = StyleSheet.create({
         flex: 1,
         height: 40,
         fontSize: 16,
-        color: '#000000',
     },
     searchButton: {
-        backgroundColor: '#007AFF',
         paddingHorizontal: 16,
         borderRadius: 10,
         justifyContent: 'center',
@@ -195,12 +258,10 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 12,
         fontSize: 16,
-        color: '#8E8E93',
     },
     placeholderText: {
         marginTop: 16,
         fontSize: 16,
-        color: '#8E8E93',
         textAlign: 'center',
     },
     resultsList: {
@@ -208,11 +269,9 @@ const styles = StyleSheet.create({
     },
     resultsCount: {
         fontSize: 14,
-        color: '#8E8E93',
         marginBottom: 16,
     },
     resultCard: {
-        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         padding: 16,
         marginBottom: 12,
@@ -231,7 +290,6 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         fontWeight: '600',
-        color: '#000000',
         marginLeft: 12,
     },
     resultMeta: {
@@ -242,7 +300,6 @@ const styles = StyleSheet.create({
     },
     metaText: {
         fontSize: 13,
-        color: '#8E8E93',
     },
     empty: {
         alignItems: 'center',
@@ -252,11 +309,9 @@ const styles = StyleSheet.create({
         marginTop: 12,
         fontSize: 17,
         fontWeight: '600',
-        color: '#3C3C43',
     },
     emptySubtext: {
         marginTop: 8,
         fontSize: 14,
-        color: '#8E8E93',
     },
 });

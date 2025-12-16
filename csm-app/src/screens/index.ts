@@ -4,3 +4,7 @@ export { SessionDetailScreen } from './SessionDetailScreen';
 export { WorkspaceSessionsScreen } from './WorkspaceSessionsScreen';
 export { SearchScreen } from './SearchScreen';
 export { SettingsScreen } from './SettingsScreen';
+export { ChatScreen } from './ChatScreen';
+export { ChatProvidersScreen } from './ChatProvidersScreen';
+export { ChatHistoryScreen } from './ChatHistoryScreen';
+export { AgentsScreen } from './AgentsScreen';

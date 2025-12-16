@@ -1,0 +1,584 @@
+import { apiClient } from './client';
+
+// Chat Provider Types
+export type ChatProviderType =
+    | 'openai'
+    | 'anthropic'
+    | 'azure-openai'
+    | 'openrouter'
+    | 'groq'
+    | 'together'
+    | 'custom';
+
+// Authentication method for providers
+export type AuthMethod = 'api-key' | 'oauth';
+
+// OAuth configuration for providers
+export interface OAuthConfig {
+    authUrl: string;
+    tokenUrl: string;
+    clientId?: string;
+    scopes: string[];
+    redirectUri: string;
+}
+
+// OAuth provider configurations
+export const OAUTH_CONFIGS: Partial<Record<ChatProviderType, OAuthConfig>> = {
+    openai: {
+        authUrl: 'https://platform.openai.com/oauth/authorize',
+        tokenUrl: 'https://api.openai.com/v1/oauth/token',
+        scopes: ['model.read', 'model.request'],
+        redirectUri: 'csm://oauth/callback',
+    },
+    anthropic: {
+        authUrl: 'https://console.anthropic.com/oauth/authorize',
+        tokenUrl: 'https://api.anthropic.com/v1/oauth/token',
+        scopes: ['messages:write'],
+        redirectUri: 'csm://oauth/callback',
+    },
+};
+
+export interface ChatProvider {
+    id: string;
+    type: ChatProviderType;
+    name: string;
+    baseUrl?: string;
+    apiKey?: string;
+    model: string;
+    isEnabled: boolean;
+    isDefault?: boolean;
+    authMethod?: AuthMethod;
+    oauthToken?: string;
+    oauthRefreshToken?: string;
+    oauthExpiresAt?: number;
+}
+
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: number;
+    model?: string;
+    tokens?: number;
+    isStreaming?: boolean;
+    error?: string;
+}
+
+export interface ChatSession {
+    id: string;
+    title: string;
+    provider: ChatProvider;
+    messages: ChatMessage[];
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface ChatCompletionRequest {
+    provider: ChatProvider;
+    messages: Array<{
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+    }>;
+    stream?: boolean;
+    temperature?: number;
+    maxTokens?: number;
+}
+
+export interface ChatCompletionResponse {
+    id: string;
+    content: string;
+    model: string;
+    tokens?: {
+        prompt: number;
+        completion: number;
+        total: number;
+    };
+    finishReason?: string;
+}
+
+// Default provider configurations (mobile-compatible only)
+export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
+    {
+        id: 'openai-gpt4',
+        type: 'openai',
+        name: 'OpenAI GPT-4o',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+    {
+        id: 'openai-gpt4-mini',
+        type: 'openai',
+        name: 'OpenAI GPT-4o Mini',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+    {
+        id: 'anthropic-claude',
+        type: 'anthropic',
+        name: 'Claude 3.5 Sonnet',
+        baseUrl: 'https://api.anthropic.com/v1',
+        model: 'claude-3-5-sonnet-20241022',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+    {
+        id: 'anthropic-haiku',
+        type: 'anthropic',
+        name: 'Claude 3.5 Haiku',
+        baseUrl: 'https://api.anthropic.com/v1',
+        model: 'claude-3-5-haiku-20241022',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+    {
+        id: 'groq-llama',
+        type: 'groq',
+        name: 'Groq Llama',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        model: 'llama-3.3-70b-versatile',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+    {
+        id: 'openrouter',
+        type: 'openrouter',
+        name: 'OpenRouter',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'anthropic/claude-3.5-sonnet',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+    {
+        id: 'together-llama',
+        type: 'together',
+        name: 'Together AI',
+        baseUrl: 'https://api.together.xyz/v1',
+        model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+        isEnabled: false,
+        authMethod: 'api-key',
+    },
+];
+
+// Generate unique ID
+export function generateId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Create a new chat session
+export function createChatSession(provider: ChatProvider, title?: string): ChatSession {
+    return {
+        id: generateId(),
+        title: title || 'New Chat',
+        provider,
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    };
+}
+
+// Format messages for API request
+function formatMessagesForProvider(
+    messages: ChatMessage[],
+    providerType: ChatProviderType
+): Array<{ role: string; content: string }> {
+    return messages
+        .filter(m => !m.isStreaming && !m.error)
+        .map(m => ({
+            role: m.role,
+            content: m.content,
+        }));
+}
+
+// Send chat completion request
+export async function sendChatCompletion(
+    request: ChatCompletionRequest
+): Promise<ChatCompletionResponse> {
+    const { provider, messages, temperature = 0.7, maxTokens = 4096 } = request;
+
+    // Build request based on provider type
+    switch (provider.type) {
+        case 'openai':
+        case 'groq':
+        case 'openrouter':
+        case 'together':
+        case 'custom': {
+            const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${provider.apiKey}`,
+                    ...(provider.type === 'openrouter' && {
+                        'HTTP-Referer': 'https://github.com/nervosys/ChatSessionManager',
+                        'X-Title': 'CSM Mobile App',
+                    }),
+                },
+                body: JSON.stringify({
+                    model: provider.model,
+                    messages: formatMessagesForProvider(messages as any, provider.type),
+                    temperature,
+                    max_tokens: maxTokens,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`API Error: ${response.status} - ${error}`);
+            }
+
+            const data = await response.json();
+            return {
+                id: data.id || generateId(),
+                content: data.choices[0]?.message?.content || '',
+                model: data.model || provider.model,
+                tokens: data.usage ? {
+                    prompt: data.usage.prompt_tokens,
+                    completion: data.usage.completion_tokens,
+                    total: data.usage.total_tokens,
+                } : undefined,
+                finishReason: data.choices[0]?.finish_reason,
+            };
+        }
+
+        case 'anthropic': {
+            const response = await fetch(`${provider.baseUrl}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': provider.apiKey || '',
+                    'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                    model: provider.model,
+                    messages: formatMessagesForProvider(messages as any, provider.type),
+                    max_tokens: maxTokens,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`API Error: ${response.status} - ${error}`);
+            }
+
+            const data = await response.json();
+            return {
+                id: data.id || generateId(),
+                content: data.content[0]?.text || '',
+                model: data.model || provider.model,
+                tokens: data.usage ? {
+                    prompt: data.usage.input_tokens,
+                    completion: data.usage.output_tokens,
+                    total: data.usage.input_tokens + data.usage.output_tokens,
+                } : undefined,
+                finishReason: data.stop_reason,
+            };
+        }
+
+        case 'azure-openai': {
+            // Azure OpenAI has a different URL structure
+            const response = await fetch(`${provider.baseUrl}/chat/completions?api-version=2024-02-15-preview`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'api-key': provider.apiKey || '',
+                },
+                body: JSON.stringify({
+                    messages: formatMessagesForProvider(messages as any, provider.type),
+                    temperature,
+                    max_tokens: maxTokens,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`API Error: ${response.status} - ${error}`);
+            }
+
+            const data = await response.json();
+            return {
+                id: data.id || generateId(),
+                content: data.choices[0]?.message?.content || '',
+                model: data.model || provider.model,
+                tokens: data.usage ? {
+                    prompt: data.usage.prompt_tokens,
+                    completion: data.usage.completion_tokens,
+                    total: data.usage.total_tokens,
+                } : undefined,
+                finishReason: data.choices[0]?.finish_reason,
+            };
+        }
+
+        default:
+            throw new Error(`Unsupported provider type: ${provider.type}`);
+    }
+}
+
+// Test provider connection
+export async function testProviderConnection(provider: ChatProvider): Promise<boolean> {
+    try {
+        const testMessage: ChatMessage = {
+            id: generateId(),
+            role: 'user',
+            content: 'Say "Hello" and nothing else.',
+            timestamp: Date.now(),
+        };
+
+        await sendChatCompletion({
+            provider,
+            messages: [testMessage],
+            maxTokens: 10,
+        });
+
+        return true;
+    } catch (error) {
+        console.error('Provider test failed:', error);
+        return false;
+    }
+}
+// =============================================================================
+// CSM Introspection (MCP Tools)
+// =============================================================================
+
+export interface McpTool {
+    name: string;
+    description: string | null;
+    input_schema: Record<string, unknown>;
+}
+
+export interface ToolCall {
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
+export interface ToolCallResult {
+    tool: string;
+    result: {
+        content: Array<{
+            type: string;
+            text: string;
+        }>;
+        isError?: boolean;
+    };
+}
+
+// Fetch available CSM tools
+export async function getCsmTools(): Promise<McpTool[]> {
+    const { apiClient } = await import('./client');
+    try {
+        const response = await apiClient.get('/mcp/tools');
+        return response.data?.mcp_tools || [];
+    } catch (error) {
+        console.error('Failed to fetch CSM tools:', error);
+        return [];
+    }
+}
+
+// Get system prompt with CSM context
+export async function getCsmSystemPrompt(): Promise<string> {
+    const { apiClient } = await import('./client');
+    try {
+        const response = await apiClient.get('/mcp/system-prompt');
+        return response.data?.system_prompt || '';
+    } catch (error) {
+        console.error('Failed to fetch CSM system prompt:', error);
+        return '';
+    }
+}
+
+// Execute a CSM tool call
+export async function callCsmTool(name: string, args: Record<string, unknown>): Promise<ToolCallResult> {
+    const { apiClient } = await import('./client');
+    try {
+        const response = await apiClient.post('/mcp/call', {
+            name,
+            arguments: args,
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Failed to call CSM tool:', error);
+        return {
+            tool: name,
+            result: {
+                content: [{ type: 'text', text: `Error calling tool: ${error}` }],
+                isError: true,
+            },
+        };
+    }
+}
+
+// Send chat completion with CSM tools support
+export async function sendChatCompletionWithTools(
+    request: ChatCompletionRequest & { enableCsmTools?: boolean }
+): Promise<ChatCompletionResponse & { toolCalls?: Array<{ name: string; arguments: string }> }> {
+    const { provider, messages, temperature = 0.7, maxTokens = 4096, enableCsmTools } = request;
+
+    // Get CSM tools if enabled
+    let tools: Array<Record<string, unknown>> = [];
+    let systemPrompt: string | undefined;
+
+    if (enableCsmTools) {
+        const csmTools = await getCsmTools();
+        tools = csmTools
+            .filter(t => t.name.startsWith('csm_db_')) // Only database tools for chat
+            .map(t => ({
+                type: 'function',
+                function: {
+                    name: t.name,
+                    description: t.description,
+                    parameters: t.input_schema,
+                },
+            }));
+        systemPrompt = await getCsmSystemPrompt();
+    }
+
+    // Build messages with system prompt if CSM tools enabled
+    const finalMessages = systemPrompt
+        ? [{ role: 'system' as const, content: systemPrompt }, ...messages]
+        : messages;
+
+    // Only OpenAI and Anthropic support tool calling well
+    if (!['openai', 'anthropic'].includes(provider.type)) {
+        return sendChatCompletion(request);
+    }
+
+    if (provider.type === 'openai') {
+        const requestBody: Record<string, unknown> = {
+            model: provider.model,
+            messages: formatMessagesForProvider(finalMessages as any, provider.type),
+            temperature,
+            max_tokens: maxTokens,
+        };
+
+        if (tools.length > 0) {
+            requestBody.tools = tools;
+            requestBody.tool_choice = 'auto';
+        }
+
+        const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${provider.apiKey}`,
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`API Error: ${response.status} - ${error}`);
+        }
+
+        const data = await response.json();
+        const choice = data.choices[0];
+
+        // Check if model wants to call tools
+        if (choice?.message?.tool_calls) {
+            return {
+                id: data.id || generateId(),
+                content: choice.message.content || '',
+                model: data.model || provider.model,
+                toolCalls: choice.message.tool_calls.map((tc: any) => ({
+                    name: tc.function.name,
+                    arguments: tc.function.arguments,
+                })),
+                tokens: data.usage ? {
+                    prompt: data.usage.prompt_tokens,
+                    completion: data.usage.completion_tokens,
+                    total: data.usage.total_tokens,
+                } : undefined,
+                finishReason: choice.finish_reason,
+            };
+        }
+
+        return {
+            id: data.id || generateId(),
+            content: choice?.message?.content || '',
+            model: data.model || provider.model,
+            tokens: data.usage ? {
+                prompt: data.usage.prompt_tokens,
+                completion: data.usage.completion_tokens,
+                total: data.usage.total_tokens,
+            } : undefined,
+            finishReason: choice?.finish_reason,
+        };
+    }
+
+    if (provider.type === 'anthropic') {
+        const anthropicTools = tools.map(t => ({
+            name: (t.function as any).name,
+            description: (t.function as any).description,
+            input_schema: (t.function as any).parameters,
+        }));
+
+        const requestBody: Record<string, unknown> = {
+            model: provider.model,
+            messages: formatMessagesForProvider(finalMessages as any, provider.type),
+            max_tokens: maxTokens,
+        };
+
+        if (systemPrompt) {
+            requestBody.system = systemPrompt;
+        }
+
+        if (anthropicTools.length > 0) {
+            requestBody.tools = anthropicTools;
+        }
+
+        const response = await fetch(`${provider.baseUrl}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': provider.apiKey || '',
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`API Error: ${response.status} - ${error}`);
+        }
+
+        const data = await response.json();
+
+        // Check for tool use in content blocks
+        const toolUseBlocks = data.content?.filter((c: any) => c.type === 'tool_use') || [];
+        const textBlocks = data.content?.filter((c: any) => c.type === 'text') || [];
+
+        if (toolUseBlocks.length > 0) {
+            return {
+                id: data.id || generateId(),
+                content: textBlocks.map((t: any) => t.text).join('\n'),
+                model: data.model || provider.model,
+                toolCalls: toolUseBlocks.map((tc: any) => ({
+                    name: tc.name,
+                    arguments: JSON.stringify(tc.input),
+                })),
+                tokens: data.usage ? {
+                    prompt: data.usage.input_tokens,
+                    completion: data.usage.output_tokens,
+                    total: data.usage.input_tokens + data.usage.output_tokens,
+                } : undefined,
+                finishReason: data.stop_reason,
+            };
+        }
+
+        return {
+            id: data.id || generateId(),
+            content: textBlocks.map((t: any) => t.text).join('\n'),
+            model: data.model || provider.model,
+            tokens: data.usage ? {
+                prompt: data.usage.input_tokens,
+                completion: data.usage.output_tokens,
+                total: data.usage.input_tokens + data.usage.output_tokens,
+            } : undefined,
+            finishReason: data.stop_reason,
+        };
+    }
+
+    // Fallback to regular completion
+    return sendChatCompletion(request);
+}

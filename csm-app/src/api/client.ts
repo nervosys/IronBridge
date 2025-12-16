@@ -1,15 +1,23 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// API base URL - use localhost for web, 10.0.2.2 for Android emulator
+// Get the local network IP from Expo config or use placeholder
+// For physical devices, set CSM_API_HOST in app.json extra config or .env
+const LOCAL_IP = Constants.expoConfig?.extra?.apiHost || 'localhost';
+
+// API base URL - use localhost for web, local IP for mobile devices
 const getBaseUrl = () => {
     if (Platform.OS === 'android') {
-        return 'http://10.0.2.2:8787';
+        // Android emulator uses 10.0.2.2 for host localhost
+        // Physical Android device uses local network IP
+        return `http://${LOCAL_IP}:8787`;
     }
     if (Platform.OS === 'ios') {
-        return 'http://localhost:8787';
+        // iOS simulator and physical device use local network IP
+        return `http://${LOCAL_IP}:8787`;
     }
-    // Web or other platforms
+    // Web
     return 'http://localhost:8787';
 };
 

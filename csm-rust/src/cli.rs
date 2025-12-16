@@ -151,6 +151,15 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // API Server Commands
+    // ============================================================================
+    /// Start the HTTP API server for the web frontend
+    Api {
+        #[command(subcommand)]
+        command: ApiCommands,
+    },
+
+    // ============================================================================
     // Easter Egg
     // ============================================================================
     /// 🎨
@@ -1174,5 +1183,27 @@ pub enum HarvestGitCommands {
         /// Path to the harvest database
         #[arg(long)]
         path: Option<String>,
+    },
+}
+
+// ============================================================================
+// API Server Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum ApiCommands {
+    /// Start the API server
+    Serve {
+        /// Host to bind to (default: 0.0.0.0 for all interfaces)
+        #[arg(long, default_value = "0.0.0.0")]
+        host: String,
+
+        /// Port to listen on (default: 8787)
+        #[arg(short, long, default_value = "8787")]
+        port: u16,
+
+        /// Path to the database file
+        #[arg(long)]
+        database: Option<String>,
     },
 }

@@ -15,11 +15,27 @@ export type RootStackParamList = {
     };
     Search: undefined;
     Settings: undefined;
+
+    // Chat screens
+    Chat: undefined;
+    ChatProviders: undefined;
+    ChatHistory: undefined;
+
+    // Agents screens
+    Agents: undefined;
+    AgentRunDetail: {
+        runId: string;
+    };
+    SwarmDetail: {
+        swarmId: string;
+    };
 };
 
 export type TabParamList = {
     WorkspacesTab: undefined;
     SessionsTab: undefined;
+    ChatTab: undefined;
+    AgentsTab: undefined;
     SearchTab: undefined;
     SettingsTab: undefined;
 };

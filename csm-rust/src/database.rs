@@ -219,7 +219,7 @@ fn extract_path_segment(url: &str, key: &str) -> Option<String> {
 
 /// Universal Chat Database manager
 pub struct ChatDatabase {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 impl ChatDatabase {

@@ -2,11 +2,13 @@
 //!
 //! A CLI tool to manage and merge chat sessions across workspaces.
 
+mod api;
 mod browser;
 mod cli;
 mod commands;
 mod database;
 mod error;
+mod mcp;
 mod models;
 mod providers;
 mod storage;
@@ -16,7 +18,7 @@ mod workspace;
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    Cli, Commands, DetectCommands, ExportCommands, FetchCommands, FindCommands, GitCommands,
+    ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands, FindCommands, GitCommands,
     HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands, MergeCommands,
     MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
 };
@@ -539,6 +541,28 @@ fn main() -> Result<()> {
                 path,
                 force,
             } => commands::register_sessions(&ids, title.as_deref(), path.as_deref(), force),
+        },
+
+        // ====================================================================
+        // API Server
+        // ====================================================================
+        Commands::Api { command } => match command {
+            ApiCommands::Serve { host, port, database } => {
+                let config = api::ServerConfig {
+                    host,
+                    port,
+                    database_path: database.unwrap_or_else(|| {
+                        dirs::data_local_dir()
+                            .map(|p| p.join("csm").join("csm.db").to_string_lossy().to_string())
+                            .unwrap_or_else(|| "csm.db".to_string())
+                    }),
+                    ..Default::default()
+                };
+                
+                // Create tokio runtime and run the server
+                let rt = tokio::runtime::Runtime::new()?;
+                rt.block_on(api::start_server(config))
+            }
         },
 
         // ====================================================================

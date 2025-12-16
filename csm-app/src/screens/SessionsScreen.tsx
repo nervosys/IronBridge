@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getSessions, Session } from '../api';
 import { RootStackParamList } from '../navigation/types';
+import { formatDate } from '../utils/formatDate';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Sessions'>;
@@ -39,6 +41,8 @@ const providerColors: Record<string, string> = {
 };
 
 export function SessionsScreen({ navigation }: Props) {
+    const { colors } = useTheme();
+
     const {
         data: sessions,
         isLoading,
@@ -58,7 +62,7 @@ export function SessionsScreen({ navigation }: Props) {
 
     const renderSession = ({ item }: { item: Session }) => (
         <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, { backgroundColor: colors.card }]}
             onPress={() =>
                 navigation.navigate('SessionDetail', {
                     sessionId: item.id,
@@ -80,21 +84,21 @@ export function SessionsScreen({ navigation }: Props) {
                     />
                 </View>
                 <View style={styles.headerText}>
-                    <Text style={styles.cardTitle} numberOfLines={2}>
+                    <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>
                         {item.title || 'Untitled Session'}
                     </Text>
-                    <Text style={styles.modelText}>
+                    <Text style={[styles.modelText, { color: colors.textTertiary }]}>
                         {item.model || item.provider}
                     </Text>
                 </View>
             </View>
             <View style={styles.cardFooter}>
                 <View style={styles.statsContainer}>
-                    <Ionicons name="chatbubbles-outline" size={14} color="#8E8E93" />
-                    <Text style={styles.statsText}>{item.message_count} messages</Text>
+                    <Ionicons name="chatbubbles-outline" size={14} color={colors.textTertiary} />
+                    <Text style={[styles.statsText, { color: colors.textTertiary }]}>{item.message_count} messages</Text>
                 </View>
-                <Text style={styles.dateText}>
-                    {new Date(item.updated_at).toLocaleDateString()}
+                <Text style={[styles.dateText, { color: colors.textTertiary }]}>
+                    {formatDate(item.updated_at)}
                 </Text>
             </View>
         </TouchableOpacity>
@@ -102,19 +106,19 @@ export function SessionsScreen({ navigation }: Props) {
 
     if (isLoading) {
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#007AFF" />
-                <Text style={styles.loadingText}>Loading sessions...</Text>
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.textTertiary }]}>Loading sessions...</Text>
             </View>
         );
     }
 
     if (error) {
         return (
-            <View style={styles.centered}>
-                <Ionicons name="cloud-offline-outline" size={48} color="#FF3B30" />
-                <Text style={styles.errorText}>Failed to load sessions</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.error }]}>Failed to load sessions</Text>
+                <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={() => refetch()}>
                     <Text style={styles.retryText}>Retry</Text>
                 </TouchableOpacity>
             </View>
@@ -122,19 +126,23 @@ export function SessionsScreen({ navigation }: Props) {
     }
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <FlatList
                 data={sessions}
                 renderItem={renderSession}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.list}
                 refreshControl={
-                    <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+                    <RefreshControl
+                        refreshing={isRefetching}
+                        onRefresh={refetch}
+                        tintColor={colors.primary}
+                    />
                 }
                 ListEmptyComponent={
                     <View style={styles.empty}>
-                        <Ionicons name="chatbubbles-outline" size={48} color="#8E8E93" />
-                        <Text style={styles.emptyText}>No sessions found</Text>
+                        <Ionicons name="chatbubbles-outline" size={48} color={colors.textTertiary} />
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No sessions found</Text>
                     </View>
                 }
             />
@@ -145,7 +153,6 @@ export function SessionsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F2F2F7',
     },
     centered: {
         flex: 1,
@@ -157,7 +164,6 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     card: {
-        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         padding: 16,
         marginBottom: 12,
@@ -185,12 +191,10 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#000000',
         lineHeight: 22,
     },
     modelText: {
         fontSize: 13,
-        color: '#8E8E93',
         marginTop: 2,
     },
     cardFooter: {
@@ -204,27 +208,22 @@ const styles = StyleSheet.create({
     },
     statsText: {
         fontSize: 13,
-        color: '#8E8E93',
         marginLeft: 6,
     },
     dateText: {
         fontSize: 13,
-        color: '#8E8E93',
     },
     loadingText: {
         marginTop: 12,
         fontSize: 16,
-        color: '#8E8E93',
     },
     errorText: {
         marginTop: 12,
         fontSize: 17,
         fontWeight: '600',
-        color: '#FF3B30',
     },
     retryButton: {
         marginTop: 20,
-        backgroundColor: '#007AFF',
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 8,
@@ -242,6 +241,5 @@ const styles = StyleSheet.create({
         marginTop: 12,
         fontSize: 17,
         fontWeight: '600',
-        color: '#3C3C43',
     },
 });

@@ -1398,6 +1398,88 @@ fn create_harvest_database(path: &Path) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_sessions_provider ON sessions(provider);
         CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON sessions(workspace_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at);
+        
+        -- Enhanced messages table with raw markdown and metadata
+        CREATE TABLE IF NOT EXISTS messages_v2 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            message_index INTEGER NOT NULL,
+            request_id TEXT,
+            response_id TEXT,
+            role TEXT NOT NULL,
+            content_raw TEXT NOT NULL,
+            content_markdown TEXT,
+            model_id TEXT,
+            timestamp INTEGER,
+            is_canceled INTEGER DEFAULT 0,
+            metadata_json TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            UNIQUE(session_id, message_index, role)
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_messages_v2_session ON messages_v2(session_id);
+        CREATE INDEX IF NOT EXISTS idx_messages_v2_role ON messages_v2(role);
+        CREATE INDEX IF NOT EXISTS idx_messages_v2_timestamp ON messages_v2(timestamp);
+        
+        -- Tool invocations within messages (file edits, terminal commands, etc.)
+        CREATE TABLE IF NOT EXISTS tool_invocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id INTEGER NOT NULL,
+            session_id TEXT NOT NULL,
+            tool_name TEXT NOT NULL,
+            tool_call_id TEXT,
+            invocation_index INTEGER DEFAULT 0,
+            input_json TEXT,
+            output_json TEXT,
+            status TEXT DEFAULT 'pending',
+            is_confirmed INTEGER DEFAULT 0,
+            timestamp INTEGER,
+            FOREIGN KEY (message_id) REFERENCES messages_v2(id) ON DELETE CASCADE,
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_tool_invocations_message ON tool_invocations(message_id);
+        CREATE INDEX IF NOT EXISTS idx_tool_invocations_session ON tool_invocations(session_id);
+        CREATE INDEX IF NOT EXISTS idx_tool_invocations_tool ON tool_invocations(tool_name);
+        
+        -- File changes/diffs associated with tool invocations
+        CREATE TABLE IF NOT EXISTS file_changes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tool_invocation_id INTEGER,
+            session_id TEXT NOT NULL,
+            message_index INTEGER,
+            file_path TEXT NOT NULL,
+            change_type TEXT NOT NULL,
+            old_content TEXT,
+            new_content TEXT,
+            diff_unified TEXT,
+            line_start INTEGER,
+            line_end INTEGER,
+            timestamp INTEGER,
+            FOREIGN KEY (tool_invocation_id) REFERENCES tool_invocations(id) ON DELETE CASCADE,
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_file_changes_tool ON file_changes(tool_invocation_id);
+        CREATE INDEX IF NOT EXISTS idx_file_changes_session ON file_changes(session_id);
+        CREATE INDEX IF NOT EXISTS idx_file_changes_path ON file_changes(file_path);
+        
+        -- Message-level checkpoints for versioning
+        CREATE TABLE IF NOT EXISTS message_checkpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            message_index INTEGER NOT NULL,
+            checkpoint_number INTEGER NOT NULL,
+            content_hash TEXT NOT NULL,
+            snapshot_json TEXT,
+            file_state_json TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            UNIQUE(session_id, message_index, checkpoint_number)
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_message_checkpoints_session ON message_checkpoints(session_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_title ON sessions(title);
 
         -- Messages table for full-text search
@@ -1518,7 +1600,393 @@ fn insert_or_update_session(
         ],
     )?;
 
+    // Populate enhanced message tables
+    populate_enhanced_messages(conn, &session_id, session)?;
+
     Ok(updated)
+}
+
+/// Populate the enhanced messages_v2, tool_invocations, and file_changes tables
+fn populate_enhanced_messages(
+    conn: &Connection,
+    session_id: &str,
+    session: &ChatSession,
+) -> Result<()> {
+    // Delete existing messages for this session to avoid duplicates
+    conn.execute("DELETE FROM messages_v2 WHERE session_id = ?", [session_id])?;
+    conn.execute("DELETE FROM tool_invocations WHERE session_id = ?", [session_id])?;
+    conn.execute("DELETE FROM file_changes WHERE session_id = ?", [session_id])?;
+    
+    for (idx, request) in session.requests.iter().enumerate() {
+        let timestamp = request.timestamp;
+        let request_id = request.request_id.as_deref();
+        let response_id = request.response_id.as_deref();
+        let model_id = request.model_id.as_deref();
+        let is_canceled = request.is_canceled.unwrap_or(false);
+        
+        // Insert user message
+        if let Some(ref message) = request.message {
+            let content = message.text.clone().unwrap_or_default();
+            if !content.is_empty() {
+                let metadata = serde_json::json!({
+                    "variable_data": request.variable_data,
+                });
+                
+                conn.execute(
+                    r#"
+                    INSERT OR REPLACE INTO messages_v2 
+                    (session_id, message_index, request_id, response_id, role, 
+                     content_raw, content_markdown, model_id, timestamp, is_canceled, metadata_json)
+                    VALUES (?, ?, ?, ?, 'user', ?, ?, ?, ?, 0, ?)
+                    "#,
+                    params![
+                        session_id,
+                        (idx * 2) as i64,
+                        request_id,
+                        response_id,
+                        &content,
+                        &content,  // content_markdown same as raw for user messages
+                        model_id,
+                        timestamp,
+                        serde_json::to_string(&metadata).ok(),
+                    ],
+                )?;
+            }
+        }
+        
+        // Insert assistant response with tool invocations
+        if let Some(ref response) = request.response {
+            let (content, tool_invocations) = extract_response_content_and_tools(response);
+            
+            if !content.is_empty() || !tool_invocations.is_empty() {
+                let metadata = serde_json::json!({
+                    "content_references": request.content_references,
+                    "code_citations": request.code_citations,
+                    "response_markdown_info": request.response_markdown_info,
+                });
+                
+                conn.execute(
+                    r#"
+                    INSERT OR REPLACE INTO messages_v2 
+                    (session_id, message_index, request_id, response_id, role, 
+                     content_raw, content_markdown, model_id, timestamp, is_canceled, metadata_json)
+                    VALUES (?, ?, ?, ?, 'assistant', ?, ?, ?, ?, ?, ?)
+                    "#,
+                    params![
+                        session_id,
+                        (idx * 2 + 1) as i64,
+                        request_id,
+                        response_id,
+                        &content,
+                        &content,
+                        model_id,
+                        timestamp,
+                        is_canceled as i64,
+                        serde_json::to_string(&metadata).ok(),
+                    ],
+                )?;
+                
+                // Get the message_id we just inserted
+                let message_id: i64 = conn.last_insert_rowid();
+                
+                // Insert tool invocations and file changes
+                for (inv_idx, invocation) in tool_invocations.iter().enumerate() {
+                    insert_tool_invocation(conn, message_id, session_id, inv_idx, invocation, timestamp)?;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Extract response content and tool invocations from the response JSON
+fn extract_response_content_and_tools(response: &serde_json::Value) -> (String, Vec<serde_json::Value>) {
+    let mut text_parts = Vec::new();
+    let mut tool_invocations = Vec::new();
+    
+    if let Some(items) = response.as_array() {
+        for item in items {
+            let kind = item.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+            
+            match kind {
+                "toolInvocationSerialized" => {
+                    tool_invocations.push(item.clone());
+                }
+                "thinking" => {
+                    // Skip thinking blocks
+                    continue;
+                }
+                _ => {
+                    if let Some(value) = item.get("value").and_then(|v| v.as_str()) {
+                        if !value.is_empty() {
+                            text_parts.push(value.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    (text_parts.join("\n\n"), tool_invocations)
+}
+
+/// Insert a tool invocation and any associated file changes
+fn insert_tool_invocation(
+    conn: &Connection,
+    message_id: i64,
+    session_id: &str,
+    inv_idx: usize,
+    invocation: &serde_json::Value,
+    timestamp: Option<i64>,
+) -> Result<()> {
+    let tool_name = invocation.get("toolId")
+        .and_then(|t| t.as_str())
+        .unwrap_or("unknown");
+    let tool_call_id = invocation.get("toolCallId").and_then(|t| t.as_str());
+    let is_complete = invocation.get("isComplete").and_then(|c| c.as_bool()).unwrap_or(false);
+    let is_confirmed = invocation.get("isConfirmed");
+    let tool_data = invocation.get("toolSpecificData");
+    
+    let input_json = tool_data.map(|d| serde_json::to_string(d).unwrap_or_default());
+    let status = if is_complete { "complete" } else { "pending" };
+    let confirmed = match is_confirmed {
+        Some(v) => v.get("type").and_then(|t| t.as_i64()).map(|t| t > 0).unwrap_or(false),
+        None => false,
+    };
+    
+    conn.execute(
+        r#"
+        INSERT INTO tool_invocations 
+        (message_id, session_id, tool_name, tool_call_id, invocation_index, 
+         input_json, status, is_confirmed, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+        params![
+            message_id,
+            session_id,
+            tool_name,
+            tool_call_id,
+            inv_idx as i64,
+            input_json,
+            status,
+            confirmed as i64,
+            timestamp,
+        ],
+    )?;
+    
+    let tool_invocation_id = conn.last_insert_rowid();
+    
+    // Extract and insert file changes based on tool type
+    if let Some(data) = tool_data {
+        insert_file_changes(conn, tool_invocation_id, session_id, data, timestamp)?;
+    }
+    
+    Ok(())
+}
+
+/// Insert file changes from tool-specific data
+fn insert_file_changes(
+    conn: &Connection,
+    tool_invocation_id: i64,
+    session_id: &str,
+    tool_data: &serde_json::Value,
+    timestamp: Option<i64>,
+) -> Result<()> {
+    let kind = tool_data.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+    
+    match kind {
+        "terminal" => {
+            // Terminal command execution
+            if let Some(cmd_line) = tool_data.get("commandLine") {
+                let original = cmd_line.get("original").and_then(|o| o.as_str());
+                let edited = cmd_line.get("toolEdited").and_then(|e| e.as_str());
+                let output = tool_data.get("terminalCommandOutput")
+                    .map(|o| serde_json::to_string(o).unwrap_or_default());
+                
+                conn.execute(
+                    r#"
+                    INSERT INTO file_changes 
+                    (tool_invocation_id, session_id, file_path, change_type, 
+                     old_content, new_content, diff_unified, timestamp)
+                    VALUES (?, ?, '[terminal]', 'command', ?, ?, ?, ?)
+                    "#,
+                    params![
+                        tool_invocation_id,
+                        session_id,
+                        original,
+                        edited.or(original),
+                        output,
+                        timestamp,
+                    ],
+                )?;
+            }
+        }
+        "replaceFile" | "editFile" => {
+            // File edit with old/new strings
+            let file_path = tool_data.get("uri")
+                .or_else(|| tool_data.get("filePath"))
+                .and_then(|p| p.as_str())
+                .unwrap_or("[unknown]");
+            let old_string = tool_data.get("oldString").and_then(|s| s.as_str());
+            let new_string = tool_data.get("newString").and_then(|s| s.as_str());
+            
+            // Generate unified diff if we have both old and new content
+            let diff = if let (Some(old), Some(new)) = (old_string, new_string) {
+                Some(generate_unified_diff(old, new, file_path))
+            } else {
+                None
+            };
+            
+            conn.execute(
+                r#"
+                INSERT INTO file_changes 
+                (tool_invocation_id, session_id, file_path, change_type, 
+                 old_content, new_content, diff_unified, timestamp)
+                VALUES (?, ?, ?, 'edit', ?, ?, ?, ?)
+                "#,
+                params![
+                    tool_invocation_id,
+                    session_id,
+                    file_path,
+                    old_string,
+                    new_string,
+                    diff,
+                    timestamp,
+                ],
+            )?;
+        }
+        "createFile" => {
+            let file_path = tool_data.get("uri")
+                .or_else(|| tool_data.get("filePath"))
+                .and_then(|p| p.as_str())
+                .unwrap_or("[unknown]");
+            let content = tool_data.get("content").and_then(|c| c.as_str());
+            
+            conn.execute(
+                r#"
+                INSERT INTO file_changes 
+                (tool_invocation_id, session_id, file_path, change_type, 
+                 new_content, timestamp)
+                VALUES (?, ?, ?, 'create', ?, ?)
+                "#,
+                params![
+                    tool_invocation_id,
+                    session_id,
+                    file_path,
+                    content,
+                    timestamp,
+                ],
+            )?;
+        }
+        "readFile" => {
+            let file_path = tool_data.get("uri")
+                .or_else(|| tool_data.get("filePath"))
+                .and_then(|p| p.as_str())
+                .unwrap_or("[unknown]");
+            
+            conn.execute(
+                r#"
+                INSERT INTO file_changes 
+                (tool_invocation_id, session_id, file_path, change_type, timestamp)
+                VALUES (?, ?, ?, 'read', ?)
+                "#,
+                params![
+                    tool_invocation_id,
+                    session_id,
+                    file_path,
+                    timestamp,
+                ],
+            )?;
+        }
+        _ => {
+            // Other tool types - store as generic change
+            if !kind.is_empty() {
+                let data_json = serde_json::to_string(tool_data).ok();
+                conn.execute(
+                    r#"
+                    INSERT INTO file_changes 
+                    (tool_invocation_id, session_id, file_path, change_type, 
+                     diff_unified, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    "#,
+                    params![
+                        tool_invocation_id,
+                        session_id,
+                        format!("[{}]", kind),
+                        kind,
+                        data_json,
+                        timestamp,
+                    ],
+                )?;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Generate a simple unified diff between two strings
+fn generate_unified_diff(old: &str, new: &str, file_path: &str) -> String {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    
+    let mut diff = format!("--- a/{}\n+++ b/{}\n", file_path, file_path);
+    
+    // Simple line-by-line diff (not a full Myers diff, but good enough for storage)
+    let max_lines = old_lines.len().max(new_lines.len());
+    let mut in_hunk = false;
+    let mut hunk_start = 0;
+    let mut hunk_lines = Vec::new();
+    
+    for i in 0..max_lines {
+        let old_line = old_lines.get(i).copied();
+        let new_line = new_lines.get(i).copied();
+        
+        match (old_line, new_line) {
+            (Some(o), Some(n)) if o == n => {
+                if in_hunk {
+                    hunk_lines.push(format!(" {}", o));
+                }
+            }
+            (Some(o), Some(n)) => {
+                if !in_hunk {
+                    in_hunk = true;
+                    hunk_start = i + 1;
+                }
+                hunk_lines.push(format!("-{}", o));
+                hunk_lines.push(format!("+{}", n));
+            }
+            (Some(o), None) => {
+                if !in_hunk {
+                    in_hunk = true;
+                    hunk_start = i + 1;
+                }
+                hunk_lines.push(format!("-{}", o));
+            }
+            (None, Some(n)) => {
+                if !in_hunk {
+                    in_hunk = true;
+                    hunk_start = i + 1;
+                }
+                hunk_lines.push(format!("+{}", n));
+            }
+            (None, None) => break,
+        }
+    }
+    
+    if !hunk_lines.is_empty() {
+        diff.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            hunk_start, old_lines.len(), hunk_start, new_lines.len()
+        ));
+        for line in hunk_lines {
+            diff.push_str(&line);
+            diff.push('\n');
+        }
+    }
+    
+    diff
 }
 
 fn update_harvest_metadata(conn: &Connection) -> Result<()> {

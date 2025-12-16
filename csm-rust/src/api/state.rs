@@ -1,17 +1,22 @@
 //! Application state for the API server
 
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::Mutex;
+use std::path::PathBuf;
 
 use crate::database::ChatDatabase;
 
 /// Shared application state
 pub struct AppState {
-    pub db: Arc<RwLock<ChatDatabase>>,
+    pub db: Mutex<ChatDatabase>,
+    #[allow(dead_code)] // Reserved for future use (e.g., reopening database)
+    pub db_path: PathBuf,
 }
 
 impl AppState {
-    pub fn new(db: Arc<RwLock<ChatDatabase>>) -> Self {
-        Self { db }
+    pub fn new(db: ChatDatabase, db_path: PathBuf) -> Self {
+        Self { 
+            db: Mutex::new(db),
+            db_path,
+        }
     }
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +10,13 @@ import {
     WorkspaceSessionsScreen,
     SearchScreen,
     SettingsScreen,
+    ChatScreen,
+    ChatProvidersScreen,
+    ChatHistoryScreen,
+    AgentsScreen,
 } from '../screens';
 import { RootStackParamList, TabParamList } from './types';
+import { useTheme } from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -92,9 +97,59 @@ function SettingsStack() {
     );
 }
 
-export function AppNavigator() {
+function ChatStack() {
     return (
-        <NavigationContainer>
+        <Stack.Navigator>
+            <Stack.Screen
+                name="Chat"
+                component={ChatScreen}
+                options={{ title: 'Chat' }}
+            />
+            <Stack.Screen
+                name="ChatProviders"
+                component={ChatProvidersScreen}
+                options={{ title: 'AI Providers' }}
+            />
+            <Stack.Screen
+                name="ChatHistory"
+                component={ChatHistoryScreen}
+                options={{ title: 'Chat History' }}
+            />
+        </Stack.Navigator>
+    );
+}
+
+function AgentsStack() {
+    return (
+        <Stack.Navigator>
+            <Stack.Screen
+                name="Agents"
+                component={AgentsScreen}
+                options={{ title: 'Agents' }}
+            />
+        </Stack.Navigator>
+    );
+}
+
+export function AppNavigator() {
+    const { colors, isDark } = useTheme();
+
+    // Create custom navigation themes based on our theme colors
+    const navigationTheme = {
+        ...(isDark ? DarkTheme : DefaultTheme),
+        colors: {
+            ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
+            primary: colors.primary,
+            background: colors.background,
+            card: colors.card,
+            text: colors.text,
+            border: colors.border,
+            notification: colors.error,
+        },
+    };
+
+    return (
+        <NavigationContainer theme={navigationTheme}>
             <Tab.Navigator
                 screenOptions={({ route }) => ({
                     headerShown: false,
@@ -108,6 +163,12 @@ export function AppNavigator() {
                             case 'SessionsTab':
                                 iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
                                 break;
+                            case 'ChatTab':
+                                iconName = focused ? 'sparkles' : 'sparkles-outline';
+                                break;
+                            case 'AgentsTab':
+                                iconName = focused ? 'git-network' : 'git-network-outline';
+                                break;
                             case 'SearchTab':
                                 iconName = focused ? 'search' : 'search-outline';
                                 break;
@@ -120,8 +181,12 @@ export function AppNavigator() {
 
                         return <Ionicons name={iconName} size={size} color={color} />;
                     },
-                    tabBarActiveTintColor: '#007AFF',
-                    tabBarInactiveTintColor: '#8E8E93',
+                    tabBarActiveTintColor: colors.primary,
+                    tabBarInactiveTintColor: colors.textTertiary,
+                    tabBarStyle: {
+                        backgroundColor: colors.tabBar,
+                        borderTopColor: colors.tabBarBorder,
+                    },
                 })}
             >
                 <Tab.Screen
@@ -133,6 +198,16 @@ export function AppNavigator() {
                     name="SessionsTab"
                     component={SessionsStack}
                     options={{ title: 'Sessions' }}
+                />
+                <Tab.Screen
+                    name="ChatTab"
+                    component={ChatStack}
+                    options={{ title: 'Chat' }}
+                />
+                <Tab.Screen
+                    name="AgentsTab"
+                    component={AgentsStack}
+                    options={{ title: 'Agents' }}
                 />
                 <Tab.Screen
                     name="SearchTab"

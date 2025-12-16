@@ -14,6 +14,7 @@ import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getSessions, Session } from '../api';
 import { RootStackParamList } from '../navigation/types';
+import { formatDate } from '../utils/formatDate';
 
 type Props = {
     route: RouteProp<RootStackParamList, 'WorkspaceSessions'>;
@@ -54,7 +55,7 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
                     <Text style={styles.statsText}>{item.message_count} messages</Text>
                 </View>
                 <Text style={styles.dateText}>
-                    {new Date(item.updated_at).toLocaleDateString()}
+                    {formatDate(item.updated_at)}
                 </Text>
             </View>
         </TouchableOpacity>

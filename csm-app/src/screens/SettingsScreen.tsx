@@ -12,8 +12,11 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { getStats, getProviders, Stats, Provider } from '../api';
+import { useTheme, ThemeMode } from '../context/ThemeContext';
 
 export function SettingsScreen() {
+    const { colors, mode, setThemeMode, isDark } = useTheme();
+
     const {
         data: stats,
         isLoading: statsLoading,
@@ -48,44 +51,92 @@ export function SettingsScreen() {
 
     if (isLoading) {
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#007AFF" />
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
 
+    const themeModes: { mode: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+        { mode: 'light', label: 'Light', icon: 'sunny' },
+        { mode: 'dark', label: 'Dark', icon: 'moon' },
+        { mode: 'system', label: 'System', icon: 'phone-portrait-outline' },
+    ];
+
     return (
         <ScrollView
-            style={styles.container}
+            style={[styles.container, { backgroundColor: colors.background }]}
             refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} />
+                <RefreshControl
+                    refreshing={isRefetching}
+                    onRefresh={handleRefresh}
+                    tintColor={colors.primary}
+                />
             }
         >
+            {/* Appearance Section */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Statistics</Text>
-                <View style={styles.card}>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Appearance</Text>
+                <View style={[styles.card, { backgroundColor: colors.card }]}>
+                    {themeModes.map((item, index) => (
+                        <React.Fragment key={item.mode}>
+                            {index > 0 && <View style={[styles.divider, { backgroundColor: colors.divider }]} />}
+                            <TouchableOpacity
+                                style={styles.themeRow}
+                                onPress={() => setThemeMode(item.mode)}
+                            >
+                                <View style={styles.themeInfo}>
+                                    <Ionicons
+                                        name={item.icon}
+                                        size={20}
+                                        color={mode === item.mode ? colors.primary : colors.textTertiary}
+                                    />
+                                    <Text style={[
+                                        styles.themeLabel,
+                                        { color: colors.text }
+                                    ]}>
+                                        {item.label}
+                                    </Text>
+                                </View>
+                                {mode === item.mode && (
+                                    <Ionicons
+                                        name="checkmark"
+                                        size={20}
+                                        color={colors.primary}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        </React.Fragment>
+                    ))}
+                </View>
+            </View>
+
+            {/* Statistics Section */}
+            <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Statistics</Text>
+                <View style={[styles.card, { backgroundColor: colors.card }]}>
                     <View style={styles.statRow}>
-                        <Text style={styles.statLabel}>Total Sessions</Text>
-                        <Text style={styles.statValue}>{stats?.total_sessions ?? 0}</Text>
+                        <Text style={[styles.statLabel, { color: colors.text }]}>Total Sessions</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>{stats?.total_sessions ?? 0}</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, { backgroundColor: colors.divider }]} />
                     <View style={styles.statRow}>
-                        <Text style={styles.statLabel}>Total Messages</Text>
-                        <Text style={styles.statValue}>{stats?.total_messages ?? 0}</Text>
+                        <Text style={[styles.statLabel, { color: colors.text }]}>Total Messages</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>{stats?.total_messages ?? 0}</Text>
                     </View>
                 </View>
             </View>
 
             {stats?.by_provider && Object.keys(stats.by_provider).length > 0 && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Sessions by Provider</Text>
-                    <View style={styles.card}>
+                    <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Sessions by Provider</Text>
+                    <View style={[styles.card, { backgroundColor: colors.card }]}>
                         {Object.entries(stats.by_provider).map(([provider, count], index) => (
                             <React.Fragment key={provider}>
-                                {index > 0 && <View style={styles.divider} />}
+                                {index > 0 && <View style={[styles.divider, { backgroundColor: colors.divider }]} />}
                                 <View style={styles.statRow}>
-                                    <Text style={styles.statLabel}>{provider}</Text>
-                                    <Text style={styles.statValue}>{count}</Text>
+                                    <Text style={[styles.statLabel, { color: colors.text }]}>{provider}</Text>
+                                    <Text style={[styles.statValue, { color: colors.textTertiary }]}>{count}</Text>
                                 </View>
                             </React.Fragment>
                         ))}
@@ -95,21 +146,21 @@ export function SettingsScreen() {
 
             {providers && providers.length > 0 && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Connected Providers</Text>
-                    <View style={styles.card}>
+                    <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Connected Providers</Text>
+                    <View style={[styles.card, { backgroundColor: colors.card }]}>
                         {providers.map((provider, index) => (
                             <React.Fragment key={provider.id}>
-                                {index > 0 && <View style={styles.divider} />}
+                                {index > 0 && <View style={[styles.divider, { backgroundColor: colors.divider }]} />}
                                 <View style={styles.providerRow}>
                                     <View style={styles.providerInfo}>
                                         <Ionicons
                                             name="checkmark-circle"
                                             size={20}
-                                            color="#34C759"
+                                            color={colors.success}
                                         />
-                                        <Text style={styles.providerName}>{provider.name}</Text>
+                                        <Text style={[styles.providerName, { color: colors.text }]}>{provider.name}</Text>
                                     </View>
-                                    <Text style={styles.providerCount}>
+                                    <Text style={[styles.providerCount, { color: colors.textTertiary }]}>
                                         {provider.session_count} sessions
                                     </Text>
                                 </View>
@@ -120,31 +171,31 @@ export function SettingsScreen() {
             )}
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>About</Text>
-                <View style={styles.card}>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>About</Text>
+                <View style={[styles.card, { backgroundColor: colors.card }]}>
                     <TouchableOpacity style={styles.linkRow} onPress={openDocs}>
                         <View style={styles.linkInfo}>
-                            <Ionicons name="book-outline" size={20} color="#007AFF" />
-                            <Text style={styles.linkText}>Documentation</Text>
+                            <Ionicons name="book-outline" size={20} color={colors.primary} />
+                            <Text style={[styles.linkText, { color: colors.primary }]}>Documentation</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                        <Ionicons name="chevron-forward" size={20} color={colors.iconSecondary} />
                     </TouchableOpacity>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, { backgroundColor: colors.divider }]} />
                     <View style={styles.statRow}>
-                        <Text style={styles.statLabel}>Version</Text>
-                        <Text style={styles.statValue}>1.0.0</Text>
+                        <Text style={[styles.statLabel, { color: colors.text }]}>Version</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>1.0.0</Text>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, { backgroundColor: colors.divider }]} />
                     <View style={styles.statRow}>
-                        <Text style={styles.statLabel}>API Server</Text>
-                        <Text style={styles.statValue}>localhost:8787</Text>
+                        <Text style={[styles.statLabel, { color: colors.text }]}>API Server</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>localhost:8787</Text>
                     </View>
                 </View>
             </View>
 
             <View style={styles.footer}>
-                <Text style={styles.footerText}>Chat Session Manager</Text>
-                <Text style={styles.footerSubtext}>
+                <Text style={[styles.footerText, { color: colors.textSecondary }]}>Chat Session Manager</Text>
+                <Text style={[styles.footerSubtext, { color: colors.textTertiary }]}>
                     Unified chat history management
                 </Text>
             </View>
@@ -155,7 +206,6 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F2F2F7',
     },
     centered: {
         flex: 1,
@@ -169,13 +219,11 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 13,
         fontWeight: '600',
-        color: '#8E8E93',
         textTransform: 'uppercase',
         marginBottom: 8,
         marginLeft: 16,
     },
     card: {
-        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         overflow: 'hidden',
     },
@@ -188,11 +236,24 @@ const styles = StyleSheet.create({
     },
     statLabel: {
         fontSize: 16,
-        color: '#000000',
     },
     statValue: {
         fontSize: 16,
-        color: '#8E8E93',
+    },
+    themeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+    },
+    themeInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    themeLabel: {
+        fontSize: 16,
+        marginLeft: 12,
     },
     providerRow: {
         flexDirection: 'row',
@@ -207,12 +268,10 @@ const styles = StyleSheet.create({
     },
     providerName: {
         fontSize: 16,
-        color: '#000000',
         marginLeft: 12,
     },
     providerCount: {
         fontSize: 14,
-        color: '#8E8E93',
     },
     linkRow: {
         flexDirection: 'row',
@@ -227,12 +286,10 @@ const styles = StyleSheet.create({
     },
     linkText: {
         fontSize: 16,
-        color: '#007AFF',
         marginLeft: 12,
     },
     divider: {
         height: 1,
-        backgroundColor: '#E5E5EA',
         marginLeft: 16,
     },
     footer: {
@@ -242,11 +299,9 @@ const styles = StyleSheet.create({
     footerText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#3C3C43',
     },
     footerSubtext: {
         fontSize: 14,
-        color: '#8E8E93',
         marginTop: 4,
     },
 });
