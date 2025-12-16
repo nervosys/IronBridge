@@ -15,6 +15,7 @@ import { RouteProp } from '@react-navigation/native';
 import { getSession, Message, SessionWithMessages, ToolInvocation, FileChange } from '../api';
 import { RootStackParamList } from '../navigation/types';
 import { formatDate } from '../utils/formatDate';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = {
     route: RouteProp<RootStackParamList, 'SessionDetail'>;
@@ -192,6 +193,7 @@ const FileChangeCard = ({ change, index }: { change: FileChange; index: number }
 
 export function SessionDetailScreen({ route }: Props) {
     const { sessionId } = route.params;
+    const { colors } = useTheme();
     const [viewMode, setViewMode] = useState<'messages' | 'changes'>('messages');
 
     const {
@@ -464,63 +466,63 @@ export function SessionDetailScreen({ route }: Props) {
 
     if (isLoading) {
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#007AFF" />
-                <Text style={styles.loadingText}>Loading conversation...</Text>
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading conversation...</Text>
             </View>
         );
     }
 
     if (error || !session) {
         return (
-            <View style={styles.centered}>
-                <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
-                <Text style={styles.errorText}>Failed to load session</Text>
+            <View style={[styles.centered, { backgroundColor: colors.background }]}>
+                <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.text }]}>Failed to load session</Text>
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle} numberOfLines={2}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>
                     {session.title || 'Untitled Session'}
                 </Text>
                 <View style={styles.headerMeta}>
-                    <Text style={styles.metaText}>
+                    <Text style={[styles.metaText, { color: colors.textSecondary }]}>
                         {session.provider} • {session.messageCount} messages
                     </Text>
-                    <Text style={styles.metaText}>
+                    <Text style={[styles.metaText, { color: colors.textSecondary }]}>
                         {formatDate(session.createdAt)}
                     </Text>
                 </View>
             </View>
 
             {/* Tab Switcher */}
-            <View style={styles.tabContainer}>
+            <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity
-                    style={[styles.tab, viewMode === 'messages' && styles.tabActive]}
+                    style={[styles.tab, viewMode === 'messages' && { borderBottomColor: colors.primary }]}
                     onPress={() => setViewMode('messages')}
                 >
                     <Ionicons
                         name="chatbubbles-outline"
                         size={16}
-                        color={viewMode === 'messages' ? '#007AFF' : '#8E8E93'}
+                        color={viewMode === 'messages' ? colors.primary : colors.textTertiary}
                     />
-                    <Text style={[styles.tabText, viewMode === 'messages' && styles.tabTextActive]}>
+                    <Text style={[styles.tabText, { color: viewMode === 'messages' ? colors.primary : colors.textTertiary }]}>
                         Messages
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, viewMode === 'changes' && styles.tabActive]}
+                    style={[styles.tab, viewMode === 'changes' && { borderBottomColor: colors.primary }]}
                     onPress={() => setViewMode('changes')}
                 >
                     <Ionicons
                         name="git-branch-outline"
                         size={16}
-                        color={viewMode === 'changes' ? '#007AFF' : '#8E8E93'}
+                        color={viewMode === 'changes' ? colors.primary : colors.textTertiary}
                     />
-                    <Text style={[styles.tabText, viewMode === 'changes' && styles.tabTextActive]}>
+                    <Text style={[styles.tabText, { color: viewMode === 'changes' ? colors.primary : colors.textTertiary }]}>
                         Changes ({allFileChanges.length})
                     </Text>
                 </TouchableOpacity>
@@ -533,7 +535,7 @@ export function SessionDetailScreen({ route }: Props) {
                     keyExtractor={(item, index) => item.id || `msg-${index}`}
                     contentContainerStyle={styles.messagesList}
                     refreshControl={
-                        <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+                        <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />
                     }
                     ListEmptyComponent={
                         <View style={styles.empty}>
