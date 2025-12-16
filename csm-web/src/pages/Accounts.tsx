@@ -25,6 +25,7 @@ import {
     User,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { formatDate } from '@csm/shared';
 import { useApi } from '../context/ApiContext';
 import { useRemoveAccount, useTestProvider, useProviderStats } from '../hooks/useApi';
 
@@ -140,10 +141,6 @@ export default function Accounts() {
     const handleDisconnectAccount = async (accountId: string) => {
         await removeAccountMutation.mutate(accountId);
         await refetchAccounts();
-    };
-
-    const formatDate = (timestamp: number) => {
-        return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
     const toggleShowKey = (id: string) => {

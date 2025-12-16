@@ -10,24 +10,25 @@ import {
     Linking,
     TextInput,
     Alert,
-    Platform,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { getStats, getProviders } from '../api';
 import type { Statistics as Stats, Provider } from '@csm/shared';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
-import { apiClient } from '../api/client';
-
-const API_HOST_KEY = 'csm_api_host';
-const DEFAULT_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+import {
+    loadApiSettings as loadSettings,
+    saveApiSettings as saveSettings,
+    testApiConnection,
+    getDefaultHost,
+    DEFAULT_PORT,
+} from '../api/client';
 
 export function SettingsScreen() {
     const { colors, mode, setThemeMode, isDark } = useTheme();
     const queryClient = useQueryClient();
-    const [apiHost, setApiHost] = useState(DEFAULT_HOST);
-    const [apiPort, setApiPort] = useState('8787');
+    const [apiHost, setApiHost] = useState(getDefaultHost());
+    const [apiPort, setApiPort] = useState(DEFAULT_PORT);
     const [isEditingApi, setIsEditingApi] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
@@ -37,22 +38,14 @@ export function SettingsScreen() {
     }, []);
 
     const loadApiSettings = async () => {
-        try {
-            const savedSettings = await AsyncStorage.getItem(API_HOST_KEY);
-            if (savedSettings) {
-                const { host, port } = JSON.parse(savedSettings);
-                setApiHost(host || DEFAULT_HOST);
-                setApiPort(port || '8787');
-            }
-        } catch (error) {
-            console.error('Failed to load API settings:', error);
-        }
+        const { host, port } = await loadSettings();
+        setApiHost(host);
+        setApiPort(port);
     };
 
-    const saveApiSettings = async () => {
+    const handleSaveApiSettings = async () => {
         try {
-            await AsyncStorage.setItem(API_HOST_KEY, JSON.stringify({ host: apiHost, port: apiPort }));
-            apiClient.defaults.baseURL = `http://${apiHost}:${apiPort}`;
+            await saveSettings(apiHost, apiPort);
             setIsEditingApi(false);
             // Invalidate all queries to refetch with new API
             queryClient.invalidateQueries();
@@ -64,12 +57,8 @@ export function SettingsScreen() {
 
     const testConnection = async () => {
         setConnectionStatus('checking');
-        try {
-            await apiClient.get('/api/stats', { timeout: 5000 });
-            setConnectionStatus('connected');
-        } catch {
-            setConnectionStatus('error');
-        }
+        const success = await testApiConnection();
+        setConnectionStatus(success ? 'connected' : 'error');
     };
 
     useEffect(() => {
@@ -190,7 +179,7 @@ export function SettingsScreen() {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.saveButton, { backgroundColor: colors.primary }]}
-                                    onPress={saveApiSettings}
+                                    onPress={handleSaveApiSettings}
                                 >
                                     <Text style={styles.saveButtonText}>Save</Text>
                                 </TouchableOpacity>
