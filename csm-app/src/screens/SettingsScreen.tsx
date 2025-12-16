@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,14 +8,73 @@ import {
     RefreshControl,
     ActivityIndicator,
     Linking,
+    TextInput,
+    Alert,
+    Platform,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { getStats, getProviders, Stats, Provider } from '../api';
+import { getStats, getProviders } from '../api';
+import type { Statistics as Stats, Provider } from '@csm/shared';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { apiClient } from '../api/client';
+
+const API_HOST_KEY = 'csm_api_host';
+const DEFAULT_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 
 export function SettingsScreen() {
     const { colors, mode, setThemeMode, isDark } = useTheme();
+    const queryClient = useQueryClient();
+    const [apiHost, setApiHost] = useState(DEFAULT_HOST);
+    const [apiPort, setApiPort] = useState('8787');
+    const [isEditingApi, setIsEditingApi] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+
+    // Load saved API settings
+    useEffect(() => {
+        loadApiSettings();
+    }, []);
+
+    const loadApiSettings = async () => {
+        try {
+            const savedSettings = await AsyncStorage.getItem(API_HOST_KEY);
+            if (savedSettings) {
+                const { host, port } = JSON.parse(savedSettings);
+                setApiHost(host || DEFAULT_HOST);
+                setApiPort(port || '8787');
+            }
+        } catch (error) {
+            console.error('Failed to load API settings:', error);
+        }
+    };
+
+    const saveApiSettings = async () => {
+        try {
+            await AsyncStorage.setItem(API_HOST_KEY, JSON.stringify({ host: apiHost, port: apiPort }));
+            apiClient.defaults.baseURL = `http://${apiHost}:${apiPort}`;
+            setIsEditingApi(false);
+            // Invalidate all queries to refetch with new API
+            queryClient.invalidateQueries();
+            testConnection();
+        } catch (error) {
+            Alert.alert('Error', 'Failed to save API settings');
+        }
+    };
+
+    const testConnection = async () => {
+        setConnectionStatus('checking');
+        try {
+            await apiClient.get('/api/stats', { timeout: 5000 });
+            setConnectionStatus('connected');
+        } catch {
+            setConnectionStatus('error');
+        }
+    };
+
+    useEffect(() => {
+        testConnection();
+    }, []);
 
     const {
         data: stats,
@@ -74,6 +133,83 @@ export function SettingsScreen() {
                 />
             }
         >
+            {/* API Server Section */}
+            <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>API Server</Text>
+                <View style={[styles.card, { backgroundColor: colors.card }]}>
+                    <View style={styles.statRow}>
+                        <View style={styles.connectionInfo}>
+                            <Ionicons
+                                name={connectionStatus === 'connected' ? 'checkmark-circle' : connectionStatus === 'error' ? 'close-circle' : 'sync'}
+                                size={20}
+                                color={connectionStatus === 'connected' ? colors.success : connectionStatus === 'error' ? colors.error : colors.warning}
+                            />
+                            <Text style={[styles.statLabel, { color: colors.text, marginLeft: 8 }]}>
+                                {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'error' ? 'Not Connected' : 'Checking...'}
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={testConnection}>
+                            <Ionicons name="refresh" size={20} color={colors.primary} />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+                    {isEditingApi ? (
+                        <>
+                            <View style={styles.inputRow}>
+                                <Text style={[styles.inputLabel, { color: colors.text }]}>Host</Text>
+                                <TextInput
+                                    style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                                    value={apiHost}
+                                    onChangeText={setApiHost}
+                                    placeholder="localhost or IP"
+                                    placeholderTextColor={colors.placeholder}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                            </View>
+                            <View style={styles.inputRow}>
+                                <Text style={[styles.inputLabel, { color: colors.text }]}>Port</Text>
+                                <TextInput
+                                    style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                                    value={apiPort}
+                                    onChangeText={setApiPort}
+                                    placeholder="8787"
+                                    placeholderTextColor={colors.placeholder}
+                                    keyboardType="number-pad"
+                                />
+                            </View>
+                            <View style={styles.buttonRow}>
+                                <TouchableOpacity
+                                    style={[styles.cancelButton, { borderColor: colors.border }]}
+                                    onPress={() => {
+                                        setIsEditingApi(false);
+                                        loadApiSettings();
+                                    }}
+                                >
+                                    <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                                    onPress={saveApiSettings}
+                                >
+                                    <Text style={styles.saveButtonText}>Save</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    ) : (
+                        <TouchableOpacity style={styles.linkRow} onPress={() => setIsEditingApi(true)}>
+                            <View style={styles.linkInfo}>
+                                <Ionicons name="server-outline" size={20} color={colors.icon} />
+                                <Text style={[styles.statLabel, { color: colors.text, marginLeft: 12 }]}>
+                                    {apiHost}:{apiPort}
+                                </Text>
+                            </View>
+                            <Ionicons name="pencil" size={16} color={colors.iconSecondary} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+
             {/* Appearance Section */}
             <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Appearance</Text>
@@ -117,26 +253,26 @@ export function SettingsScreen() {
                 <View style={[styles.card, { backgroundColor: colors.card }]}>
                     <View style={styles.statRow}>
                         <Text style={[styles.statLabel, { color: colors.text }]}>Total Sessions</Text>
-                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>{stats?.total_sessions ?? 0}</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>{stats?.totalSessions ?? 0}</Text>
                     </View>
                     <View style={[styles.divider, { backgroundColor: colors.divider }]} />
                     <View style={styles.statRow}>
                         <Text style={[styles.statLabel, { color: colors.text }]}>Total Messages</Text>
-                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>{stats?.total_messages ?? 0}</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>{stats?.totalMessages ?? 0}</Text>
                     </View>
                 </View>
             </View>
 
-            {stats?.by_provider && Object.keys(stats.by_provider).length > 0 && (
+            {stats?.sessionsByProvider && stats.sessionsByProvider.length > 0 && (
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Sessions by Provider</Text>
                     <View style={[styles.card, { backgroundColor: colors.card }]}>
-                        {Object.entries(stats.by_provider).map(([provider, count], index) => (
-                            <React.Fragment key={provider}>
+                        {stats.sessionsByProvider.map((item, index) => (
+                            <React.Fragment key={item.provider}>
                                 {index > 0 && <View style={[styles.divider, { backgroundColor: colors.divider }]} />}
                                 <View style={styles.statRow}>
-                                    <Text style={[styles.statLabel, { color: colors.text }]}>{provider}</Text>
-                                    <Text style={[styles.statValue, { color: colors.textTertiary }]}>{count}</Text>
+                                    <Text style={[styles.statLabel, { color: colors.text }]}>{item.provider}</Text>
+                                    <Text style={[styles.statValue, { color: colors.textTertiary }]}>{item.count}</Text>
                                 </View>
                             </React.Fragment>
                         ))}
@@ -161,7 +297,7 @@ export function SettingsScreen() {
                                         <Text style={[styles.providerName, { color: colors.text }]}>{provider.name}</Text>
                                     </View>
                                     <Text style={[styles.providerCount, { color: colors.textTertiary }]}>
-                                        {provider.session_count} sessions
+                                        {provider.sessionCount ?? 0} sessions
                                     </Text>
                                 </View>
                             </React.Fragment>
@@ -184,11 +320,6 @@ export function SettingsScreen() {
                     <View style={styles.statRow}>
                         <Text style={[styles.statLabel, { color: colors.text }]}>Version</Text>
                         <Text style={[styles.statValue, { color: colors.textTertiary }]}>1.0.0</Text>
-                    </View>
-                    <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-                    <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: colors.text }]}>API Server</Text>
-                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>localhost:8787</Text>
                     </View>
                 </View>
             </View>
@@ -291,6 +422,57 @@ const styles = StyleSheet.create({
     divider: {
         height: 1,
         marginLeft: 16,
+    },
+    connectionInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    inputRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+    },
+    inputLabel: {
+        fontSize: 16,
+        width: 60,
+    },
+    input: {
+        flex: 1,
+        fontSize: 16,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderRadius: 8,
+        marginLeft: 12,
+    },
+    buttonRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        gap: 12,
+    },
+    cancelButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    cancelButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    saveButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+    },
+    saveButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     footer: {
         alignItems: 'center',
