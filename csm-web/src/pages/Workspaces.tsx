@@ -1,17 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Search, FolderOpen, MessageSquare, ExternalLink, MoreVertical, AlertCircle, Loader2 } from 'lucide-react';
 import { useApi } from '../context/ApiContext';
-
-// Format timestamp to readable date
-function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-}
+import { formatDate } from '@csm/shared';
 
 export default function Workspaces() {
     const { workspaces, sessions, isLoading, error } = useApi();

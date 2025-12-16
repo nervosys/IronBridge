@@ -30,20 +30,7 @@ import {
     Area,
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
-
-// Helper to format relative time
-function formatRelativeTime(timestamp: number): string {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return 'just now';
-}
+import { formatRelativeTime } from '@csm/shared';
 
 // Activity log type for tracking agent actions
 interface ActivityLogEntry {

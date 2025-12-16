@@ -30,6 +30,7 @@ import {
     useStartSwarm,
     usePauseSwarm,
 } from '../hooks/useApi';
+import { formatRelativeTime } from '@csm/shared';
 import type { Swarm } from '../api/types';
 
 // Agent role templates
@@ -76,20 +77,6 @@ const communicationProtocols = [
     { id: 'a2a', name: 'A2A', fullName: 'Agent-to-Agent', description: 'Direct agent communication', category: 'Communication' },
     { id: 'nanda', name: 'NANDA', description: 'Decentralized discovery & coordination', category: 'Discovery' },
 ];
-
-// Helper to format relative time
-function formatRelativeTime(timestamp: number): string {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return 'just now';
-}
 
 export default function Swarms() {
     const { swarms, agents, isLoading, error, refetchSwarms } = useApi();
