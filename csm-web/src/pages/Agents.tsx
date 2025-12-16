@@ -49,7 +49,7 @@ export default function Agents() {
     const agentsData = useMemo(() => {
         return agents.map(agent => {
             // Count sessions that might be associated with this agent's provider
-            const agentSessions = sessions.filter(s => s.provider === agent.provider);
+            const agentSessions = sessions.filter(s => s.provider === agent.providerId);
             const tokenCount = agentSessions.reduce((sum, s) => sum + (s.tokenCount || 0), 0);
             const messageCount = agentSessions.reduce((sum, s) => sum + s.messageCount, 0);
 
@@ -60,7 +60,7 @@ export default function Agents() {
                 messages: messageCount,
                 currentTask: agent.description || 'No active task',
                 progress: 0,
-                protocol: agent.tools.includes('mcp') ? 'mcp' : undefined,
+                protocol: agent.tools?.includes('mcp') ? 'mcp' : undefined,
             };
         });
     }, [agents, sessions]);
@@ -278,7 +278,7 @@ export default function Agents() {
                                                     <span className="ml-1">{agent.status}</span>
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{agent.provider} • {agent.model}</p>
+                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{agent.providerId || 'N/A'} • {agent.model}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -318,12 +318,12 @@ export default function Agents() {
                                 </div>
 
                                 {/* Tools Badge */}
-                                {agent.tools.length > 0 && (
+                                {(agent.tools?.length ?? 0) > 0 && (
                                     <div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <Network size={14} className="text-[hsl(var(--primary))]" />
                                             <span className="text-sm text-[hsl(var(--muted-foreground))]">Tools:</span>
-                                            {agent.tools.slice(0, 3).map(tool => (
+                                            {agent.tools?.slice(0, 3).map(tool => (
                                                 <span
                                                     key={tool}
                                                     className="px-2 py-0.5 rounded-full text-xs bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-medium"
@@ -331,9 +331,9 @@ export default function Agents() {
                                                     {tool}
                                                 </span>
                                             ))}
-                                            {agent.tools.length > 3 && (
+                                            {(agent.tools?.length ?? 0) > 3 && (
                                                 <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                                                    +{agent.tools.length - 3} more
+                                                    +{(agent.tools?.length ?? 0) - 3} more
                                                 </span>
                                             )}
                                         </div>

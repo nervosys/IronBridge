@@ -286,7 +286,7 @@ export function SettingsScreen() {
                                         <Text style={[styles.providerName, { color: colors.text }]}>{provider.name}</Text>
                                     </View>
                                     <Text style={[styles.providerCount, { color: colors.textTertiary }]}>
-                                        {provider.sessionCount ?? 0} sessions
+                                        {provider.status}
                                     </Text>
                                 </View>
                             </React.Fragment>

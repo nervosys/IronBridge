@@ -397,7 +397,7 @@ export default function Swarms() {
                                                     </div>
                                                 </div>
                                                 <div className="text-right text-sm">
-                                                    <div className="text-[hsl(var(--foreground))]">{agent?.provider || 'N/A'}</div>
+                                                    <div className="text-[hsl(var(--foreground))]">{agent?.providerId || 'N/A'}</div>
                                                     <div className="text-xs text-[hsl(var(--muted-foreground))]">
                                                         {agent?.model || 'N/A'}
                                                     </div>
@@ -618,7 +618,7 @@ export default function Swarms() {
                                         <option disabled>No agents available</option>
                                     ) : (
                                         agents.map(agent => (
-                                            <option key={agent.id} value={agent.id}>{agent.name} ({agent.provider})</option>
+                                            <option key={agent.id} value={agent.id}>{agent.name} ({agent.providerId || 'N/A'})</option>
                                         ))
                                     )}
                                 </select>

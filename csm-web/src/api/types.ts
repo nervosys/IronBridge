@@ -30,39 +30,31 @@ export type {
     Statistics,
 
     // Chat/Completion types
-    ChatMessage,
     ChatCompletionRequest,
     ChatCompletionResponse,
-    ChatChoice,
     TokenUsage,
     StreamChunk,
-    StreamDelta,
 
     // Agent types
     Agent,
-    AgentCapability,
     AgentTask,
     AgentMessage,
     AgentRun,
     Swarm,
     SwarmAgent,
+    AgentStatus,
+    AgentRole,
+    SwarmStatus,
 
     // MCP types
-    McpServer,
     McpTool,
     McpToolCall,
     McpToolResult,
-    McpResource,
-    McpPrompt,
-    McpPromptArgument,
 
     // Settings
     ThemeMode,
     AppSettings,
 } from '@csm/shared';
-
-// Re-export some as values if needed
-export { ThemeMode } from '@csm/shared';
 
 // =============================================================================
 // Web-Specific Types (extend shared types if needed)
@@ -182,7 +174,7 @@ export interface WorkflowEdge {
     condition?: string;
 }
 
-export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'error';
+// SwarmStatus is exported from @csm/shared
 
 // =============================================================================
 // Git Integration Models
@@ -300,8 +292,23 @@ export interface ProviderAccount {
 // WebSocket Events
 // =============================================================================
 
-import type { Session, Message, ProviderStatus, ApiError } from '@csm/shared';
-    | { type: 'provider_status'; provider: string; status: ProviderStatus }
-    | { type: 'swarm_status'; swarmId: string; status: SwarmStatus }
+import type {
+    Session as WsSession,
+    Message as WsMessage,
+    ProviderStatus as WsProviderStatus,
+    ApiError as WsApiError,
+    SwarmStatus as WsSwarmStatus
+} from '@csm/shared';
+
+export type WebSocketEvent =
+    | { type: 'connected' }
+    | { type: 'disconnected' }
+    | { type: 'session_update'; session: WsSession }
+    | { type: 'session_created'; session: WsSession }
+    | { type: 'session_updated'; session: WsSession }
+    | { type: 'session_deleted'; sessionId: string }
+    | { type: 'message_created'; sessionId: string; message: WsMessage }
+    | { type: 'provider_status'; provider: string; status: WsProviderStatus }
+    | { type: 'swarm_status'; swarmId: string; status: WsSwarmStatus }
     | { type: 'sync_progress'; progress: number; total: number }
-    | { type: 'error'; error: ApiError };
+    | { type: 'error'; error: WsApiError };

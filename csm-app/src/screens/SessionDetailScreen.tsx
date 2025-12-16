@@ -242,7 +242,7 @@ export function SessionDetailScreen({ route }: Props) {
 
     const renderToolInvocation = (tool: ToolInvocation, index: number) => {
         const hasFileChanges = tool.fileChanges && tool.fileChanges.length > 0;
-        const toolData = tool.toolSpecificData;
+        const toolData = tool.toolSpecificData as { kind?: string; commandLine?: string | { original?: string } } | undefined;
 
         // Extract command for terminal tools
         let command = '';
@@ -254,12 +254,12 @@ export function SessionDetailScreen({ route }: Props) {
 
         // Safely get invocation message as string - handle all object cases
         let invocationMessage = '';
-        if (tool.invocation_message) {
-            if (typeof tool.invocation_message === 'string') {
-                invocationMessage = tool.invocation_message;
-            } else if (typeof tool.invocation_message === 'object') {
+        if (tool.invocationMessage) {
+            if (typeof tool.invocationMessage === 'string') {
+                invocationMessage = tool.invocationMessage;
+            } else if (typeof tool.invocationMessage === 'object') {
                 // Extract value from object, or stringify if needed
-                const msg = tool.invocationMessage as any;
+                const msg = tool.invocationMessage as { value?: string };
                 invocationMessage = msg.value && typeof msg.value === 'string'
                     ? msg.value
                     : '';
@@ -435,21 +435,21 @@ export function SessionDetailScreen({ route }: Props) {
                         </View>
                     ) : null}
 
-                    {(change.old_string || change.new_string) && (
+                    {(change.oldString || change.newString) && (
                         <View style={styles.timelineDiff}>
-                            {change.old_string && (
+                            {change.oldString && (
                                 <View style={styles.timelineDiffOld}>
                                     <Text style={styles.timelineDiffLabel}>- Removed</Text>
                                     <Text style={styles.timelineDiffText} numberOfLines={3}>
-                                        {typeof change.old_string === 'string' ? change.old_string : ''}
+                                        {typeof change.oldString === 'string' ? change.oldString : ''}
                                     </Text>
                                 </View>
                             )}
-                            {change.new_string && (
+                            {change.newString && (
                                 <View style={styles.timelineDiffNew}>
                                     <Text style={styles.timelineDiffLabel}>+ Added</Text>
                                     <Text style={styles.timelineDiffText} numberOfLines={3}>
-                                        {typeof change.new_string === 'string' ? change.new_string : ''}
+                                        {typeof change.newString === 'string' ? change.newString : ''}
                                     </Text>
                                 </View>
                             )}
