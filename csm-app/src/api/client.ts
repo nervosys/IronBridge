@@ -22,17 +22,21 @@ export const DEFAULT_PORT = '8787';
 
 // API base URL - use localhost for web, local IP for mobile devices
 const getBaseUrl = () => {
-    if (Platform.OS === 'android') {
-        // Android emulator uses 10.0.2.2 for host localhost
-        // Physical Android device uses local network IP
-        return `http://${LOCAL_IP}:8787`;
-    }
-    if (Platform.OS === 'ios') {
-        // iOS simulator and physical device use local network IP
-        return `http://${LOCAL_IP}:8787`;
-    }
-    // Web
-    return 'http://localhost:8787';
+    const url = (() => {
+        if (Platform.OS === 'android') {
+            // Android emulator uses 10.0.2.2 for host localhost
+            // Physical Android device uses local network IP
+            return `http://${LOCAL_IP}:8787`;
+        }
+        if (Platform.OS === 'ios') {
+            // iOS simulator and physical device use local network IP
+            return `http://${LOCAL_IP}:8787`;
+        }
+        // Web - use 127.0.0.1 instead of localhost for better compatibility
+        return 'http://127.0.0.1:8787';
+    })();
+    console.log(`[API] Platform: ${Platform.OS}, Base URL: ${url}`);
+    return url;
 };
 
 export const apiClient = axios.create({

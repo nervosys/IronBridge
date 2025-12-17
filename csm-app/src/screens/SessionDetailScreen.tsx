@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
     View,
     Text,
@@ -8,17 +8,27 @@ import {
     ActivityIndicator,
     TouchableOpacity,
     ScrollView,
+    Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { RouteProp } from '@react-navigation/native';
-import { getSession, Message, SessionWithMessages, ToolInvocation, FileChange } from '../api';
+import { RouteProp, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { getSession, Message, SessionWithMessages, ToolInvocation, FileChange, deleteSession } from '../api';
 import { RootStackParamList } from '../navigation/types';
 import { formatDate } from '../utils/formatDate';
 import { useTheme } from '../context/ThemeContext';
+import {
+    formatSessionAsMarkdown,
+    formatSessionAsText,
+    exportToFile,
+    shareContent,
+    ExportFormat,
+} from '../utils/export';
 
 type Props = {
     route: RouteProp<RootStackParamList, 'SessionDetail'>;
+    navigation: NativeStackNavigationProp<RootStackParamList, 'SessionDetail'>;
 };
 
 // Helper functions for tool display
@@ -191,7 +201,7 @@ const FileChangeCard = ({ change, index }: { change: FileChange; index: number }
     );
 };
 
-export function SessionDetailScreen({ route }: Props) {
+export function SessionDetailScreen({ route, navigation }: Props) {
     const { sessionId } = route.params;
     const { colors } = useTheme();
     const [viewMode, setViewMode] = useState<'messages' | 'changes'>('messages');
@@ -206,6 +216,86 @@ export function SessionDetailScreen({ route }: Props) {
         queryKey: ['session', sessionId],
         queryFn: () => getSession(sessionId),
     });
+
+    // Setup header with export button
+    useLayoutEffect(() => {
+        if (session) {
+            navigation.setOptions({
+                title: session.title || 'Session',
+                headerRight: () => (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                            style={{ paddingHorizontal: 8 }}
+                            onPress={handleExport}
+                        >
+                            <Ionicons name="share-outline" size={24} color={colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={{ paddingHorizontal: 8 }}
+                            onPress={handleDelete}
+                        >
+                            <Ionicons name="trash-outline" size={24} color={colors.error} />
+                        </TouchableOpacity>
+                    </View>
+                ),
+            });
+        }
+    }, [session, navigation, colors]);
+
+    const handleExport = () => {
+        if (!session) return;
+
+        Alert.alert('Export Session', `Export "${session.title || 'Session'}"`, [
+            {
+                text: 'Share as Markdown',
+                onPress: async () => {
+                    const markdown = formatSessionAsMarkdown(session);
+                    await shareContent(session.title || 'Session', markdown);
+                },
+            },
+            {
+                text: 'Save as Markdown',
+                onPress: async () => {
+                    const markdown = formatSessionAsMarkdown(session);
+                    const filename = `session_${sessionId.slice(0, 8)}.md`;
+                    await exportToFile(markdown, filename, 'text/markdown');
+                },
+            },
+            {
+                text: 'Save as JSON',
+                onPress: async () => {
+                    const json = JSON.stringify(session, null, 2);
+                    const filename = `session_${sessionId.slice(0, 8)}.json`;
+                    await exportToFile(json, filename, 'application/json');
+                },
+            },
+            { text: 'Cancel', style: 'cancel' },
+        ]);
+    };
+
+    const handleDelete = () => {
+        if (!session) return;
+
+        Alert.alert(
+            'Delete Session',
+            `Are you sure you want to delete "${session.title || 'this session'}"? This cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteSession(sessionId);
+                            navigation.goBack();
+                        } catch (err) {
+                            Alert.alert('Error', 'Failed to delete session');
+                        }
+                    },
+                },
+            ]
+        );
+    };
 
     // Collect all file changes from all messages for the changes timeline
     const allFileChanges = React.useMemo(() => {
@@ -316,8 +406,9 @@ export function SessionDetailScreen({ route }: Props) {
             <View
                 style={[
                     styles.messageContainer,
-                    isUser ? styles.userMessage : styles.assistantMessage,
-                    isSystem && styles.systemMessage,
+                    { backgroundColor: colors.card },
+                    isUser ? [styles.userMessage, { borderLeftColor: colors.primary }] : [styles.assistantMessage, { borderLeftColor: colors.success }],
+                    isSystem && [styles.systemMessage, { borderLeftColor: colors.textTertiary }],
                 ]}
             >
                 <View style={styles.messageHeader}>
@@ -331,13 +422,14 @@ export function SessionDetailScreen({ route }: Props) {
                                         : 'sparkles-outline'
                             }
                             size={14}
-                            color={isUser ? '#007AFF' : isSystem ? '#8E8E93' : '#10A37F'}
+                            color={isUser ? colors.primary : isSystem ? colors.textTertiary : colors.success}
                         />
                         <Text
                             style={[
                                 styles.roleText,
-                                isUser && styles.userRoleText,
-                                isSystem && styles.systemRoleText,
+                                { color: colors.text },
+                                isUser && { color: colors.primary },
+                                isSystem && { color: colors.textTertiary },
                             ]}
                         >
                             {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
@@ -345,31 +437,31 @@ export function SessionDetailScreen({ route }: Props) {
                     </View>
                     <View style={styles.headerRight}>
                         {hasTools && (
-                            <View style={styles.toolBadge}>
+                            <View style={[styles.toolBadge, { backgroundColor: colors.surface }]}>
                                 <Ionicons name="construct-outline" size={10} color="#8B5CF6" />
-                                <Text style={styles.toolBadgeText}>{item.toolInvocations!.length}</Text>
+                                <Text style={[styles.toolBadgeText, { color: colors.textSecondary }]}>{item.toolInvocations!.length}</Text>
                             </View>
                         )}
                         {(item.model || item.modelId) && (
-                            <Text style={styles.modelText}>{item.model || item.modelId}</Text>
+                            <Text style={[styles.modelText, { color: colors.textTertiary }]}>{item.model || item.modelId}</Text>
                         )}
                     </View>
                 </View>
 
-                <Text style={styles.messageContent} selectable={true}>
+                <Text style={[styles.messageContent, { color: colors.text }]} selectable={true}>
                     {item.contentRaw || item.content}
                 </Text>
 
                 {hasTools && (
-                    <View style={styles.toolsSection}>
-                        <Text style={styles.toolsSectionTitle}>
+                    <View style={[styles.toolsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={[styles.toolsSectionTitle, { color: colors.textSecondary }]}>
                             Tool Invocations ({item.toolInvocations!.length})
                         </Text>
                         {item.toolInvocations!.map((tool, idx) => renderToolInvocation(tool, idx))}
                     </View>
                 )}
 
-                <Text style={styles.timestampText}>
+                <Text style={[styles.timestampText, { color: colors.textTertiary }]}>
                     {formatDate(item.createdAt ?? undefined)}
                 </Text>
             </View>

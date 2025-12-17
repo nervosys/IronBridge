@@ -8,6 +8,29 @@ use serde::{Deserialize, Serialize};
 
 use super::state::AppState;
 
+/// Check if a string is an empty code block marker (just ``` with no content)
+fn is_empty_code_block(s: &str) -> bool {
+    // Match patterns like "```", "```\n", "```language", "```\n```", "```\n\n```"
+    let s = s.trim();
+    if s == "```" {
+        return true;
+    }
+    // Check for code block with just a language identifier and no content
+    if s.starts_with("```") && !s.contains('\n') {
+        return true;
+    }
+    // Check for empty code block with opening and closing (possibly with whitespace-only lines)
+    let lines: Vec<&str> = s.lines().collect();
+    if lines.len() >= 2 && lines[0].starts_with("```") && lines.last() == Some(&"```") {
+        // Check if all lines between opening and closing are empty or whitespace
+        let content_lines = &lines[1..lines.len()-1];
+        if content_lines.iter().all(|line| line.trim().is_empty()) {
+            return true;
+        }
+    }
+    false
+}
+
 // =============================================================================
 // Response Types
 // =============================================================================
@@ -71,6 +94,41 @@ fn derive_workspace_name(workspace_id: &str) -> String {
         .to_string()
 }
 
+/// Look up workspace path from VS Code workspace storage
+fn lookup_workspace_path(workspace_hash: &str) -> Option<String> {
+    // VS Code stores workspace info in %APPDATA%/Code/User/workspaceStorage/<hash>/workspace.json
+    let workspace_storage = dirs::config_dir()?.join("Code/User/workspaceStorage").join(workspace_hash).join("workspace.json");
+    
+    if workspace_storage.exists() {
+        if let Ok(content) = std::fs::read_to_string(&workspace_storage) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                // Extract folder path from workspace.json
+                if let Some(folder) = json.get("folder").and_then(|f| f.as_str()) {
+                    // Decode file:// URL
+                    let path = folder
+                        .strip_prefix("file:///")
+                        .unwrap_or(folder)
+                        .replace("%3A", ":")
+                        .replace("%20", " ");
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Get workspace info (name and path) from hash
+fn get_workspace_info(workspace_hash: &str) -> (String, String) {
+    if let Some(path) = lookup_workspace_path(workspace_hash) {
+        let name = derive_workspace_name(&path);
+        (name, path)
+    } else {
+        // Fallback: use hash as both name and path
+        (workspace_hash.to_string(), String::new())
+    }
+}
+
 // =============================================================================
 // Health Check
 // =============================================================================
@@ -89,36 +147,61 @@ pub async fn health_check() -> impl Responder {
 pub async fn list_workspaces(state: web::Data<AppState>) -> impl Responder {
     let db = state.db.lock().unwrap();
     
-    // Query unique workspaces from sessions table (harvest schema)
-    // workspace_name column contains the actual path (e.g., "c:\Users\...")
-    // workspace_id is a hash identifier
+    // First try to get workspaces from the workspaces table
     let result: Result<Vec<serde_json::Value>, _> = (|| {
         let mut stmt = db.conn.prepare(
-            "SELECT workspace_id, workspace_name, provider, COUNT(*) as session_count
-             FROM sessions 
-             WHERE workspace_id IS NOT NULL AND workspace_id != ''
-             GROUP BY workspace_id 
-             ORDER BY MAX(updated_at) DESC"
+            "SELECT w.id, w.name, w.path, w.provider, COUNT(s.id) as session_count
+             FROM workspaces w
+             LEFT JOIN sessions s ON w.id = s.workspace_id
+             GROUP BY w.id
+             ORDER BY MAX(s.updated_at) DESC, w.updated_at DESC"
         )?;
         
         let workspaces: Vec<serde_json::Value> = stmt
             .query_map([], |row| {
                 let id: String = row.get(0)?;
-                let workspace_name: Option<String> = row.get(1)?;
-                let provider: String = row.get(2)?;
-                let count: i64 = row.get(3)?;
-                // workspace_name contains the actual path, use it or fall back to id
-                let path = workspace_name.unwrap_or_else(|| id.clone());
-                let name = derive_workspace_name(&path);
+                let name: String = row.get(1)?;
+                let path: Option<String> = row.get(2)?;
+                let provider: String = row.get(3)?;
+                let count: i64 = row.get(4)?;
                 Ok(serde_json::json!({
                     "id": id,
                     "name": name,
-                    "path": path,
+                    "path": path.unwrap_or_default(),
                     "provider": provider,
                     "session_count": count,
                 }))
             })?
             .collect::<Result<Vec<_>, _>>()?;
+        
+        // If workspaces table is empty, derive workspaces from sessions
+        if workspaces.is_empty() {
+            let mut stmt = db.conn.prepare(
+                "SELECT workspace_id, provider, COUNT(*) as session_count
+                 FROM sessions
+                 WHERE workspace_id IS NOT NULL AND workspace_id != ''
+                 GROUP BY workspace_id
+                 ORDER BY MAX(updated_at) DESC"
+            )?;
+            
+            let derived: Vec<serde_json::Value> = stmt
+                .query_map([], |row| {
+                    let id: String = row.get(0)?;
+                    let provider: String = row.get(1)?;
+                    let count: i64 = row.get(2)?;
+                    let (name, path) = get_workspace_info(&id);
+                    Ok(serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "path": path,
+                        "provider": provider,
+                        "session_count": count,
+                    }))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            
+            return Ok(derived);
+        }
         
         Ok::<_, rusqlite::Error>(workspaces)
     })();
@@ -138,23 +221,23 @@ pub async fn get_workspace(
     
     let result: Result<Option<serde_json::Value>, _> = (|| {
         let mut stmt = db.conn.prepare(
-            "SELECT workspace_id, workspace_name, provider, COUNT(*) as session_count
-             FROM sessions 
-             WHERE workspace_id = ?1
-             GROUP BY workspace_id"
+            "SELECT w.id, w.name, w.path, w.provider, COUNT(s.id) as session_count
+             FROM workspaces w
+             LEFT JOIN sessions s ON w.id = s.workspace_id
+             WHERE w.id = ?1
+             GROUP BY w.id"
         )?;
         
         let workspace = stmt.query_row([&workspace_id], |row| {
             let id: String = row.get(0)?;
-            let workspace_name: Option<String> = row.get(1)?;
-            let provider: String = row.get(2)?;
-            let count: i64 = row.get(3)?;
-            let path = workspace_name.unwrap_or_else(|| id.clone());
-            let name = derive_workspace_name(&path);
+            let name: String = row.get(1)?;
+            let path: Option<String> = row.get(2)?;
+            let provider: String = row.get(3)?;
+            let count: i64 = row.get(4)?;
             Ok(serde_json::json!({
                 "id": id,
                 "name": name,
-                "path": path,
+                "path": path.unwrap_or_default(),
                 "provider": provider,
                 "session_count": count,
             }))
@@ -417,10 +500,27 @@ fn extract_response_with_tools(response: &serde_json::Value) -> (String, Vec<ser
                     // Skip thinking blocks or include encrypted content reference
                     continue;
                 }
+                "inlineReference" => {
+                    // Inline code reference (method names, file paths, symbols)
+                    // These are stored as separate objects with a "name" field
+                    if let Some(inline_ref) = item.get("inlineReference") {
+                        if let Some(name) = inline_ref.get("name").and_then(|n| n.as_str()) {
+                            // Wrap the name in backticks to represent inline code
+                            text_parts.push(format!("`{}`", name));
+                        }
+                    }
+                }
                 _ => {
-                    // Text/markdown content
-                    if let Some(value) = item.get("value").and_then(|v| v.as_str()) {
-                        if !value.is_empty() {
+                    // Check if this item contains an inlineReference (VS Code stores them without a kind)
+                    if let Some(inline_ref) = item.get("inlineReference") {
+                        if let Some(name) = inline_ref.get("name").and_then(|n| n.as_str()) {
+                            // Wrap the name in backticks to represent inline code
+                            text_parts.push(format!("`{}`", name));
+                        }
+                    } else if let Some(value) = item.get("value").and_then(|v| v.as_str()) {
+                        // Text/markdown content - filter out empty code block markers
+                        let trimmed = value.trim();
+                        if !trimmed.is_empty() && !is_empty_code_block(trimmed) {
                             text_parts.push(value.to_string());
                         }
                     }
@@ -429,7 +529,7 @@ fn extract_response_with_tools(response: &serde_json::Value) -> (String, Vec<ser
         }
     }
     
-    (text_parts.join("\n\n"), tool_invocations)
+    (text_parts.join(""), tool_invocations)
 }
 
 /// Extract file changes from tool-specific data, presentation, and source

@@ -1,4 +1,6 @@
 import { apiClient } from './client';
+import { OAuthProviderType, mapChatProviderToOAuth } from './oauth';
+import { oauthService } from '../services/oauth';
 
 // Chat Provider Types
 export type ChatProviderType =
@@ -8,35 +10,15 @@ export type ChatProviderType =
     | 'openrouter'
     | 'groq'
     | 'together'
+    | 'google'
     | 'custom';
 
 // Authentication method for providers
 export type AuthMethod = 'api-key' | 'oauth';
 
-// OAuth configuration for providers
-export interface OAuthConfig {
-    authUrl: string;
-    tokenUrl: string;
-    clientId?: string;
-    scopes: string[];
-    redirectUri: string;
-}
-
-// OAuth provider configurations
-export const OAUTH_CONFIGS: Partial<Record<ChatProviderType, OAuthConfig>> = {
-    openai: {
-        authUrl: 'https://platform.openai.com/oauth/authorize',
-        tokenUrl: 'https://api.openai.com/v1/oauth/token',
-        scopes: ['model.read', 'model.request'],
-        redirectUri: 'csm://oauth/callback',
-    },
-    anthropic: {
-        authUrl: 'https://console.anthropic.com/oauth/authorize',
-        tokenUrl: 'https://api.anthropic.com/v1/oauth/token',
-        scopes: ['messages:write'],
-        redirectUri: 'csm://oauth/callback',
-    },
-};
+// Re-export OAuth types for convenience
+export type { OAuthProviderType } from './oauth';
+export { OAUTH_PROVIDERS, SCOPE_DESCRIPTIONS, mapChatProviderToOAuth } from './oauth';
 
 export interface ChatProvider {
     id: string;
@@ -48,9 +30,9 @@ export interface ChatProvider {
     isEnabled: boolean;
     isDefault?: boolean;
     authMethod?: AuthMethod;
-    oauthToken?: string;
-    oauthRefreshToken?: string;
-    oauthExpiresAt?: number;
+    // OAuth tokens (managed by AuthContext, stored securely)
+    oauthProvider?: OAuthProviderType;
+    oauthConnected?: boolean;
 }
 
 export interface ChatMessage {
@@ -106,6 +88,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
         model: 'gpt-4o',
         isEnabled: false,
         authMethod: 'api-key',
+        oauthProvider: 'openai',
     },
     {
         id: 'openai-gpt4-mini',
@@ -115,6 +98,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
         model: 'gpt-4o-mini',
         isEnabled: false,
         authMethod: 'api-key',
+        oauthProvider: 'openai',
     },
     {
         id: 'anthropic-claude',
@@ -124,6 +108,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
         model: 'claude-3-5-sonnet-20241022',
         isEnabled: false,
         authMethod: 'api-key',
+        oauthProvider: 'anthropic',
     },
     {
         id: 'anthropic-haiku',
@@ -133,6 +118,27 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
         model: 'claude-3-5-haiku-20241022',
         isEnabled: false,
         authMethod: 'api-key',
+        oauthProvider: 'anthropic',
+    },
+    {
+        id: 'google-gemini',
+        type: 'google',
+        name: 'Google Gemini Pro',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        model: 'gemini-1.5-pro',
+        isEnabled: false,
+        authMethod: 'api-key',
+        oauthProvider: 'google',
+    },
+    {
+        id: 'azure-openai',
+        type: 'azure-openai',
+        name: 'Azure OpenAI',
+        baseUrl: '', // User must configure endpoint
+        model: 'gpt-4',
+        isEnabled: false,
+        authMethod: 'api-key',
+        oauthProvider: 'azure',
     },
     {
         id: 'groq-llama',
@@ -193,11 +199,36 @@ function formatMessagesForProvider(
         }));
 }
 
+// Get authorization header for a provider (supports both API key and OAuth)
+async function getAuthHeader(provider: ChatProvider): Promise<Record<string, string>> {
+    // If OAuth is configured and connected, use OAuth token
+    if (provider.authMethod === 'oauth' && provider.oauthProvider && provider.oauthConnected) {
+        const token = await oauthService.getAccessToken(provider.oauthProvider);
+        if (token) {
+            return { 'Authorization': `Bearer ${token}` };
+        }
+    }
+
+    // Fall back to API key
+    if (provider.apiKey) {
+        if (provider.type === 'anthropic') {
+            return { 'x-api-key': provider.apiKey };
+        }
+        if (provider.type === 'azure-openai') {
+            return { 'api-key': provider.apiKey };
+        }
+        return { 'Authorization': `Bearer ${provider.apiKey}` };
+    }
+
+    return {};
+}
+
 // Send chat completion request
 export async function sendChatCompletion(
     request: ChatCompletionRequest
 ): Promise<ChatCompletionResponse> {
     const { provider, messages, temperature = 0.7, maxTokens = 4096 } = request;
+    const authHeaders = await getAuthHeader(provider);
 
     // Build request based on provider type
     switch (provider.type) {
@@ -210,7 +241,7 @@ export async function sendChatCompletion(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${provider.apiKey}`,
+                    ...authHeaders,
                     ...(provider.type === 'openrouter' && {
                         'HTTP-Referer': 'https://github.com/nervosys/ChatSessionManager',
                         'X-Title': 'CSM Mobile App',
@@ -248,7 +279,7 @@ export async function sendChatCompletion(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': provider.apiKey || '',
+                    ...authHeaders,
                     'anthropic-version': '2023-06-01',
                 },
                 body: JSON.stringify({
@@ -283,7 +314,7 @@ export async function sendChatCompletion(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'api-key': provider.apiKey || '',
+                    ...authHeaders,
                 },
                 body: JSON.stringify({
                     messages: formatMessagesForProvider(messages as any, provider.type),
@@ -308,6 +339,55 @@ export async function sendChatCompletion(
                     total: data.usage.total_tokens,
                 } : undefined,
                 finishReason: data.choices[0]?.finish_reason,
+            };
+        }
+
+        case 'google': {
+            // Google Gemini API format
+            const geminiMessages = messages.map(m => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }],
+            }));
+
+            // Use API key in URL for Gemini
+            const apiKey = provider.oauthConnected && provider.oauthProvider
+                ? await oauthService.getAccessToken(provider.oauthProvider)
+                : provider.apiKey;
+
+            const response = await fetch(
+                `${provider.baseUrl}/models/${provider.model}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: geminiMessages,
+                        generationConfig: {
+                            temperature,
+                            maxOutputTokens: maxTokens,
+                        },
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`API Error: ${response.status} - ${error}`);
+            }
+
+            const data = await response.json();
+            const candidate = data.candidates?.[0];
+            return {
+                id: generateId(),
+                content: candidate?.content?.parts?.[0]?.text || '',
+                model: provider.model,
+                tokens: data.usageMetadata ? {
+                    prompt: data.usageMetadata.promptTokenCount || 0,
+                    completion: data.usageMetadata.candidatesTokenCount || 0,
+                    total: data.usageMetadata.totalTokenCount || 0,
+                } : undefined,
+                finishReason: candidate?.finishReason,
             };
         }
 

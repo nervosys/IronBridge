@@ -261,35 +261,37 @@ export function ChatScreen({ navigation }: Props) {
                 key={message.id || index}
                 style={[
                     styles.messageBubble,
-                    isUser ? styles.userBubble : styles.assistantBubble,
-                    isError && styles.errorBubble,
+                    isUser
+                        ? [styles.userBubble, { backgroundColor: colors.primary }]
+                        : [styles.assistantBubble, { backgroundColor: colors.card, borderColor: colors.border }],
+                    isError && [styles.errorBubble, { backgroundColor: isDark ? '#3C1A1A' : '#FFF5F5', borderColor: colors.error }],
                 ]}
             >
                 {!isUser && (
                     <View style={styles.assistantHeader}>
-                        <Ionicons name="sparkles" size={14} color="#8E8E93" />
-                        <Text style={styles.modelText}>
+                        <Ionicons name="sparkles" size={14} color={colors.textTertiary} />
+                        <Text style={[styles.modelText, { color: colors.textTertiary }]}>
                             {message.model || activeSession?.provider.name || 'Assistant'}
                         </Text>
                     </View>
                 )}
                 {message.isStreaming ? (
                     <View style={styles.streamingContainer}>
-                        <ActivityIndicator size="small" color="#007AFF" />
-                        <Text style={styles.streamingText}>Thinking...</Text>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={[styles.streamingText, { color: colors.textSecondary }]}>Thinking...</Text>
                     </View>
                 ) : isError ? (
                     <View style={styles.errorContainer}>
-                        <Ionicons name="alert-circle" size={16} color="#FF3B30" />
-                        <Text style={styles.errorText}>{message.error}</Text>
+                        <Ionicons name="alert-circle" size={16} color={colors.error} />
+                        <Text style={[styles.errorText, { color: colors.error }]}>{message.error}</Text>
                     </View>
                 ) : (
-                    <Text style={[styles.messageText, isUser && styles.userMessageText]}>
+                    <Text style={[styles.messageText, { color: isUser ? '#FFFFFF' : colors.text }]}>
                         {message.content}
                     </Text>
                 )}
                 {message.tokens && (
-                    <Text style={styles.tokenText}>{message.tokens} tokens</Text>
+                    <Text style={[styles.tokenText, { color: colors.textTertiary }]}>{message.tokens} tokens</Text>
                 )}
             </View>
         );

@@ -13,13 +13,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatContext } from '../context/ChatContext';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth, useProviderAuth } from '../context/AuthContext';
 import {
     ChatProvider,
     ChatProviderType,
     DEFAULT_PROVIDERS,
     testProviderConnection,
     generateId,
-    OAUTH_CONFIGS,
+    OAUTH_PROVIDERS,
+    OAuthProviderType,
 } from '../api/chat';
 
 const PROVIDER_ICONS: Record<ChatProviderType, keyof typeof Ionicons.glyphMap> = {
@@ -29,39 +32,74 @@ const PROVIDER_ICONS: Record<ChatProviderType, keyof typeof Ionicons.glyphMap> =
     openrouter: 'git-network-outline',
     groq: 'flash-outline',
     together: 'people-outline',
+    google: 'logo-google',
     custom: 'code-slash-outline',
 };
 
 export function ChatProvidersScreen() {
+    const { colors, isDark } = useTheme();
     const { providers, updateProvider, addProvider, removeProvider } = useChatContext();
+    const { login, logout, isAuthenticated, isLoading: oauthLoading } = useAuth();
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [testingId, setTestingId] = useState<string | null>(null);
     const [editingProvider, setEditingProvider] = useState<ChatProvider | null>(null);
 
     const handleToggleEnabled = (provider: ChatProvider) => {
-        // Check if API key is required
-        if (!provider.isEnabled && !provider.apiKey && !provider.oauthToken) {
+        // Check if authentication is available
+        const oauthConnected = provider.oauthProvider && isAuthenticated(provider.oauthProvider);
+        if (!provider.isEnabled && !provider.apiKey && !oauthConnected) {
             Alert.alert(
-                'API Key Required',
-                `Please add an API key for ${provider.name} before enabling.`,
+                'Authentication Required',
+                `Please add an API key or connect via OAuth for ${provider.name} before enabling.`,
                 [{ text: 'OK' }]
             );
             return;
         }
-        updateProvider({ ...provider, isEnabled: !provider.isEnabled });
+        updateProvider({ ...provider, isEnabled: !provider.isEnabled, oauthConnected });
     };
 
-    const handleGetApiKey = async (provider: ChatProvider) => {
-        const oauthConfig = OAUTH_CONFIGS[provider.type];
-        if (!oauthConfig) {
-            Alert.alert('Not Available', `API key setup is not available for ${provider.name}`);
+    const handleOAuthConnect = async (provider: ChatProvider) => {
+        if (!provider.oauthProvider) {
+            Alert.alert('Not Available', `OAuth is not available for ${provider.name}`);
             return;
         }
 
+        const success = await login(provider.oauthProvider);
+        if (success) {
+            // Update provider to indicate OAuth connection
+            updateProvider({ ...provider, oauthConnected: true, authMethod: 'oauth' });
+        }
+    };
+
+    const handleOAuthDisconnect = async (provider: ChatProvider) => {
+        if (!provider.oauthProvider) return;
+
+        Alert.alert(
+            'Disconnect OAuth',
+            `Are you sure you want to disconnect ${provider.name} from OAuth? You will need an API key to continue using this provider.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Disconnect',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await logout(provider.oauthProvider!);
+                        updateProvider({ ...provider, oauthConnected: false, authMethod: 'api-key' });
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleGetApiKey = async (provider: ChatProvider) => {
         // Open the provider's developer console to get an API key
         const apiKeyUrls: Record<string, string> = {
             openai: 'https://platform.openai.com/api-keys',
             anthropic: 'https://console.anthropic.com/settings/keys',
+            google: 'https://makersuite.google.com/app/apikey',
+            groq: 'https://console.groq.com/keys',
+            together: 'https://api.together.xyz/settings/api-keys',
+            openrouter: 'https://openrouter.ai/keys',
         };
 
         const url = apiKeyUrls[provider.type];
@@ -77,6 +115,8 @@ export function ChatProvidersScreen() {
                     },
                 ]
             );
+        } else {
+            Alert.alert('Not Available', `API key setup URL is not available for ${provider.name}`);
         }
     };
 
@@ -146,6 +186,7 @@ export function ChatProvidersScreen() {
         const isExpanded = expandedId === provider.id;
         const isTesting = testingId === provider.id;
         const icon = PROVIDER_ICONS[provider.type] || 'server-outline';
+        const oauthConnected = provider.oauthProvider && isAuthenticated(provider.oauthProvider);
 
         return (
             <View key={provider.id} style={styles.providerCard}>
@@ -165,7 +206,15 @@ export function ChatProvidersScreen() {
                             />
                         </View>
                         <View style={styles.providerText}>
-                            <Text style={styles.providerName}>{provider.name}</Text>
+                            <View style={styles.providerNameRow}>
+                                <Text style={styles.providerName}>{provider.name}</Text>
+                                {oauthConnected && (
+                                    <View style={styles.oauthBadge}>
+                                        <Ionicons name="checkmark-circle" size={12} color="#34C759" />
+                                        <Text style={styles.oauthBadgeText}>OAuth</Text>
+                                    </View>
+                                )}
+                            </View>
                             <Text style={styles.providerModel}>{provider.model}</Text>
                         </View>
                     </View>
@@ -191,8 +240,60 @@ export function ChatProvidersScreen() {
 
                 {isExpanded && (
                     <View style={styles.providerDetails}>
+                        {/* OAuth Connect Section for supported providers */}
+                        {provider.oauthProvider && (
+                            <View style={styles.authSection}>
+                                <Text style={[styles.authSectionTitle, { color: colors.textSecondary }]}>
+                                    Authentication
+                                </Text>
+                                {oauthConnected ? (
+                                    <View style={styles.oauthConnectedRow}>
+                                        <View style={styles.oauthConnectedInfo}>
+                                            <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                                            <Text style={[styles.oauthConnectedText, { color: colors.text }]}>
+                                                Connected via OAuth
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            style={[styles.oauthDisconnectButton, { borderColor: colors.error }]}
+                                            onPress={() => handleOAuthDisconnect(provider)}
+                                            disabled={oauthLoading}
+                                        >
+                                            {oauthLoading ? (
+                                                <ActivityIndicator size="small" color={colors.error} />
+                                            ) : (
+                                                <Text style={[styles.oauthDisconnectText, { color: colors.error }]}>
+                                                    Disconnect
+                                                </Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={[styles.oauthConnectButton, { backgroundColor: colors.primary }]}
+                                        onPress={() => handleOAuthConnect(provider)}
+                                        disabled={oauthLoading}
+                                    >
+                                        {oauthLoading ? (
+                                            <ActivityIndicator size="small" color="#FFFFFF" />
+                                        ) : (
+                                            <>
+                                                <Ionicons name="log-in-outline" size={18} color="#FFFFFF" />
+                                                <Text style={styles.oauthConnectText}>
+                                                    Connect with {OAUTH_PROVIDERS[provider.oauthProvider]?.displayName || provider.oauthProvider}
+                                                </Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                                <Text style={[styles.authDivider, { color: colors.textTertiary }]}>
+                                    — or use API key —
+                                </Text>
+                            </View>
+                        )}
+
                         {/* Get API Key Button for supported providers */}
-                        {['openai', 'anthropic'].includes(provider.type) && (
+                        {['openai', 'anthropic', 'google', 'groq', 'together', 'openrouter'].includes(provider.type) && (
                             <TouchableOpacity
                                 style={styles.oauthButton}
                                 onPress={() => handleGetApiKey(provider)}
@@ -326,11 +427,11 @@ export function ChatProvidersScreen() {
     const customProviders = providers.filter(p => p.type === 'custom');
 
     return (
-        <ScrollView style={styles.container}>
+        <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Quick Setup */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Quick Setup</Text>
-                <Text style={styles.sectionSubtitle}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Setup</Text>
+                <Text style={[styles.sectionSubtitle, { color: colors.textTertiary }]}>
                     Get API keys from your provider accounts
                 </Text>
                 <View style={styles.oauthButtonsRow}>
@@ -451,6 +552,25 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#000000',
     },
+    providerNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    oauthBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5E9',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        gap: 2,
+    },
+    oauthBadgeText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#34C759',
+    },
     providerModel: {
         fontSize: 13,
         color: '#8E8E93',
@@ -480,6 +600,59 @@ const styles = StyleSheet.create({
         paddingTop: 0,
         borderTopWidth: 1,
         borderTopColor: '#E5E5EA',
+    },
+    authSection: {
+        marginBottom: 16,
+    },
+    authSectionTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 10,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    oauthConnectedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    oauthConnectedInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    oauthConnectedText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    oauthConnectButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        gap: 8,
+    },
+    oauthConnectText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    oauthDisconnectButton: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        borderWidth: 1,
+    },
+    oauthDisconnectText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    authDivider: {
+        fontSize: 12,
+        textAlign: 'center',
+        marginVertical: 12,
     },
     inputGroup: {
         marginBottom: 16,

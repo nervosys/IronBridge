@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppNavigator } from './src/navigation';
 import { ChatContextProvider } from './src/context/ChatContext';
 import { AgentsContextProvider } from './src/context/AgentsContext';
+import { AuthProvider } from './src/context/AuthContext';
 import { ThemeContextProvider, useTheme } from './src/context/ThemeContext';
 
 // Create a QueryClient instance
@@ -33,11 +34,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeContextProvider>
-        <ChatContextProvider>
-          <AgentsContextProvider>
-            <AppContent />
-          </AgentsContextProvider>
-        </ChatContextProvider>
+        <AuthProvider>
+          <ChatContextProvider>
+            <AgentsContextProvider>
+              <AppContent />
+            </AgentsContextProvider>
+          </ChatContextProvider>
+        </AuthProvider>
       </ThemeContextProvider>
     </QueryClientProvider>
   );

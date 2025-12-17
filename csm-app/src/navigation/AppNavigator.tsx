@@ -1,8 +1,9 @@
 import React from 'react';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import {
     OverviewScreen,
     WorkspacesScreen,
@@ -15,12 +16,29 @@ import {
     ChatProvidersScreen,
     ChatHistoryScreen,
     AgentsScreen,
+    AgentRunDetailScreen,
+    SwarmDetailScreen,
 } from '../screens';
+import { OAuthLoginScreen } from '../screens/OAuthLoginScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useTheme } from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
+
+// Deep linking configuration for OAuth callbacks
+const linking: LinkingOptions<TabParamList> = {
+    prefixes: [Linking.createURL('/'), 'csm://'],
+    config: {
+        screens: {
+            SettingsTab: {
+                screens: {
+                    OAuthLogin: 'oauth/callback',
+                },
+            },
+        },
+    },
+};
 
 function OverviewStack() {
     return (
@@ -39,6 +57,13 @@ function OverviewStack() {
                 name="Workspaces"
                 component={WorkspacesScreen}
                 options={{ title: 'Workspaces' }}
+            />
+            <Stack.Screen
+                name="WorkspaceSessions"
+                component={WorkspaceSessionsScreen}
+                options={({ route }) => ({
+                    title: route.params.workspaceName,
+                })}
             />
             <Stack.Screen
                 name="SessionDetail"
@@ -123,6 +148,11 @@ function SettingsStack() {
                 component={SettingsScreen}
                 options={{ title: 'Settings' }}
             />
+            <Stack.Screen
+                name="OAuthLogin"
+                component={OAuthLoginScreen}
+                options={{ title: 'Connected Accounts' }}
+            />
         </Stack.Navigator>
     );
 }
@@ -157,6 +187,20 @@ function AgentsStack() {
                 component={AgentsScreen}
                 options={{ title: 'Agents' }}
             />
+            <Stack.Screen
+                name="AgentRunDetail"
+                component={AgentRunDetailScreen}
+                options={({ route }) => ({
+                    title: 'Run Details',
+                })}
+            />
+            <Stack.Screen
+                name="SwarmDetail"
+                component={SwarmDetailScreen}
+                options={({ route }) => ({
+                    title: 'Swarm',
+                })}
+            />
         </Stack.Navigator>
     );
 }
@@ -179,7 +223,7 @@ export function AppNavigator() {
     };
 
     return (
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer theme={navigationTheme} linking={linking}>
             <Tab.Navigator
                 screenOptions={({ route }) => ({
                     headerShown: false,

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAgentsContext } from '../context/AgentsContext';
+import { useTheme } from '../context/ThemeContext';
 import {
     AgentRun,
     AgentSwarm,
@@ -46,6 +47,7 @@ const ROLE_ICONS: Record<AgentRole, keyof typeof Ionicons.glyphMap> = {
 };
 
 export function AgentsScreen({ navigation }: Props) {
+    const { colors, isDark } = useTheme();
     const {
         runs,
         swarms,
@@ -404,11 +406,11 @@ export function AgentsScreen({ navigation }: Props) {
     );
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Swarms Section */}
             {swarms.length > 0 && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>SWARMS</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>SWARMS</Text>
                     <FlatList
                         data={swarms}
                         renderItem={renderSwarm}
@@ -422,7 +424,7 @@ export function AgentsScreen({ navigation }: Props) {
 
             {/* Runs Section */}
             <View style={styles.runsSection}>
-                <Text style={styles.sectionTitle}>RECENT RUNS</Text>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>RECENT RUNS</Text>
                 <FlatList
                     data={runs}
                     renderItem={renderRun}

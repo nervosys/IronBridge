@@ -74,12 +74,29 @@ export async function searchSessions(query: string, limit = 20): Promise<Session
 
 export async function getProviders(): Promise<Provider[]> {
     const response = await apiClient.get('/api/providers');
-    return response.data;
+    return response.data.data || response.data || [];
 }
 
 export async function getStats(): Promise<Stats> {
     const response = await apiClient.get('/api/stats');
-    return response.data;
+    const raw = response.data.data || response.data;
+
+    // Transform snake_case API response to camelCase
+    const byProvider = raw.by_provider || {};
+    const sessionsByProvider = Object.entries(byProvider).map(([provider, count]) => ({
+        provider,
+        count: count as number,
+    }));
+
+    return {
+        totalSessions: raw.total_sessions ?? 0,
+        totalMessages: raw.total_messages ?? 0,
+        totalWorkspaces: raw.total_workspaces ?? 0,
+        totalProviders: sessionsByProvider.length,
+        totalToolInvocations: raw.total_tool_invocations ?? 0,
+        totalFileChanges: raw.total_file_changes ?? 0,
+        sessionsByProvider,
+    };
 }
 
 export async function deleteSession(id: string): Promise<void> {

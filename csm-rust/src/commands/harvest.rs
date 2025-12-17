@@ -20,6 +20,29 @@ use crate::models::ChatSession;
 use crate::providers::{ProviderRegistry, ProviderType};
 use crate::workspace::{discover_workspaces, get_chat_sessions_from_workspace};
 
+/// Check if a string is an empty code block marker (just ``` with no content)
+fn is_empty_code_block(s: &str) -> bool {
+    // Match patterns like "```", "```\n", "```language", "```\n```", "```\n\n```"
+    let s = s.trim();
+    if s == "```" {
+        return true;
+    }
+    // Check for code block with just a language identifier and no content
+    if s.starts_with("```") && !s.contains('\n') {
+        return true;
+    }
+    // Check for empty code block with opening and closing (possibly with whitespace-only lines)
+    let lines: Vec<&str> = s.lines().collect();
+    if lines.len() >= 2 && lines[0].starts_with("```") && lines.last() == Some(&"```") {
+        // Check if all lines between opening and closing are empty or whitespace
+        let content_lines = &lines[1..lines.len()-1];
+        if content_lines.iter().all(|line| line.trim().is_empty()) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Type alias for harvested session query result (id, provider, title, msg_count, created, last_msg, workspace)
 type HarvestQueryResult = (String, String, String, i64, i64, i64, Option<String>);
 
@@ -1719,7 +1742,9 @@ fn extract_response_content_and_tools(response: &serde_json::Value) -> (String, 
                 }
                 _ => {
                     if let Some(value) = item.get("value").and_then(|v| v.as_str()) {
-                        if !value.is_empty() {
+                        // Filter out empty code block markers (```\n or just ```)
+                        let trimmed = value.trim();
+                        if !trimmed.is_empty() && !is_empty_code_block(trimmed) {
                             text_parts.push(value.to_string());
                         }
                     }

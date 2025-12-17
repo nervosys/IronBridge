@@ -22,6 +22,9 @@ export type RootStackParamList = {
     ChatProviders: undefined;
     ChatHistory: undefined;
 
+    // OAuth screens
+    OAuthLogin: undefined;
+
     // Agents screens
     Agents: undefined;
     AgentRunDetail: {

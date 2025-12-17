@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatContext } from '../context/ChatContext';
+import { useTheme } from '../context/ThemeContext';
 import { ChatSession } from '../api/chat';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function ChatHistoryScreen({ navigation }: Props) {
+    const { colors, isDark } = useTheme();
     const { sessions, activeSessionId, setActiveSession, deleteSession } = useChatContext();
 
     const handleSelectSession = (session: ChatSession) => {
@@ -70,27 +72,31 @@ export function ChatHistoryScreen({ navigation }: Props) {
 
         return (
             <TouchableOpacity
-                style={[styles.sessionCard, isActive && styles.sessionCardActive]}
+                style={[
+                    styles.sessionCard,
+                    { backgroundColor: colors.card },
+                    isActive && [styles.sessionCardActive, { borderColor: colors.primary }]
+                ]}
                 onPress={() => handleSelectSession(item)}
                 onLongPress={() => handleDeleteSession(item)}
             >
                 <View style={styles.sessionHeader}>
                     <View style={styles.sessionInfo}>
-                        <Text style={styles.sessionTitle} numberOfLines={1}>
+                        <Text style={[styles.sessionTitle, { color: colors.text }]} numberOfLines={1}>
                             {item.title}
                         </Text>
-                        <Text style={styles.sessionDate}>{formatDate(item.updatedAt)}</Text>
+                        <Text style={[styles.sessionDate, { color: colors.textTertiary }]}>{formatDate(item.updatedAt)}</Text>
                     </View>
                 </View>
-                <Text style={styles.sessionPreview} numberOfLines={2}>
+                <Text style={[styles.sessionPreview, { color: colors.textSecondary }]} numberOfLines={2}>
                     {getPreviewText(item)}
                 </Text>
                 <View style={styles.sessionFooter}>
-                    <View style={styles.providerBadge}>
-                        <Ionicons name="flash" size={12} color="#007AFF" />
-                        <Text style={styles.providerName}>{item.provider.name}</Text>
+                    <View style={[styles.providerBadge, { backgroundColor: colors.surface }]}>
+                        <Ionicons name="flash" size={12} color={colors.primary} />
+                        <Text style={[styles.providerName, { color: colors.textSecondary }]}>{item.provider.name}</Text>
                     </View>
-                    <Text style={styles.messageCount}>
+                    <Text style={[styles.messageCount, { color: colors.textTertiary }]}>
                         {item.messages.length} messages
                     </Text>
                 </View>
@@ -100,16 +106,16 @@ export function ChatHistoryScreen({ navigation }: Props) {
 
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#C7C7CC" />
-            <Text style={styles.emptyTitle}>No Chat History</Text>
-            <Text style={styles.emptySubtitle}>
+            <Ionicons name="chatbubbles-outline" size={64} color={colors.iconSecondary} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No Chat History</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>
                 Your conversations will appear here
             </Text>
         </View>
     );
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <FlatList
                 data={sessions}
                 renderItem={renderSession}

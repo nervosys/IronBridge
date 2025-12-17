@@ -9,3 +9,6 @@ export { ChatScreen } from './ChatScreen';
 export { ChatProvidersScreen } from './ChatProvidersScreen';
 export { ChatHistoryScreen } from './ChatHistoryScreen';
 export { AgentsScreen } from './AgentsScreen';
+export { AgentRunDetailScreen } from './AgentRunDetailScreen';
+export { SwarmDetailScreen } from './SwarmDetailScreen';
+export { OAuthLoginScreen } from './OAuthLoginScreen';

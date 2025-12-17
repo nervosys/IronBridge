@@ -30,9 +30,14 @@
       "bundler": "metro"
     },
     "extra": {
+      "apiHost": "10.0.0.52",
       "eas": {
         "projectId": "csm-app"
       }
-    }
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-secure-store"
+    ]
   }
 }

@@ -1,10 +1,21 @@
 // Agent Types for tracking agentic AI communication and task completion
 
+import { OAuthProviderType } from './oauth';
+import { ChatProviderType } from './chat';
+
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'custom';
+
+// Authentication configuration for agents
+export interface AgentAuthConfig {
+    method: 'api-key' | 'oauth';
+    apiKey?: string;
+    oauthProvider?: OAuthProviderType;
+    oauthConnected?: boolean;
+}
 
 export interface AgentMessage {
     id: string;
@@ -39,11 +50,14 @@ export interface Agent {
     description: string;
     model?: string;
     providerId?: string;
+    providerType?: ChatProviderType;
     systemPrompt?: string;
     status: AgentStatus;
     capabilities: string[];
     currentTaskId?: string;
     messageCount: number;
+    // Authentication
+    auth?: AgentAuthConfig;
     createdAt: number;
     updatedAt: number;
 }

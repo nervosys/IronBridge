@@ -11,11 +11,15 @@ import {
     TextInput,
     Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { getStats, getProviders } from '../api';
 import type { Statistics as Stats, Provider } from '@csm/shared';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import type { RootStackParamList } from '../navigation/types';
 import {
     loadApiSettings as loadSettings,
     saveApiSettings as saveSettings,
@@ -24,8 +28,12 @@ import {
     DEFAULT_PORT,
 } from '../api/client';
 
+type SettingsNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Settings'>;
+
 export function SettingsScreen() {
+    const navigation = useNavigation<SettingsNavigationProp>();
     const { colors, mode, setThemeMode, isDark } = useTheme();
+    const { authenticatedProviders } = useAuth();
     const queryClient = useQueryClient();
     const [apiHost, setApiHost] = useState(getDefaultHost());
     const [apiPort, setApiPort] = useState(DEFAULT_PORT);
@@ -236,6 +244,40 @@ export function SettingsScreen() {
                 </View>
             </View>
 
+            {/* Connected Accounts Section */}
+            <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Authentication</Text>
+                <View style={[styles.card, { backgroundColor: colors.card }]}>
+                    <TouchableOpacity
+                        style={styles.linkRow}
+                        onPress={() => navigation.navigate('OAuthLogin')}
+                    >
+                        <View style={styles.linkInfo}>
+                            <Ionicons name="key-outline" size={20} color={colors.icon} />
+                            <View style={styles.linkTextContainer}>
+                                <Text style={[styles.linkText, { color: colors.text }]}>Connected Accounts</Text>
+                                {authenticatedProviders.length > 0 && (
+                                    <Text style={[styles.linkSubtext, { color: colors.textTertiary }]}>
+                                        {authenticatedProviders.length} account{authenticatedProviders.length !== 1 ? 's' : ''} connected
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+                        <View style={styles.linkBadge}>
+                            {authenticatedProviders.length > 0 && (
+                                <View style={[styles.connectedBadge, { backgroundColor: colors.success + '20' }]}>
+                                    <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                                    <Text style={[styles.connectedBadgeText, { color: colors.success }]}>
+                                        {authenticatedProviders.length}
+                                    </Text>
+                                </View>
+                            )}
+                            <Ionicons name="chevron-forward" size={20} color={colors.iconSecondary} />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             {/* Statistics Section */}
             <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>Statistics</Text>
@@ -403,10 +445,34 @@ const styles = StyleSheet.create({
     linkInfo: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
+    },
+    linkTextContainer: {
+        marginLeft: 12,
     },
     linkText: {
         fontSize: 16,
-        marginLeft: 12,
+    },
+    linkSubtext: {
+        fontSize: 12,
+        marginTop: 2,
+    },
+    linkBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    connectedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+    },
+    connectedBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     divider: {
         height: 1,

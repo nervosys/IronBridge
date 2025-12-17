@@ -38,7 +38,9 @@ impl Default for ServerConfig {
                 "http://127.0.0.1:5173".to_string(),
                 "http://127.0.0.1:3000".to_string(),
                 "http://localhost:8081".to_string(),  // Expo web
+                "http://127.0.0.1:8081".to_string(),  // Expo web
                 "http://localhost:19006".to_string(), // Expo web alt
+                "http://127.0.0.1:19006".to_string(), // Expo web alt
             ],
         }
     }

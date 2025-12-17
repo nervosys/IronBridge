@@ -69,3 +69,11 @@ config.local.json
 .api_key
 .token
 *.apikey
+
+# Debug/test files (may contain private chat data)
+**/raw_session.json
+**/session_sample.txt
+**/test_output.json
+**/*_log.txt
+**/*_out.txt
+**/*_err.txt

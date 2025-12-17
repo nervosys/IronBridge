@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
     View,
     Text,
@@ -14,9 +14,14 @@ import { useQuery } from '@tanstack/react-query';
 import { getWorkspaces, getSessions, getStats, getProviders } from '../api/sessions';
 import { formatRelativeTime } from '../utils/formatDate';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { RootStackParamList, TabParamList } from '../navigation/types';
 
-type OverviewScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Overview'>;
+type OverviewScreenNavigationProp = CompositeNavigationProp<
+    NativeStackNavigationProp<RootStackParamList, 'Overview'>,
+    BottomTabNavigationProp<TabParamList>
+>;
 
 interface Props {
     navigation: OverviewScreenNavigationProp;
@@ -173,6 +178,35 @@ export function OverviewScreen({ navigation }: Props) {
 
     const isLoading = workspacesLoading || sessionsLoading || statsLoading || providersLoading;
 
+    // Debug: Test direct API connection
+    useEffect(() => {
+        const testConnection = async () => {
+            console.log('[DEBUG] Testing API connection...');
+            console.log('[DEBUG] Window location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+
+            // Test with XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://127.0.0.1:8787/api/health', true);
+            xhr.onload = () => {
+                console.log('[DEBUG] XHR success:', xhr.status, xhr.responseText);
+            };
+            xhr.onerror = (e) => {
+                console.error('[DEBUG] XHR error:', e);
+            };
+            xhr.send();
+
+            // Also test fetch
+            try {
+                const response = await fetch('http://127.0.0.1:8787/api/health');
+                const data = await response.json();
+                console.log('[DEBUG] Fetch success:', data);
+            } catch (error) {
+                console.error('[DEBUG] Fetch failed:', error);
+            }
+        };
+        testConnection();
+    }, []);
+
     const handleRefresh = async () => {
         await Promise.all([refetchWorkspaces(), refetchSessions(), refetchStats(), refetchProviders()]);
     };
@@ -327,28 +361,28 @@ export function OverviewScreen({ navigation }: Props) {
                 <View style={styles.quickActions}>
                     <TouchableOpacity
                         style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-                        onPress={() => navigation.navigate('Chat')}
+                        onPress={() => navigation.navigate('ChatTab')}
                     >
                         <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
                         <Text style={[styles.quickActionText, { color: colors.text }]}>New Chat</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-                        onPress={() => navigation.navigate('Search')}
+                        onPress={() => navigation.navigate('SearchTab')}
                     >
                         <Ionicons name="search-outline" size={28} color={colors.primary} />
                         <Text style={[styles.quickActionText, { color: colors.text }]}>Search</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-                        onPress={() => navigation.navigate('Agents')}
+                        onPress={() => navigation.navigate('AgentsTab')}
                     >
                         <Ionicons name="hardware-chip-outline" size={28} color={colors.primary} />
                         <Text style={[styles.quickActionText, { color: colors.text }]}>Agents</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-                        onPress={() => navigation.navigate('Settings')}
+                        onPress={() => navigation.navigate('SettingsTab')}
                     >
                         <Ionicons name="settings-outline" size={28} color={colors.primary} />
                         <Text style={[styles.quickActionText, { color: colors.text }]}>Settings</Text>
