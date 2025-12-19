@@ -16,12 +16,12 @@
 //! - **GPT4All** - Local privacy-focused AI
 //! - **Llamafile** - Portable executable LLMs
 //!
-//! ## Agent Development Kit (ADK)
+//! ## Agent Development Kit (Agency)
 //!
-//! The `adk` module provides a Rust-native framework for building AI agents:
+//! The `Agency` module provides a Rust-native framework for building AI agents:
 //!
 //! ```rust,ignore
-//! use csm::adk::{Agent, AgentBuilder, Runtime, Tool};
+//! use csm::Agency::{Agent, AgentBuilder, Runtime, Tool};
 //!
 //! let agent = AgentBuilder::new("assistant")
 //!     .instruction("You are a helpful assistant.")
@@ -34,7 +34,7 @@
 //! let result = runtime.run("assistant", "Hello!").await?;
 //! ```
 
-pub mod adk;
+pub mod agency;
 pub mod browser;
 pub mod cli;
 pub mod commands;

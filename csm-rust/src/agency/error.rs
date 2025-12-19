@@ -1,10 +1,10 @@
-//! ADK Error types
+//! Agency Error types
 
 use thiserror::Error;
 
-/// ADK-specific errors
+/// Agency-specific errors
 #[derive(Error, Debug)]
-pub enum AdkError {
+pub enum AgencyError {
     #[error("Agent not found: {0}")]
     AgentNotFound(String),
 
@@ -54,16 +54,16 @@ pub enum AdkError {
     Other(#[from] anyhow::Error),
 }
 
-impl From<serde_json::Error> for AdkError {
+impl From<serde_json::Error> for AgencyError {
     fn from(err: serde_json::Error) -> Self {
-        AdkError::SerializationError(err.to_string())
+        AgencyError::SerializationError(err.to_string())
     }
 }
 
-impl From<rusqlite::Error> for AdkError {
+impl From<rusqlite::Error> for AgencyError {
     fn from(err: rusqlite::Error) -> Self {
-        AdkError::DatabaseError(err.to_string())
+        AgencyError::DatabaseError(err.to_string())
     }
 }
 
-pub type AdkResult<T> = Result<T, AdkError>;
+pub type AgencyResult<T> = Result<T, AgencyError>;

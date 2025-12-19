@@ -1,6 +1,6 @@
 // CSM Chat Panel - Unified Chat Interface with Agent Support
-// A comprehensive chat interface that rivals Google ADK's Antigravity
-// Types aligned with csm-shared and csm-rust ADK
+// A comprehensive chat interface that rivals Google Agency's Antigravity
+// Types aligned with csm-shared and csm-rust Agency
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
@@ -950,7 +950,7 @@ export class CsmChatPanel {
     }
 
     // =========================================================================
-    // Swarm Management (aligned with csm-shared and csm-rust ADK)
+    // Swarm Management (aligned with csm-shared and csm-rust Agency)
     // =========================================================================
 
     private async _createSwarm(name: string, description: string, agentIds: string[]) {

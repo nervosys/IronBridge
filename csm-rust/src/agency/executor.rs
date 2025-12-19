@@ -2,11 +2,11 @@
 //!
 //! Handles the execution of individual agents with tool calling.
 
-use crate::adk::agent::{Agent, AgentStatus};
-use crate::adk::error::{AdkError, AdkResult};
-use crate::adk::models::{AdkEvent, AdkMessage, EventType, MessageRole, ToolCall, ToolResult, TokenUsage};
-use crate::adk::session::{generate_message_id, Session};
-use crate::adk::tools::ToolRegistry;
+use crate::agency::agent::{Agent, AgentStatus};
+use crate::agency::error::{AgencyError, AgencyResult};
+use crate::agency::models::{AgencyEvent, AgencyMessage, EventType, MessageRole, ToolCall, ToolResult, TokenUsage};
+use crate::agency::session::{generate_message_id, Session};
+use crate::agency::tools::ToolRegistry;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ pub struct ExecutionContext {
     /// Maximum tool calls per turn
     pub max_tool_calls: u32,
     /// Event sender for streaming
-    pub event_sender: Option<mpsc::Sender<AdkEvent>>,
+    pub event_sender: Option<mpsc::Sender<AgencyEvent>>,
 }
 
 impl ExecutionContext {
@@ -46,7 +46,7 @@ impl ExecutionContext {
     }
 
     /// Send an event to listeners
-    pub async fn emit(&self, event: AdkEvent) {
+    pub async fn emit(&self, event: AgencyEvent) {
         if let Some(sender) = &self.event_sender {
             let _ = sender.send(event).await;
         }
@@ -59,9 +59,9 @@ pub struct ExecutionResult {
     /// Final response text
     pub response: String,
     /// Messages generated during execution
-    pub messages: Vec<AdkMessage>,
+    pub messages: Vec<AgencyMessage>,
     /// Events emitted
-    pub events: Vec<AdkEvent>,
+    pub events: Vec<AgencyEvent>,
     /// Token usage
     pub token_usage: TokenUsage,
     /// Execution duration in milliseconds
@@ -90,7 +90,7 @@ impl Executor {
         session: &mut Session,
         user_message: &str,
         ctx: &mut ExecutionContext,
-    ) -> AdkResult<ExecutionResult> {
+    ) -> AgencyResult<ExecutionResult> {
         let start_time = std::time::Instant::now();
         let mut messages = Vec::new();
         let mut events = Vec::new();
@@ -100,7 +100,7 @@ impl Executor {
         agent.set_status(AgentStatus::Thinking);
 
         // Emit start event
-        let start_event = AdkEvent {
+        let start_event = AgencyEvent {
             event_type: EventType::AgentStart,
             agent_name: agent.name().to_string(),
             data: serde_json::json!({ "message": user_message }),
@@ -111,7 +111,7 @@ impl Executor {
         ctx.emit(start_event).await;
 
         // Add user message
-        let user_msg = AdkMessage {
+        let user_msg = AgencyMessage {
             id: generate_message_id(),
             role: MessageRole::User,
             content: user_message.to_string(),
@@ -133,7 +133,7 @@ impl Executor {
         loop {
             // Call the model
             agent.set_status(AgentStatus::Thinking);
-            let thinking_event = AdkEvent {
+            let thinking_event = AgencyEvent {
                 event_type: EventType::Thinking,
                 agent_name: agent.name().to_string(),
                 data: serde_json::json!({}),
@@ -156,11 +156,11 @@ impl Executor {
                 for tool_call in &model_response.tool_calls {
                     tool_call_count += 1;
                     if tool_call_count > ctx.max_tool_calls {
-                        return Err(AdkError::MaxIterationsExceeded(ctx.max_tool_calls));
+                        return Err(AgencyError::MaxIterationsExceeded(ctx.max_tool_calls));
                     }
 
                     // Emit tool call event
-                    let call_event = AdkEvent {
+                    let call_event = AgencyEvent {
                         event_type: EventType::ToolCall,
                         agent_name: agent.name().to_string(),
                         data: serde_json::json!({
@@ -178,7 +178,7 @@ impl Executor {
                     let tool_result = self.execute_tool(tool_call).await;
 
                     // Emit tool result event
-                    let result_event = AdkEvent {
+                    let result_event = AgencyEvent {
                         event_type: EventType::ToolResult,
                         agent_name: agent.name().to_string(),
                         data: serde_json::json!({
@@ -193,7 +193,7 @@ impl Executor {
                     ctx.emit(result_event).await;
 
                     // Add tool result message
-                    let tool_msg = AdkMessage {
+                    let tool_msg = AgencyMessage {
                         id: generate_message_id(),
                         role: MessageRole::Tool,
                         content: tool_result.content.clone(),
@@ -216,7 +216,7 @@ impl Executor {
             final_response = model_response.content.clone();
 
             // Add assistant message
-            let assistant_msg = AdkMessage {
+            let assistant_msg = AgencyMessage {
                 id: generate_message_id(),
                 role: MessageRole::Assistant,
                 content: model_response.content,
@@ -235,7 +235,7 @@ impl Executor {
 
         // Emit end event
         agent.set_status(AgentStatus::Completed);
-        let end_event = AdkEvent {
+        let end_event = AgencyEvent {
             event_type: EventType::AgentEnd,
             agent_name: agent.name().to_string(),
             data: serde_json::json!({ "response": final_response }),
@@ -257,7 +257,7 @@ impl Executor {
     }
 
     /// Call the model (placeholder - implement with actual API)
-    async fn call_model(&self, agent: &Agent, session: &Session) -> AdkResult<ModelResponse> {
+    async fn call_model(&self, agent: &Agent, session: &Session) -> AgencyResult<ModelResponse> {
         // TODO: Implement actual model API calls for different providers
         // This is a placeholder that returns a mock response
 
@@ -317,7 +317,7 @@ struct ModelResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adk::agent::AgentBuilder;
+    use crate::agency::agent::AgentBuilder;
 
     #[tokio::test]
     async fn test_executor() {

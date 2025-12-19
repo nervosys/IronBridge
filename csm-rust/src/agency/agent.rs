@@ -2,8 +2,8 @@
 //!
 //! Defines the core Agent structure and provides a fluent builder API.
 
-use crate::adk::models::{ModelConfig, ModelProvider};
-use crate::adk::tools::Tool;
+use crate::agency::models::{ModelConfig, ModelProvider};
+use crate::agency::tools::Tool;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

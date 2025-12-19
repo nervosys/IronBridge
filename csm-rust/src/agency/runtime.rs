@@ -1,14 +1,14 @@
-//! ADK Runtime
+//! Agency Runtime
 //!
 //! High-level API for running agents with automatic session management.
 
-use crate::adk::agent::Agent;
-use crate::adk::error::{AdkError, AdkResult};
-use crate::adk::executor::{ExecutionContext, ExecutionResult, Executor};
-use crate::adk::models::AdkEvent;
-use crate::adk::orchestrator::{Orchestrator, OrchestratorResult, Pipeline, Swarm};
-use crate::adk::session::{Session, SessionManager};
-use crate::adk::tools::ToolRegistry;
+use crate::agency::agent::Agent;
+use crate::agency::error::{AgencyError, AgencyResult};
+use crate::agency::executor::{ExecutionContext, ExecutionResult, Executor};
+use crate::agency::models::AgencyEvent;
+use crate::agency::orchestrator::{Orchestrator, OrchestratorResult, Pipeline, Swarm};
+use crate::agency::session::{Session, SessionManager};
+use crate::agency::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -36,7 +36,7 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            db_path: PathBuf::from("adk_sessions.db"),
+            db_path: PathBuf::from("Agency_sessions.db"),
             default_model: "gemini-2.5-flash".to_string(),
             max_tool_calls: 10,
             timeout_seconds: 120,
@@ -46,7 +46,7 @@ impl Default for RuntimeConfig {
     }
 }
 
-/// The ADK Runtime - main entry point for running agents
+/// The Agency Runtime - main entry point for running agents
 pub struct Runtime {
     config: RuntimeConfig,
     tool_registry: Arc<ToolRegistry>,
@@ -58,12 +58,12 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new runtime with default configuration
-    pub fn new() -> AdkResult<Self> {
+    pub fn new() -> AgencyResult<Self> {
         Self::with_config(RuntimeConfig::default())
     }
 
     /// Create a new runtime with custom configuration
-    pub fn with_config(config: RuntimeConfig) -> AdkResult<Self> {
+    pub fn with_config(config: RuntimeConfig) -> AgencyResult<Self> {
         let tool_registry = Arc::new(ToolRegistry::with_builtins());
         let session_manager = Arc::new(SessionManager::new(&config.db_path)?);
         let executor = Arc::new(Executor::new(tool_registry.clone()));
@@ -80,7 +80,7 @@ impl Runtime {
     }
 
     /// Create an in-memory runtime (for testing)
-    pub fn in_memory() -> AdkResult<Self> {
+    pub fn in_memory() -> AgencyResult<Self> {
         let tool_registry = Arc::new(ToolRegistry::with_builtins());
         let session_manager = Arc::new(SessionManager::in_memory()?);
         let executor = Arc::new(Executor::new(tool_registry.clone()));
@@ -127,20 +127,20 @@ impl Runtime {
         agent_name: &str,
         message: &str,
         options: Option<RunOptions>,
-    ) -> AdkResult<ExecutionResult> {
+    ) -> AgencyResult<ExecutionResult> {
         let options = options.unwrap_or_default();
 
         // Get or create agent
         let agent_arc = self
             .agents
             .get(agent_name)
-            .ok_or_else(|| AdkError::AgentNotFound(agent_name.to_string()))?;
+            .ok_or_else(|| AgencyError::AgentNotFound(agent_name.to_string()))?;
 
         // Get or create session
         let mut session = if let Some(session_id) = &options.session_id {
             self.session_manager
                 .get(session_id)?
-                .ok_or_else(|| AdkError::SessionNotFound(session_id.clone()))?
+                .ok_or_else(|| AgencyError::SessionNotFound(session_id.clone()))?
         } else {
             self.session_manager
                 .create(agent_name, options.user_id.clone())?
@@ -171,7 +171,7 @@ impl Runtime {
         agent_name: &str,
         message: &str,
         options: Option<RunOptions>,
-    ) -> AdkResult<(ExecutionResult, mpsc::Receiver<AdkEvent>)> {
+    ) -> AgencyResult<(ExecutionResult, mpsc::Receiver<AgencyEvent>)> {
         let (tx, rx) = mpsc::channel(100);
         let mut options = options.unwrap_or_default();
         options.event_sender = Some(tx);
@@ -186,7 +186,7 @@ impl Runtime {
         pipeline: &Pipeline,
         input: &str,
         options: Option<RunOptions>,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         let options = options.unwrap_or_default();
 
         let session = Session::new(&pipeline.name, options.user_id.clone());
@@ -204,7 +204,7 @@ impl Runtime {
         swarm: &Swarm,
         input: &str,
         options: Option<RunOptions>,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         let options = options.unwrap_or_default();
 
         let session = Session::new(&swarm.name, options.user_id.clone());
@@ -217,22 +217,22 @@ impl Runtime {
     }
 
     /// Create a new session for an agent
-    pub fn create_session(&self, agent_name: &str, user_id: Option<String>) -> AdkResult<Session> {
+    pub fn create_session(&self, agent_name: &str, user_id: Option<String>) -> AgencyResult<Session> {
         self.session_manager.create(agent_name, user_id)
     }
 
     /// Get a session by ID
-    pub fn get_session(&self, session_id: &str) -> AdkResult<Option<Session>> {
+    pub fn get_session(&self, session_id: &str) -> AgencyResult<Option<Session>> {
         self.session_manager.get(session_id)
     }
 
     /// List sessions for an agent
-    pub fn list_sessions(&self, agent_name: &str, limit: Option<u32>) -> AdkResult<Vec<Session>> {
+    pub fn list_sessions(&self, agent_name: &str, limit: Option<u32>) -> AgencyResult<Vec<Session>> {
         self.session_manager.list_by_agent(agent_name, limit)
     }
 
     /// Delete a session
-    pub fn delete_session(&self, session_id: &str) -> AdkResult<bool> {
+    pub fn delete_session(&self, session_id: &str) -> AgencyResult<bool> {
         self.session_manager.delete(session_id)
     }
 }
@@ -249,7 +249,7 @@ pub struct RunOptions {
     /// Maximum tool calls
     pub max_tool_calls: Option<u32>,
     /// Event sender for streaming
-    pub event_sender: Option<mpsc::Sender<AdkEvent>>,
+    pub event_sender: Option<mpsc::Sender<AgencyEvent>>,
 }
 
 impl RunOptions {
@@ -279,10 +279,10 @@ impl RunOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adk::agent::AgentBuilder;
+    use crate::agency::agent::AgentBuilder;
 
     #[tokio::test]
-    async fn test_runtime() -> AdkResult<()> {
+    async fn test_runtime() -> AgencyResult<()> {
         let mut runtime = Runtime::in_memory()?;
 
         let agent = AgentBuilder::new("assistant")
@@ -301,7 +301,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_runtime_sessions() -> AdkResult<()> {
+    async fn test_runtime_sessions() -> AgencyResult<()> {
         let mut runtime = Runtime::in_memory()?;
 
         let agent = AgentBuilder::new("test_agent")

@@ -1,13 +1,13 @@
-//! ADK (Agent Development Kit) command implementations
+//! Agency (Agent Development Kit) command implementations
 
 use anyhow::Result;
-use crate::adk::{AgentRole, OrchestrationType};
+use crate::agency::{AgentRole, OrchestrationType};
 use colored::Colorize;
 
 /// List available agents and roles
 pub fn list_agents(verbose: bool) -> Result<()> {
     println!("{}", "╔═══════════════════════════════════════════════════════════════════╗".cyan());
-    println!("{}", "║              CSM Agent Development Kit (ADK)                      ║".cyan());
+    println!("{}", "║              CSM Agent Development Kit (Agency)                      ║".cyan());
     println!("{}", "╚═══════════════════════════════════════════════════════════════════╝".cyan());
     println!();
     
@@ -84,7 +84,7 @@ pub fn show_agent_info(name: &str) -> Result<()> {
         _ => {
             println!("  {} Agent '{}' not found in defaults", "⚠️".yellow(), name);
             println!();
-            println!("  Use 'csm adk create {}' to create a new agent", name);
+            println!("  Use 'csm Agency create {}' to create a new agent", name);
         }
     }
 
@@ -112,7 +112,7 @@ pub fn list_modes() -> Result<()> {
 
     println!();
     println!("{}", "Usage:".dimmed());
-    println!("  csm adk run --orchestration swarm \"Build a web scraper\"");
+    println!("  csm Agency run --orchestration swarm \"Build a web scraper\"");
 
     Ok(())
 }
@@ -236,7 +236,7 @@ pub fn create_agent(
     println!("  {} {}", "Instruction:".dimmed(), instruction);
     println!();
     println!("{}", "💡 To use this agent:".dimmed());
-    println!("   csm adk run --agent {} \"Your prompt here\"", name);
+    println!("   csm Agency run --agent {} \"Your prompt here\"", name);
 
     Ok(())
 }

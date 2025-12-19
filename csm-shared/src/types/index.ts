@@ -195,7 +195,7 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'c
 export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 
 /**
- * Orchestration type - matches Rust ADK OrchestrationType
+ * Orchestration type - matches Rust Agency OrchestrationType
  */
 export type OrchestrationType =
     | 'single'       // Traditional single-agent
@@ -611,13 +611,13 @@ export interface McpToolResult {
 }
 
 // =============================================================================
-// ADK Event Types (matches Rust ADK)
+// Agency Event Types (matches Rust Agency)
 // =============================================================================
 
 /**
- * ADK Event type - mirrors Rust ADK EventType
+ * Agency Event type - mirrors Rust Agency EventType
  */
-export type AdkEventType =
+export type AgencyEventType =
     | 'agent_started'
     | 'agent_thinking'
     | 'agent_executing'
@@ -640,10 +640,10 @@ export type AdkEventType =
     | 'error';
 
 /**
- * ADK Event - matches Rust ADK AdkEvent
+ * Agency Event - matches Rust Agency AgencyEvent
  */
-export interface AdkEvent {
-    type: AdkEventType;
+export interface AgencyEvent {
+    type: AgencyEventType;
     agentId?: string;
     agentName?: string;
     taskId?: string;
@@ -657,9 +657,9 @@ export interface AdkEvent {
 }
 
 /**
- * Tool call information - matches Rust ADK ToolCall
+ * Tool call information - matches Rust Agency ToolCall
  */
-export interface AdkToolCall {
+export interface AgencyToolCall {
     id: string;
     name: string;
     arguments: Record<string, unknown>;
@@ -667,9 +667,9 @@ export interface AdkToolCall {
 }
 
 /**
- * Tool result - matches Rust ADK ToolResult
+ * Tool result - matches Rust Agency ToolResult
  */
-export interface AdkToolResult {
+export interface AgencyToolResult {
     callId: string;
     name: string;
     content: string;
@@ -687,8 +687,8 @@ export interface ExecutionResult {
     agentName?: string;
     tokensUsed?: TokenUsage;
     duration: number;
-    toolCalls?: AdkToolCall[];
-    events: AdkEvent[];
+    toolCalls?: AgencyToolCall[];
+    events: AgencyEvent[];
 }
 
 /**

@@ -2,7 +2,7 @@
 //!
 //! A CLI tool to manage and merge chat sessions across workspaces.
 
-mod adk;
+mod agency;
 mod api;
 mod browser;
 mod cli;

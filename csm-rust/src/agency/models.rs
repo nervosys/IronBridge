@@ -1,4 +1,4 @@
-//! ADK Data Models
+//! Agency Data Models
 //!
 //! Core data structures for the Agent Development Kit.
 
@@ -6,9 +6,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Message in an ADK conversation
+/// Message in an Agency conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AdkMessage {
+pub struct AgencyMessage {
     /// Unique message ID
     pub id: String,
     /// Role: user, assistant, system, tool
@@ -90,7 +90,7 @@ pub struct ToolResult {
 
 /// Event emitted during agent execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AdkEvent {
+pub struct AgencyEvent {
     /// Event type
     pub event_type: EventType,
     /// Associated agent name

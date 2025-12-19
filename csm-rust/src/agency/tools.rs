@@ -2,8 +2,8 @@
 //!
 //! Define and register tools that agents can use.
 
-use crate::adk::error::AdkResult;
-use crate::adk::models::ToolResult;
+use crate::agency::error::AgencyResult;
+use crate::agency::models::ToolResult;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -206,12 +206,12 @@ pub trait ToolExecutor: Send + Sync {
     fn definition(&self) -> &Tool;
 
     /// Execute the tool with the given arguments
-    async fn execute(&self, args: Value) -> AdkResult<ToolResult>;
+    async fn execute(&self, args: Value) -> AgencyResult<ToolResult>;
 }
 
 /// Type alias for tool execution function
 pub type ToolFn = Box<
-    dyn Fn(Value) -> Pin<Box<dyn Future<Output = AdkResult<ToolResult>> + Send>> + Send + Sync,
+    dyn Fn(Value) -> Pin<Box<dyn Future<Output = AgencyResult<ToolResult>> + Send>> + Send + Sync,
 >;
 
 /// Tool registry for managing available tools
@@ -275,7 +275,7 @@ impl ToolRegistry {
     }
 }
 
-/// Builtin tools provided by the ADK
+/// Builtin tools provided by the Agency
 pub struct BuiltinTools;
 
 impl BuiltinTools {

@@ -6,11 +6,11 @@
 //! - Loop: Agent repeats until condition met
 //! - Hierarchical: Coordinator delegates to sub-agents
 
-use crate::adk::agent::Agent;
-use crate::adk::error::{AdkError, AdkResult};
-use crate::adk::executor::{ExecutionContext, ExecutionResult, Executor};
-use crate::adk::models::{AdkEvent, EventType, TokenUsage};
-use crate::adk::session::Session;
+use crate::agency::agent::Agent;
+use crate::agency::error::{AgencyError, AgencyResult};
+use crate::agency::executor::{ExecutionContext, ExecutionResult, Executor};
+use crate::agency::models::{AgencyEvent, EventType, TokenUsage};
+use crate::agency::session::Session;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -130,13 +130,13 @@ impl Orchestrator {
         pipeline: &Pipeline,
         input: &str,
         ctx: &mut ExecutionContext,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         match pipeline.orchestration {
             OrchestrationType::Sequential => self.run_sequential(pipeline, input, ctx).await,
             OrchestrationType::Parallel => self.run_parallel(pipeline, input, ctx).await,
             OrchestrationType::Loop => self.run_loop(pipeline, input, ctx).await,
             OrchestrationType::Hierarchical => {
-                Err(AdkError::OrchestrationError(
+                Err(AgencyError::OrchestrationError(
                     "Use run_swarm for hierarchical orchestration".to_string(),
                 ))
             }
@@ -149,7 +149,7 @@ impl Orchestrator {
         pipeline: &Pipeline,
         input: &str,
         ctx: &mut ExecutionContext,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         let start_time = std::time::Instant::now();
         let mut results = Vec::new();
         let mut events = Vec::new();
@@ -190,7 +190,7 @@ impl Orchestrator {
         pipeline: &Pipeline,
         input: &str,
         ctx: &mut ExecutionContext,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         let start_time = std::time::Instant::now();
         let mut handles = Vec::new();
 
@@ -226,7 +226,7 @@ impl Orchestrator {
                     return Err(e);
                 }
                 Err(e) => {
-                    return Err(AdkError::ExecutionFailed(e.to_string()));
+                    return Err(AgencyError::ExecutionFailed(e.to_string()));
                 }
             }
         }
@@ -250,7 +250,7 @@ impl Orchestrator {
         pipeline: &Pipeline,
         input: &str,
         ctx: &mut ExecutionContext,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         let start_time = std::time::Instant::now();
         let mut results = Vec::new();
         let mut events = Vec::new();
@@ -259,7 +259,7 @@ impl Orchestrator {
         let mut iterations = 0;
 
         let agent_arc = pipeline.agents.first().ok_or_else(|| {
-            AdkError::OrchestrationError("Loop pipeline requires at least one agent".to_string())
+            AgencyError::OrchestrationError("Loop pipeline requires at least one agent".to_string())
         })?;
 
         loop {
@@ -311,7 +311,7 @@ impl Orchestrator {
         swarm: &Swarm,
         input: &str,
         ctx: &mut ExecutionContext,
-    ) -> AdkResult<OrchestratorResult> {
+    ) -> AgencyResult<OrchestratorResult> {
         let start_time = std::time::Instant::now();
         let mut results = Vec::new();
         let mut events = Vec::new();
@@ -344,7 +344,7 @@ impl Orchestrator {
         results.push(coord_result.clone());
 
         // Emit handoff event
-        let handoff_event = AdkEvent {
+        let handoff_event = AgencyEvent {
             event_type: EventType::Handoff,
             agent_name: coordinator.name().to_string(),
             data: serde_json::json!({
@@ -414,7 +414,7 @@ pub struct OrchestratorResult {
     /// Individual agent results
     pub agent_results: Vec<ExecutionResult>,
     /// All events emitted
-    pub events: Vec<AdkEvent>,
+    pub events: Vec<AgencyEvent>,
     /// Total token usage
     pub token_usage: TokenUsage,
     /// Execution duration in milliseconds
@@ -426,8 +426,8 @@ pub struct OrchestratorResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adk::agent::AgentBuilder;
-    use crate::adk::tools::ToolRegistry;
+    use crate::agency::agent::AgentBuilder;
+    use crate::agency::tools::ToolRegistry;
 
     fn create_test_agent(name: &str) -> Agent {
         AgentBuilder::new(name)

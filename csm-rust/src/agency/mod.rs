@@ -1,4 +1,4 @@
-//! Agent Development Kit (ADK) - Rust Implementation
+//! Agent Development Kit (Agency) - Rust Implementation
 //!
 //! A Rust-native framework for building, orchestrating, and deploying AI agents.
 //! Inspired by multi-agent patterns but built from scratch for performance and control.
@@ -15,7 +15,7 @@
 //! ## Example
 //!
 //! ```rust,ignore
-//! use csm::adk::{Agent, AgentBuilder, Tool, Runtime};
+//! use csm::Agency::{Agent, AgentBuilder, Tool, Runtime};
 //!
 //! let search_agent = AgentBuilder::new("researcher")
 //!     .model("gemini-2.5-flash")
@@ -38,9 +38,9 @@ pub mod tools;
 
 // Re-export main types
 pub use agent::{Agent, AgentBuilder, AgentConfig, AgentRole, AgentStatus};
-pub use error::AdkError;
+pub use error::AgencyError;
 pub use executor::{ExecutionContext, ExecutionResult, Executor};
-pub use models::{AdkMessage, AdkEvent, EventType, ToolCall, ToolResult};
+pub use models::{AgencyMessage, AgencyEvent, EventType, ToolCall, ToolResult};
 pub use orchestrator::{Orchestrator, OrchestrationType, Pipeline, Swarm};
 pub use runtime::{Runtime, RuntimeConfig};
 pub use session::{Session, SessionManager, SessionState};

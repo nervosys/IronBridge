@@ -2,8 +2,8 @@
 //!
 //! Manages conversation sessions with persistent state.
 
-use crate::adk::error::{AdkError, AdkResult};
-use crate::adk::models::{AdkMessage, MessageRole, TokenUsage};
+use crate::agency::error::{AgencyError, AgencyResult};
+use crate::agency::models::{AgencyMessage, MessageRole, TokenUsage};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ pub struct Session {
     #[serde(default)]
     pub title: Option<String>,
     /// Conversation messages
-    pub messages: Vec<AdkMessage>,
+    pub messages: Vec<AgencyMessage>,
     /// Session state
     #[serde(default)]
     pub state: SessionState,
@@ -95,7 +95,7 @@ impl Session {
     }
 
     /// Add a message to the session
-    pub fn add_message(&mut self, message: AdkMessage) {
+    pub fn add_message(&mut self, message: AgencyMessage) {
         if let Some(tokens) = message.tokens {
             self.token_usage.total_tokens += tokens;
             match message.role {
@@ -125,7 +125,7 @@ impl Session {
     }
 
     /// Get the last N messages
-    pub fn last_messages(&self, n: usize) -> &[AdkMessage] {
+    pub fn last_messages(&self, n: usize) -> &[AgencyMessage] {
         let start = self.messages.len().saturating_sub(n);
         &self.messages[start..]
     }
@@ -138,7 +138,7 @@ impl Session {
     }
 
     /// Rewind to before a specific message
-    pub fn rewind_to(&mut self, message_id: &str) -> Option<Vec<AdkMessage>> {
+    pub fn rewind_to(&mut self, message_id: &str) -> Option<Vec<AgencyMessage>> {
         if let Some(pos) = self.messages.iter().position(|m| m.id == message_id) {
             let removed: Vec<_> = self.messages.drain(pos..).collect();
             self.updated_at = Utc::now();
@@ -194,7 +194,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     /// Create a new session manager with the given database path
-    pub fn new(db_path: impl AsRef<Path>) -> AdkResult<Self> {
+    pub fn new(db_path: impl AsRef<Path>) -> AgencyResult<Self> {
         let conn = Connection::open(db_path)?;
         let manager = Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -204,7 +204,7 @@ impl SessionManager {
     }
 
     /// Create an in-memory session manager (for testing)
-    pub fn in_memory() -> AdkResult<Self> {
+    pub fn in_memory() -> AgencyResult<Self> {
         let conn = Connection::open_in_memory()?;
         let manager = Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -214,11 +214,11 @@ impl SessionManager {
     }
 
     /// Initialize database schema
-    fn init_schema(&self) -> AdkResult<()> {
-        let conn = self.conn.lock().map_err(|e| AdkError::DatabaseError(e.to_string()))?;
+    fn init_schema(&self) -> AgencyResult<()> {
+        let conn = self.conn.lock().map_err(|e| AgencyError::DatabaseError(e.to_string()))?;
         conn.execute_batch(
             r#"
-            CREATE TABLE IF NOT EXISTS adk_sessions (
+            CREATE TABLE IF NOT EXISTS Agency_sessions (
                 id TEXT PRIMARY KEY,
                 agent_name TEXT NOT NULL,
                 user_id TEXT,
@@ -231,27 +231,27 @@ impl SessionManager {
                 updated_at TEXT NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS idx_adk_sessions_agent ON adk_sessions(agent_name);
-            CREATE INDEX IF NOT EXISTS idx_adk_sessions_user ON adk_sessions(user_id);
-            CREATE INDEX IF NOT EXISTS idx_adk_sessions_updated ON adk_sessions(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_Agency_sessions_agent ON Agency_sessions(agent_name);
+            CREATE INDEX IF NOT EXISTS idx_Agency_sessions_user ON Agency_sessions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_Agency_sessions_updated ON Agency_sessions(updated_at DESC);
             "#,
         )?;
         Ok(())
     }
 
     /// Create a new session
-    pub fn create(&self, agent_name: impl Into<String>, user_id: Option<String>) -> AdkResult<Session> {
+    pub fn create(&self, agent_name: impl Into<String>, user_id: Option<String>) -> AgencyResult<Session> {
         let session = Session::new(agent_name, user_id);
         self.save(&session)?;
         Ok(session)
     }
 
     /// Save a session
-    pub fn save(&self, session: &Session) -> AdkResult<()> {
-        let conn = self.conn.lock().map_err(|e| AdkError::DatabaseError(e.to_string()))?;
+    pub fn save(&self, session: &Session) -> AgencyResult<()> {
+        let conn = self.conn.lock().map_err(|e| AgencyError::DatabaseError(e.to_string()))?;
         conn.execute(
             r#"
-            INSERT OR REPLACE INTO adk_sessions 
+            INSERT OR REPLACE INTO Agency_sessions 
             (id, agent_name, user_id, title, messages, state, token_usage, metadata, created_at, updated_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             "#,
@@ -272,11 +272,11 @@ impl SessionManager {
     }
 
     /// Get a session by ID
-    pub fn get(&self, id: &str) -> AdkResult<Option<Session>> {
-        let conn = self.conn.lock().map_err(|e| AdkError::DatabaseError(e.to_string()))?;
+    pub fn get(&self, id: &str) -> AgencyResult<Option<Session>> {
+        let conn = self.conn.lock().map_err(|e| AgencyError::DatabaseError(e.to_string()))?;
         let session = conn
             .query_row(
-                "SELECT * FROM adk_sessions WHERE id = ?1",
+                "SELECT * FROM Agency_sessions WHERE id = ?1",
                 params![id],
                 |row| {
                     Ok(Session {
@@ -302,11 +302,11 @@ impl SessionManager {
     }
 
     /// List sessions for an agent
-    pub fn list_by_agent(&self, agent_name: &str, limit: Option<u32>) -> AdkResult<Vec<Session>> {
-        let conn = self.conn.lock().map_err(|e| AdkError::DatabaseError(e.to_string()))?;
+    pub fn list_by_agent(&self, agent_name: &str, limit: Option<u32>) -> AgencyResult<Vec<Session>> {
+        let conn = self.conn.lock().map_err(|e| AgencyError::DatabaseError(e.to_string()))?;
         let limit = limit.unwrap_or(100);
         let mut stmt = conn.prepare(
-            "SELECT * FROM adk_sessions WHERE agent_name = ?1 ORDER BY updated_at DESC LIMIT ?2",
+            "SELECT * FROM Agency_sessions WHERE agent_name = ?1 ORDER BY updated_at DESC LIMIT ?2",
         )?;
         let sessions = stmt
             .query_map(params![agent_name, limit], |row| {
@@ -333,11 +333,11 @@ impl SessionManager {
     }
 
     /// List sessions for a user
-    pub fn list_by_user(&self, user_id: &str, limit: Option<u32>) -> AdkResult<Vec<Session>> {
-        let conn = self.conn.lock().map_err(|e| AdkError::DatabaseError(e.to_string()))?;
+    pub fn list_by_user(&self, user_id: &str, limit: Option<u32>) -> AgencyResult<Vec<Session>> {
+        let conn = self.conn.lock().map_err(|e| AgencyError::DatabaseError(e.to_string()))?;
         let limit = limit.unwrap_or(100);
         let mut stmt = conn.prepare(
-            "SELECT * FROM adk_sessions WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2",
+            "SELECT * FROM Agency_sessions WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2",
         )?;
         let sessions = stmt
             .query_map(params![user_id, limit], |row| {
@@ -364,9 +364,9 @@ impl SessionManager {
     }
 
     /// Delete a session
-    pub fn delete(&self, id: &str) -> AdkResult<bool> {
-        let conn = self.conn.lock().map_err(|e| AdkError::DatabaseError(e.to_string()))?;
-        let rows = conn.execute("DELETE FROM adk_sessions WHERE id = ?1", params![id])?;
+    pub fn delete(&self, id: &str) -> AgencyResult<bool> {
+        let conn = self.conn.lock().map_err(|e| AgencyError::DatabaseError(e.to_string()))?;
+        let rows = conn.execute("DELETE FROM Agency_sessions WHERE id = ?1", params![id])?;
         Ok(rows > 0)
     }
 }
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn test_session_messages() {
         let mut session = Session::new("test_agent", None);
-        session.add_message(AdkMessage {
+        session.add_message(AgencyMessage {
             id: "msg1".to_string(),
             role: MessageRole::User,
             content: "Hello".to_string(),
@@ -407,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn test_session_manager() -> AdkResult<()> {
+    fn test_session_manager() -> AgencyResult<()> {
         let manager = SessionManager::in_memory()?;
         let session = manager.create("test_agent", Some("user1".to_string()))?;
 

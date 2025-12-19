@@ -166,7 +166,7 @@ type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor
 type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 /**
- * Orchestration type - matches Rust ADK OrchestrationType
+ * Orchestration type - matches Rust Agency OrchestrationType
  */
 type OrchestrationType = 'single' | 'sequential' | 'parallel' | 'loop' | 'hierarchical' | 'swarm' | 'debate';
 /**
@@ -519,14 +519,14 @@ interface McpToolResult {
     };
 }
 /**
- * ADK Event type - mirrors Rust ADK EventType
+ * Agency Event type - mirrors Rust Agency EventType
  */
-type AdkEventType = 'agent_started' | 'agent_thinking' | 'agent_executing' | 'agent_completed' | 'agent_failed' | 'tool_call_started' | 'tool_call_completed' | 'tool_call_failed' | 'message_created' | 'message_delta' | 'task_created' | 'task_started' | 'task_completed' | 'task_failed' | 'swarm_started' | 'swarm_agent_joined' | 'swarm_completed' | 'swarm_failed' | 'handoff' | 'error';
+type AgencyEventType = 'agent_started' | 'agent_thinking' | 'agent_executing' | 'agent_completed' | 'agent_failed' | 'tool_call_started' | 'tool_call_completed' | 'tool_call_failed' | 'message_created' | 'message_delta' | 'task_created' | 'task_started' | 'task_completed' | 'task_failed' | 'swarm_started' | 'swarm_agent_joined' | 'swarm_completed' | 'swarm_failed' | 'handoff' | 'error';
 /**
- * ADK Event - matches Rust ADK AdkEvent
+ * Agency Event - matches Rust Agency AgencyEvent
  */
-interface AdkEvent {
-    type: AdkEventType;
+interface AgencyEvent {
+    type: AgencyEventType;
     agentId?: string;
     agentName?: string;
     taskId?: string;
@@ -539,18 +539,18 @@ interface AdkEvent {
     metadata?: Record<string, unknown>;
 }
 /**
- * Tool call information - matches Rust ADK ToolCall
+ * Tool call information - matches Rust Agency ToolCall
  */
-interface AdkToolCall {
+interface AgencyToolCall {
     id: string;
     name: string;
     arguments: Record<string, unknown>;
     timestamp: number;
 }
 /**
- * Tool result - matches Rust ADK ToolResult
+ * Tool result - matches Rust Agency ToolResult
  */
-interface AdkToolResult {
+interface AgencyToolResult {
     callId: string;
     name: string;
     content: string;
@@ -567,8 +567,8 @@ interface ExecutionResult {
     agentName?: string;
     tokensUsed?: TokenUsage;
     duration: number;
-    toolCalls?: AdkToolCall[];
-    events: AdkEvent[];
+    toolCalls?: AgencyToolCall[];
+    events: AgencyEvent[];
 }
 /**
  * Orchestrator result for multi-agent runs
@@ -581,4 +581,4 @@ interface OrchestratorResult {
     duration: number;
 }
 
-export type { AdkEvent, AdkEventType, AdkToolCall, AdkToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };
+export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };

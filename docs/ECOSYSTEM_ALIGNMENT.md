@@ -28,7 +28,7 @@ This document describes how the CSM (Chat Session Manager) ecosystem maintains c
 
 ### csm-rust (Rust Backend)
 - **Location**: `csm-rust/`
-- **Purpose**: High-performance backend with ADK (Agent Development Kit)
+- **Purpose**: High-performance backend with Agency (Agent Development Kit)
 - **Key Features**:
   - CLI tool (`csm`, `chasm`)
   - Agent orchestration (Sequential, Parallel, Loop, Hierarchical, Swarm)
@@ -72,7 +72,7 @@ This document describes how the CSM (Chat Session Manager) ecosystem maintains c
 All modules use the same provider definitions:
 - copilot, ollama, openai, anthropic, azure, google
 - lmstudio, jan, gpt4all, llamafile, localai, vllm
-- text-gen-webui, cursor, google-adk
+- text-gen-webui, cursor, google-Agency
 
 ### Agent Roles
 ```typescript
@@ -83,7 +83,7 @@ coordinator | researcher | coder | reviewer | executor | writer | tester | custo
 ```typescript
 single | sequential | parallel | loop | hierarchical | swarm | debate
 ```
-Maps to Rust ADK `OrchestrationType` enum.
+Maps to Rust Agency `OrchestrationType` enum.
 
 ### Agent Statuses
 ```typescript
@@ -112,11 +112,11 @@ pending | in_progress | completed | failed | cancelled
 | `Swarm`                 | `Swarm`         |
 | `Pipeline`              | `Pipeline`      |
 
-### ADK Event Types
+### Agency Event Types
 | TypeScript (csm-shared) | Rust (csm-rust)      |
 | ----------------------- | -------------------- |
-| `AdkEvent`              | `AdkEvent`           |
-| `AdkEventType`          | `EventType`          |
+| `AgencyEvent`              | `AgencyEvent`           |
+| `AgencyEventType`          | `EventType`          |
 | `ExecutionResult`       | `ExecutionResult`    |
 | `OrchestratorResult`    | `OrchestratorResult` |
 
@@ -157,7 +157,7 @@ const API_ENDPOINTS = {
 
 When adding a new feature (e.g., new agent role):
 
-1. **csm-rust**: Add to `AgentRole` enum in `adk/agent.rs`
+1. **csm-rust**: Add to `AgentRole` enum in `Agency/agent.rs`
 2. **csm-shared**: Add to `AgentRole` type and `AGENT_ROLES` constant
 3. **csm-web**: Will automatically get from csm-shared
 4. **csm-app**: Add to `ROLE_ICONS`, `ROLE_COLORS` in screens

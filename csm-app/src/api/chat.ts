@@ -11,7 +11,6 @@ export type ChatProviderType =
     | 'groq'
     | 'together'
     | 'google'
-    | 'google-adk'
     | 'custom';
 
 // Authentication method for providers

@@ -1,7 +1,7 @@
 // =============================================================================
 // CSM VS Code Extension Types
 // =============================================================================
-// Type definitions aligned with csm-shared and csm-rust ADK
+// Type definitions aligned with csm-shared and csm-rust Agency
 // These types ensure consistency across the entire CSM ecosystem
 
 // =============================================================================
@@ -9,7 +9,7 @@
 // =============================================================================
 
 /**
- * Message role - matches csm-rust ADK MessageRole
+ * Message role - matches csm-rust Agency MessageRole
  */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -39,7 +39,7 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'c
 export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 
 /**
- * Orchestration type - matches csm-rust ADK OrchestrationType
+ * Orchestration type - matches csm-rust Agency OrchestrationType
  */
 export type OrchestrationType = 'single' | 'sequential' | 'parallel' | 'loop' | 'hierarchical' | 'swarm' | 'debate';
 
@@ -54,11 +54,11 @@ export type ProviderType = 'local' | 'cloud';
 export type ProviderStatus = 'connected' | 'disconnected' | 'error' | 'unknown';
 
 // =============================================================================
-// Message Types (aligned with csm-rust ADK models)
+// Message Types (aligned with csm-rust Agency models)
 // =============================================================================
 
 /**
- * Tool call request - matches csm-rust ADK ToolCall
+ * Tool call request - matches csm-rust Agency ToolCall
  */
 export interface ToolCall {
     id: string;
@@ -68,7 +68,7 @@ export interface ToolCall {
 }
 
 /**
- * Tool execution result - matches csm-rust ADK ToolResult
+ * Tool execution result - matches csm-rust Agency ToolResult
  */
 export interface ToolResult {
     callId: string;
@@ -129,7 +129,7 @@ export interface TokenUsage {
 }
 
 /**
- * Chat message - aligned with csm-shared Message and csm-rust AdkMessage
+ * Chat message - aligned with csm-shared Message and csm-rust AgencyMessage
  */
 export interface ChatMessage {
     id: string;
@@ -196,7 +196,7 @@ export interface SessionFilter {
 }
 
 // =============================================================================
-// Agent Types (aligned with csm-shared Agent and csm-rust ADK Agent)
+// Agent Types (aligned with csm-shared Agent and csm-rust Agency Agent)
 // =============================================================================
 
 /**
@@ -209,7 +209,7 @@ export interface AgentCapability {
 }
 
 /**
- * Agent configuration - aligned with csm-shared Agent and csm-rust ADK Agent
+ * Agent configuration - aligned with csm-shared Agent and csm-rust Agency Agent
  */
 export interface AgentConfig {
     id?: string;
@@ -297,7 +297,7 @@ export interface AgentReflection {
 }
 
 // =============================================================================
-// Swarm Types (aligned with csm-shared Swarm and csm-rust ADK Swarm)
+// Swarm Types (aligned with csm-shared Swarm and csm-rust Agency Swarm)
 // =============================================================================
 
 /**
@@ -339,7 +339,7 @@ export interface SwarmWorkflow {
 }
 
 /**
- * Multi-agent swarm - matches csm-shared Swarm and csm-rust ADK Swarm
+ * Multi-agent swarm - matches csm-shared Swarm and csm-rust Agency Swarm
  */
 export interface Swarm {
     id: string;
@@ -473,11 +473,11 @@ export interface McpToolResult {
 }
 
 // =============================================================================
-// Event Types (aligned with csm-rust ADK events)
+// Event Types (aligned with csm-rust Agency events)
 // =============================================================================
 
 /**
- * Event type - matches csm-rust ADK EventType
+ * Event type - matches csm-rust Agency EventType
  */
 export type EventType =
     | 'agent_started'
@@ -494,9 +494,9 @@ export type EventType =
     | 'reflection_complete';
 
 /**
- * ADK Event - aligned with csm-rust ADK AdkEvent
+ * Agency Event - aligned with csm-rust Agency AgencyEvent
  */
-export interface AdkEvent {
+export interface AgencyEvent {
     eventType: EventType;
     agentName: string;
     data: unknown;
