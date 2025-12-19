@@ -203,7 +203,10 @@ csm list orphaned --path /path/to/project
 # Register all sessions from a workspace into the index
 csm register all --path /path/to/project --force
 
-# Merge all sessions into one and register it
+# Register all sessions for current project
+csm register all --force
+
+# Merge all sessions for current project into one and register it
 csm register all --merge --force
 
 # Register specific sessions by ID (supports multiple IDs)

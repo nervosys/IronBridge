@@ -30,28 +30,28 @@ import {
     useStartSwarm,
     usePauseSwarm,
 } from '../hooks/useApi';
-import { formatRelativeTime, formatDate } from '@csm/shared';
+import { formatRelativeTime, formatDate, AGENT_ROLES, ORCHESTRATION_MODES } from '@csm/shared';
 import type { Swarm } from '../api/types';
 
-// Agent role templates
+// Agent role templates - enhanced from shared constants
 const agentRoles = [
-    { id: 'researcher', name: 'Researcher', icon: Search, color: '#3b82f6', description: 'Gathers information and analyzes data' },
-    { id: 'coder', name: 'Coder', icon: Code, color: '#22c55e', description: 'Writes and reviews code' },
-    { id: 'writer', name: 'Writer', icon: FileText, color: '#f59e0b', description: 'Creates documentation and content' },
-    { id: 'reviewer', name: 'Reviewer', icon: Target, color: '#ef4444', description: 'Reviews and provides feedback' },
-    { id: 'planner', name: 'Planner', icon: Brain, color: '#8b5cf6', description: 'Plans and coordinates tasks' },
-    { id: 'debugger', name: 'Debugger', icon: Zap, color: '#ec4899', description: 'Finds and fixes issues' },
-    { id: 'tester', name: 'Tester', icon: CheckCircle2, color: '#14b8a6', description: 'Tests and validates solutions' },
+    { id: 'researcher', name: 'Researcher', icon: Search, color: AGENT_ROLES.researcher.color, description: AGENT_ROLES.researcher.description },
+    { id: 'coder', name: 'Coder', icon: Code, color: AGENT_ROLES.coder.color, description: AGENT_ROLES.coder.description },
+    { id: 'writer', name: 'Writer', icon: FileText, color: AGENT_ROLES.writer.color, description: AGENT_ROLES.writer.description },
+    { id: 'reviewer', name: 'Reviewer', icon: Target, color: AGENT_ROLES.reviewer.color, description: AGENT_ROLES.reviewer.description },
+    { id: 'coordinator', name: 'Coordinator', icon: Brain, color: AGENT_ROLES.coordinator.color, description: AGENT_ROLES.coordinator.description },
+    { id: 'executor', name: 'Executor', icon: Zap, color: AGENT_ROLES.executor.color, description: AGENT_ROLES.executor.description },
+    { id: 'tester', name: 'Tester', icon: CheckCircle2, color: AGENT_ROLES.tester.color, description: AGENT_ROLES.tester.description },
     { id: 'architect', name: 'Architect', icon: GitBranch, color: '#6366f1', description: 'Designs system architecture' },
 ];
 
-// Execution patterns (basic orchestration)
+// Execution patterns - enhanced from shared orchestration modes
 const executionPatterns = [
-    { id: 'sequential', name: 'Sequential', description: 'Agents work one after another' },
-    { id: 'parallel', name: 'Parallel', description: 'Agents work simultaneously' },
-    { id: 'hierarchical', name: 'Hierarchical', description: 'Lead agent coordinates others' },
-    { id: 'collaborative', name: 'Collaborative', description: 'Agents discuss and reach consensus' },
-    { id: 'competitive', name: 'Competitive', description: 'Agents compete for best solution' },
+    { id: 'sequential', name: ORCHESTRATION_MODES.sequential.name, description: ORCHESTRATION_MODES.sequential.description },
+    { id: 'parallel', name: ORCHESTRATION_MODES.parallel.name, description: ORCHESTRATION_MODES.parallel.description },
+    { id: 'hierarchical', name: ORCHESTRATION_MODES.hierarchical.name, description: ORCHESTRATION_MODES.hierarchical.description },
+    { id: 'swarm', name: ORCHESTRATION_MODES.swarm.name, description: ORCHESTRATION_MODES.swarm.description },
+    { id: 'debate', name: ORCHESTRATION_MODES.debate.name, description: ORCHESTRATION_MODES.debate.description },
 ];
 
 // Swarm Intelligence Algorithms

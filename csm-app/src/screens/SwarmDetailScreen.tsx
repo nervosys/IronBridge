@@ -48,6 +48,8 @@ const ROLE_ICONS: Record<AgentRole, keyof typeof Ionicons.glyphMap> = {
     coder: 'code-slash-outline',
     reviewer: 'checkmark-circle-outline',
     executor: 'play-outline',
+    writer: 'document-text-outline',
+    tester: 'flask-outline',
     custom: 'construct-outline',
 };
 
@@ -57,6 +59,8 @@ const ROLE_COLORS: Record<AgentRole, string> = {
     coder: '#34C759',
     reviewer: '#FF9500',
     executor: '#FF3B30',
+    writer: '#EC4899',
+    tester: '#06B6D4',
     custom: '#8E8E93',
 };
 

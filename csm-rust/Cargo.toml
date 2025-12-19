@@ -46,6 +46,9 @@ colored = "2.1"
 anyhow = "1.0"
 thiserror = "1.0"
 
+# Async trait support (for ADK)
+async-trait = "0.1"
+
 # Process management (check if VS Code is running)
 sysinfo = "0.30"
 

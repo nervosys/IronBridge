@@ -15,7 +15,26 @@
 //! - **Jan.ai** - Open source ChatGPT alternative
 //! - **GPT4All** - Local privacy-focused AI
 //! - **Llamafile** - Portable executable LLMs
+//!
+//! ## Agent Development Kit (ADK)
+//!
+//! The `adk` module provides a Rust-native framework for building AI agents:
+//!
+//! ```rust,ignore
+//! use csm::adk::{Agent, AgentBuilder, Runtime, Tool};
+//!
+//! let agent = AgentBuilder::new("assistant")
+//!     .instruction("You are a helpful assistant.")
+//!     .model("gemini-2.5-flash")
+//!     .tool(Tool::web_search())
+//!     .build();
+//!
+//! let runtime = Runtime::new()?;
+//! runtime.register_agent(agent);
+//! let result = runtime.run("assistant", "Hello!").await?;
+//! ```
 
+pub mod adk;
 pub mod browser;
 pub mod cli;
 pub mod commands;

@@ -1,5 +1,6 @@
 //! Command implementations
 
+mod adk;
 mod detect;
 mod export_import;
 mod git;
@@ -10,6 +11,7 @@ mod providers;
 mod register;
 mod workspace_cmds;
 
+pub use adk::*;
 pub use detect::*;
 pub use export_import::*;
 pub use git::*;

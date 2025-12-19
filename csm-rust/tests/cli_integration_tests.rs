@@ -282,7 +282,7 @@ mod find_commands {
             .args(["find", "--help"])
             .assert()
             .success()
-            .stdout(predicate::str::contains("Find"));
+            .stdout(predicate::str::contains("Search"));
     }
 
     #[test]

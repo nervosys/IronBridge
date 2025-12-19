@@ -1,13 +1,15 @@
 // Agent Types for tracking agentic AI communication and task completion
+// Re-exports shared constants from @csm/shared when available
 
 import { OAuthProviderType } from './oauth';
 import { ChatProviderType } from './chat';
+import { AGENT_ROLES, SWARM_TEMPLATES as SHARED_SWARM_TEMPLATES } from '@csm/shared';
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
-export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'custom';
+export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'custom';
 
 // Authentication configuration for agents
 export interface AgentAuthConfig {
@@ -174,6 +176,12 @@ export function createAgentRun(name: string, description: string): AgentRun {
 }
 
 function getDefaultCapabilities(role: AgentRole): string[] {
+    // Use shared AGENT_ROLES capabilities when available
+    const roleInfo = AGENT_ROLES[role as keyof typeof AGENT_ROLES];
+    if (roleInfo && roleInfo.capabilities.length > 0) {
+        return [...roleInfo.capabilities];
+    }
+    // Fallback for app-specific roles
     switch (role) {
         case 'coordinator':
             return ['task_planning', 'delegation', 'monitoring', 'synthesis'];
@@ -185,6 +193,10 @@ function getDefaultCapabilities(role: AgentRole): string[] {
             return ['code_review', 'quality_assurance', 'feedback', 'validation'];
         case 'executor':
             return ['tool_use', 'api_calls', 'file_operations', 'command_execution'];
+        case 'writer':
+            return ['documentation', 'content_creation', 'editing', 'summarization'];
+        case 'tester':
+            return ['test_generation', 'test_execution', 'bug_finding', 'coverage_analysis'];
         case 'custom':
         default:
             return [];
@@ -228,25 +240,37 @@ export const AGENT_TEMPLATES: Omit<Agent, 'id' | 'createdAt' | 'updatedAt' | 'me
     {
         name: 'Executor',
         role: 'executor',
-        description: 'Executes tools and commands',
+        description: AGENT_ROLES.executor.description,
         status: 'idle',
-        capabilities: ['tool_use', 'api_calls', 'file_operations', 'command_execution'],
+        capabilities: [...AGENT_ROLES.executor.capabilities],
         systemPrompt: 'You are an executor agent that runs tools, makes API calls, and performs actions in the environment.',
+    },
+    {
+        name: 'Writer',
+        role: 'writer',
+        description: AGENT_ROLES.writer.description,
+        status: 'idle',
+        capabilities: [...AGENT_ROLES.writer.capabilities],
+        systemPrompt: 'You are a writer agent skilled at creating documentation, content, and written materials.',
+    },
+    {
+        name: 'Tester',
+        role: 'tester',
+        description: AGENT_ROLES.tester.description,
+        status: 'idle',
+        capabilities: [...AGENT_ROLES.tester.capabilities],
+        systemPrompt: 'You are a tester agent focused on creating and executing tests to ensure quality.',
     },
 ];
 
-// Swarm Templates
+// Swarm Templates - extended from shared templates
 export const SWARM_TEMPLATES: { name: string; description: string; roles: AgentRole[] }[] = [
-    {
-        name: 'Research Team',
-        description: 'A team focused on research and analysis tasks',
-        roles: ['coordinator', 'researcher', 'researcher', 'reviewer'],
-    },
-    {
-        name: 'Development Team',
-        description: 'A team for software development tasks',
-        roles: ['coordinator', 'coder', 'reviewer', 'executor'],
-    },
+    // Include shared templates (spread readonly arrays to mutable)
+    ...SHARED_SWARM_TEMPLATES.map(t => ({
+        ...t,
+        roles: [...t.roles] as AgentRole[],
+    })),
+    // App-specific template
     {
         name: 'Full Stack Team',
         description: 'A comprehensive team for complex projects',

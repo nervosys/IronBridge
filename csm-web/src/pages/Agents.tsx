@@ -30,7 +30,7 @@ import {
     Area,
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
-import { formatRelativeTime, formatTime } from '@csm/shared';
+import { formatRelativeTime, formatTime, AGENT_ROLES } from '@csm/shared';
 
 // Activity log type for tracking agent actions
 interface ActivityLogEntry {
@@ -39,6 +39,12 @@ interface ActivityLogEntry {
     action: string;
     type: 'success' | 'warning' | 'error' | 'info' | 'pause';
 }
+
+// Use shared agent roles for display
+const getAgentRoleInfo = (role: string) => {
+    const roleInfo = AGENT_ROLES[role as keyof typeof AGENT_ROLES];
+    return roleInfo || AGENT_ROLES.custom;
+};
 
 export default function Agents() {
     const { agents, sessions, providers, isLoading, error, refetchAgents } = useApi();
@@ -52,6 +58,7 @@ export default function Agents() {
             const agentSessions = sessions.filter(s => s.provider === agent.providerId);
             const tokenCount = agentSessions.reduce((sum, s) => sum + (s.tokenCount || 0), 0);
             const messageCount = agentSessions.reduce((sum, s) => sum + s.messageCount, 0);
+            const roleInfo = getAgentRoleInfo(agent.role || 'custom');
 
             return {
                 ...agent,
@@ -61,6 +68,7 @@ export default function Agents() {
                 currentTask: agent.description || 'No active task',
                 progress: 0,
                 protocol: agent.tools?.includes('mcp') ? 'mcp' : undefined,
+                roleInfo,
             };
         });
     }, [agents, sessions]);

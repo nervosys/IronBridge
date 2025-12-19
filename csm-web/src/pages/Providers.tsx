@@ -13,14 +13,16 @@ import {
 } from 'lucide-react';
 import { useApi } from '../context/ApiContext';
 import type { Provider as ApiProvider, ProviderHealth } from '../api/types';
+import { PROVIDERS } from '@csm/shared';
 
-// Provider icons mapping
+// Provider icons mapping - uses shared provider data when available
 const PROVIDER_ICONS: Record<string, string> = {
     'github-copilot': '🤖',
     'copilot': '🤖',
     'cursor': '⚡',
     'ollama': '🦙',
     'lm-studio': '🎛️',
+    'lmstudio': '🎛️',
     'chatgpt': '💬',
     'openai': '💬',
     'claude': '🧠',
@@ -32,11 +34,19 @@ const PROVIDER_ICONS: Record<string, string> = {
     'gpt4all': '🌐',
     'localai': '🖥️',
     'llamafile': '📦',
+    'azure': '☁️',
     'default': '🤖',
 };
 
 function getProviderIcon(name: string): string {
     const normalized = name.toLowerCase().replace(/\s+/g, '-');
+    // Try shared providers first
+    const sharedProvider = Object.values(PROVIDERS).find(
+        p => p.id === normalized || p.name.toLowerCase().replace(/\s+/g, '-') === normalized
+    );
+    if (sharedProvider) {
+        return PROVIDER_ICONS[sharedProvider.id] || PROVIDER_ICONS.default;
+    }
     return PROVIDER_ICONS[normalized] || PROVIDER_ICONS.default;
 }
 
@@ -82,10 +92,10 @@ function ProviderCard({ provider, health, sessionCount, onRefresh }: ProviderCar
                             )}
                             <span
                                 className={`flex items-center gap-1 text-xs ${status === 'connected'
-                                        ? 'text-green-500'
-                                        : status === 'disconnected'
-                                            ? 'text-red-500'
-                                            : 'text-yellow-500'
+                                    ? 'text-green-500'
+                                    : status === 'disconnected'
+                                        ? 'text-red-500'
+                                        : 'text-yellow-500'
                                     }`}
                             >
                                 {status === 'connected' ? (
@@ -258,8 +268,8 @@ export default function Providers() {
                             key={type}
                             onClick={() => setFilter(type)}
                             className={`px-4 py-2 text-sm capitalize transition-colors ${filter === type
-                                    ? 'bg-[hsl(var(--primary))] text-white'
-                                    : 'bg-[hsl(var(--card))] hover:bg-[hsl(var(--muted))]'
+                                ? 'bg-[hsl(var(--primary))] text-white'
+                                : 'bg-[hsl(var(--card))] hover:bg-[hsl(var(--muted))]'
                                 }`}
                         >
                             {type}
@@ -272,8 +282,8 @@ export default function Providers() {
                             key={status}
                             onClick={() => setStatusFilter(status)}
                             className={`px-4 py-2 text-sm capitalize transition-colors ${statusFilter === status
-                                    ? 'bg-[hsl(var(--primary))] text-white'
-                                    : 'bg-[hsl(var(--card))] hover:bg-[hsl(var(--muted))]'
+                                ? 'bg-[hsl(var(--primary))] text-white'
+                                : 'bg-[hsl(var(--card))] hover:bg-[hsl(var(--muted))]'
                                 }`}
                         >
                             {status}

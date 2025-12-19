@@ -39,6 +39,11 @@
         },
         "commands": [
             {
+                "command": "csm.openChat",
+                "title": "CSM: Open Chat",
+                "icon": "$(comment-discussion)"
+            },
+            {
                 "command": "csm.showWorkspaces",
                 "title": "CSM: Show All Workspaces",
                 "icon": "$(list-tree)"
@@ -81,6 +86,11 @@
             {
                 "command": "csm.refresh",
                 "title": "CSM: Refresh",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "csm.reloadAndShowChats",
+                "title": "CSM: Reload Window and Show Chats",
                 "icon": "$(refresh)"
             },
             {
@@ -166,6 +176,11 @@
         "views": {
             "csm": [
                 {
+                    "id": "csm.chatQuickAccess",
+                    "name": "Chat",
+                    "icon": "$(comment-discussion)"
+                },
+                {
                     "id": "csm.workspaces",
                     "name": "Workspaces",
                     "icon": "$(folder)"
@@ -178,6 +193,10 @@
             ]
         },
         "viewsWelcome": [
+            {
+                "view": "csm.chatQuickAccess",
+                "contents": "Start a new conversation or continue an existing one.\n[Open CSM Chat](command:csm.openChat)"
+            },
             {
                 "view": "csm.workspaces",
                 "contents": "No workspaces found.\n[Refresh](command:csm.refresh)"
@@ -259,6 +278,9 @@
             ],
             "commandPalette": [
                 {
+                    "command": "csm.openChat"
+                },
+                {
                     "command": "csm.showWorkspaces"
                 },
                 {
@@ -310,7 +332,14 @@
                     "command": "csm.showVersion"
                 }
             ]
-        }
+        },
+        "keybindings": [
+            {
+                "command": "csm.openChat",
+                "key": "ctrl+shift+;",
+                "mac": "cmd+shift+;"
+            }
+        ]
     },
     "scripts": {
         "vscode:prepublish": "npm run compile && npm run copy-binary",

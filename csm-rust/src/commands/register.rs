@@ -89,12 +89,15 @@ pub fn register_all(project_path: Option<&str>, merge: bool, force: bool) -> Res
         registered.to_string().cyan()
     );
 
-    if force && is_vscode_running() {
-        println!(
-            "   {} Sessions should appear in VS Code immediately (no restart needed)",
-            "→".cyan()
-        );
-    }
+    // Always show reload instructions since VS Code caches the index
+    println!(
+        "\n{} VS Code caches the session index in memory.",
+        "[!]".yellow()
+    );
+    println!("   To see the new sessions, do one of the following:");
+    println!("   • Run: {} (if CSM extension is installed)", "code --command csm.reloadAndShowChats".cyan());
+    println!("   • Or press {} in VS Code and run {}", "Ctrl+Shift+P".cyan(), "Developer: Reload Window".cyan());
+    println!("   • Or restart VS Code");
 
     Ok(())
 }

@@ -489,6 +489,402 @@ function isColorDark(hex) {
   return luminance < 0.5;
 }
 
+// src/constants.ts
+var PROVIDERS = {
+  copilot: {
+    id: "copilot",
+    name: "GitHub Copilot",
+    type: "cloud",
+    models: ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "o1-preview", "o1-mini"],
+    color: "#1f6feb",
+    icon: "github"
+  },
+  ollama: {
+    id: "ollama",
+    name: "Ollama",
+    type: "local",
+    endpoint: "http://localhost:11434",
+    models: ["llama3.2", "llama3.1", "codellama", "mistral", "mixtral", "qwen2.5-coder", "deepseek-coder"],
+    color: "#ffffff",
+    icon: "ollama"
+  },
+  openai: {
+    id: "openai",
+    name: "OpenAI",
+    type: "cloud",
+    endpoint: "https://api.openai.com/v1",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"],
+    color: "#10a37f",
+    icon: "openai"
+  },
+  anthropic: {
+    id: "anthropic",
+    name: "Anthropic",
+    type: "cloud",
+    endpoint: "https://api.anthropic.com/v1",
+    models: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"],
+    color: "#d4a574",
+    icon: "anthropic"
+  },
+  azure: {
+    id: "azure",
+    name: "Azure OpenAI",
+    type: "cloud",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+    color: "#0078d4",
+    icon: "azure"
+  },
+  google: {
+    id: "google",
+    name: "Google AI",
+    type: "cloud",
+    endpoint: "https://generativelanguage.googleapis.com/v1",
+    models: ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"],
+    color: "#4285f4",
+    icon: "google"
+  },
+  lmstudio: {
+    id: "lmstudio",
+    name: "LM Studio",
+    type: "local",
+    endpoint: "http://localhost:1234/v1",
+    models: [],
+    color: "#6366f1",
+    icon: "lmstudio"
+  },
+  jan: {
+    id: "jan",
+    name: "Jan",
+    type: "local",
+    endpoint: "http://localhost:1337/v1",
+    models: [],
+    color: "#2563eb",
+    icon: "jan"
+  },
+  llamafile: {
+    id: "llamafile",
+    name: "llamafile",
+    type: "local",
+    endpoint: "http://localhost:8080/v1",
+    models: [],
+    color: "#f97316",
+    icon: "llamafile"
+  },
+  gpt4all: {
+    id: "gpt4all",
+    name: "GPT4All",
+    type: "local",
+    endpoint: "http://localhost:4891/v1",
+    models: [],
+    color: "#22c55e",
+    icon: "gpt4all"
+  }
+};
+var AGENT_ROLES = {
+  coordinator: {
+    id: "coordinator",
+    name: "Coordinator",
+    description: "Orchestrates tasks and manages other agents",
+    icon: "\u{1F3AF}",
+    color: "#3b82f6",
+    capabilities: ["planning", "delegation", "synthesis", "monitoring"]
+  },
+  researcher: {
+    id: "researcher",
+    name: "Researcher",
+    description: "Gathers information and analyzes data",
+    icon: "\u{1F50D}",
+    color: "#10b981",
+    capabilities: ["search", "analysis", "synthesis", "fact_checking"]
+  },
+  coder: {
+    id: "coder",
+    name: "Coder",
+    description: "Writes, reviews, and debugs code",
+    icon: "\u{1F4BB}",
+    color: "#f59e0b",
+    capabilities: ["code_generation", "code_review", "debugging", "refactoring"]
+  },
+  reviewer: {
+    id: "reviewer",
+    name: "Reviewer",
+    description: "Reviews code and provides feedback",
+    icon: "\u2705",
+    color: "#8b5cf6",
+    capabilities: ["code_review", "quality_assurance", "feedback", "validation"]
+  },
+  executor: {
+    id: "executor",
+    name: "Executor",
+    description: "Executes tools and commands",
+    icon: "\u26A1",
+    color: "#ef4444",
+    capabilities: ["tool_use", "command_execution", "automation", "api_calls"]
+  },
+  writer: {
+    id: "writer",
+    name: "Writer",
+    description: "Creates and edits documentation",
+    icon: "\u270D\uFE0F",
+    color: "#ec4899",
+    capabilities: ["documentation", "content_creation", "editing", "summarization"]
+  },
+  tester: {
+    id: "tester",
+    name: "Tester",
+    description: "Creates and runs tests",
+    icon: "\u{1F9EA}",
+    color: "#06b6d4",
+    capabilities: ["test_generation", "test_execution", "bug_finding", "coverage_analysis"]
+  },
+  custom: {
+    id: "custom",
+    name: "Custom",
+    description: "Custom agent with user-defined capabilities",
+    icon: "\u{1F527}",
+    color: "#6b7280",
+    capabilities: []
+  }
+};
+var ORCHESTRATION_MODES = {
+  single: {
+    id: "single",
+    name: "Single Agent",
+    description: "Traditional single-agent response",
+    icon: "\u{1F464}"
+  },
+  sequential: {
+    id: "sequential",
+    name: "Sequential",
+    description: "Agents execute one after another, passing results forward",
+    icon: "\u27A1\uFE0F"
+  },
+  parallel: {
+    id: "parallel",
+    name: "Parallel",
+    description: "Multiple agents work simultaneously on subtasks",
+    icon: "\u26A1"
+  },
+  loop: {
+    id: "loop",
+    name: "Loop",
+    description: "Agent repeats until a condition is met",
+    icon: "\u{1F501}"
+  },
+  hierarchical: {
+    id: "hierarchical",
+    name: "Hierarchical",
+    description: "Lead agent delegates to specialized sub-agents",
+    icon: "\u{1F3DB}\uFE0F"
+  },
+  swarm: {
+    id: "swarm",
+    name: "Swarm",
+    description: "Multiple agents collaborate with a coordinator",
+    icon: "\u{1F41D}"
+  },
+  debate: {
+    id: "debate",
+    name: "Debate",
+    description: "Agents debate to reach the best solution",
+    icon: "\u{1F4AC}"
+  }
+};
+var TOOL_CATEGORIES = {
+  code: {
+    id: "code",
+    name: "Code",
+    description: "Code execution and development tools",
+    icon: "\u{1F4BB}"
+  },
+  search: {
+    id: "search",
+    name: "Search",
+    description: "Search and retrieval tools",
+    icon: "\u{1F50D}"
+  },
+  file: {
+    id: "file",
+    name: "File",
+    description: "File system operations",
+    icon: "\u{1F4C1}"
+  },
+  web: {
+    id: "web",
+    name: "Web",
+    description: "Web browsing and fetching",
+    icon: "\u{1F310}"
+  },
+  analysis: {
+    id: "analysis",
+    name: "Analysis",
+    description: "Code analysis and linting",
+    icon: "\u{1F4CA}"
+  },
+  git: {
+    id: "git",
+    name: "Git",
+    description: "Version control operations",
+    icon: "\u{1F4E6}"
+  },
+  database: {
+    id: "database",
+    name: "Database",
+    description: "Database operations",
+    icon: "\u{1F5C3}\uFE0F"
+  },
+  custom: {
+    id: "custom",
+    name: "Custom",
+    description: "Custom tools",
+    icon: "\u{1F527}"
+  }
+};
+var AGENT_STATUSES = ["idle", "thinking", "executing", "waiting", "completed", "failed", "paused"];
+var TASK_STATUSES = ["pending", "in_progress", "completed", "failed", "cancelled"];
+var SWARM_STATUSES = ["idle", "running", "paused", "completed", "failed"];
+var PROVIDER_STATUSES = ["connected", "disconnected", "error", "unknown"];
+var EXPORT_FORMATS = ["json", "markdown", "html", "csv", "pdf"];
+var API_CONFIG = {
+  defaultBaseUrl: "http://localhost:3000",
+  defaultTimeout: 3e4,
+  version: "v1"
+};
+var API_ENDPOINTS = {
+  health: "/api/health",
+  stats: "/api/v1/stats",
+  workspaces: "/api/v1/workspaces",
+  sessions: "/api/v1/sessions",
+  messages: "/api/v1/messages",
+  providers: "/api/v1/providers",
+  agents: "/api/v1/agents",
+  swarms: "/api/v1/swarms",
+  runs: "/api/v1/runs",
+  chat: "/api/v1/chat",
+  search: "/api/v1/search",
+  mcp: "/api/v1/mcp",
+  export: "/api/v1/export",
+  import: "/api/v1/import"
+};
+var SESSION_FORMAT = {
+  version: 3,
+  maxMessages: 1e3,
+  maxTitleLength: 200,
+  maxContentLength: 1e5
+};
+var LIMITS = {
+  maxMessageLength: 1e5,
+  maxSessionMessages: 1e3,
+  maxSessionTitleLength: 200,
+  maxAgentsPerSwarm: 10,
+  maxIterations: 50,
+  maxConcurrentAgents: 5,
+  maxToolCalls: 100,
+  maxFileSize: 10 * 1024 * 1024
+  // 10MB
+};
+var DEFAULT_AGENT_CONFIG = {
+  temperature: 0.7,
+  maxTokens: 4096,
+  autonomy: "medium",
+  maxIterations: 10
+};
+var DEFAULT_AGENTS = [
+  {
+    name: "assistant",
+    role: "custom",
+    description: "General-purpose AI assistant with planning and reflection",
+    instruction: "You are a helpful assistant that provides clear, accurate, and concise responses.",
+    model: "gpt-4o",
+    tools: [],
+    temperature: 0.7,
+    autonomy: "medium",
+    maxIterations: 10
+  },
+  {
+    name: "coder",
+    role: "coder",
+    description: "Expert software developer with autonomous coding capabilities",
+    instruction: "You are an expert software developer. Plan your approach, write clean code, and test it.",
+    model: "gpt-4o",
+    tools: ["read_file", "create_file", "replace_string_in_file", "run_in_terminal", "get_errors"],
+    temperature: 0.3,
+    autonomy: "high",
+    maxIterations: 15
+  },
+  {
+    name: "researcher",
+    role: "researcher",
+    description: "Research specialist with deep analysis capabilities",
+    instruction: "You are a research specialist. Analyze thoroughly and provide balanced perspectives.",
+    model: "gpt-4o",
+    tools: ["semantic_search", "fetch_webpage", "read_file"],
+    temperature: 0.5,
+    autonomy: "high",
+    maxIterations: 12
+  },
+  {
+    name: "reviewer",
+    role: "reviewer",
+    description: "Code review expert with detailed analysis",
+    instruction: "You are a senior code reviewer. Review for correctness, security, and best practices.",
+    model: "gpt-4o",
+    tools: ["read_file", "grep_search", "get_errors"],
+    temperature: 0.3,
+    autonomy: "medium",
+    maxIterations: 8
+  },
+  {
+    name: "coordinator",
+    role: "coordinator",
+    description: "Multi-agent coordinator for complex tasks",
+    instruction: "You are a coordinator that orchestrates multiple agents. Plan, delegate, and synthesize.",
+    model: "gpt-4o",
+    tools: ["semantic_search"],
+    temperature: 0.4,
+    autonomy: "high",
+    maxIterations: 20
+  }
+];
+var SWARM_TEMPLATES = [
+  {
+    name: "Research Team",
+    description: "A team focused on research and analysis tasks",
+    roles: ["coordinator", "researcher", "researcher", "reviewer"]
+  },
+  {
+    name: "Development Team",
+    description: "A team for software development tasks",
+    roles: ["coordinator", "coder", "reviewer", "tester"]
+  },
+  {
+    name: "Documentation Team",
+    description: "A team for creating and reviewing documentation",
+    roles: ["coordinator", "writer", "reviewer"]
+  },
+  {
+    name: "Code Review Team",
+    description: "A team for thorough code reviews",
+    roles: ["coordinator", "reviewer", "reviewer", "tester"]
+  }
+];
+
+exports.AGENT_ROLES = AGENT_ROLES;
+exports.AGENT_STATUSES = AGENT_STATUSES;
+exports.API_CONFIG = API_CONFIG;
+exports.API_ENDPOINTS = API_ENDPOINTS;
+exports.DEFAULT_AGENTS = DEFAULT_AGENTS;
+exports.DEFAULT_AGENT_CONFIG = DEFAULT_AGENT_CONFIG;
+exports.EXPORT_FORMATS = EXPORT_FORMATS;
+exports.LIMITS = LIMITS;
+exports.ORCHESTRATION_MODES = ORCHESTRATION_MODES;
+exports.PROVIDERS = PROVIDERS;
+exports.PROVIDER_STATUSES = PROVIDER_STATUSES;
+exports.SESSION_FORMAT = SESSION_FORMAT;
+exports.SWARM_STATUSES = SWARM_STATUSES;
+exports.SWARM_TEMPLATES = SWARM_TEMPLATES;
+exports.TASK_STATUSES = TASK_STATUSES;
+exports.TOOL_CATEGORIES = TOOL_CATEGORIES;
 exports.api = api;
 exports.capitalize = capitalize;
 exports.chunk = chunk;

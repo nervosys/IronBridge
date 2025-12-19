@@ -7,6 +7,7 @@ import * as path from 'path';
 import { CsmExecutor } from './csmExecutor';
 import { WorkspaceProvider, WorkspaceItem } from './workspaceProvider';
 import { SessionProvider } from './sessionProvider';
+import { CsmChatPanel } from './chatPanel';
 
 let executor: CsmExecutor;
 let workspaceProvider: WorkspaceProvider;
@@ -202,6 +203,24 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('CSM');
     outputChannel.appendLine('Chat System Manager activated');
 
+    // Check if we should show chats after reload (triggered by csm.reloadAndShowChats)
+    const showChatsAfterReload = context.globalState.get<boolean>('csm.showChatsAfterReload', false);
+    if (showChatsAfterReload) {
+        context.globalState.update('csm.showChatsAfterReload', false);
+        // Give VS Code a moment to fully initialize, then open chat history
+        setTimeout(async () => {
+            try {
+                // Try to open VS Code's built-in chat history picker
+                await vscode.commands.executeCommand('workbench.action.chat.history');
+            } catch {
+                // Fallback: show info message
+                vscode.window.showInformationMessage(
+                    'Sessions registered! Open Chat panel and click "Show Chats..." to see them.'
+                );
+            }
+        }, 1000);
+    }
+
     // Initialize executor with extension path for bundled binary lookup
     executor = new CsmExecutor(outputChannel, context.extensionPath);
 
@@ -224,9 +243,21 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register commands
     context.subscriptions.push(
+        // Open CSM Chat Panel - unified chat interface
+        vscode.commands.registerCommand('csm.openChat', () => {
+            CsmChatPanel.createOrShow(context.extensionUri, executor, outputChannel);
+        }),
+
         vscode.commands.registerCommand('csm.refresh', () => {
             workspaceProvider.refresh();
             sessionProvider.refresh();
+        }),
+
+        // Reload window and open chat history picker (for use after csm register)
+        vscode.commands.registerCommand('csm.reloadAndShowChats', async () => {
+            // Store intent to show chats after reload
+            await context.globalState.update('csm.showChatsAfterReload', true);
+            await vscode.commands.executeCommand('workbench.action.reloadWindow');
         }),
 
         // Click handler for workspace items - single click shows sessions

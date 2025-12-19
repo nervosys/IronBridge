@@ -33,6 +33,7 @@ const PROVIDER_ICONS: Record<ChatProviderType, keyof typeof Ionicons.glyphMap> =
     groq: 'flash-outline',
     together: 'people-outline',
     google: 'logo-google',
+    'google-adk': 'logo-google',
     custom: 'code-slash-outline',
 };
 

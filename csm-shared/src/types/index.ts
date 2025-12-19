@@ -190,9 +190,34 @@ export interface ProviderHealth {
 // =============================================================================
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
-export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'custom';
+export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'custom';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+
+/**
+ * Orchestration type - matches Rust ADK OrchestrationType
+ */
+export type OrchestrationType =
+    | 'single'       // Traditional single-agent
+    | 'sequential'   // Agents execute one after another
+    | 'parallel'     // Agents execute simultaneously
+    | 'loop'         // Agent repeats until condition met
+    | 'hierarchical' // Coordinator delegates to sub-agents
+    | 'swarm'        // Multi-agent swarm with coordinator
+    | 'debate';      // Agents debate to reach consensus
+
+/**
+ * Pipeline configuration for multi-agent orchestration
+ */
+export interface Pipeline {
+    id: string;
+    name: string;
+    orchestration: OrchestrationType;
+    agents: string[]; // Agent IDs
+    maxIterations?: number;
+    createdAt: number;
+    updatedAt: number;
+}
 
 /**
  * AI Agent configuration
@@ -583,4 +608,96 @@ export interface McpToolResult {
         content: Array<{ type: string; text: string }>;
         isError?: boolean;
     };
+}
+
+// =============================================================================
+// ADK Event Types (matches Rust ADK)
+// =============================================================================
+
+/**
+ * ADK Event type - mirrors Rust ADK EventType
+ */
+export type AdkEventType =
+    | 'agent_started'
+    | 'agent_thinking'
+    | 'agent_executing'
+    | 'agent_completed'
+    | 'agent_failed'
+    | 'tool_call_started'
+    | 'tool_call_completed'
+    | 'tool_call_failed'
+    | 'message_created'
+    | 'message_delta'
+    | 'task_created'
+    | 'task_started'
+    | 'task_completed'
+    | 'task_failed'
+    | 'swarm_started'
+    | 'swarm_agent_joined'
+    | 'swarm_completed'
+    | 'swarm_failed'
+    | 'handoff'
+    | 'error';
+
+/**
+ * ADK Event - matches Rust ADK AdkEvent
+ */
+export interface AdkEvent {
+    type: AdkEventType;
+    agentId?: string;
+    agentName?: string;
+    taskId?: string;
+    toolName?: string;
+    message?: string;
+    content?: string;
+    error?: string;
+    tokensUsed?: number;
+    timestamp: number;
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * Tool call information - matches Rust ADK ToolCall
+ */
+export interface AdkToolCall {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+    timestamp: number;
+}
+
+/**
+ * Tool result - matches Rust ADK ToolResult
+ */
+export interface AdkToolResult {
+    callId: string;
+    name: string;
+    content: string;
+    isError: boolean;
+    duration?: number;
+    timestamp: number;
+}
+
+/**
+ * Execution result from agent or pipeline run
+ */
+export interface ExecutionResult {
+    success: boolean;
+    output: string;
+    agentName?: string;
+    tokensUsed?: TokenUsage;
+    duration: number;
+    toolCalls?: AdkToolCall[];
+    events: AdkEvent[];
+}
+
+/**
+ * Orchestrator result for multi-agent runs
+ */
+export interface OrchestratorResult {
+    success: boolean;
+    outputs: string[];
+    agentResults: ExecutionResult[];
+    totalTokens: TokenUsage;
+    duration: number;
 }

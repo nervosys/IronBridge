@@ -2,6 +2,7 @@
 //!
 //! A CLI tool to manage and merge chat sessions across workspaces.
 
+mod adk;
 mod api;
 mod browser;
 mod cli;
@@ -18,7 +19,7 @@ mod workspace;
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands, FindCommands, GitCommands,
+    AgencyCommands, ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands, FindCommands, GitCommands,
     HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands, MergeCommands,
     MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
 };
@@ -562,6 +563,33 @@ fn main() -> Result<()> {
                 // Create tokio runtime and run the server
                 let rt = tokio::runtime::Runtime::new()?;
                 rt.block_on(api::start_server(config))
+            }
+        },
+
+        // ====================================================================
+        // Agency (Agent Development Kit)
+        // ====================================================================
+        Commands::Agency { command } => match command {
+            AgencyCommands::List { verbose } => {
+                commands::list_agents(verbose)
+            }
+            AgencyCommands::Info { name } => {
+                commands::show_agent_info(&name)
+            }
+            AgencyCommands::Modes => {
+                commands::list_modes()
+            }
+            AgencyCommands::Run { agent, prompt, model, orchestration, verbose } => {
+                commands::run_agent(&agent, &prompt, model.as_deref(), &orchestration, verbose)
+            }
+            AgencyCommands::Create { name, role, instruction, model } => {
+                commands::create_agent(&name, &role, instruction.as_deref(), model.as_deref())
+            }
+            AgencyCommands::Tools => {
+                commands::list_tools()
+            }
+            AgencyCommands::Templates => {
+                commands::list_templates()
             }
         },
 

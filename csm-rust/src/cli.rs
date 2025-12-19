@@ -27,7 +27,7 @@ pub enum Commands {
     // ============================================================================
     // Find Commands
     // ============================================================================
-    /// Find workspaces, sessions, or paths by search pattern
+    /// Search workspaces or sessions by text pattern (title, content, ID)
     Find {
         #[command(subcommand)]
         command: Option<FindCommands>,
@@ -72,7 +72,7 @@ pub enum Commands {
     // ============================================================================
     // Import Commands
     // ============================================================================
-    /// Import chat sessions into workspaces, sessions, or paths
+    /// Import session files from external directories into a workspace
     Import {
         #[command(subcommand)]
         command: Option<ImportCommands>,
@@ -135,7 +135,7 @@ pub enum Commands {
     // ============================================================================
     // Register Commands
     // ============================================================================
-    /// Register chat sessions in VS Code's index so they appear in "Show Chats..."
+    /// Add on-disk sessions to VS Code's database index (makes orphaned sessions visible)
     Register {
         #[command(subcommand)]
         command: RegisterCommands,
@@ -157,6 +157,15 @@ pub enum Commands {
     Api {
         #[command(subcommand)]
         command: ApiCommands,
+    },
+
+    // ============================================================================
+    // Agency Commands
+    // ============================================================================
+    /// Agent Development Kit - manage agents and orchestration
+    Agency {
+        #[command(subcommand)]
+        command: AgencyCommands,
     },
 
     // ============================================================================
@@ -189,7 +198,7 @@ pub enum ListCommands {
         project_path: Option<String>,
     },
 
-    /// List sessions that are on disk but not in VS Code's index
+    /// List unregistered sessions (exist on disk but invisible to VS Code)
     Orphaned {
         /// Project path (default: current directory)
         #[arg(long)]
@@ -203,15 +212,15 @@ pub enum ListCommands {
 
 #[derive(Subcommand)]
 pub enum FindCommands {
-    /// Find workspaces by search pattern (defaults to current directory name)
+    /// Search workspaces by name pattern (defaults to current directory name)
     Workspace {
-        /// Search pattern (case-insensitive, defaults to current directory name)
+        /// Text pattern to match (case-insensitive, defaults to current directory name)
         pattern: Option<String>,
     },
 
-    /// Find sessions by search pattern (defaults to current directory name)
+    /// Search sessions by title, content, or ID pattern
     Session {
-        /// Search pattern (case-insensitive, defaults to current directory name)
+        /// Text pattern to match (case-insensitive, defaults to current directory name)
         pattern: Option<String>,
 
         /// Filter by project path
@@ -219,7 +228,7 @@ pub enum FindCommands {
         project_path: Option<String>,
     },
 
-    /// Find sessions in a specific project path (defaults to current directory)
+    /// Search sessions within a specific project path
     Path {
         /// Search pattern (case-insensitive, defaults to current directory name)
         pattern: Option<String>,
@@ -532,9 +541,9 @@ pub enum ExportCommands {
 
 #[derive(Subcommand)]
 pub enum ImportCommands {
-    /// Import sessions into a workspace by hash
+    /// Copy session files from external directory into a workspace
     Workspace {
-        /// Source directory containing session JSON files
+        /// Source directory containing session JSON files to import
         source: String,
 
         /// Target workspace hash
@@ -545,7 +554,7 @@ pub enum ImportCommands {
         force: bool,
     },
 
-    /// Import specific session files
+    /// Copy specific session files into a workspace
     Sessions {
         /// Session files to import (space-separated paths)
         #[arg(required = true, num_args = 1..)]
@@ -560,9 +569,9 @@ pub enum ImportCommands {
         force: bool,
     },
 
-    /// Import chat sessions into a project path
+    /// Copy session files from external directory into a project workspace
     Path {
-        /// Source directory containing session JSON files
+        /// Source directory containing session JSON files to import
         source: String,
 
         /// Target project path (default: current directory)
@@ -892,7 +901,7 @@ pub enum DetectCommands {
 
 #[derive(Subcommand)]
 pub enum RegisterCommands {
-    /// Register all sessions from a workspace into VS Code's index
+    /// Register all on-disk sessions into VS Code's index (fixes orphaned sessions)
     All {
         /// Project path (default: current directory)
         #[arg(long)]
@@ -907,7 +916,7 @@ pub enum RegisterCommands {
         force: bool,
     },
 
-    /// Register specific sessions by ID or title
+    /// Register specific sessions by ID or title into VS Code's index
     Session {
         /// Session IDs or filenames (without .json extension)
         #[arg(required_unless_present = "title")]
@@ -1206,4 +1215,73 @@ pub enum ApiCommands {
         #[arg(long)]
         database: Option<String>,
     },
+}
+
+// ============================================================================
+// Agency (Agent Development Kit) Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum AgencyCommands {
+    /// List available agents and their roles
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show agent information
+    Info {
+        /// Agent name or ID
+        name: String,
+    },
+
+    /// List supported orchestration modes
+    Modes,
+
+    /// Run an agent with a prompt
+    Run {
+        /// Agent name to run
+        #[arg(short, long, default_value = "assistant")]
+        agent: String,
+
+        /// Prompt or task for the agent
+        prompt: String,
+
+        /// Model to use (e.g., gemini-2.0-flash, gpt-4o)
+        #[arg(short, long)]
+        model: Option<String>,
+
+        /// Orchestration mode (single, sequential, parallel, swarm)
+        #[arg(long, default_value = "single")]
+        orchestration: String,
+
+        /// Enable verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Create a new agent configuration
+    Create {
+        /// Agent name
+        name: String,
+
+        /// Agent role (coordinator, researcher, coder, reviewer, executor, writer, tester, custom)
+        #[arg(short, long, default_value = "custom")]
+        role: String,
+
+        /// System instruction for the agent
+        #[arg(short, long)]
+        instruction: Option<String>,
+
+        /// Model to use
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+
+    /// List available tools
+    Tools,
+
+    /// Show swarm templates
+    Templates,
 }
