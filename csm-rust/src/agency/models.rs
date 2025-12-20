@@ -104,45 +104,75 @@ pub struct AgencyEvent {
     pub session_id: Option<String>,
 }
 
-/// Types of events during execution
+/// Types of events during execution - matches csm-shared AgencyEventType
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     /// Agent started processing
-    AgentStart,
-    /// Agent finished processing
-    AgentEnd,
-    /// Model is thinking/generating
-    Thinking,
-    /// Model response (partial or complete)
-    ModelResponse,
-    /// Tool call initiated
-    ToolCall,
-    /// Tool execution completed
-    ToolResult,
+    AgentStarted,
+    /// Agent is thinking
+    AgentThinking,
+    /// Agent is executing
+    AgentExecuting,
+    /// Agent completed processing
+    AgentCompleted,
+    /// Agent failed
+    AgentFailed,
+    /// Tool call started
+    ToolCallStarted,
+    /// Tool call completed
+    ToolCallCompleted,
+    /// Tool call failed
+    ToolCallFailed,
+    /// Message created
+    MessageCreated,
+    /// Message delta (streaming)
+    MessageDelta,
+    /// Task created
+    TaskCreated,
+    /// Task started
+    TaskStarted,
+    /// Task completed
+    TaskCompleted,
+    /// Task failed
+    TaskFailed,
+    /// Swarm started
+    SwarmStarted,
+    /// Agent joined swarm
+    SwarmAgentJoined,
+    /// Swarm completed
+    SwarmCompleted,
+    /// Swarm failed
+    SwarmFailed,
     /// Agent handoff to another agent
     Handoff,
     /// Error occurred
     Error,
-    /// Execution cancelled
-    Cancelled,
-    /// State updated
-    StateUpdate,
 }
 
 impl std::fmt::Display for EventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EventType::AgentStart => write!(f, "agent_start"),
-            EventType::AgentEnd => write!(f, "agent_end"),
-            EventType::Thinking => write!(f, "thinking"),
-            EventType::ModelResponse => write!(f, "model_response"),
-            EventType::ToolCall => write!(f, "tool_call"),
-            EventType::ToolResult => write!(f, "tool_result"),
+            EventType::AgentStarted => write!(f, "agent_started"),
+            EventType::AgentThinking => write!(f, "agent_thinking"),
+            EventType::AgentExecuting => write!(f, "agent_executing"),
+            EventType::AgentCompleted => write!(f, "agent_completed"),
+            EventType::AgentFailed => write!(f, "agent_failed"),
+            EventType::ToolCallStarted => write!(f, "tool_call_started"),
+            EventType::ToolCallCompleted => write!(f, "tool_call_completed"),
+            EventType::ToolCallFailed => write!(f, "tool_call_failed"),
+            EventType::MessageCreated => write!(f, "message_created"),
+            EventType::MessageDelta => write!(f, "message_delta"),
+            EventType::TaskCreated => write!(f, "task_created"),
+            EventType::TaskStarted => write!(f, "task_started"),
+            EventType::TaskCompleted => write!(f, "task_completed"),
+            EventType::TaskFailed => write!(f, "task_failed"),
+            EventType::SwarmStarted => write!(f, "swarm_started"),
+            EventType::SwarmAgentJoined => write!(f, "swarm_agent_joined"),
+            EventType::SwarmCompleted => write!(f, "swarm_completed"),
+            EventType::SwarmFailed => write!(f, "swarm_failed"),
             EventType::Handoff => write!(f, "handoff"),
             EventType::Error => write!(f, "error"),
-            EventType::Cancelled => write!(f, "cancelled"),
-            EventType::StateUpdate => write!(f, "state_update"),
         }
     }
 }

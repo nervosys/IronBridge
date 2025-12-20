@@ -101,7 +101,7 @@ impl Executor {
 
         // Emit start event
         let start_event = AgencyEvent {
-            event_type: EventType::AgentStart,
+            event_type: EventType::AgentStarted,
             agent_name: agent.name().to_string(),
             data: serde_json::json!({ "message": user_message }),
             timestamp: Utc::now(),
@@ -134,7 +134,7 @@ impl Executor {
             // Call the model
             agent.set_status(AgentStatus::Thinking);
             let thinking_event = AgencyEvent {
-                event_type: EventType::Thinking,
+                event_type: EventType::AgentThinking,
                 agent_name: agent.name().to_string(),
                 data: serde_json::json!({}),
                 timestamp: Utc::now(),
@@ -160,7 +160,7 @@ impl Executor {
 
                     // Emit tool call event
                     let call_event = AgencyEvent {
-                        event_type: EventType::ToolCall,
+                        event_type: EventType::ToolCallStarted,
                         agent_name: agent.name().to_string(),
                         data: serde_json::json!({
                             "tool": tool_call.name,
@@ -178,7 +178,7 @@ impl Executor {
 
                     // Emit tool result event
                     let result_event = AgencyEvent {
-                        event_type: EventType::ToolResult,
+                        event_type: EventType::ToolCallCompleted,
                         agent_name: agent.name().to_string(),
                         data: serde_json::json!({
                             "tool": tool_call.name,
@@ -235,7 +235,7 @@ impl Executor {
         // Emit end event
         agent.set_status(AgentStatus::Completed);
         let end_event = AgencyEvent {
-            event_type: EventType::AgentEnd,
+            event_type: EventType::AgentCompleted,
             agent_name: agent.name().to_string(),
             data: serde_json::json!({ "response": final_response }),
             timestamp: Utc::now(),
