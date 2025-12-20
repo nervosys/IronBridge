@@ -256,24 +256,185 @@ impl Executor {
         })
     }
 
-    /// Call the model (placeholder - implement with actual API)
+    /// Call the model using the appropriate provider
     async fn call_model(&self, agent: &Agent, session: &Session) -> AgencyResult<ModelResponse> {
-        // TODO: Implement actual model API calls for different providers
-        // This is a placeholder that returns a mock response
-
-        let _messages = session.to_api_messages();
-        let _tools = agent.tool_definitions();
-
-        // Mock response
-        Ok(ModelResponse {
-            content: format!(
-                "I'm {}, an AI assistant. I received your message and am ready to help. \
-                (Note: This is a placeholder response - implement model API integration)",
-                agent.name()
+        use crate::agency::models::ModelProvider;
+        
+        let messages = session.to_api_messages();
+        let tools = agent.tool_definitions();
+        let model_config = agent.model();
+        
+        // Build request body
+        let mut request_body = serde_json::json!({
+            "model": model_config.model,
+            "messages": messages,
+            "temperature": model_config.temperature,
+        });
+        
+        if let Some(max_tokens) = model_config.max_tokens {
+            request_body["max_tokens"] = serde_json::json!(max_tokens);
+        }
+        
+        if !tools.is_empty() {
+            request_body["tools"] = serde_json::json!(tools);
+        }
+        
+        // Determine endpoint based on provider
+        let endpoint = match model_config.provider {
+            ModelProvider::OpenAI => "https://api.openai.com/v1/chat/completions".to_string(),
+            ModelProvider::Anthropic => "https://api.anthropic.com/v1/messages".to_string(),
+            ModelProvider::Google => format!(
+                "https://generativelanguage.googleapis.com/v1/models/{}:generateContent",
+                model_config.model
             ),
-            tool_calls: vec![],
-            usage: TokenUsage::new(10, 20),
+            ModelProvider::Ollama => "http://localhost:11434/api/chat".to_string(),
+            ModelProvider::Azure => model_config.endpoint.clone().unwrap_or_default(),
+            ModelProvider::OpenAICompatible | ModelProvider::Custom => {
+                model_config.endpoint.clone().unwrap_or_else(|| "http://localhost:8080/v1/chat/completions".to_string())
+            }
+        };
+        
+        if endpoint.is_empty() {
+            return Err(AgencyError::ConfigError("No endpoint configured for model provider".to_string()));
+        }
+        
+        // Make HTTP request
+        let client = reqwest::Client::new();
+        let mut request = client.post(&endpoint).json(&request_body);
+        
+        // Add authentication
+        if let Some(api_key) = &model_config.api_key {
+            match model_config.provider {
+                ModelProvider::Anthropic => {
+                    request = request.header("x-api-key", api_key);
+                    request = request.header("anthropic-version", "2023-06-01");
+                }
+                ModelProvider::Google => {
+                    // Google uses query parameter for API key
+                    request = client.post(format!("{}?key={}", endpoint, api_key)).json(&request_body);
+                }
+                _ => {
+                    request = request.header("Authorization", format!("Bearer {}", api_key));
+                }
+            }
+        }
+        
+        let response = request.send().await.map_err(|e| {
+            AgencyError::NetworkError(format!("HTTP request failed: {}", e))
+        })?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let body: String = response.text().await.unwrap_or_default();
+            return Err(AgencyError::ModelError(format!(
+                "Model API error ({}): {}", status, body
+            )));
+        }
+        
+        let response_body: serde_json::Value = response.json().await.map_err(|e| {
+            AgencyError::ModelError(format!("Failed to parse response: {}", e))
+        })?;
+        
+        // Parse response based on provider format
+        let (content, tool_calls, usage) = Self::parse_model_response(&response_body, &model_config.provider)?;
+        
+        Ok(ModelResponse {
+            content,
+            tool_calls,
+            usage,
         })
+    }
+    
+    /// Parse model response based on provider format
+    fn parse_model_response(
+        response: &serde_json::Value,
+        provider: &crate::agency::models::ModelProvider,
+    ) -> AgencyResult<(String, Vec<ToolCall>, TokenUsage)> {
+        use crate::agency::models::ModelProvider;
+        
+        match provider {
+            ModelProvider::Anthropic => {
+                // Anthropic format
+                let content = response["content"][0]["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
+                let usage = TokenUsage::new(
+                    response["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32,
+                    response["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32,
+                );
+                // Parse tool_use blocks for Anthropic
+                let mut tool_calls = vec![];
+                if let Some(content_blocks) = response["content"].as_array() {
+                    for block in content_blocks {
+                        if block["type"].as_str() == Some("tool_use") {
+                            tool_calls.push(ToolCall {
+                                id: block["id"].as_str().unwrap_or("").to_string(),
+                                name: block["name"].as_str().unwrap_or("").to_string(),
+                                arguments: block["input"].clone(),
+                                timestamp: Utc::now(),
+                            });
+                        }
+                    }
+                }
+                Ok((content, tool_calls, usage))
+            }
+            ModelProvider::Google => {
+                // Google Gemini format
+                let content = response["candidates"][0]["content"]["parts"][0]["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
+                let usage = TokenUsage::new(
+                    response["usageMetadata"]["promptTokenCount"].as_u64().unwrap_or(0) as u32,
+                    response["usageMetadata"]["candidatesTokenCount"].as_u64().unwrap_or(0) as u32,
+                );
+                // Parse function calls for Google
+                let mut tool_calls = vec![];
+                if let Some(parts) = response["candidates"][0]["content"]["parts"].as_array() {
+                    for part in parts {
+                        if let Some(fn_call) = part.get("functionCall") {
+                            tool_calls.push(ToolCall {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                name: fn_call["name"].as_str().unwrap_or("").to_string(),
+                                arguments: fn_call["args"].clone(),
+                                timestamp: Utc::now(),
+                            });
+                        }
+                    }
+                }
+                Ok((content, tool_calls, usage))
+            }
+            _ => {
+                // OpenAI-compatible format (OpenAI, Ollama, Azure, OpenAICompatible, Custom)
+                let choice = &response["choices"][0];
+                let content = choice["message"]["content"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
+                
+                let mut tool_calls = vec![];
+                if let Some(calls) = choice["message"]["tool_calls"].as_array() {
+                    for call in calls {
+                        tool_calls.push(ToolCall {
+                            id: call["id"].as_str().unwrap_or("").to_string(),
+                            name: call["function"]["name"].as_str().unwrap_or("").to_string(),
+                            arguments: serde_json::from_str(
+                                call["function"]["arguments"].as_str().unwrap_or("{}")
+                            ).unwrap_or_default(),
+                            timestamp: Utc::now(),
+                        });
+                    }
+                }
+                
+                let usage = TokenUsage::new(
+                    response["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
+                    response["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
+                );
+                
+                Ok((content, tool_calls, usage))
+            }
+        }
     }
 
     /// Execute a tool
@@ -320,6 +481,7 @@ mod tests {
     use crate::agency::agent::AgentBuilder;
 
     #[tokio::test]
+    #[ignore = "Integration test - requires API credentials"]
     async fn test_executor() {
         let tool_registry = Arc::new(ToolRegistry::new());
         let executor = Executor::new(tool_registry);

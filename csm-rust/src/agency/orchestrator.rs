@@ -438,6 +438,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Integration test - requires API credentials"]
     async fn test_sequential_pipeline() {
         let tool_registry = Arc::new(ToolRegistry::new());
         let executor = Arc::new(Executor::new(tool_registry));
@@ -462,6 +463,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Integration test - requires API credentials"]
     async fn test_parallel_pipeline() {
         let tool_registry = Arc::new(ToolRegistry::new());
         let executor = Arc::new(Executor::new(tool_registry));

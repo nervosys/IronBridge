@@ -282,6 +282,7 @@ mod tests {
     use crate::agency::agent::AgentBuilder;
 
     #[tokio::test]
+    #[ignore = "Integration test - requires API credentials"]
     async fn test_runtime() -> AgencyResult<()> {
         let mut runtime = Runtime::in_memory()?;
 
@@ -301,6 +302,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Integration test - requires API credentials"]
     async fn test_runtime_sessions() -> AgencyResult<()> {
         let mut runtime = Runtime::in_memory()?;
 
