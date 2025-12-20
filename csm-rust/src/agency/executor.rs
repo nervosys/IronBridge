@@ -143,8 +143,7 @@ impl Executor {
             events.push(thinking_event.clone());
             ctx.emit(thinking_event).await;
 
-            // TODO: Implement actual model API call
-            // For now, return a placeholder response
+            // Call the model with the current session context
             let model_response = self.call_model(agent, session).await?;
 
             token_usage.add(&model_response.usage);
