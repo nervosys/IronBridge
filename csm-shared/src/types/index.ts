@@ -747,3 +747,215 @@ export interface OrchestratorResult {
     totalTokens: TokenUsage;
     duration: number;
 }
+
+// =============================================================================
+// Life Integration Types
+// =============================================================================
+
+/**
+ * Integration category
+ */
+export type IntegrationCategory =
+    | 'productivity'
+    | 'communication'
+    | 'browser'
+    | 'development'
+    | 'smart_home'
+    | 'finance'
+    | 'health'
+    | 'media'
+    | 'travel'
+    | 'shopping'
+    | 'system';
+
+/**
+ * Authentication method for integrations
+ */
+export type IntegrationAuthType =
+    | 'oauth2'
+    | 'api_key'
+    | 'bot_token'
+    | 'local'
+    | 'bridge'
+    | 'extension'
+    | 'none';
+
+/**
+ * Integration status
+ */
+export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'pending' | 'unknown';
+
+/**
+ * Integration configuration
+ */
+export interface Integration {
+    id: string;
+    name: string;
+    category: IntegrationCategory;
+    icon: string;
+    color: string;
+    capabilities: string[];
+    authType: IntegrationAuthType;
+    status: IntegrationStatus;
+    lastSync?: number;
+    error?: string;
+    config?: IntegrationConfig;
+}
+
+/**
+ * Integration-specific configuration
+ */
+export interface IntegrationConfig {
+    enabled: boolean;
+    credentials?: IntegrationCredentials;
+    settings?: Record<string, unknown>;
+    webhookUrl?: string;
+    refreshToken?: string;
+    expiresAt?: number;
+}
+
+/**
+ * Integration credentials (stored securely)
+ */
+export interface IntegrationCredentials {
+    accessToken?: string;
+    apiKey?: string;
+    clientId?: string;
+    clientSecret?: string;
+    refreshToken?: string;
+}
+
+// =============================================================================
+// Hook Types
+// =============================================================================
+
+/**
+ * Hook trigger types
+ */
+export type HookTriggerType =
+    | 'cron'
+    | 'interval'
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'webhook'
+    | 'file_change'
+    | 'email_received'
+    | 'calendar_event'
+    | 'git_push'
+    | 'git_pr'
+    | 'app_launch'
+    | 'system_wake'
+    | 'battery_low'
+    | 'network_change'
+    | 'custom';
+
+/**
+ * Hook action types
+ */
+export type HookActionType =
+    | 'send_notification'
+    | 'send_email'
+    | 'send_slack'
+    | 'send_discord'
+    | 'send_sms'
+    | 'run_command'
+    | 'run_script'
+    | 'call_api'
+    | 'create_file'
+    | 'move_file'
+    | 'create_event'
+    | 'update_event'
+    | 'create_task'
+    | 'complete_task'
+    | 'control_device'
+    | 'run_scene'
+    | 'ask_agent'
+    | 'summarize'
+    | 'translate'
+    | 'custom';
+
+/**
+ * Hook trigger configuration
+ */
+export interface HookTrigger {
+    type: HookTriggerType;
+    config: Record<string, unknown>;
+}
+
+/**
+ * Hook action configuration
+ */
+export interface HookAction {
+    type: HookActionType;
+    integrationId?: string;
+    config: Record<string, unknown>;
+}
+
+/**
+ * Hook condition for conditional execution
+ */
+export interface HookCondition {
+    field: string;
+    operator: 'equals' | 'contains' | 'matches' | 'gt' | 'lt' | 'gte' | 'lte' | 'exists' | 'not_exists';
+    value: unknown;
+    negate?: boolean;
+}
+
+/**
+ * Hook configuration
+ */
+export interface Hook {
+    id: string;
+    name: string;
+    description?: string;
+    enabled: boolean;
+    trigger: HookTrigger;
+    conditions?: HookCondition[];
+    actions: HookAction[];
+    cooldownMs?: number;
+    maxExecutions?: number;
+    executionCount: number;
+    lastExecuted?: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
+/**
+ * Hook execution result
+ */
+export interface HookExecutionResult {
+    hookId: string;
+    success: boolean;
+    actionsExecuted: number;
+    actionsFailed: number;
+    results: HookActionResult[];
+    duration: number;
+    timestamp: number;
+}
+
+/**
+ * Individual action result
+ */
+export interface HookActionResult {
+    actionType: HookActionType;
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    duration: number;
+}
+
+/**
+ * Hook preset template
+ */
+export interface HookPreset {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    trigger: HookTrigger;
+    conditions?: HookCondition[];
+    actions: HookAction[];
+    requiredIntegrations: string[];
+}
+

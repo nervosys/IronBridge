@@ -580,3 +580,434 @@ export const SWARM_TEMPLATES = [
         roles: ['coordinator', 'reviewer', 'reviewer', 'tester'],
     },
 ] as const;
+
+// =============================================================================
+// Life Integrations
+// =============================================================================
+
+export const INTEGRATIONS = {
+    // =========================================================================
+    // Productivity
+    // =========================================================================
+    googleCalendar: {
+        id: 'google_calendar',
+        name: 'Google Calendar',
+        category: 'productivity' as const,
+        icon: 'calendar',
+        color: '#4285f4',
+        capabilities: ['list_events', 'create_event', 'update_event', 'delete_event', 'get_free_busy'],
+        authType: 'oauth2' as const,
+    },
+    outlook: {
+        id: 'outlook',
+        name: 'Microsoft Outlook',
+        category: 'productivity' as const,
+        icon: 'mail',
+        color: '#0078d4',
+        capabilities: ['list_events', 'create_event', 'list_emails', 'send_email', 'read_email'],
+        authType: 'oauth2' as const,
+    },
+    gmail: {
+        id: 'gmail',
+        name: 'Gmail',
+        category: 'productivity' as const,
+        icon: 'mail',
+        color: '#ea4335',
+        capabilities: ['list_emails', 'send_email', 'read_email', 'archive', 'label', 'search'],
+        authType: 'oauth2' as const,
+    },
+    notion: {
+        id: 'notion',
+        name: 'Notion',
+        category: 'productivity' as const,
+        icon: 'file-text',
+        color: '#000000',
+        capabilities: ['list_pages', 'create_page', 'update_page', 'query_database', 'search'],
+        authType: 'oauth2' as const,
+    },
+    obsidian: {
+        id: 'obsidian',
+        name: 'Obsidian',
+        category: 'productivity' as const,
+        icon: 'gem',
+        color: '#7c3aed',
+        capabilities: ['list_notes', 'create_note', 'update_note', 'search', 'get_backlinks'],
+        authType: 'local' as const,
+    },
+    todoist: {
+        id: 'todoist',
+        name: 'Todoist',
+        category: 'productivity' as const,
+        icon: 'check-square',
+        color: '#e44332',
+        capabilities: ['list_tasks', 'create_task', 'complete_task', 'update_task', 'list_projects'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // Communication
+    // =========================================================================
+    slack: {
+        id: 'slack',
+        name: 'Slack',
+        category: 'communication' as const,
+        icon: 'message-square',
+        color: '#4a154b',
+        capabilities: ['send_message', 'list_channels', 'read_messages', 'upload_file', 'react'],
+        authType: 'oauth2' as const,
+    },
+    discord: {
+        id: 'discord',
+        name: 'Discord',
+        category: 'communication' as const,
+        icon: 'message-circle',
+        color: '#5865f2',
+        capabilities: ['send_message', 'list_guilds', 'list_channels', 'read_messages'],
+        authType: 'bot_token' as const,
+    },
+    teams: {
+        id: 'teams',
+        name: 'Microsoft Teams',
+        category: 'communication' as const,
+        icon: 'users',
+        color: '#6264a7',
+        capabilities: ['send_message', 'list_teams', 'list_channels', 'schedule_meeting'],
+        authType: 'oauth2' as const,
+    },
+    telegram: {
+        id: 'telegram',
+        name: 'Telegram',
+        category: 'communication' as const,
+        icon: 'send',
+        color: '#0088cc',
+        capabilities: ['send_message', 'list_chats', 'read_messages', 'send_file'],
+        authType: 'bot_token' as const,
+    },
+
+    // =========================================================================
+    // Browser
+    // =========================================================================
+    chrome: {
+        id: 'chrome',
+        name: 'Google Chrome',
+        category: 'browser' as const,
+        icon: 'globe',
+        color: '#4285f4',
+        capabilities: ['list_tabs', 'open_url', 'close_tab', 'get_bookmarks', 'get_history'],
+        authType: 'extension' as const,
+    },
+    arc: {
+        id: 'arc',
+        name: 'Arc Browser',
+        category: 'browser' as const,
+        icon: 'compass',
+        color: '#fc5c65',
+        capabilities: ['list_tabs', 'list_spaces', 'create_space', 'pin_tab', 'create_easel'],
+        authType: 'local' as const,
+    },
+
+    // =========================================================================
+    // Development
+    // =========================================================================
+    github: {
+        id: 'github',
+        name: 'GitHub',
+        category: 'development' as const,
+        icon: 'github',
+        color: '#171515',
+        capabilities: ['list_repos', 'create_issue', 'create_pr', 'review_pr', 'search_code'],
+        authType: 'oauth2' as const,
+    },
+    gitlab: {
+        id: 'gitlab',
+        name: 'GitLab',
+        category: 'development' as const,
+        icon: 'gitlab',
+        color: '#fc6d26',
+        capabilities: ['list_projects', 'create_issue', 'create_mr', 'pipelines'],
+        authType: 'oauth2' as const,
+    },
+    linear: {
+        id: 'linear',
+        name: 'Linear',
+        category: 'development' as const,
+        icon: 'layout',
+        color: '#5e6ad2',
+        capabilities: ['list_issues', 'create_issue', 'update_issue', 'list_projects', 'search'],
+        authType: 'oauth2' as const,
+    },
+    docker: {
+        id: 'docker',
+        name: 'Docker',
+        category: 'development' as const,
+        icon: 'box',
+        color: '#2496ed',
+        capabilities: ['list_containers', 'start_container', 'stop_container', 'build_image', 'logs'],
+        authType: 'local' as const,
+    },
+
+    // =========================================================================
+    // Smart Home
+    // =========================================================================
+    homeAssistant: {
+        id: 'home_assistant',
+        name: 'Home Assistant',
+        category: 'smart_home' as const,
+        icon: 'home',
+        color: '#41bdf5',
+        capabilities: ['list_devices', 'control_device', 'run_scene', 'run_automation', 'get_state'],
+        authType: 'api_key' as const,
+    },
+    hue: {
+        id: 'hue',
+        name: 'Philips Hue',
+        category: 'smart_home' as const,
+        icon: 'sun',
+        color: '#0065d3',
+        capabilities: ['list_lights', 'set_light', 'list_scenes', 'run_scene'],
+        authType: 'bridge' as const,
+    },
+    nest: {
+        id: 'nest',
+        name: 'Google Nest',
+        category: 'smart_home' as const,
+        icon: 'thermometer',
+        color: '#00a5e5',
+        capabilities: ['get_temperature', 'set_temperature', 'get_cameras', 'get_doorbell'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // Finance
+    // =========================================================================
+    plaid: {
+        id: 'plaid',
+        name: 'Plaid',
+        category: 'finance' as const,
+        icon: 'credit-card',
+        color: '#00d66e',
+        capabilities: ['list_accounts', 'get_transactions', 'get_balance'],
+        authType: 'oauth2' as const,
+    },
+    coinbase: {
+        id: 'coinbase',
+        name: 'Coinbase',
+        category: 'finance' as const,
+        icon: 'dollar-sign',
+        color: '#0052ff',
+        capabilities: ['get_portfolio', 'get_prices', 'list_transactions'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // Health
+    // =========================================================================
+    appleHealth: {
+        id: 'apple_health',
+        name: 'Apple Health',
+        category: 'health' as const,
+        icon: 'heart',
+        color: '#ff2d55',
+        capabilities: ['get_steps', 'get_heart_rate', 'get_sleep', 'get_workouts'],
+        authType: 'local' as const,
+    },
+    oura: {
+        id: 'oura',
+        name: 'Oura Ring',
+        category: 'health' as const,
+        icon: 'activity',
+        color: '#1d1d1f',
+        capabilities: ['get_sleep', 'get_readiness', 'get_activity', 'get_heart_rate'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // Media
+    // =========================================================================
+    spotify: {
+        id: 'spotify',
+        name: 'Spotify',
+        category: 'media' as const,
+        icon: 'music',
+        color: '#1db954',
+        capabilities: ['get_playing', 'play', 'pause', 'skip', 'search', 'add_to_playlist'],
+        authType: 'oauth2' as const,
+    },
+    youtube: {
+        id: 'youtube',
+        name: 'YouTube',
+        category: 'media' as const,
+        icon: 'youtube',
+        color: '#ff0000',
+        capabilities: ['search', 'get_subscriptions', 'get_playlist', 'get_watch_later'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // Travel
+    // =========================================================================
+    googleMaps: {
+        id: 'google_maps',
+        name: 'Google Maps',
+        category: 'travel' as const,
+        icon: 'map-pin',
+        color: '#4285f4',
+        capabilities: ['search_places', 'get_directions', 'get_traffic', 'get_distance'],
+        authType: 'api_key' as const,
+    },
+    uber: {
+        id: 'uber',
+        name: 'Uber',
+        category: 'travel' as const,
+        icon: 'car',
+        color: '#000000',
+        capabilities: ['request_ride', 'get_estimate', 'get_history'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // Shopping
+    // =========================================================================
+    amazon: {
+        id: 'amazon',
+        name: 'Amazon',
+        category: 'shopping' as const,
+        icon: 'shopping-cart',
+        color: '#ff9900',
+        capabilities: ['search_products', 'get_orders', 'track_package', 'add_to_cart'],
+        authType: 'oauth2' as const,
+    },
+    instacart: {
+        id: 'instacart',
+        name: 'Instacart',
+        category: 'shopping' as const,
+        icon: 'shopping-bag',
+        color: '#43b02a',
+        capabilities: ['search_products', 'add_to_cart', 'checkout', 'track_order'],
+        authType: 'oauth2' as const,
+    },
+
+    // =========================================================================
+    // System
+    // =========================================================================
+    shell: {
+        id: 'shell',
+        name: 'Shell',
+        category: 'system' as const,
+        icon: 'terminal',
+        color: '#4d4d4d',
+        capabilities: ['run_command', 'run_script', 'get_environment'],
+        authType: 'local' as const,
+    },
+    clipboard: {
+        id: 'clipboard',
+        name: 'Clipboard',
+        category: 'system' as const,
+        icon: 'clipboard',
+        color: '#6b7280',
+        capabilities: ['get', 'set', 'get_history', 'clear'],
+        authType: 'local' as const,
+    },
+    filesystem: {
+        id: 'filesystem',
+        name: 'Filesystem',
+        category: 'system' as const,
+        icon: 'folder',
+        color: '#3b82f6',
+        capabilities: ['read', 'write', 'list', 'search', 'watch'],
+        authType: 'local' as const,
+    },
+    notifications: {
+        id: 'notifications',
+        name: 'System Notifications',
+        category: 'system' as const,
+        icon: 'bell',
+        color: '#ef4444',
+        capabilities: ['notify', 'schedule', 'cancel'],
+        authType: 'local' as const,
+    },
+} as const;
+
+export type IntegrationId = keyof typeof INTEGRATIONS;
+
+export const INTEGRATION_CATEGORIES = [
+    'productivity',
+    'communication',
+    'browser',
+    'development',
+    'smart_home',
+    'finance',
+    'health',
+    'media',
+    'travel',
+    'shopping',
+    'system',
+] as const;
+
+export type IntegrationCategoryType = (typeof INTEGRATION_CATEGORIES)[number];
+
+// =============================================================================
+// Hook Triggers
+// =============================================================================
+
+export const HOOK_TRIGGERS = {
+    // Time-based
+    cron: { id: 'cron', name: 'Cron Schedule', category: 'time' },
+    interval: { id: 'interval', name: 'Interval', category: 'time' },
+    daily: { id: 'daily', name: 'Daily', category: 'time' },
+    weekly: { id: 'weekly', name: 'Weekly', category: 'time' },
+    monthly: { id: 'monthly', name: 'Monthly', category: 'time' },
+
+    // Event-based
+    webhook: { id: 'webhook', name: 'Webhook', category: 'event' },
+    fileChange: { id: 'file_change', name: 'File Change', category: 'event' },
+    emailReceived: { id: 'email_received', name: 'Email Received', category: 'event' },
+    calendarEvent: { id: 'calendar_event', name: 'Calendar Event', category: 'event' },
+    gitPush: { id: 'git_push', name: 'Git Push', category: 'event' },
+    gitPr: { id: 'git_pr', name: 'Pull Request', category: 'event' },
+    appLaunch: { id: 'app_launch', name: 'App Launch', category: 'event' },
+    systemWake: { id: 'system_wake', name: 'System Wake', category: 'event' },
+    batteryLow: { id: 'battery_low', name: 'Battery Low', category: 'event' },
+    networkChange: { id: 'network_change', name: 'Network Change', category: 'event' },
+} as const;
+
+export type HookTriggerId = keyof typeof HOOK_TRIGGERS;
+
+// =============================================================================
+// Hook Actions
+// =============================================================================
+
+export const HOOK_ACTIONS = {
+    // Notifications
+    sendNotification: { id: 'send_notification', name: 'Send Notification', category: 'notification' },
+    sendEmail: { id: 'send_email', name: 'Send Email', category: 'notification' },
+    sendSlack: { id: 'send_slack', name: 'Send Slack Message', category: 'notification' },
+    sendDiscord: { id: 'send_discord', name: 'Send Discord Message', category: 'notification' },
+    sendSms: { id: 'send_sms', name: 'Send SMS', category: 'notification' },
+
+    // Automation
+    runCommand: { id: 'run_command', name: 'Run Command', category: 'automation' },
+    runScript: { id: 'run_script', name: 'Run Script', category: 'automation' },
+    callApi: { id: 'call_api', name: 'Call API', category: 'automation' },
+    createFile: { id: 'create_file', name: 'Create File', category: 'automation' },
+    moveFile: { id: 'move_file', name: 'Move File', category: 'automation' },
+
+    // Calendar
+    createEvent: { id: 'create_event', name: 'Create Calendar Event', category: 'calendar' },
+    updateEvent: { id: 'update_event', name: 'Update Calendar Event', category: 'calendar' },
+
+    // Tasks
+    createTask: { id: 'create_task', name: 'Create Task', category: 'tasks' },
+    completeTask: { id: 'complete_task', name: 'Complete Task', category: 'tasks' },
+
+    // Smart Home
+    controlDevice: { id: 'control_device', name: 'Control Smart Device', category: 'smart_home' },
+    runScene: { id: 'run_scene', name: 'Run Scene', category: 'smart_home' },
+
+    // AI
+    askAgent: { id: 'ask_agent', name: 'Ask AI Agent', category: 'ai' },
+    summarize: { id: 'summarize', name: 'Summarize Content', category: 'ai' },
+    translate: { id: 'translate', name: 'Translate', category: 'ai' },
+} as const;
+
+export type HookActionId = keyof typeof HOOK_ACTIONS;
