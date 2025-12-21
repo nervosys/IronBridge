@@ -50,6 +50,7 @@ import {
     useSessionCommits,
     useCreateCheckpoint,
     useChatStream,
+    useChatCompletion,
 } from '../hooks/useApi';
 // Types used via API context and hooks
 
@@ -92,6 +93,7 @@ export default function Chat() {
 
     // Streaming chat
     const chatStream = useChatStream();
+    const chatCompletion = useChatCompletion();
 
     // Local UI state
     const [input, setInput] = useState('');
@@ -269,15 +271,32 @@ export default function Chat() {
                 await refetchActiveSession();
             }
         } else {
-            // TODO: Non-streaming completion via useChatCompletion
-            // For now, just show a placeholder
-            await createMessageMutation.mutate({
-                sessionId: sessionId!,
-                data: {
-                    role: 'assistant',
-                    content: 'Non-streaming responses not yet implemented. Enable "Stream Responses" in settings.',
-                },
+            // Non-streaming completion
+            const response = await chatCompletion.mutate({
+                provider: selectedProvider.id,
+                model: selectedModel ?? selectedProvider.models?.[0] ?? '',
+                messages: messageHistory,
+                sessionId,
             });
+
+            if (response?.content) {
+                await createMessageMutation.mutate({
+                    sessionId: sessionId!,
+                    data: {
+                        role: 'assistant',
+                        content: response.content,
+                        model: selectedModel,
+                    },
+                });
+            } else if (chatCompletion.error) {
+                await createMessageMutation.mutate({
+                    sessionId: sessionId!,
+                    data: {
+                        role: 'assistant',
+                        content: `Error: ${chatCompletion.error.message}`,
+                    },
+                });
+            }
             await refetchActiveSession();
         }
     };
