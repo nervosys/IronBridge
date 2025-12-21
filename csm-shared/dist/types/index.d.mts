@@ -281,6 +281,188 @@ interface AgentTask {
     updatedAt: number;
 }
 /**
+ * Memory type classification - matches Rust MemoryType
+ */
+type MemoryType = 'short_term' | 'long_term' | 'episodic' | 'semantic' | 'procedural' | 'preference' | 'cache';
+/**
+ * Source of memory entry
+ */
+type MemorySource = {
+    type: 'conversation';
+    sessionId: string;
+    messageId: string;
+} | {
+    type: 'document';
+    path: string;
+    chunkIndex: number;
+} | {
+    type: 'user_input';
+} | {
+    type: 'agent_reasoning';
+    agentId: string;
+} | {
+    type: 'tool_result';
+    toolName: string;
+} | {
+    type: 'web_page';
+    url: string;
+} | {
+    type: 'summary';
+    sourceIds: string[];
+} | {
+    type: 'custom';
+    sourceType: string;
+};
+/**
+ * Memory entry - stored knowledge
+ */
+interface MemoryEntry {
+    id: string;
+    content: string;
+    embedding?: number[];
+    memoryType: MemoryType;
+    source: MemorySource;
+    importance: number;
+    accessCount: number;
+    lastAccessed: number;
+    createdAt: number;
+    expiresAt?: number;
+    agentId?: string;
+    sessionId?: string;
+    metadata?: Record<string, unknown>;
+    tags: string[];
+}
+/**
+ * Search result from vector store
+ */
+interface VectorSearchResult {
+    entry: MemoryEntry;
+    score: number;
+    rank: number;
+}
+/**
+ * Embedding model options
+ */
+type EmbeddingModel = 'openai_small' | 'openai_large' | 'openai_ada' | 'minilm' | 'mpnet' | 'cohere' | 'google_gecko' | 'voyage' | {
+    type: 'ollama';
+    model: string;
+} | {
+    type: 'custom';
+    name: string;
+    dim: number;
+};
+/**
+ * Similarity metric for vector search
+ */
+type SimilarityMetric = 'cosine' | 'euclidean' | 'dot_product' | 'manhattan';
+/**
+ * Vector store configuration
+ */
+interface VectorStoreConfig {
+    embeddingModel: EmbeddingModel;
+    embeddingDim: number;
+    similarityMetric: SimilarityMetric;
+    maxEntries: number;
+    dbPath?: string;
+}
+/**
+ * Document for knowledge base
+ */
+interface Document {
+    id: string;
+    title: string;
+    content: string;
+    docType: DocumentType;
+    source: string;
+    chunks: DocumentChunk[];
+    createdAt: number;
+    updatedAt: number;
+    metadata?: Record<string, unknown>;
+}
+/**
+ * Document types
+ */
+type DocumentType = 'text' | 'markdown' | {
+    type: 'code';
+    language: string;
+} | 'html' | 'pdf' | 'json' | 'yaml' | 'csv' | {
+    type: 'custom';
+    mimeType: string;
+};
+/**
+ * Document chunk for embedding
+ */
+interface DocumentChunk {
+    index: number;
+    content: string;
+    startPos: number;
+    endPos: number;
+    embedding?: number[];
+    tokenCount: number;
+}
+/**
+ * Chunking strategy
+ */
+type ChunkingStrategy = 'fixed_size' | 'sentence' | 'paragraph' | 'semantic' | 'code';
+/**
+ * Chunking configuration
+ */
+interface ChunkingConfig {
+    chunkSize: number;
+    chunkOverlap: number;
+    strategy: ChunkingStrategy;
+}
+/**
+ * Context segment type
+ */
+type ContextSegmentType = 'system_prompt' | 'user_preferences' | 'conversation_history' | 'retrieved_context' | 'tool_results' | 'current_query' | {
+    type: 'custom';
+    name: string;
+};
+/**
+ * Context segment for building prompts
+ */
+interface ContextSegment {
+    segmentType: ContextSegmentType;
+    content: string;
+    tokens: number;
+    priority: number;
+    required: boolean;
+}
+/**
+ * Memory manager configuration
+ */
+interface MemoryConfig {
+    vectorStore: VectorStoreConfig;
+    chunking: ChunkingConfig;
+    contextWindowTokens: number;
+    cacheSize: number;
+    dbPath?: string;
+    autoSummarize: boolean;
+    summarizeThreshold: number;
+}
+/**
+ * Memory statistics
+ */
+interface MemoryStats {
+    totalEntries: number;
+    entriesByType: Record<string, number>;
+    totalAccessCount: number;
+    avgImportance: number;
+    documentCount: number;
+}
+/**
+ * RAG (Retrieval-Augmented Generation) configuration
+ */
+interface RAGConfig {
+    enabled: boolean;
+    memoryConfig: MemoryConfig;
+    retrievalLimit: number;
+    minRelevanceScore: number;
+    includeConversationHistory: boolean;
+    maxConversationTurns: number;
+}
+/**
  * Agent message for inter-agent communication
  */
 interface AgentMessage {
@@ -774,4 +956,4 @@ interface HookPreset {
     requiredIntegrations: string[];
 }
 
-export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, DetectedProblem, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };
+export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };

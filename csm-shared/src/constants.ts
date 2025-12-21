@@ -799,6 +799,212 @@ export const PROACTIVE_AGENT_CONFIG = {
 } as const;
 
 // =============================================================================
+// Memory & RAG Configuration
+// =============================================================================
+
+export const MEMORY_CONFIG = {
+    /** Available embedding models */
+    embeddingModels: {
+        minilm: {
+            id: 'minilm',
+            name: 'MiniLM-L6-v2',
+            dimension: 384,
+            provider: 'local' as const,
+            description: 'Fast local embeddings, good for most use cases',
+        },
+        mpnet: {
+            id: 'mpnet',
+            name: 'MPNet Base v2',
+            dimension: 768,
+            provider: 'local' as const,
+            description: 'Higher quality local embeddings',
+        },
+        openaiSmall: {
+            id: 'openai_small',
+            name: 'OpenAI text-embedding-3-small',
+            dimension: 1536,
+            provider: 'openai' as const,
+            description: 'Balanced cloud embeddings, good quality/cost ratio',
+        },
+        openaiLarge: {
+            id: 'openai_large',
+            name: 'OpenAI text-embedding-3-large',
+            dimension: 3072,
+            provider: 'openai' as const,
+            description: 'Highest quality OpenAI embeddings',
+        },
+        cohere: {
+            id: 'cohere',
+            name: 'Cohere embed-english-v3.0',
+            dimension: 1024,
+            provider: 'cohere' as const,
+            description: 'Cohere multilingual embeddings',
+        },
+        googleGecko: {
+            id: 'google_gecko',
+            name: 'Google text-embedding-004',
+            dimension: 768,
+            provider: 'google' as const,
+            description: 'Google Vertex AI embeddings',
+        },
+        voyage: {
+            id: 'voyage',
+            name: 'Voyage AI voyage-2',
+            dimension: 1024,
+            provider: 'voyage' as const,
+            description: 'High quality embeddings for code and text',
+        },
+    },
+    /** Memory types with descriptions */
+    memoryTypes: {
+        short_term: {
+            id: 'short_term',
+            name: 'Short-term Memory',
+            description: 'Current conversation context, cleared after session',
+            ttlMinutes: 60,
+        },
+        long_term: {
+            id: 'long_term',
+            name: 'Long-term Memory',
+            description: 'Persistent facts, preferences, and learned information',
+            ttlMinutes: null,
+        },
+        episodic: {
+            id: 'episodic',
+            name: 'Episodic Memory',
+            description: 'Specific events and experiences with timestamps',
+            ttlMinutes: null,
+        },
+        semantic: {
+            id: 'semantic',
+            name: 'Semantic Memory',
+            description: 'Concepts, relationships, and general knowledge',
+            ttlMinutes: null,
+        },
+        procedural: {
+            id: 'procedural',
+            name: 'Procedural Memory',
+            description: 'How to do things, workflows, and processes',
+            ttlMinutes: null,
+        },
+        preference: {
+            id: 'preference',
+            name: 'User Preferences',
+            description: 'User settings, likes, dislikes, and habits',
+            ttlMinutes: null,
+        },
+        cache: {
+            id: 'cache',
+            name: 'Computation Cache',
+            description: 'Cached results for expensive operations',
+            ttlMinutes: 30,
+        },
+    },
+    /** Chunking strategies for documents */
+    chunkingStrategies: {
+        fixed_size: {
+            id: 'fixed_size',
+            name: 'Fixed Size',
+            description: 'Split into fixed character chunks',
+            defaultSize: 1000,
+        },
+        sentence: {
+            id: 'sentence',
+            name: 'Sentence',
+            description: 'Split on sentence boundaries',
+            defaultSize: 512,
+        },
+        paragraph: {
+            id: 'paragraph',
+            name: 'Paragraph',
+            description: 'Split on paragraph boundaries',
+            defaultSize: 512,
+        },
+        semantic: {
+            id: 'semantic',
+            name: 'Semantic',
+            description: 'Intelligent splitting respecting content structure',
+            defaultSize: 512,
+        },
+        code: {
+            id: 'code',
+            name: 'Code-aware',
+            description: 'Split on function/class boundaries',
+            defaultSize: 1024,
+        },
+    },
+    /** Default configurations */
+    defaults: {
+        embeddingModel: 'minilm',
+        chunkSize: 512,
+        chunkOverlap: 50,
+        chunkingStrategy: 'semantic',
+        contextWindowTokens: 8192,
+        cacheSize: 1000,
+        maxVectorStoreEntries: 100000,
+        retrievalLimit: 5,
+        minRelevanceScore: 0.7,
+        autoSummarize: true,
+        summarizeThreshold: 20,
+    },
+    /** Similarity metrics */
+    similarityMetrics: {
+        cosine: { id: 'cosine', name: 'Cosine Similarity', description: 'Default, works well for most cases' },
+        euclidean: { id: 'euclidean', name: 'Euclidean Distance', description: 'L2 distance converted to similarity' },
+        dot_product: { id: 'dot_product', name: 'Dot Product', description: 'Fast, requires normalized vectors' },
+        manhattan: { id: 'manhattan', name: 'Manhattan Distance', description: 'L1 distance converted to similarity' },
+    },
+    /** RAG presets */
+    ragPresets: {
+        minimal: {
+            id: 'minimal',
+            name: 'Minimal RAG',
+            description: 'Light memory usage, good for simple assistants',
+            config: {
+                embeddingModel: 'minilm',
+                contextWindowTokens: 4096,
+                retrievalLimit: 3,
+                autoSummarize: false,
+            },
+        },
+        balanced: {
+            id: 'balanced',
+            name: 'Balanced RAG',
+            description: 'Good balance of quality and performance',
+            config: {
+                embeddingModel: 'minilm',
+                contextWindowTokens: 8192,
+                retrievalLimit: 5,
+                autoSummarize: true,
+            },
+        },
+        comprehensive: {
+            id: 'comprehensive',
+            name: 'Comprehensive RAG',
+            description: 'Full memory capabilities for power users',
+            config: {
+                embeddingModel: 'openai_small',
+                contextWindowTokens: 16384,
+                retrievalLimit: 10,
+                autoSummarize: true,
+            },
+        },
+        code_focused: {
+            id: 'code_focused',
+            name: 'Code-focused RAG',
+            description: 'Optimized for code documentation and retrieval',
+            config: {
+                embeddingModel: 'voyage',
+                contextWindowTokens: 8192,
+                retrievalLimit: 8,
+                chunkingStrategy: 'code',
+                autoSummarize: false,
+            },
+        },
+    },
+} as const;
+
+// =============================================================================
 // Life Integrations
 // =============================================================================
 

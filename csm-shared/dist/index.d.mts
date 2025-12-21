@@ -1,4 +1,4 @@
-export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, DetectedProblem, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.mjs';
+export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.mjs';
 export { ApiClientConfig, api, createApiClient } from './api/index.mjs';
 export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy } from './utils/index.mjs';
 
@@ -610,6 +610,223 @@ declare const PROACTIVE_AGENT_CONFIG: {
         readonly business: readonly ["calendar_conflict", "deadline_approaching", "email_urgent", "meeting_prep_needed", "follow_up_due", "expense_pending", "project_at_risk", "competitor_news", "team_blocker", "report_due"];
     };
 };
+declare const MEMORY_CONFIG: {
+    /** Available embedding models */
+    readonly embeddingModels: {
+        readonly minilm: {
+            readonly id: "minilm";
+            readonly name: "MiniLM-L6-v2";
+            readonly dimension: 384;
+            readonly provider: "local";
+            readonly description: "Fast local embeddings, good for most use cases";
+        };
+        readonly mpnet: {
+            readonly id: "mpnet";
+            readonly name: "MPNet Base v2";
+            readonly dimension: 768;
+            readonly provider: "local";
+            readonly description: "Higher quality local embeddings";
+        };
+        readonly openaiSmall: {
+            readonly id: "openai_small";
+            readonly name: "OpenAI text-embedding-3-small";
+            readonly dimension: 1536;
+            readonly provider: "openai";
+            readonly description: "Balanced cloud embeddings, good quality/cost ratio";
+        };
+        readonly openaiLarge: {
+            readonly id: "openai_large";
+            readonly name: "OpenAI text-embedding-3-large";
+            readonly dimension: 3072;
+            readonly provider: "openai";
+            readonly description: "Highest quality OpenAI embeddings";
+        };
+        readonly cohere: {
+            readonly id: "cohere";
+            readonly name: "Cohere embed-english-v3.0";
+            readonly dimension: 1024;
+            readonly provider: "cohere";
+            readonly description: "Cohere multilingual embeddings";
+        };
+        readonly googleGecko: {
+            readonly id: "google_gecko";
+            readonly name: "Google text-embedding-004";
+            readonly dimension: 768;
+            readonly provider: "google";
+            readonly description: "Google Vertex AI embeddings";
+        };
+        readonly voyage: {
+            readonly id: "voyage";
+            readonly name: "Voyage AI voyage-2";
+            readonly dimension: 1024;
+            readonly provider: "voyage";
+            readonly description: "High quality embeddings for code and text";
+        };
+    };
+    /** Memory types with descriptions */
+    readonly memoryTypes: {
+        readonly short_term: {
+            readonly id: "short_term";
+            readonly name: "Short-term Memory";
+            readonly description: "Current conversation context, cleared after session";
+            readonly ttlMinutes: 60;
+        };
+        readonly long_term: {
+            readonly id: "long_term";
+            readonly name: "Long-term Memory";
+            readonly description: "Persistent facts, preferences, and learned information";
+            readonly ttlMinutes: null;
+        };
+        readonly episodic: {
+            readonly id: "episodic";
+            readonly name: "Episodic Memory";
+            readonly description: "Specific events and experiences with timestamps";
+            readonly ttlMinutes: null;
+        };
+        readonly semantic: {
+            readonly id: "semantic";
+            readonly name: "Semantic Memory";
+            readonly description: "Concepts, relationships, and general knowledge";
+            readonly ttlMinutes: null;
+        };
+        readonly procedural: {
+            readonly id: "procedural";
+            readonly name: "Procedural Memory";
+            readonly description: "How to do things, workflows, and processes";
+            readonly ttlMinutes: null;
+        };
+        readonly preference: {
+            readonly id: "preference";
+            readonly name: "User Preferences";
+            readonly description: "User settings, likes, dislikes, and habits";
+            readonly ttlMinutes: null;
+        };
+        readonly cache: {
+            readonly id: "cache";
+            readonly name: "Computation Cache";
+            readonly description: "Cached results for expensive operations";
+            readonly ttlMinutes: 30;
+        };
+    };
+    /** Chunking strategies for documents */
+    readonly chunkingStrategies: {
+        readonly fixed_size: {
+            readonly id: "fixed_size";
+            readonly name: "Fixed Size";
+            readonly description: "Split into fixed character chunks";
+            readonly defaultSize: 1000;
+        };
+        readonly sentence: {
+            readonly id: "sentence";
+            readonly name: "Sentence";
+            readonly description: "Split on sentence boundaries";
+            readonly defaultSize: 512;
+        };
+        readonly paragraph: {
+            readonly id: "paragraph";
+            readonly name: "Paragraph";
+            readonly description: "Split on paragraph boundaries";
+            readonly defaultSize: 512;
+        };
+        readonly semantic: {
+            readonly id: "semantic";
+            readonly name: "Semantic";
+            readonly description: "Intelligent splitting respecting content structure";
+            readonly defaultSize: 512;
+        };
+        readonly code: {
+            readonly id: "code";
+            readonly name: "Code-aware";
+            readonly description: "Split on function/class boundaries";
+            readonly defaultSize: 1024;
+        };
+    };
+    /** Default configurations */
+    readonly defaults: {
+        readonly embeddingModel: "minilm";
+        readonly chunkSize: 512;
+        readonly chunkOverlap: 50;
+        readonly chunkingStrategy: "semantic";
+        readonly contextWindowTokens: 8192;
+        readonly cacheSize: 1000;
+        readonly maxVectorStoreEntries: 100000;
+        readonly retrievalLimit: 5;
+        readonly minRelevanceScore: 0.7;
+        readonly autoSummarize: true;
+        readonly summarizeThreshold: 20;
+    };
+    /** Similarity metrics */
+    readonly similarityMetrics: {
+        readonly cosine: {
+            readonly id: "cosine";
+            readonly name: "Cosine Similarity";
+            readonly description: "Default, works well for most cases";
+        };
+        readonly euclidean: {
+            readonly id: "euclidean";
+            readonly name: "Euclidean Distance";
+            readonly description: "L2 distance converted to similarity";
+        };
+        readonly dot_product: {
+            readonly id: "dot_product";
+            readonly name: "Dot Product";
+            readonly description: "Fast, requires normalized vectors";
+        };
+        readonly manhattan: {
+            readonly id: "manhattan";
+            readonly name: "Manhattan Distance";
+            readonly description: "L1 distance converted to similarity";
+        };
+    };
+    /** RAG presets */
+    readonly ragPresets: {
+        readonly minimal: {
+            readonly id: "minimal";
+            readonly name: "Minimal RAG";
+            readonly description: "Light memory usage, good for simple assistants";
+            readonly config: {
+                readonly embeddingModel: "minilm";
+                readonly contextWindowTokens: 4096;
+                readonly retrievalLimit: 3;
+                readonly autoSummarize: false;
+            };
+        };
+        readonly balanced: {
+            readonly id: "balanced";
+            readonly name: "Balanced RAG";
+            readonly description: "Good balance of quality and performance";
+            readonly config: {
+                readonly embeddingModel: "minilm";
+                readonly contextWindowTokens: 8192;
+                readonly retrievalLimit: 5;
+                readonly autoSummarize: true;
+            };
+        };
+        readonly comprehensive: {
+            readonly id: "comprehensive";
+            readonly name: "Comprehensive RAG";
+            readonly description: "Full memory capabilities for power users";
+            readonly config: {
+                readonly embeddingModel: "openai_small";
+                readonly contextWindowTokens: 16384;
+                readonly retrievalLimit: 10;
+                readonly autoSummarize: true;
+            };
+        };
+        readonly code_focused: {
+            readonly id: "code_focused";
+            readonly name: "Code-focused RAG";
+            readonly description: "Optimized for code documentation and retrieval";
+            readonly config: {
+                readonly embeddingModel: "voyage";
+                readonly contextWindowTokens: 8192;
+                readonly retrievalLimit: 8;
+                readonly chunkingStrategy: "code";
+                readonly autoSummarize: false;
+            };
+        };
+    };
+};
 declare const INTEGRATIONS: {
     readonly googleCalendar: {
         readonly id: "google_calendar";
@@ -1089,4 +1306,4 @@ declare const HOOK_ACTIONS: {
 };
 type HookActionId = keyof typeof HOOK_ACTIONS;
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId };
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, MEMORY_CONFIG, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId };

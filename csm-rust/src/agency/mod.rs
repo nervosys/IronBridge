@@ -30,6 +30,7 @@
 pub mod agent;
 pub mod error;
 pub mod executor;
+pub mod memory;
 pub mod models;
 pub mod orchestrator;
 pub mod proactive;
@@ -41,6 +42,13 @@ pub mod tools;
 pub use agent::{Agent, AgentBuilder, AgentConfig, AgentRole, AgentStatus};
 pub use error::AgencyError;
 pub use executor::{ExecutionContext, ExecutionResult, Executor};
+pub use memory::{
+    MemoryManager, MemoryConfig, MemoryEntry, MemoryType, MemorySource, MemoryError, MemoryStats,
+    VectorStore, VectorStoreConfig, VectorStoreStats, Embedding, SearchResult, SimilarityMetric,
+    KnowledgeBase, Document, DocumentType, DocumentChunk, ChunkingConfig, ChunkingStrategy,
+    ContextWindow, ContextSegment, ContextSegmentType,
+    AgentCache, CacheEntry, EmbeddingModel, EmbeddingProvider,
+};
 pub use models::{AgencyMessage, AgencyEvent, EventType, ToolCall, ToolResult};
 pub use orchestrator::{Orchestrator, OrchestrationType, Pipeline, Swarm};
 pub use proactive::{
