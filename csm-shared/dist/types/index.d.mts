@@ -179,9 +179,51 @@ interface ProviderHealth {
     models: string[];
 }
 type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
-type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'custom';
+type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'household' | 'business' | 'custom';
+type AgentAutonomy = 'none' | 'low' | 'medium' | 'high' | 'supervised';
 type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+/**
+ * Permission level for proactive agents
+ */
+type PermissionLevel = 'notify_only' | 'low_risk' | 'medium_risk' | 'high_autonomy';
+/**
+ * Proactive action that requires permission
+ */
+interface ProactiveAction {
+    id: string;
+    agentId: string;
+    actionType: string;
+    description: string;
+    reasoning: string;
+    estimatedImpact?: string;
+    riskLevel: 'low' | 'medium' | 'high';
+    status: 'pending' | 'approved' | 'rejected' | 'executed' | 'cancelled';
+    autoApproved?: boolean;
+    approvedAt?: number;
+    approvedBy?: string;
+    executedAt?: number;
+    result?: string;
+    error?: string;
+    createdAt: number;
+}
+/**
+ * Detected problem by proactive agent
+ */
+interface DetectedProblem {
+    id: string;
+    agentId: string;
+    category: string;
+    title: string;
+    description: string;
+    severity: 'info' | 'warning' | 'urgent' | 'critical';
+    detectedAt: number;
+    source: string;
+    suggestedActions: ProactiveAction[];
+    status: 'new' | 'acknowledged' | 'in_progress' | 'resolved' | 'dismissed';
+    resolvedAt?: number;
+    metadata?: Record<string, unknown>;
+}
 /**
  * Orchestration type - matches Rust Agency OrchestrationType
  */
@@ -597,5 +639,139 @@ interface OrchestratorResult {
     totalTokens: TokenUsage;
     duration: number;
 }
+/**
+ * Integration category
+ */
+type IntegrationCategory = 'productivity' | 'communication' | 'browser' | 'development' | 'smart_home' | 'finance' | 'health' | 'media' | 'travel' | 'shopping' | 'system';
+/**
+ * Authentication method for integrations
+ */
+type IntegrationAuthType = 'oauth2' | 'api_key' | 'bot_token' | 'local' | 'bridge' | 'extension' | 'none';
+/**
+ * Integration status
+ */
+type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'pending' | 'unknown';
+/**
+ * Integration configuration
+ */
+interface Integration {
+    id: string;
+    name: string;
+    category: IntegrationCategory;
+    icon: string;
+    color: string;
+    capabilities: string[];
+    authType: IntegrationAuthType;
+    status: IntegrationStatus;
+    lastSync?: number;
+    error?: string;
+    config?: IntegrationConfig;
+}
+/**
+ * Integration-specific configuration
+ */
+interface IntegrationConfig {
+    enabled: boolean;
+    credentials?: IntegrationCredentials;
+    settings?: Record<string, unknown>;
+    webhookUrl?: string;
+    refreshToken?: string;
+    expiresAt?: number;
+}
+/**
+ * Integration credentials (stored securely)
+ */
+interface IntegrationCredentials {
+    accessToken?: string;
+    apiKey?: string;
+    clientId?: string;
+    clientSecret?: string;
+    refreshToken?: string;
+}
+/**
+ * Hook trigger types
+ */
+type HookTriggerType = 'cron' | 'interval' | 'daily' | 'weekly' | 'monthly' | 'webhook' | 'file_change' | 'email_received' | 'calendar_event' | 'git_push' | 'git_pr' | 'app_launch' | 'system_wake' | 'battery_low' | 'network_change' | 'custom';
+/**
+ * Hook action types
+ */
+type HookActionType = 'send_notification' | 'send_email' | 'send_slack' | 'send_discord' | 'send_sms' | 'run_command' | 'run_script' | 'call_api' | 'create_file' | 'move_file' | 'create_event' | 'update_event' | 'create_task' | 'complete_task' | 'control_device' | 'run_scene' | 'ask_agent' | 'summarize' | 'translate' | 'custom';
+/**
+ * Hook trigger configuration
+ */
+interface HookTrigger {
+    type: HookTriggerType;
+    config: Record<string, unknown>;
+}
+/**
+ * Hook action configuration
+ */
+interface HookAction {
+    type: HookActionType;
+    integrationId?: string;
+    config: Record<string, unknown>;
+}
+/**
+ * Hook condition for conditional execution
+ */
+interface HookCondition {
+    field: string;
+    operator: 'equals' | 'contains' | 'matches' | 'gt' | 'lt' | 'gte' | 'lte' | 'exists' | 'not_exists';
+    value: unknown;
+    negate?: boolean;
+}
+/**
+ * Hook configuration
+ */
+interface Hook {
+    id: string;
+    name: string;
+    description?: string;
+    enabled: boolean;
+    trigger: HookTrigger;
+    conditions?: HookCondition[];
+    actions: HookAction[];
+    cooldownMs?: number;
+    maxExecutions?: number;
+    executionCount: number;
+    lastExecuted?: number;
+    createdAt: number;
+    updatedAt: number;
+}
+/**
+ * Hook execution result
+ */
+interface HookExecutionResult {
+    hookId: string;
+    success: boolean;
+    actionsExecuted: number;
+    actionsFailed: number;
+    results: HookActionResult[];
+    duration: number;
+    timestamp: number;
+}
+/**
+ * Individual action result
+ */
+interface HookActionResult {
+    actionType: HookActionType;
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    duration: number;
+}
+/**
+ * Hook preset template
+ */
+interface HookPreset {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    trigger: HookTrigger;
+    conditions?: HookCondition[];
+    actions: HookAction[];
+    requiredIntegrations: string[];
+}
 
-export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };
+export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, DetectedProblem, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };

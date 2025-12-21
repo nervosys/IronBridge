@@ -1,4 +1,4 @@
-export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.mjs';
+export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, DetectedProblem, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.mjs';
 export { ApiClientConfig, api, createApiClient } from './api/index.mjs';
 export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy } from './utils/index.mjs';
 
@@ -267,6 +267,22 @@ declare const AGENT_ROLES: {
         readonly color: "#06b6d4";
         readonly capabilities: readonly ["test_generation", "test_execution", "bug_finding", "coverage_analysis"];
     };
+    readonly household: {
+        readonly id: "household";
+        readonly name: "Household Agent";
+        readonly description: "Proactively monitors and solves household problems with permission";
+        readonly icon: "🏠";
+        readonly color: "#14b8a6";
+        readonly capabilities: readonly ["smart_home_monitoring", "energy_optimization", "maintenance_scheduling", "grocery_management", "bill_tracking", "appliance_monitoring", "security_alerts", "package_tracking", "cleaning_scheduling", "meal_planning"];
+    };
+    readonly business: {
+        readonly id: "business";
+        readonly name: "Business Agent";
+        readonly description: "Proactively monitors and solves work/business problems with permission";
+        readonly icon: "💼";
+        readonly color: "#8b5cf6";
+        readonly capabilities: readonly ["calendar_optimization", "email_triage", "meeting_prep", "deadline_tracking", "expense_management", "report_generation", "competitor_monitoring", "lead_tracking", "project_health", "team_coordination"];
+    };
     readonly custom: {
         readonly id: "custom";
         readonly name: "Custom";
@@ -476,6 +492,26 @@ declare const DEFAULT_AGENTS: readonly [{
     readonly temperature: 0.4;
     readonly autonomy: "high";
     readonly maxIterations: 20;
+}, {
+    readonly name: "household";
+    readonly role: "household";
+    readonly description: "Proactive household management agent that monitors your home and solves problems";
+    readonly instruction: "You are a proactive Household Agent that helps users manage their home life efficiently.\n\nYour responsibilities:\n1. MONITOR: Continuously scan for household issues (bills due, maintenance needed, supplies running low)\n2. DETECT: Identify problems before they become urgent\n3. PROPOSE: Suggest solutions with clear cost/benefit analysis\n4. EXECUTE: Take action ONLY after explicit user permission\n\nProactive behaviors:\n- Track recurring bills and alert before due dates\n- Monitor smart home devices for anomalies (energy spikes, device offline)\n- Manage grocery lists based on consumption patterns\n- Schedule maintenance reminders (HVAC filters, car service, etc.)\n- Track package deliveries and alert on delays\n- Optimize energy usage based on utility rates and patterns\n- Coordinate cleaning and household tasks\n- Manage home security alerts\n\nPERMISSION PROTOCOL:\n- Always explain what you detected and why action is needed\n- Present options ranked by recommendation\n- Wait for explicit \"approved\", \"yes\", or \"do it\" before taking action\n- For financial actions, always require confirmation\n- Log all actions taken for transparency";
+    readonly model: "gpt-4o";
+    readonly tools: readonly ["smart_home_control", "calendar_create", "send_notification", "grocery_add", "bill_pay", "package_track", "energy_monitor", "maintenance_schedule"];
+    readonly temperature: 0.4;
+    readonly autonomy: "supervised";
+    readonly maxIterations: 15;
+}, {
+    readonly name: "business";
+    readonly role: "business";
+    readonly description: "Proactive business agent that monitors work and solves professional problems";
+    readonly instruction: "You are a proactive Business Agent that helps users excel in their professional life.\n\nYour responsibilities:\n1. MONITOR: Scan calendars, emails, projects, and deadlines continuously\n2. DETECT: Identify risks, conflicts, and opportunities early\n3. PROPOSE: Suggest optimizations with clear reasoning\n4. EXECUTE: Take action ONLY after explicit user permission\n\nProactive behaviors:\n- Analyze calendar for conflicts, back-to-back meetings, prep time gaps\n- Triage incoming emails by urgency and required action\n- Prepare briefing docs before important meetings\n- Track project deadlines and flag risks early\n- Monitor expense reports and flag anomalies\n- Generate weekly/monthly reports automatically\n- Track competitor news and industry trends\n- Follow up on pending responses and action items\n- Optimize meeting schedules for focus time\n- Coordinate with team members on shared goals\n\nPERMISSION PROTOCOL:\n- Always explain what you detected and the business impact\n- Present options with pros/cons\n- Wait for explicit approval before:\n  - Sending any communication\n  - Scheduling or rescheduling meetings\n  - Making financial decisions\n  - Sharing information externally\n- Maintain confidentiality of all business data\n- Log all actions for audit trail";
+    readonly model: "gpt-4o";
+    readonly tools: readonly ["calendar_read", "calendar_create", "email_read", "email_draft", "slack_send", "document_create", "expense_submit", "project_track", "web_search", "competitor_monitor"];
+    readonly temperature: 0.3;
+    readonly autonomy: "supervised";
+    readonly maxIterations: 20;
 }];
 declare const SWARM_TEMPLATES: readonly [{
     readonly name: "Research Team";
@@ -493,6 +529,564 @@ declare const SWARM_TEMPLATES: readonly [{
     readonly name: "Code Review Team";
     readonly description: "A team for thorough code reviews";
     readonly roles: readonly ["coordinator", "reviewer", "reviewer", "tester"];
+}, {
+    readonly name: "Life Management Team";
+    readonly description: "Proactive agents for managing household and business tasks";
+    readonly roles: readonly ["coordinator", "household", "business"];
+}, {
+    readonly name: "Home Automation Team";
+    readonly description: "Smart home monitoring and optimization";
+    readonly roles: readonly ["household", "executor"];
+}, {
+    readonly name: "Executive Assistant Team";
+    readonly description: "Full business support with research and coordination";
+    readonly roles: readonly ["business", "researcher", "writer", "coordinator"];
 }];
+declare const PROACTIVE_AGENT_CONFIG: {
+    /** Permission levels for proactive actions */
+    readonly permissionLevels: {
+        readonly notify_only: {
+            readonly id: "notify_only";
+            readonly name: "Notify Only";
+            readonly description: "Agent can only send notifications, no actions taken";
+            readonly autoApprove: readonly [];
+        };
+        readonly low_risk: {
+            readonly id: "low_risk";
+            readonly name: "Low Risk Auto-Approve";
+            readonly description: "Auto-approve notifications, reminders, and info gathering";
+            readonly autoApprove: readonly ["send_notification", "calendar_read", "email_read", "web_search", "package_track"];
+        };
+        readonly medium_risk: {
+            readonly id: "medium_risk";
+            readonly name: "Medium Risk Auto-Approve";
+            readonly description: "Also auto-approve scheduling and drafts (no sending)";
+            readonly autoApprove: readonly ["send_notification", "calendar_read", "calendar_create", "email_read", "email_draft", "document_create", "web_search", "package_track"];
+        };
+        readonly high_autonomy: {
+            readonly id: "high_autonomy";
+            readonly name: "High Autonomy";
+            readonly description: "Auto-approve most actions except financial and external communication";
+            readonly autoApprove: readonly ["*"];
+            readonly requireApproval: readonly ["bill_pay", "email_send", "slack_send", "expense_submit", "purchase"];
+        };
+    };
+    /** Scanning intervals for proactive monitoring */
+    readonly scanIntervals: {
+        readonly realtime: {
+            readonly id: "realtime";
+            readonly name: "Real-time";
+            readonly intervalMs: 0;
+            readonly description: "Event-driven, instant response";
+        };
+        readonly frequent: {
+            readonly id: "frequent";
+            readonly name: "Every 5 minutes";
+            readonly intervalMs: number;
+            readonly description: "High priority items";
+        };
+        readonly regular: {
+            readonly id: "regular";
+            readonly name: "Every 30 minutes";
+            readonly intervalMs: number;
+            readonly description: "Standard monitoring";
+        };
+        readonly hourly: {
+            readonly id: "hourly";
+            readonly name: "Hourly";
+            readonly intervalMs: number;
+            readonly description: "Low priority background tasks";
+        };
+        readonly daily: {
+            readonly id: "daily";
+            readonly name: "Daily";
+            readonly intervalMs: number;
+            readonly description: "Daily digest and reports";
+        };
+    };
+    /** Problem categories that agents can detect */
+    readonly problemCategories: {
+        readonly household: readonly ["bill_due", "maintenance_needed", "supply_low", "energy_anomaly", "device_offline", "security_alert", "package_delayed", "appointment_reminder", "weather_alert", "subscription_renewal"];
+        readonly business: readonly ["calendar_conflict", "deadline_approaching", "email_urgent", "meeting_prep_needed", "follow_up_due", "expense_pending", "project_at_risk", "competitor_news", "team_blocker", "report_due"];
+    };
+};
+declare const INTEGRATIONS: {
+    readonly googleCalendar: {
+        readonly id: "google_calendar";
+        readonly name: "Google Calendar";
+        readonly category: "productivity";
+        readonly icon: "calendar";
+        readonly color: "#4285f4";
+        readonly capabilities: readonly ["list_events", "create_event", "update_event", "delete_event", "get_free_busy"];
+        readonly authType: "oauth2";
+    };
+    readonly outlook: {
+        readonly id: "outlook";
+        readonly name: "Microsoft Outlook";
+        readonly category: "productivity";
+        readonly icon: "mail";
+        readonly color: "#0078d4";
+        readonly capabilities: readonly ["list_events", "create_event", "list_emails", "send_email", "read_email"];
+        readonly authType: "oauth2";
+    };
+    readonly gmail: {
+        readonly id: "gmail";
+        readonly name: "Gmail";
+        readonly category: "productivity";
+        readonly icon: "mail";
+        readonly color: "#ea4335";
+        readonly capabilities: readonly ["list_emails", "send_email", "read_email", "archive", "label", "search"];
+        readonly authType: "oauth2";
+    };
+    readonly notion: {
+        readonly id: "notion";
+        readonly name: "Notion";
+        readonly category: "productivity";
+        readonly icon: "file-text";
+        readonly color: "#000000";
+        readonly capabilities: readonly ["list_pages", "create_page", "update_page", "query_database", "search"];
+        readonly authType: "oauth2";
+    };
+    readonly obsidian: {
+        readonly id: "obsidian";
+        readonly name: "Obsidian";
+        readonly category: "productivity";
+        readonly icon: "gem";
+        readonly color: "#7c3aed";
+        readonly capabilities: readonly ["list_notes", "create_note", "update_note", "search", "get_backlinks"];
+        readonly authType: "local";
+    };
+    readonly todoist: {
+        readonly id: "todoist";
+        readonly name: "Todoist";
+        readonly category: "productivity";
+        readonly icon: "check-square";
+        readonly color: "#e44332";
+        readonly capabilities: readonly ["list_tasks", "create_task", "complete_task", "update_task", "list_projects"];
+        readonly authType: "oauth2";
+    };
+    readonly slack: {
+        readonly id: "slack";
+        readonly name: "Slack";
+        readonly category: "communication";
+        readonly icon: "message-square";
+        readonly color: "#4a154b";
+        readonly capabilities: readonly ["send_message", "list_channels", "read_messages", "upload_file", "react"];
+        readonly authType: "oauth2";
+    };
+    readonly discord: {
+        readonly id: "discord";
+        readonly name: "Discord";
+        readonly category: "communication";
+        readonly icon: "message-circle";
+        readonly color: "#5865f2";
+        readonly capabilities: readonly ["send_message", "list_guilds", "list_channels", "read_messages"];
+        readonly authType: "bot_token";
+    };
+    readonly teams: {
+        readonly id: "teams";
+        readonly name: "Microsoft Teams";
+        readonly category: "communication";
+        readonly icon: "users";
+        readonly color: "#6264a7";
+        readonly capabilities: readonly ["send_message", "list_teams", "list_channels", "schedule_meeting"];
+        readonly authType: "oauth2";
+    };
+    readonly telegram: {
+        readonly id: "telegram";
+        readonly name: "Telegram";
+        readonly category: "communication";
+        readonly icon: "send";
+        readonly color: "#0088cc";
+        readonly capabilities: readonly ["send_message", "list_chats", "read_messages", "send_file"];
+        readonly authType: "bot_token";
+    };
+    readonly chrome: {
+        readonly id: "chrome";
+        readonly name: "Google Chrome";
+        readonly category: "browser";
+        readonly icon: "globe";
+        readonly color: "#4285f4";
+        readonly capabilities: readonly ["list_tabs", "open_url", "close_tab", "get_bookmarks", "get_history"];
+        readonly authType: "extension";
+    };
+    readonly arc: {
+        readonly id: "arc";
+        readonly name: "Arc Browser";
+        readonly category: "browser";
+        readonly icon: "compass";
+        readonly color: "#fc5c65";
+        readonly capabilities: readonly ["list_tabs", "list_spaces", "create_space", "pin_tab", "create_easel"];
+        readonly authType: "local";
+    };
+    readonly github: {
+        readonly id: "github";
+        readonly name: "GitHub";
+        readonly category: "development";
+        readonly icon: "github";
+        readonly color: "#171515";
+        readonly capabilities: readonly ["list_repos", "create_issue", "create_pr", "review_pr", "search_code"];
+        readonly authType: "oauth2";
+    };
+    readonly gitlab: {
+        readonly id: "gitlab";
+        readonly name: "GitLab";
+        readonly category: "development";
+        readonly icon: "gitlab";
+        readonly color: "#fc6d26";
+        readonly capabilities: readonly ["list_projects", "create_issue", "create_mr", "pipelines"];
+        readonly authType: "oauth2";
+    };
+    readonly linear: {
+        readonly id: "linear";
+        readonly name: "Linear";
+        readonly category: "development";
+        readonly icon: "layout";
+        readonly color: "#5e6ad2";
+        readonly capabilities: readonly ["list_issues", "create_issue", "update_issue", "list_projects", "search"];
+        readonly authType: "oauth2";
+    };
+    readonly docker: {
+        readonly id: "docker";
+        readonly name: "Docker";
+        readonly category: "development";
+        readonly icon: "box";
+        readonly color: "#2496ed";
+        readonly capabilities: readonly ["list_containers", "start_container", "stop_container", "build_image", "logs"];
+        readonly authType: "local";
+    };
+    readonly homeAssistant: {
+        readonly id: "home_assistant";
+        readonly name: "Home Assistant";
+        readonly category: "smart_home";
+        readonly icon: "home";
+        readonly color: "#41bdf5";
+        readonly capabilities: readonly ["list_devices", "control_device", "run_scene", "run_automation", "get_state"];
+        readonly authType: "api_key";
+    };
+    readonly hue: {
+        readonly id: "hue";
+        readonly name: "Philips Hue";
+        readonly category: "smart_home";
+        readonly icon: "sun";
+        readonly color: "#0065d3";
+        readonly capabilities: readonly ["list_lights", "set_light", "list_scenes", "run_scene"];
+        readonly authType: "bridge";
+    };
+    readonly nest: {
+        readonly id: "nest";
+        readonly name: "Google Nest";
+        readonly category: "smart_home";
+        readonly icon: "thermometer";
+        readonly color: "#00a5e5";
+        readonly capabilities: readonly ["get_temperature", "set_temperature", "get_cameras", "get_doorbell"];
+        readonly authType: "oauth2";
+    };
+    readonly plaid: {
+        readonly id: "plaid";
+        readonly name: "Plaid";
+        readonly category: "finance";
+        readonly icon: "credit-card";
+        readonly color: "#00d66e";
+        readonly capabilities: readonly ["list_accounts", "get_transactions", "get_balance"];
+        readonly authType: "oauth2";
+    };
+    readonly coinbase: {
+        readonly id: "coinbase";
+        readonly name: "Coinbase";
+        readonly category: "finance";
+        readonly icon: "dollar-sign";
+        readonly color: "#0052ff";
+        readonly capabilities: readonly ["get_portfolio", "get_prices", "list_transactions"];
+        readonly authType: "oauth2";
+    };
+    readonly appleHealth: {
+        readonly id: "apple_health";
+        readonly name: "Apple Health";
+        readonly category: "health";
+        readonly icon: "heart";
+        readonly color: "#ff2d55";
+        readonly capabilities: readonly ["get_steps", "get_heart_rate", "get_sleep", "get_workouts"];
+        readonly authType: "local";
+    };
+    readonly oura: {
+        readonly id: "oura";
+        readonly name: "Oura Ring";
+        readonly category: "health";
+        readonly icon: "activity";
+        readonly color: "#1d1d1f";
+        readonly capabilities: readonly ["get_sleep", "get_readiness", "get_activity", "get_heart_rate"];
+        readonly authType: "oauth2";
+    };
+    readonly spotify: {
+        readonly id: "spotify";
+        readonly name: "Spotify";
+        readonly category: "media";
+        readonly icon: "music";
+        readonly color: "#1db954";
+        readonly capabilities: readonly ["get_playing", "play", "pause", "skip", "search", "add_to_playlist"];
+        readonly authType: "oauth2";
+    };
+    readonly youtube: {
+        readonly id: "youtube";
+        readonly name: "YouTube";
+        readonly category: "media";
+        readonly icon: "youtube";
+        readonly color: "#ff0000";
+        readonly capabilities: readonly ["search", "get_subscriptions", "get_playlist", "get_watch_later"];
+        readonly authType: "oauth2";
+    };
+    readonly googleMaps: {
+        readonly id: "google_maps";
+        readonly name: "Google Maps";
+        readonly category: "travel";
+        readonly icon: "map-pin";
+        readonly color: "#4285f4";
+        readonly capabilities: readonly ["search_places", "get_directions", "get_traffic", "get_distance"];
+        readonly authType: "api_key";
+    };
+    readonly uber: {
+        readonly id: "uber";
+        readonly name: "Uber";
+        readonly category: "travel";
+        readonly icon: "car";
+        readonly color: "#000000";
+        readonly capabilities: readonly ["request_ride", "get_estimate", "get_history"];
+        readonly authType: "oauth2";
+    };
+    readonly amazon: {
+        readonly id: "amazon";
+        readonly name: "Amazon";
+        readonly category: "shopping";
+        readonly icon: "shopping-cart";
+        readonly color: "#ff9900";
+        readonly capabilities: readonly ["search_products", "get_orders", "track_package", "add_to_cart"];
+        readonly authType: "oauth2";
+    };
+    readonly instacart: {
+        readonly id: "instacart";
+        readonly name: "Instacart";
+        readonly category: "shopping";
+        readonly icon: "shopping-bag";
+        readonly color: "#43b02a";
+        readonly capabilities: readonly ["search_products", "add_to_cart", "checkout", "track_order"];
+        readonly authType: "oauth2";
+    };
+    readonly shell: {
+        readonly id: "shell";
+        readonly name: "Shell";
+        readonly category: "system";
+        readonly icon: "terminal";
+        readonly color: "#4d4d4d";
+        readonly capabilities: readonly ["run_command", "run_script", "get_environment"];
+        readonly authType: "local";
+    };
+    readonly clipboard: {
+        readonly id: "clipboard";
+        readonly name: "Clipboard";
+        readonly category: "system";
+        readonly icon: "clipboard";
+        readonly color: "#6b7280";
+        readonly capabilities: readonly ["get", "set", "get_history", "clear"];
+        readonly authType: "local";
+    };
+    readonly filesystem: {
+        readonly id: "filesystem";
+        readonly name: "Filesystem";
+        readonly category: "system";
+        readonly icon: "folder";
+        readonly color: "#3b82f6";
+        readonly capabilities: readonly ["read", "write", "list", "search", "watch"];
+        readonly authType: "local";
+    };
+    readonly notifications: {
+        readonly id: "notifications";
+        readonly name: "System Notifications";
+        readonly category: "system";
+        readonly icon: "bell";
+        readonly color: "#ef4444";
+        readonly capabilities: readonly ["notify", "schedule", "cancel"];
+        readonly authType: "local";
+    };
+};
+type IntegrationId = keyof typeof INTEGRATIONS;
+declare const INTEGRATION_CATEGORIES: readonly ["productivity", "communication", "browser", "development", "smart_home", "finance", "health", "media", "travel", "shopping", "system"];
+type IntegrationCategoryType = (typeof INTEGRATION_CATEGORIES)[number];
+declare const HOOK_TRIGGERS: {
+    readonly cron: {
+        readonly id: "cron";
+        readonly name: "Cron Schedule";
+        readonly category: "time";
+    };
+    readonly interval: {
+        readonly id: "interval";
+        readonly name: "Interval";
+        readonly category: "time";
+    };
+    readonly daily: {
+        readonly id: "daily";
+        readonly name: "Daily";
+        readonly category: "time";
+    };
+    readonly weekly: {
+        readonly id: "weekly";
+        readonly name: "Weekly";
+        readonly category: "time";
+    };
+    readonly monthly: {
+        readonly id: "monthly";
+        readonly name: "Monthly";
+        readonly category: "time";
+    };
+    readonly webhook: {
+        readonly id: "webhook";
+        readonly name: "Webhook";
+        readonly category: "event";
+    };
+    readonly fileChange: {
+        readonly id: "file_change";
+        readonly name: "File Change";
+        readonly category: "event";
+    };
+    readonly emailReceived: {
+        readonly id: "email_received";
+        readonly name: "Email Received";
+        readonly category: "event";
+    };
+    readonly calendarEvent: {
+        readonly id: "calendar_event";
+        readonly name: "Calendar Event";
+        readonly category: "event";
+    };
+    readonly gitPush: {
+        readonly id: "git_push";
+        readonly name: "Git Push";
+        readonly category: "event";
+    };
+    readonly gitPr: {
+        readonly id: "git_pr";
+        readonly name: "Pull Request";
+        readonly category: "event";
+    };
+    readonly appLaunch: {
+        readonly id: "app_launch";
+        readonly name: "App Launch";
+        readonly category: "event";
+    };
+    readonly systemWake: {
+        readonly id: "system_wake";
+        readonly name: "System Wake";
+        readonly category: "event";
+    };
+    readonly batteryLow: {
+        readonly id: "battery_low";
+        readonly name: "Battery Low";
+        readonly category: "event";
+    };
+    readonly networkChange: {
+        readonly id: "network_change";
+        readonly name: "Network Change";
+        readonly category: "event";
+    };
+};
+type HookTriggerId = keyof typeof HOOK_TRIGGERS;
+declare const HOOK_ACTIONS: {
+    readonly sendNotification: {
+        readonly id: "send_notification";
+        readonly name: "Send Notification";
+        readonly category: "notification";
+    };
+    readonly sendEmail: {
+        readonly id: "send_email";
+        readonly name: "Send Email";
+        readonly category: "notification";
+    };
+    readonly sendSlack: {
+        readonly id: "send_slack";
+        readonly name: "Send Slack Message";
+        readonly category: "notification";
+    };
+    readonly sendDiscord: {
+        readonly id: "send_discord";
+        readonly name: "Send Discord Message";
+        readonly category: "notification";
+    };
+    readonly sendSms: {
+        readonly id: "send_sms";
+        readonly name: "Send SMS";
+        readonly category: "notification";
+    };
+    readonly runCommand: {
+        readonly id: "run_command";
+        readonly name: "Run Command";
+        readonly category: "automation";
+    };
+    readonly runScript: {
+        readonly id: "run_script";
+        readonly name: "Run Script";
+        readonly category: "automation";
+    };
+    readonly callApi: {
+        readonly id: "call_api";
+        readonly name: "Call API";
+        readonly category: "automation";
+    };
+    readonly createFile: {
+        readonly id: "create_file";
+        readonly name: "Create File";
+        readonly category: "automation";
+    };
+    readonly moveFile: {
+        readonly id: "move_file";
+        readonly name: "Move File";
+        readonly category: "automation";
+    };
+    readonly createEvent: {
+        readonly id: "create_event";
+        readonly name: "Create Calendar Event";
+        readonly category: "calendar";
+    };
+    readonly updateEvent: {
+        readonly id: "update_event";
+        readonly name: "Update Calendar Event";
+        readonly category: "calendar";
+    };
+    readonly createTask: {
+        readonly id: "create_task";
+        readonly name: "Create Task";
+        readonly category: "tasks";
+    };
+    readonly completeTask: {
+        readonly id: "complete_task";
+        readonly name: "Complete Task";
+        readonly category: "tasks";
+    };
+    readonly controlDevice: {
+        readonly id: "control_device";
+        readonly name: "Control Smart Device";
+        readonly category: "smart_home";
+    };
+    readonly runScene: {
+        readonly id: "run_scene";
+        readonly name: "Run Scene";
+        readonly category: "smart_home";
+    };
+    readonly askAgent: {
+        readonly id: "ask_agent";
+        readonly name: "Ask AI Agent";
+        readonly category: "ai";
+    };
+    readonly summarize: {
+        readonly id: "summarize";
+        readonly name: "Summarize Content";
+        readonly category: "ai";
+    };
+    readonly translate: {
+        readonly id: "translate";
+        readonly name: "Translate";
+        readonly category: "ai";
+    };
+};
+type HookActionId = keyof typeof HOOK_ACTIONS;
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, LIMITS, ORCHESTRATION_MODES, type OrchestrationModeId, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId };
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId };

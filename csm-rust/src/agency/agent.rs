@@ -52,6 +52,12 @@ pub enum AgentRole {
     Analyst,
     Writer,
     Executor,
+    /// Proactive household management agent
+    Household,
+    /// Proactive business/work agent
+    Business,
+    /// Tester agent
+    Tester,
     Custom,
 }
 

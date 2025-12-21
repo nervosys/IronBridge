@@ -32,6 +32,7 @@ pub mod error;
 pub mod executor;
 pub mod models;
 pub mod orchestrator;
+pub mod proactive;
 pub mod runtime;
 pub mod session;
 pub mod tools;
@@ -42,6 +43,12 @@ pub use error::AgencyError;
 pub use executor::{ExecutionContext, ExecutionResult, Executor};
 pub use models::{AgencyMessage, AgencyEvent, EventType, ToolCall, ToolResult};
 pub use orchestrator::{Orchestrator, OrchestrationType, Pipeline, Swarm};
+pub use proactive::{
+    ProactiveAgentConfig, ProactiveAction, ProactiveMonitor,
+    DetectedProblem, ProblemCategory, ProblemSeverity, ProblemStatus,
+    PermissionLevel, ActionRisk, ActionStatus,
+    household_agent_config, business_agent_config,
+};
 pub use runtime::{Runtime, RuntimeConfig};
 pub use session::{Session, SessionManager, SessionState};
 pub use tools::{Tool, ToolBuilder, ToolRegistry, BuiltinTools};

@@ -760,6 +760,44 @@ var AGENT_ROLES = {
     color: "#06b6d4",
     capabilities: ["test_generation", "test_execution", "bug_finding", "coverage_analysis"]
   },
+  household: {
+    id: "household",
+    name: "Household Agent",
+    description: "Proactively monitors and solves household problems with permission",
+    icon: "\u{1F3E0}",
+    color: "#14b8a6",
+    capabilities: [
+      "smart_home_monitoring",
+      "energy_optimization",
+      "maintenance_scheduling",
+      "grocery_management",
+      "bill_tracking",
+      "appliance_monitoring",
+      "security_alerts",
+      "package_tracking",
+      "cleaning_scheduling",
+      "meal_planning"
+    ]
+  },
+  business: {
+    id: "business",
+    name: "Business Agent",
+    description: "Proactively monitors and solves work/business problems with permission",
+    icon: "\u{1F4BC}",
+    color: "#8b5cf6",
+    capabilities: [
+      "calendar_optimization",
+      "email_triage",
+      "meeting_prep",
+      "deadline_tracking",
+      "expense_management",
+      "report_generation",
+      "competitor_monitoring",
+      "lead_tracking",
+      "project_health",
+      "team_coordination"
+    ]
+  },
   custom: {
     id: "custom",
     name: "Custom",
@@ -967,6 +1005,100 @@ var DEFAULT_AGENTS = [
     temperature: 0.4,
     autonomy: "high",
     maxIterations: 20
+  },
+  {
+    name: "household",
+    role: "household",
+    description: "Proactive household management agent that monitors your home and solves problems",
+    instruction: `You are a proactive Household Agent that helps users manage their home life efficiently.
+
+Your responsibilities:
+1. MONITOR: Continuously scan for household issues (bills due, maintenance needed, supplies running low)
+2. DETECT: Identify problems before they become urgent
+3. PROPOSE: Suggest solutions with clear cost/benefit analysis
+4. EXECUTE: Take action ONLY after explicit user permission
+
+Proactive behaviors:
+- Track recurring bills and alert before due dates
+- Monitor smart home devices for anomalies (energy spikes, device offline)
+- Manage grocery lists based on consumption patterns
+- Schedule maintenance reminders (HVAC filters, car service, etc.)
+- Track package deliveries and alert on delays
+- Optimize energy usage based on utility rates and patterns
+- Coordinate cleaning and household tasks
+- Manage home security alerts
+
+PERMISSION PROTOCOL:
+- Always explain what you detected and why action is needed
+- Present options ranked by recommendation
+- Wait for explicit "approved", "yes", or "do it" before taking action
+- For financial actions, always require confirmation
+- Log all actions taken for transparency`,
+    model: "gpt-4o",
+    tools: [
+      "smart_home_control",
+      "calendar_create",
+      "send_notification",
+      "grocery_add",
+      "bill_pay",
+      "package_track",
+      "energy_monitor",
+      "maintenance_schedule"
+    ],
+    temperature: 0.4,
+    autonomy: "supervised",
+    maxIterations: 15
+  },
+  {
+    name: "business",
+    role: "business",
+    description: "Proactive business agent that monitors work and solves professional problems",
+    instruction: `You are a proactive Business Agent that helps users excel in their professional life.
+
+Your responsibilities:
+1. MONITOR: Scan calendars, emails, projects, and deadlines continuously
+2. DETECT: Identify risks, conflicts, and opportunities early
+3. PROPOSE: Suggest optimizations with clear reasoning
+4. EXECUTE: Take action ONLY after explicit user permission
+
+Proactive behaviors:
+- Analyze calendar for conflicts, back-to-back meetings, prep time gaps
+- Triage incoming emails by urgency and required action
+- Prepare briefing docs before important meetings
+- Track project deadlines and flag risks early
+- Monitor expense reports and flag anomalies
+- Generate weekly/monthly reports automatically
+- Track competitor news and industry trends
+- Follow up on pending responses and action items
+- Optimize meeting schedules for focus time
+- Coordinate with team members on shared goals
+
+PERMISSION PROTOCOL:
+- Always explain what you detected and the business impact
+- Present options with pros/cons
+- Wait for explicit approval before:
+  - Sending any communication
+  - Scheduling or rescheduling meetings
+  - Making financial decisions
+  - Sharing information externally
+- Maintain confidentiality of all business data
+- Log all actions for audit trail`,
+    model: "gpt-4o",
+    tools: [
+      "calendar_read",
+      "calendar_create",
+      "email_read",
+      "email_draft",
+      "slack_send",
+      "document_create",
+      "expense_submit",
+      "project_track",
+      "web_search",
+      "competitor_monitor"
+    ],
+    temperature: 0.3,
+    autonomy: "supervised",
+    maxIterations: 20
   }
 ];
 var SWARM_TEMPLATES = [
@@ -989,8 +1121,479 @@ var SWARM_TEMPLATES = [
     name: "Code Review Team",
     description: "A team for thorough code reviews",
     roles: ["coordinator", "reviewer", "reviewer", "tester"]
+  },
+  {
+    name: "Life Management Team",
+    description: "Proactive agents for managing household and business tasks",
+    roles: ["coordinator", "household", "business"]
+  },
+  {
+    name: "Home Automation Team",
+    description: "Smart home monitoring and optimization",
+    roles: ["household", "executor"]
+  },
+  {
+    name: "Executive Assistant Team",
+    description: "Full business support with research and coordination",
+    roles: ["business", "researcher", "writer", "coordinator"]
   }
 ];
+var PROACTIVE_AGENT_CONFIG = {
+  /** Permission levels for proactive actions */
+  permissionLevels: {
+    notify_only: {
+      id: "notify_only",
+      name: "Notify Only",
+      description: "Agent can only send notifications, no actions taken",
+      autoApprove: []
+    },
+    low_risk: {
+      id: "low_risk",
+      name: "Low Risk Auto-Approve",
+      description: "Auto-approve notifications, reminders, and info gathering",
+      autoApprove: ["send_notification", "calendar_read", "email_read", "web_search", "package_track"]
+    },
+    medium_risk: {
+      id: "medium_risk",
+      name: "Medium Risk Auto-Approve",
+      description: "Also auto-approve scheduling and drafts (no sending)",
+      autoApprove: ["send_notification", "calendar_read", "calendar_create", "email_read", "email_draft", "document_create", "web_search", "package_track"]
+    },
+    high_autonomy: {
+      id: "high_autonomy",
+      name: "High Autonomy",
+      description: "Auto-approve most actions except financial and external communication",
+      autoApprove: ["*"],
+      requireApproval: ["bill_pay", "email_send", "slack_send", "expense_submit", "purchase"]
+    }
+  },
+  /** Scanning intervals for proactive monitoring */
+  scanIntervals: {
+    realtime: { id: "realtime", name: "Real-time", intervalMs: 0, description: "Event-driven, instant response" },
+    frequent: { id: "frequent", name: "Every 5 minutes", intervalMs: 5 * 60 * 1e3, description: "High priority items" },
+    regular: { id: "regular", name: "Every 30 minutes", intervalMs: 30 * 60 * 1e3, description: "Standard monitoring" },
+    hourly: { id: "hourly", name: "Hourly", intervalMs: 60 * 60 * 1e3, description: "Low priority background tasks" },
+    daily: { id: "daily", name: "Daily", intervalMs: 24 * 60 * 60 * 1e3, description: "Daily digest and reports" }
+  },
+  /** Problem categories that agents can detect */
+  problemCategories: {
+    household: [
+      "bill_due",
+      "maintenance_needed",
+      "supply_low",
+      "energy_anomaly",
+      "device_offline",
+      "security_alert",
+      "package_delayed",
+      "appointment_reminder",
+      "weather_alert",
+      "subscription_renewal"
+    ],
+    business: [
+      "calendar_conflict",
+      "deadline_approaching",
+      "email_urgent",
+      "meeting_prep_needed",
+      "follow_up_due",
+      "expense_pending",
+      "project_at_risk",
+      "competitor_news",
+      "team_blocker",
+      "report_due"
+    ]
+  }
+};
+var INTEGRATIONS = {
+  // =========================================================================
+  // Productivity
+  // =========================================================================
+  googleCalendar: {
+    id: "google_calendar",
+    name: "Google Calendar",
+    category: "productivity",
+    icon: "calendar",
+    color: "#4285f4",
+    capabilities: ["list_events", "create_event", "update_event", "delete_event", "get_free_busy"],
+    authType: "oauth2"
+  },
+  outlook: {
+    id: "outlook",
+    name: "Microsoft Outlook",
+    category: "productivity",
+    icon: "mail",
+    color: "#0078d4",
+    capabilities: ["list_events", "create_event", "list_emails", "send_email", "read_email"],
+    authType: "oauth2"
+  },
+  gmail: {
+    id: "gmail",
+    name: "Gmail",
+    category: "productivity",
+    icon: "mail",
+    color: "#ea4335",
+    capabilities: ["list_emails", "send_email", "read_email", "archive", "label", "search"],
+    authType: "oauth2"
+  },
+  notion: {
+    id: "notion",
+    name: "Notion",
+    category: "productivity",
+    icon: "file-text",
+    color: "#000000",
+    capabilities: ["list_pages", "create_page", "update_page", "query_database", "search"],
+    authType: "oauth2"
+  },
+  obsidian: {
+    id: "obsidian",
+    name: "Obsidian",
+    category: "productivity",
+    icon: "gem",
+    color: "#7c3aed",
+    capabilities: ["list_notes", "create_note", "update_note", "search", "get_backlinks"],
+    authType: "local"
+  },
+  todoist: {
+    id: "todoist",
+    name: "Todoist",
+    category: "productivity",
+    icon: "check-square",
+    color: "#e44332",
+    capabilities: ["list_tasks", "create_task", "complete_task", "update_task", "list_projects"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // Communication
+  // =========================================================================
+  slack: {
+    id: "slack",
+    name: "Slack",
+    category: "communication",
+    icon: "message-square",
+    color: "#4a154b",
+    capabilities: ["send_message", "list_channels", "read_messages", "upload_file", "react"],
+    authType: "oauth2"
+  },
+  discord: {
+    id: "discord",
+    name: "Discord",
+    category: "communication",
+    icon: "message-circle",
+    color: "#5865f2",
+    capabilities: ["send_message", "list_guilds", "list_channels", "read_messages"],
+    authType: "bot_token"
+  },
+  teams: {
+    id: "teams",
+    name: "Microsoft Teams",
+    category: "communication",
+    icon: "users",
+    color: "#6264a7",
+    capabilities: ["send_message", "list_teams", "list_channels", "schedule_meeting"],
+    authType: "oauth2"
+  },
+  telegram: {
+    id: "telegram",
+    name: "Telegram",
+    category: "communication",
+    icon: "send",
+    color: "#0088cc",
+    capabilities: ["send_message", "list_chats", "read_messages", "send_file"],
+    authType: "bot_token"
+  },
+  // =========================================================================
+  // Browser
+  // =========================================================================
+  chrome: {
+    id: "chrome",
+    name: "Google Chrome",
+    category: "browser",
+    icon: "globe",
+    color: "#4285f4",
+    capabilities: ["list_tabs", "open_url", "close_tab", "get_bookmarks", "get_history"],
+    authType: "extension"
+  },
+  arc: {
+    id: "arc",
+    name: "Arc Browser",
+    category: "browser",
+    icon: "compass",
+    color: "#fc5c65",
+    capabilities: ["list_tabs", "list_spaces", "create_space", "pin_tab", "create_easel"],
+    authType: "local"
+  },
+  // =========================================================================
+  // Development
+  // =========================================================================
+  github: {
+    id: "github",
+    name: "GitHub",
+    category: "development",
+    icon: "github",
+    color: "#171515",
+    capabilities: ["list_repos", "create_issue", "create_pr", "review_pr", "search_code"],
+    authType: "oauth2"
+  },
+  gitlab: {
+    id: "gitlab",
+    name: "GitLab",
+    category: "development",
+    icon: "gitlab",
+    color: "#fc6d26",
+    capabilities: ["list_projects", "create_issue", "create_mr", "pipelines"],
+    authType: "oauth2"
+  },
+  linear: {
+    id: "linear",
+    name: "Linear",
+    category: "development",
+    icon: "layout",
+    color: "#5e6ad2",
+    capabilities: ["list_issues", "create_issue", "update_issue", "list_projects", "search"],
+    authType: "oauth2"
+  },
+  docker: {
+    id: "docker",
+    name: "Docker",
+    category: "development",
+    icon: "box",
+    color: "#2496ed",
+    capabilities: ["list_containers", "start_container", "stop_container", "build_image", "logs"],
+    authType: "local"
+  },
+  // =========================================================================
+  // Smart Home
+  // =========================================================================
+  homeAssistant: {
+    id: "home_assistant",
+    name: "Home Assistant",
+    category: "smart_home",
+    icon: "home",
+    color: "#41bdf5",
+    capabilities: ["list_devices", "control_device", "run_scene", "run_automation", "get_state"],
+    authType: "api_key"
+  },
+  hue: {
+    id: "hue",
+    name: "Philips Hue",
+    category: "smart_home",
+    icon: "sun",
+    color: "#0065d3",
+    capabilities: ["list_lights", "set_light", "list_scenes", "run_scene"],
+    authType: "bridge"
+  },
+  nest: {
+    id: "nest",
+    name: "Google Nest",
+    category: "smart_home",
+    icon: "thermometer",
+    color: "#00a5e5",
+    capabilities: ["get_temperature", "set_temperature", "get_cameras", "get_doorbell"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // Finance
+  // =========================================================================
+  plaid: {
+    id: "plaid",
+    name: "Plaid",
+    category: "finance",
+    icon: "credit-card",
+    color: "#00d66e",
+    capabilities: ["list_accounts", "get_transactions", "get_balance"],
+    authType: "oauth2"
+  },
+  coinbase: {
+    id: "coinbase",
+    name: "Coinbase",
+    category: "finance",
+    icon: "dollar-sign",
+    color: "#0052ff",
+    capabilities: ["get_portfolio", "get_prices", "list_transactions"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // Health
+  // =========================================================================
+  appleHealth: {
+    id: "apple_health",
+    name: "Apple Health",
+    category: "health",
+    icon: "heart",
+    color: "#ff2d55",
+    capabilities: ["get_steps", "get_heart_rate", "get_sleep", "get_workouts"],
+    authType: "local"
+  },
+  oura: {
+    id: "oura",
+    name: "Oura Ring",
+    category: "health",
+    icon: "activity",
+    color: "#1d1d1f",
+    capabilities: ["get_sleep", "get_readiness", "get_activity", "get_heart_rate"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // Media
+  // =========================================================================
+  spotify: {
+    id: "spotify",
+    name: "Spotify",
+    category: "media",
+    icon: "music",
+    color: "#1db954",
+    capabilities: ["get_playing", "play", "pause", "skip", "search", "add_to_playlist"],
+    authType: "oauth2"
+  },
+  youtube: {
+    id: "youtube",
+    name: "YouTube",
+    category: "media",
+    icon: "youtube",
+    color: "#ff0000",
+    capabilities: ["search", "get_subscriptions", "get_playlist", "get_watch_later"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // Travel
+  // =========================================================================
+  googleMaps: {
+    id: "google_maps",
+    name: "Google Maps",
+    category: "travel",
+    icon: "map-pin",
+    color: "#4285f4",
+    capabilities: ["search_places", "get_directions", "get_traffic", "get_distance"],
+    authType: "api_key"
+  },
+  uber: {
+    id: "uber",
+    name: "Uber",
+    category: "travel",
+    icon: "car",
+    color: "#000000",
+    capabilities: ["request_ride", "get_estimate", "get_history"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // Shopping
+  // =========================================================================
+  amazon: {
+    id: "amazon",
+    name: "Amazon",
+    category: "shopping",
+    icon: "shopping-cart",
+    color: "#ff9900",
+    capabilities: ["search_products", "get_orders", "track_package", "add_to_cart"],
+    authType: "oauth2"
+  },
+  instacart: {
+    id: "instacart",
+    name: "Instacart",
+    category: "shopping",
+    icon: "shopping-bag",
+    color: "#43b02a",
+    capabilities: ["search_products", "add_to_cart", "checkout", "track_order"],
+    authType: "oauth2"
+  },
+  // =========================================================================
+  // System
+  // =========================================================================
+  shell: {
+    id: "shell",
+    name: "Shell",
+    category: "system",
+    icon: "terminal",
+    color: "#4d4d4d",
+    capabilities: ["run_command", "run_script", "get_environment"],
+    authType: "local"
+  },
+  clipboard: {
+    id: "clipboard",
+    name: "Clipboard",
+    category: "system",
+    icon: "clipboard",
+    color: "#6b7280",
+    capabilities: ["get", "set", "get_history", "clear"],
+    authType: "local"
+  },
+  filesystem: {
+    id: "filesystem",
+    name: "Filesystem",
+    category: "system",
+    icon: "folder",
+    color: "#3b82f6",
+    capabilities: ["read", "write", "list", "search", "watch"],
+    authType: "local"
+  },
+  notifications: {
+    id: "notifications",
+    name: "System Notifications",
+    category: "system",
+    icon: "bell",
+    color: "#ef4444",
+    capabilities: ["notify", "schedule", "cancel"],
+    authType: "local"
+  }
+};
+var INTEGRATION_CATEGORIES = [
+  "productivity",
+  "communication",
+  "browser",
+  "development",
+  "smart_home",
+  "finance",
+  "health",
+  "media",
+  "travel",
+  "shopping",
+  "system"
+];
+var HOOK_TRIGGERS = {
+  // Time-based
+  cron: { id: "cron", name: "Cron Schedule", category: "time" },
+  interval: { id: "interval", name: "Interval", category: "time" },
+  daily: { id: "daily", name: "Daily", category: "time" },
+  weekly: { id: "weekly", name: "Weekly", category: "time" },
+  monthly: { id: "monthly", name: "Monthly", category: "time" },
+  // Event-based
+  webhook: { id: "webhook", name: "Webhook", category: "event" },
+  fileChange: { id: "file_change", name: "File Change", category: "event" },
+  emailReceived: { id: "email_received", name: "Email Received", category: "event" },
+  calendarEvent: { id: "calendar_event", name: "Calendar Event", category: "event" },
+  gitPush: { id: "git_push", name: "Git Push", category: "event" },
+  gitPr: { id: "git_pr", name: "Pull Request", category: "event" },
+  appLaunch: { id: "app_launch", name: "App Launch", category: "event" },
+  systemWake: { id: "system_wake", name: "System Wake", category: "event" },
+  batteryLow: { id: "battery_low", name: "Battery Low", category: "event" },
+  networkChange: { id: "network_change", name: "Network Change", category: "event" }
+};
+var HOOK_ACTIONS = {
+  // Notifications
+  sendNotification: { id: "send_notification", name: "Send Notification", category: "notification" },
+  sendEmail: { id: "send_email", name: "Send Email", category: "notification" },
+  sendSlack: { id: "send_slack", name: "Send Slack Message", category: "notification" },
+  sendDiscord: { id: "send_discord", name: "Send Discord Message", category: "notification" },
+  sendSms: { id: "send_sms", name: "Send SMS", category: "notification" },
+  // Automation
+  runCommand: { id: "run_command", name: "Run Command", category: "automation" },
+  runScript: { id: "run_script", name: "Run Script", category: "automation" },
+  callApi: { id: "call_api", name: "Call API", category: "automation" },
+  createFile: { id: "create_file", name: "Create File", category: "automation" },
+  moveFile: { id: "move_file", name: "Move File", category: "automation" },
+  // Calendar
+  createEvent: { id: "create_event", name: "Create Calendar Event", category: "calendar" },
+  updateEvent: { id: "update_event", name: "Update Calendar Event", category: "calendar" },
+  // Tasks
+  createTask: { id: "create_task", name: "Create Task", category: "tasks" },
+  completeTask: { id: "complete_task", name: "Complete Task", category: "tasks" },
+  // Smart Home
+  controlDevice: { id: "control_device", name: "Control Smart Device", category: "smart_home" },
+  runScene: { id: "run_scene", name: "Run Scene", category: "smart_home" },
+  // AI
+  askAgent: { id: "ask_agent", name: "Ask AI Agent", category: "ai" },
+  summarize: { id: "summarize", name: "Summarize Content", category: "ai" },
+  translate: { id: "translate", name: "Translate", category: "ai" }
+};
 
 exports.AGENT_ROLES = AGENT_ROLES;
 exports.AGENT_STATUSES = AGENT_STATUSES;
@@ -999,8 +1602,13 @@ exports.API_ENDPOINTS = API_ENDPOINTS;
 exports.DEFAULT_AGENTS = DEFAULT_AGENTS;
 exports.DEFAULT_AGENT_CONFIG = DEFAULT_AGENT_CONFIG;
 exports.EXPORT_FORMATS = EXPORT_FORMATS;
+exports.HOOK_ACTIONS = HOOK_ACTIONS;
+exports.HOOK_TRIGGERS = HOOK_TRIGGERS;
+exports.INTEGRATIONS = INTEGRATIONS;
+exports.INTEGRATION_CATEGORIES = INTEGRATION_CATEGORIES;
 exports.LIMITS = LIMITS;
 exports.ORCHESTRATION_MODES = ORCHESTRATION_MODES;
+exports.PROACTIVE_AGENT_CONFIG = PROACTIVE_AGENT_CONFIG;
 exports.PROVIDERS = PROVIDERS;
 exports.PROVIDER_STATUSES = PROVIDER_STATUSES;
 exports.SESSION_FORMAT = SESSION_FORMAT;

@@ -289,6 +289,44 @@ export const AGENT_ROLES = {
         color: '#06b6d4',
         capabilities: ['test_generation', 'test_execution', 'bug_finding', 'coverage_analysis'],
     },
+    household: {
+        id: 'household',
+        name: 'Household Agent',
+        description: 'Proactively monitors and solves household problems with permission',
+        icon: '🏠',
+        color: '#14b8a6',
+        capabilities: [
+            'smart_home_monitoring',
+            'energy_optimization',
+            'maintenance_scheduling',
+            'grocery_management',
+            'bill_tracking',
+            'appliance_monitoring',
+            'security_alerts',
+            'package_tracking',
+            'cleaning_scheduling',
+            'meal_planning',
+        ],
+    },
+    business: {
+        id: 'business',
+        name: 'Business Agent',
+        description: 'Proactively monitors and solves work/business problems with permission',
+        icon: '💼',
+        color: '#8b5cf6',
+        capabilities: [
+            'calendar_optimization',
+            'email_triage',
+            'meeting_prep',
+            'deadline_tracking',
+            'expense_management',
+            'report_generation',
+            'competitor_monitoring',
+            'lead_tracking',
+            'project_health',
+            'team_coordination',
+        ],
+    },
     custom: {
         id: 'custom',
         name: 'Custom',
@@ -552,6 +590,100 @@ export const DEFAULT_AGENTS = [
         autonomy: 'high' as const,
         maxIterations: 20,
     },
+    {
+        name: 'household',
+        role: 'household' as const,
+        description: 'Proactive household management agent that monitors your home and solves problems',
+        instruction: `You are a proactive Household Agent that helps users manage their home life efficiently.
+
+Your responsibilities:
+1. MONITOR: Continuously scan for household issues (bills due, maintenance needed, supplies running low)
+2. DETECT: Identify problems before they become urgent
+3. PROPOSE: Suggest solutions with clear cost/benefit analysis
+4. EXECUTE: Take action ONLY after explicit user permission
+
+Proactive behaviors:
+- Track recurring bills and alert before due dates
+- Monitor smart home devices for anomalies (energy spikes, device offline)
+- Manage grocery lists based on consumption patterns
+- Schedule maintenance reminders (HVAC filters, car service, etc.)
+- Track package deliveries and alert on delays
+- Optimize energy usage based on utility rates and patterns
+- Coordinate cleaning and household tasks
+- Manage home security alerts
+
+PERMISSION PROTOCOL:
+- Always explain what you detected and why action is needed
+- Present options ranked by recommendation
+- Wait for explicit "approved", "yes", or "do it" before taking action
+- For financial actions, always require confirmation
+- Log all actions taken for transparency`,
+        model: 'gpt-4o',
+        tools: [
+            'smart_home_control',
+            'calendar_create',
+            'send_notification',
+            'grocery_add',
+            'bill_pay',
+            'package_track',
+            'energy_monitor',
+            'maintenance_schedule',
+        ],
+        temperature: 0.4,
+        autonomy: 'supervised' as const,
+        maxIterations: 15,
+    },
+    {
+        name: 'business',
+        role: 'business' as const,
+        description: 'Proactive business agent that monitors work and solves professional problems',
+        instruction: `You are a proactive Business Agent that helps users excel in their professional life.
+
+Your responsibilities:
+1. MONITOR: Scan calendars, emails, projects, and deadlines continuously
+2. DETECT: Identify risks, conflicts, and opportunities early
+3. PROPOSE: Suggest optimizations with clear reasoning
+4. EXECUTE: Take action ONLY after explicit user permission
+
+Proactive behaviors:
+- Analyze calendar for conflicts, back-to-back meetings, prep time gaps
+- Triage incoming emails by urgency and required action
+- Prepare briefing docs before important meetings
+- Track project deadlines and flag risks early
+- Monitor expense reports and flag anomalies
+- Generate weekly/monthly reports automatically
+- Track competitor news and industry trends
+- Follow up on pending responses and action items
+- Optimize meeting schedules for focus time
+- Coordinate with team members on shared goals
+
+PERMISSION PROTOCOL:
+- Always explain what you detected and the business impact
+- Present options with pros/cons
+- Wait for explicit approval before:
+  - Sending any communication
+  - Scheduling or rescheduling meetings
+  - Making financial decisions
+  - Sharing information externally
+- Maintain confidentiality of all business data
+- Log all actions for audit trail`,
+        model: 'gpt-4o',
+        tools: [
+            'calendar_read',
+            'calendar_create',
+            'email_read',
+            'email_draft',
+            'slack_send',
+            'document_create',
+            'expense_submit',
+            'project_track',
+            'web_search',
+            'competitor_monitor',
+        ],
+        temperature: 0.3,
+        autonomy: 'supervised' as const,
+        maxIterations: 20,
+    },
 ] as const;
 
 // =============================================================================
@@ -579,7 +711,92 @@ export const SWARM_TEMPLATES = [
         description: 'A team for thorough code reviews',
         roles: ['coordinator', 'reviewer', 'reviewer', 'tester'],
     },
+    {
+        name: 'Life Management Team',
+        description: 'Proactive agents for managing household and business tasks',
+        roles: ['coordinator', 'household', 'business'],
+    },
+    {
+        name: 'Home Automation Team',
+        description: 'Smart home monitoring and optimization',
+        roles: ['household', 'executor'],
+    },
+    {
+        name: 'Executive Assistant Team',
+        description: 'Full business support with research and coordination',
+        roles: ['business', 'researcher', 'writer', 'coordinator'],
+    },
 ] as const;
+
+// =============================================================================
+// Proactive Agent Configuration
+// =============================================================================
+
+export const PROACTIVE_AGENT_CONFIG = {
+    /** Permission levels for proactive actions */
+    permissionLevels: {
+        notify_only: {
+            id: 'notify_only',
+            name: 'Notify Only',
+            description: 'Agent can only send notifications, no actions taken',
+            autoApprove: [],
+        },
+        low_risk: {
+            id: 'low_risk',
+            name: 'Low Risk Auto-Approve',
+            description: 'Auto-approve notifications, reminders, and info gathering',
+            autoApprove: ['send_notification', 'calendar_read', 'email_read', 'web_search', 'package_track'],
+        },
+        medium_risk: {
+            id: 'medium_risk',
+            name: 'Medium Risk Auto-Approve',
+            description: 'Also auto-approve scheduling and drafts (no sending)',
+            autoApprove: ['send_notification', 'calendar_read', 'calendar_create', 'email_read', 'email_draft', 'document_create', 'web_search', 'package_track'],
+        },
+        high_autonomy: {
+            id: 'high_autonomy',
+            name: 'High Autonomy',
+            description: 'Auto-approve most actions except financial and external communication',
+            autoApprove: ['*'],
+            requireApproval: ['bill_pay', 'email_send', 'slack_send', 'expense_submit', 'purchase'],
+        },
+    },
+    /** Scanning intervals for proactive monitoring */
+    scanIntervals: {
+        realtime: { id: 'realtime', name: 'Real-time', intervalMs: 0, description: 'Event-driven, instant response' },
+        frequent: { id: 'frequent', name: 'Every 5 minutes', intervalMs: 5 * 60 * 1000, description: 'High priority items' },
+        regular: { id: 'regular', name: 'Every 30 minutes', intervalMs: 30 * 60 * 1000, description: 'Standard monitoring' },
+        hourly: { id: 'hourly', name: 'Hourly', intervalMs: 60 * 60 * 1000, description: 'Low priority background tasks' },
+        daily: { id: 'daily', name: 'Daily', intervalMs: 24 * 60 * 60 * 1000, description: 'Daily digest and reports' },
+    },
+    /** Problem categories that agents can detect */
+    problemCategories: {
+        household: [
+            'bill_due',
+            'maintenance_needed',
+            'supply_low',
+            'energy_anomaly',
+            'device_offline',
+            'security_alert',
+            'package_delayed',
+            'appointment_reminder',
+            'weather_alert',
+            'subscription_renewal',
+        ],
+        business: [
+            'calendar_conflict',
+            'deadline_approaching',
+            'email_urgent',
+            'meeting_prep_needed',
+            'follow_up_due',
+            'expense_pending',
+            'project_at_risk',
+            'competitor_news',
+            'team_blocker',
+            'report_due',
+        ],
+    },
+} as const;
 
 // =============================================================================
 // Life Integrations

@@ -210,6 +210,9 @@ pub fn create_agent(
         "writer" => AgentRole::Writer,
         "analyst" => AgentRole::Analyst,
         "assistant" => AgentRole::Assistant,
+        "household" => AgentRole::Household,
+        "business" => AgentRole::Business,
+        "tester" => AgentRole::Tester,
         _ => AgentRole::Custom,
     };
 
@@ -222,6 +225,9 @@ pub fn create_agent(
         AgentRole::Writer => "You are a writer that creates documentation and content.",
         AgentRole::Analyst => "You are an analyst that examines data and provides insights.",
         AgentRole::Assistant => "You are a helpful AI assistant.",
+        AgentRole::Household => "You are a proactive Household Agent that monitors and solves home problems with user permission. Track bills, maintenance, supplies, smart home devices, and daily household tasks.",
+        AgentRole::Business => "You are a proactive Business Agent that monitors and solves work problems with user permission. Optimize calendars, triage emails, prepare for meetings, track deadlines, and coordinate projects.",
+        AgentRole::Tester => "You are a testing specialist that creates and runs tests.",
         AgentRole::Custom => "You are a helpful AI assistant.",
     };
 

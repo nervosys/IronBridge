@@ -236,9 +236,54 @@ export interface ProviderHealth {
 // =============================================================================
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
-export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'custom';
+export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'household' | 'business' | 'custom';
+export type AgentAutonomy = 'none' | 'low' | 'medium' | 'high' | 'supervised';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+
+/**
+ * Permission level for proactive agents
+ */
+export type PermissionLevel = 'notify_only' | 'low_risk' | 'medium_risk' | 'high_autonomy';
+
+/**
+ * Proactive action that requires permission
+ */
+export interface ProactiveAction {
+    id: string;
+    agentId: string;
+    actionType: string;
+    description: string;
+    reasoning: string;
+    estimatedImpact?: string;
+    riskLevel: 'low' | 'medium' | 'high';
+    status: 'pending' | 'approved' | 'rejected' | 'executed' | 'cancelled';
+    autoApproved?: boolean;
+    approvedAt?: number;
+    approvedBy?: string;
+    executedAt?: number;
+    result?: string;
+    error?: string;
+    createdAt: number;
+}
+
+/**
+ * Detected problem by proactive agent
+ */
+export interface DetectedProblem {
+    id: string;
+    agentId: string;
+    category: string;
+    title: string;
+    description: string;
+    severity: 'info' | 'warning' | 'urgent' | 'critical';
+    detectedAt: number;
+    source: string;
+    suggestedActions: ProactiveAction[];
+    status: 'new' | 'acknowledged' | 'in_progress' | 'resolved' | 'dismissed';
+    resolvedAt?: number;
+    metadata?: Record<string, unknown>;
+}
 
 /**
  * Orchestration type - matches Rust Agency OrchestrationType
