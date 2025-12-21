@@ -280,14 +280,47 @@ impl Executor {
         
         // Determine endpoint based on provider
         let endpoint = match model_config.provider {
+            // Cloud Providers
             ModelProvider::OpenAI => "https://api.openai.com/v1/chat/completions".to_string(),
             ModelProvider::Anthropic => "https://api.anthropic.com/v1/messages".to_string(),
             ModelProvider::Google => format!(
                 "https://generativelanguage.googleapis.com/v1/models/{}:generateContent",
                 model_config.model
             ),
-            ModelProvider::Ollama => "http://localhost:11434/api/chat".to_string(),
+            ModelProvider::Groq => "https://api.groq.com/openai/v1/chat/completions".to_string(),
+            ModelProvider::Together => "https://api.together.xyz/v1/chat/completions".to_string(),
+            ModelProvider::Fireworks => "https://api.fireworks.ai/inference/v1/chat/completions".to_string(),
+            ModelProvider::DeepSeek => "https://api.deepseek.com/v1/chat/completions".to_string(),
+            ModelProvider::Mistral => "https://api.mistral.ai/v1/chat/completions".to_string(),
+            ModelProvider::Cohere => "https://api.cohere.ai/v1/chat".to_string(),
+            ModelProvider::Perplexity => "https://api.perplexity.ai/chat/completions".to_string(),
             ModelProvider::Azure => model_config.endpoint.clone().unwrap_or_default(),
+            
+            // Local Providers (OpenAI-compatible)
+            ModelProvider::Ollama => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:11434/api/chat".to_string()),
+            ModelProvider::LMStudio => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:1234/v1/chat/completions".to_string()),
+            ModelProvider::Jan => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:1337/v1/chat/completions".to_string()),
+            ModelProvider::GPT4All => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:4891/v1/chat/completions".to_string()),
+            ModelProvider::LocalAI => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:8080/v1/chat/completions".to_string()),
+            ModelProvider::Llamafile => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:8080/v1/chat/completions".to_string()),
+            ModelProvider::TextGenWebUI => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:5000/v1/chat/completions".to_string()),
+            ModelProvider::VLLM => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:8000/v1/chat/completions".to_string()),
+            ModelProvider::KoboldCpp => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:5001/v1/chat/completions".to_string()),
+            ModelProvider::TabbyML => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:8080/v1/chat/completions".to_string()),
+            ModelProvider::Exo => model_config.endpoint.clone()
+                .unwrap_or_else(|| "http://localhost:52415/v1/chat/completions".to_string()),
+            
+            // Generic
             ModelProvider::OpenAICompatible | ModelProvider::Custom => {
                 model_config.endpoint.clone().unwrap_or_else(|| "http://localhost:8080/v1/chat/completions".to_string())
             }

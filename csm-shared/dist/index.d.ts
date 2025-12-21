@@ -1,4 +1,4 @@
-export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.js';
+export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.js';
 export { ApiClientConfig, api, createApiClient } from './api/index.js';
 export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy } from './utils/index.js';
 
@@ -11,21 +11,12 @@ declare const PROVIDERS: {
         readonly color: "#1f6feb";
         readonly icon: "github";
     };
-    readonly ollama: {
-        readonly id: "ollama";
-        readonly name: "Ollama";
-        readonly type: "local";
-        readonly endpoint: "http://localhost:11434";
-        readonly models: readonly ["llama3.2", "llama3.1", "codellama", "mistral", "mixtral", "qwen2.5-coder", "deepseek-coder"];
-        readonly color: "#ffffff";
-        readonly icon: "ollama";
-    };
     readonly openai: {
         readonly id: "openai";
         readonly name: "OpenAI";
         readonly type: "cloud";
         readonly endpoint: "https://api.openai.com/v1";
-        readonly models: readonly ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"];
+        readonly models: readonly ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini", "o3-mini"];
         readonly color: "#10a37f";
         readonly icon: "openai";
     };
@@ -34,7 +25,7 @@ declare const PROVIDERS: {
         readonly name: "Anthropic";
         readonly type: "cloud";
         readonly endpoint: "https://api.anthropic.com/v1";
-        readonly models: readonly ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"];
+        readonly models: readonly ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest", "claude-sonnet-4-20250514"];
         readonly color: "#d4a574";
         readonly icon: "anthropic";
     };
@@ -51,9 +42,81 @@ declare const PROVIDERS: {
         readonly name: "Google AI";
         readonly type: "cloud";
         readonly endpoint: "https://generativelanguage.googleapis.com/v1";
-        readonly models: readonly ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"];
+        readonly models: readonly ["gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"];
         readonly color: "#4285f4";
         readonly icon: "google";
+    };
+    readonly groq: {
+        readonly id: "groq";
+        readonly name: "Groq";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.groq.com/openai/v1";
+        readonly models: readonly ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"];
+        readonly color: "#f55036";
+        readonly icon: "groq";
+    };
+    readonly together: {
+        readonly id: "together";
+        readonly name: "Together AI";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.together.xyz/v1";
+        readonly models: readonly ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-Coder-32B-Instruct", "deepseek-ai/DeepSeek-R1"];
+        readonly color: "#0ea5e9";
+        readonly icon: "together";
+    };
+    readonly fireworks: {
+        readonly id: "fireworks";
+        readonly name: "Fireworks AI";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.fireworks.ai/inference/v1";
+        readonly models: readonly ["accounts/fireworks/models/llama-v3p3-70b-instruct", "accounts/fireworks/models/qwen2p5-coder-32b-instruct"];
+        readonly color: "#ff6b35";
+        readonly icon: "fireworks";
+    };
+    readonly deepseek: {
+        readonly id: "deepseek";
+        readonly name: "DeepSeek";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.deepseek.com/v1";
+        readonly models: readonly ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"];
+        readonly color: "#4f46e5";
+        readonly icon: "deepseek";
+    };
+    readonly mistral: {
+        readonly id: "mistral";
+        readonly name: "Mistral AI";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.mistral.ai/v1";
+        readonly models: readonly ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest"];
+        readonly color: "#ff7000";
+        readonly icon: "mistral";
+    };
+    readonly cohere: {
+        readonly id: "cohere";
+        readonly name: "Cohere";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.cohere.ai/v1";
+        readonly models: readonly ["command-r-plus", "command-r", "command-light"];
+        readonly color: "#39594d";
+        readonly icon: "cohere";
+    };
+    readonly perplexity: {
+        readonly id: "perplexity";
+        readonly name: "Perplexity";
+        readonly type: "cloud";
+        readonly endpoint: "https://api.perplexity.ai";
+        readonly models: readonly ["llama-3.1-sonar-large-128k-online", "llama-3.1-sonar-small-128k-online"];
+        readonly color: "#20b2aa";
+        readonly icon: "perplexity";
+    };
+    readonly ollama: {
+        readonly id: "ollama";
+        readonly name: "Ollama";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:11434";
+        readonly models: readonly ["llama3.2", "llama3.1", "codellama", "mistral", "mixtral", "qwen2.5-coder", "deepseek-coder-v2", "phi3"];
+        readonly color: "#ffffff";
+        readonly icon: "ollama";
     };
     readonly lmstudio: {
         readonly id: "lmstudio";
@@ -73,6 +136,24 @@ declare const PROVIDERS: {
         readonly color: "#2563eb";
         readonly icon: "jan";
     };
+    readonly gpt4all: {
+        readonly id: "gpt4all";
+        readonly name: "GPT4All";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:4891/v1";
+        readonly models: readonly [];
+        readonly color: "#22c55e";
+        readonly icon: "gpt4all";
+    };
+    readonly localai: {
+        readonly id: "localai";
+        readonly name: "LocalAI";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:8080/v1";
+        readonly models: readonly [];
+        readonly color: "#14b8a6";
+        readonly icon: "localai";
+    };
     readonly llamafile: {
         readonly id: "llamafile";
         readonly name: "llamafile";
@@ -82,14 +163,50 @@ declare const PROVIDERS: {
         readonly color: "#f97316";
         readonly icon: "llamafile";
     };
-    readonly gpt4all: {
-        readonly id: "gpt4all";
-        readonly name: "GPT4All";
+    readonly textgenwebui: {
+        readonly id: "textgenwebui";
+        readonly name: "Text Gen WebUI";
         readonly type: "local";
-        readonly endpoint: "http://localhost:4891/v1";
+        readonly endpoint: "http://localhost:5000/v1";
         readonly models: readonly [];
-        readonly color: "#22c55e";
-        readonly icon: "gpt4all";
+        readonly color: "#a855f7";
+        readonly icon: "textgenwebui";
+    };
+    readonly vllm: {
+        readonly id: "vllm";
+        readonly name: "vLLM";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:8000/v1";
+        readonly models: readonly [];
+        readonly color: "#3b82f6";
+        readonly icon: "vllm";
+    };
+    readonly koboldcpp: {
+        readonly id: "koboldcpp";
+        readonly name: "KoboldCpp";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:5001/v1";
+        readonly models: readonly [];
+        readonly color: "#eab308";
+        readonly icon: "koboldcpp";
+    };
+    readonly tabbyml: {
+        readonly id: "tabbyml";
+        readonly name: "Tabby";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:8080/v1";
+        readonly models: readonly [];
+        readonly color: "#ec4899";
+        readonly icon: "tabbyml";
+    };
+    readonly exo: {
+        readonly id: "exo";
+        readonly name: "Exo";
+        readonly type: "local";
+        readonly endpoint: "http://localhost:52415/v1";
+        readonly models: readonly [];
+        readonly color: "#8b5cf6";
+        readonly icon: "exo";
     };
 };
 type ProviderId = keyof typeof PROVIDERS;

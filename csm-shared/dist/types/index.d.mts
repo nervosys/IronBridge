@@ -126,6 +126,23 @@ interface ShareLink {
 }
 type ShareLinkProvider = 'github_gist' | 'pastebin' | 'hastebin' | 'chatgpt' | 'claude' | 'custom';
 /**
+ * Model provider type - matches Rust Agency ModelProvider enum
+ * Includes both cloud and local LLM providers
+ */
+type ModelProvider = 'google' | 'openai' | 'anthropic' | 'azure' | 'groq' | 'together' | 'fireworks' | 'deepseek' | 'mistral' | 'cohere' | 'perplexity' | 'ollama' | 'lmstudio' | 'jan' | 'gpt4all' | 'localai' | 'llamafile' | 'textgenwebui' | 'vllm' | 'koboldcpp' | 'tabbyml' | 'exo' | 'openai_compatible' | 'custom';
+/**
+ * Model configuration - matches Rust Agency ModelConfig
+ */
+interface ModelConfig {
+    model: string;
+    provider: ModelProvider;
+    endpoint?: string | null;
+    apiKey?: string | null;
+    temperature?: number;
+    maxTokens?: number | null;
+    topP?: number | null;
+}
+/**
  * LLM provider configuration
  */
 interface Provider {
@@ -581,4 +598,4 @@ interface OrchestratorResult {
     duration: number;
 }
 
-export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };
+export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, DayCount, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, ImportResult, ImportSource, McpTool, McpToolCall, McpToolResult, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, Pipeline, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };

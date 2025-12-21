@@ -251,24 +251,145 @@ impl Default for ModelConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelProvider {
+    // Cloud Providers
     #[default]
     Google,
     OpenAI,
     Anthropic,
     Azure,
+    Groq,
+    Together,
+    Fireworks,
+    DeepSeek,
+    Mistral,
+    Cohere,
+    Perplexity,
+    
+    // Local Providers
     Ollama,
+    LMStudio,
+    Jan,
+    GPT4All,
+    LocalAI,
+    Llamafile,
+    TextGenWebUI,
+    VLLM,
+    KoboldCpp,
+    TabbyML,
+    Exo,
+    
+    // Generic
     OpenAICompatible,
     Custom,
+}
+
+impl ModelProvider {
+    /// Get the default endpoint for this provider
+    pub fn default_endpoint(&self) -> Option<&'static str> {
+        match self {
+            // Cloud Providers
+            ModelProvider::Google => Some("https://generativelanguage.googleapis.com/v1"),
+            ModelProvider::OpenAI => Some("https://api.openai.com/v1"),
+            ModelProvider::Anthropic => Some("https://api.anthropic.com/v1"),
+            ModelProvider::Azure => None, // Requires custom endpoint
+            ModelProvider::Groq => Some("https://api.groq.com/openai/v1"),
+            ModelProvider::Together => Some("https://api.together.xyz/v1"),
+            ModelProvider::Fireworks => Some("https://api.fireworks.ai/inference/v1"),
+            ModelProvider::DeepSeek => Some("https://api.deepseek.com/v1"),
+            ModelProvider::Mistral => Some("https://api.mistral.ai/v1"),
+            ModelProvider::Cohere => Some("https://api.cohere.ai/v1"),
+            ModelProvider::Perplexity => Some("https://api.perplexity.ai"),
+            
+            // Local Providers
+            ModelProvider::Ollama => Some("http://localhost:11434"),
+            ModelProvider::LMStudio => Some("http://localhost:1234/v1"),
+            ModelProvider::Jan => Some("http://localhost:1337/v1"),
+            ModelProvider::GPT4All => Some("http://localhost:4891/v1"),
+            ModelProvider::LocalAI => Some("http://localhost:8080/v1"),
+            ModelProvider::Llamafile => Some("http://localhost:8080/v1"),
+            ModelProvider::TextGenWebUI => Some("http://localhost:5000/v1"),
+            ModelProvider::VLLM => Some("http://localhost:8000/v1"),
+            ModelProvider::KoboldCpp => Some("http://localhost:5001/v1"),
+            ModelProvider::TabbyML => Some("http://localhost:8080/v1"),
+            ModelProvider::Exo => Some("http://localhost:52415/v1"),
+            
+            // Generic
+            ModelProvider::OpenAICompatible => None, // Requires custom endpoint
+            ModelProvider::Custom => None,
+        }
+    }
+    
+    /// Check if this provider is a local provider
+    pub fn is_local(&self) -> bool {
+        matches!(self,
+            ModelProvider::Ollama |
+            ModelProvider::LMStudio |
+            ModelProvider::Jan |
+            ModelProvider::GPT4All |
+            ModelProvider::LocalAI |
+            ModelProvider::Llamafile |
+            ModelProvider::TextGenWebUI |
+            ModelProvider::VLLM |
+            ModelProvider::KoboldCpp |
+            ModelProvider::TabbyML |
+            ModelProvider::Exo
+        )
+    }
+    
+    /// Check if this provider uses OpenAI-compatible API
+    pub fn is_openai_compatible(&self) -> bool {
+        matches!(self,
+            ModelProvider::OpenAI |
+            ModelProvider::Azure |
+            ModelProvider::Groq |
+            ModelProvider::Together |
+            ModelProvider::Fireworks |
+            ModelProvider::DeepSeek |
+            ModelProvider::Mistral |
+            ModelProvider::Perplexity |
+            ModelProvider::LMStudio |
+            ModelProvider::Jan |
+            ModelProvider::GPT4All |
+            ModelProvider::LocalAI |
+            ModelProvider::Llamafile |
+            ModelProvider::TextGenWebUI |
+            ModelProvider::VLLM |
+            ModelProvider::KoboldCpp |
+            ModelProvider::TabbyML |
+            ModelProvider::Exo |
+            ModelProvider::OpenAICompatible
+        )
+    }
 }
 
 impl std::fmt::Display for ModelProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            // Cloud Providers
             ModelProvider::Google => write!(f, "google"),
             ModelProvider::OpenAI => write!(f, "openai"),
             ModelProvider::Anthropic => write!(f, "anthropic"),
             ModelProvider::Azure => write!(f, "azure"),
+            ModelProvider::Groq => write!(f, "groq"),
+            ModelProvider::Together => write!(f, "together"),
+            ModelProvider::Fireworks => write!(f, "fireworks"),
+            ModelProvider::DeepSeek => write!(f, "deepseek"),
+            ModelProvider::Mistral => write!(f, "mistral"),
+            ModelProvider::Cohere => write!(f, "cohere"),
+            ModelProvider::Perplexity => write!(f, "perplexity"),
+            // Local Providers
             ModelProvider::Ollama => write!(f, "ollama"),
+            ModelProvider::LMStudio => write!(f, "lmstudio"),
+            ModelProvider::Jan => write!(f, "jan"),
+            ModelProvider::GPT4All => write!(f, "gpt4all"),
+            ModelProvider::LocalAI => write!(f, "localai"),
+            ModelProvider::Llamafile => write!(f, "llamafile"),
+            ModelProvider::TextGenWebUI => write!(f, "textgenwebui"),
+            ModelProvider::VLLM => write!(f, "vllm"),
+            ModelProvider::KoboldCpp => write!(f, "koboldcpp"),
+            ModelProvider::TabbyML => write!(f, "tabbyml"),
+            ModelProvider::Exo => write!(f, "exo"),
+            // Generic
             ModelProvider::OpenAICompatible => write!(f, "openai_compatible"),
             ModelProvider::Custom => write!(f, "custom"),
         }

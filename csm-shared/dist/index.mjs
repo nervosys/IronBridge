@@ -489,6 +489,9 @@ function isColorDark(hex) {
 
 // src/constants.ts
 var PROVIDERS = {
+  // =========================================================================
+  // Cloud Providers
+  // =========================================================================
   copilot: {
     id: "copilot",
     name: "GitHub Copilot",
@@ -497,21 +500,12 @@ var PROVIDERS = {
     color: "#1f6feb",
     icon: "github"
   },
-  ollama: {
-    id: "ollama",
-    name: "Ollama",
-    type: "local",
-    endpoint: "http://localhost:11434",
-    models: ["llama3.2", "llama3.1", "codellama", "mistral", "mixtral", "qwen2.5-coder", "deepseek-coder"],
-    color: "#ffffff",
-    icon: "ollama"
-  },
   openai: {
     id: "openai",
     name: "OpenAI",
     type: "cloud",
     endpoint: "https://api.openai.com/v1",
-    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"],
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini", "o3-mini"],
     color: "#10a37f",
     icon: "openai"
   },
@@ -520,7 +514,7 @@ var PROVIDERS = {
     name: "Anthropic",
     type: "cloud",
     endpoint: "https://api.anthropic.com/v1",
-    models: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"],
+    models: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest", "claude-sonnet-4-20250514"],
     color: "#d4a574",
     icon: "anthropic"
   },
@@ -537,9 +531,84 @@ var PROVIDERS = {
     name: "Google AI",
     type: "cloud",
     endpoint: "https://generativelanguage.googleapis.com/v1",
-    models: ["gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-1.5-flash"],
+    models: ["gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
     color: "#4285f4",
     icon: "google"
+  },
+  groq: {
+    id: "groq",
+    name: "Groq",
+    type: "cloud",
+    endpoint: "https://api.groq.com/openai/v1",
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+    color: "#f55036",
+    icon: "groq"
+  },
+  together: {
+    id: "together",
+    name: "Together AI",
+    type: "cloud",
+    endpoint: "https://api.together.xyz/v1",
+    models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-Coder-32B-Instruct", "deepseek-ai/DeepSeek-R1"],
+    color: "#0ea5e9",
+    icon: "together"
+  },
+  fireworks: {
+    id: "fireworks",
+    name: "Fireworks AI",
+    type: "cloud",
+    endpoint: "https://api.fireworks.ai/inference/v1",
+    models: ["accounts/fireworks/models/llama-v3p3-70b-instruct", "accounts/fireworks/models/qwen2p5-coder-32b-instruct"],
+    color: "#ff6b35",
+    icon: "fireworks"
+  },
+  deepseek: {
+    id: "deepseek",
+    name: "DeepSeek",
+    type: "cloud",
+    endpoint: "https://api.deepseek.com/v1",
+    models: ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"],
+    color: "#4f46e5",
+    icon: "deepseek"
+  },
+  mistral: {
+    id: "mistral",
+    name: "Mistral AI",
+    type: "cloud",
+    endpoint: "https://api.mistral.ai/v1",
+    models: ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest"],
+    color: "#ff7000",
+    icon: "mistral"
+  },
+  cohere: {
+    id: "cohere",
+    name: "Cohere",
+    type: "cloud",
+    endpoint: "https://api.cohere.ai/v1",
+    models: ["command-r-plus", "command-r", "command-light"],
+    color: "#39594d",
+    icon: "cohere"
+  },
+  perplexity: {
+    id: "perplexity",
+    name: "Perplexity",
+    type: "cloud",
+    endpoint: "https://api.perplexity.ai",
+    models: ["llama-3.1-sonar-large-128k-online", "llama-3.1-sonar-small-128k-online"],
+    color: "#20b2aa",
+    icon: "perplexity"
+  },
+  // =========================================================================
+  // Local Providers
+  // =========================================================================
+  ollama: {
+    id: "ollama",
+    name: "Ollama",
+    type: "local",
+    endpoint: "http://localhost:11434",
+    models: ["llama3.2", "llama3.1", "codellama", "mistral", "mixtral", "qwen2.5-coder", "deepseek-coder-v2", "phi3"],
+    color: "#ffffff",
+    icon: "ollama"
   },
   lmstudio: {
     id: "lmstudio",
@@ -559,6 +628,24 @@ var PROVIDERS = {
     color: "#2563eb",
     icon: "jan"
   },
+  gpt4all: {
+    id: "gpt4all",
+    name: "GPT4All",
+    type: "local",
+    endpoint: "http://localhost:4891/v1",
+    models: [],
+    color: "#22c55e",
+    icon: "gpt4all"
+  },
+  localai: {
+    id: "localai",
+    name: "LocalAI",
+    type: "local",
+    endpoint: "http://localhost:8080/v1",
+    models: [],
+    color: "#14b8a6",
+    icon: "localai"
+  },
   llamafile: {
     id: "llamafile",
     name: "llamafile",
@@ -568,14 +655,50 @@ var PROVIDERS = {
     color: "#f97316",
     icon: "llamafile"
   },
-  gpt4all: {
-    id: "gpt4all",
-    name: "GPT4All",
+  textgenwebui: {
+    id: "textgenwebui",
+    name: "Text Gen WebUI",
     type: "local",
-    endpoint: "http://localhost:4891/v1",
+    endpoint: "http://localhost:5000/v1",
     models: [],
-    color: "#22c55e",
-    icon: "gpt4all"
+    color: "#a855f7",
+    icon: "textgenwebui"
+  },
+  vllm: {
+    id: "vllm",
+    name: "vLLM",
+    type: "local",
+    endpoint: "http://localhost:8000/v1",
+    models: [],
+    color: "#3b82f6",
+    icon: "vllm"
+  },
+  koboldcpp: {
+    id: "koboldcpp",
+    name: "KoboldCpp",
+    type: "local",
+    endpoint: "http://localhost:5001/v1",
+    models: [],
+    color: "#eab308",
+    icon: "koboldcpp"
+  },
+  tabbyml: {
+    id: "tabbyml",
+    name: "Tabby",
+    type: "local",
+    endpoint: "http://localhost:8080/v1",
+    models: [],
+    color: "#ec4899",
+    icon: "tabbyml"
+  },
+  exo: {
+    id: "exo",
+    name: "Exo",
+    type: "local",
+    endpoint: "http://localhost:52415/v1",
+    models: [],
+    color: "#8b5cf6",
+    icon: "exo"
   }
 };
 var AGENT_ROLES = {

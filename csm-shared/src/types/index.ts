@@ -146,6 +146,52 @@ export type ShareLinkProvider = 'github_gist' | 'pastebin' | 'hastebin' | 'chatg
 // =============================================================================
 
 /**
+ * Model provider type - matches Rust Agency ModelProvider enum
+ * Includes both cloud and local LLM providers
+ */
+export type ModelProvider =
+    // Cloud Providers
+    | 'google'
+    | 'openai'
+    | 'anthropic'
+    | 'azure'
+    | 'groq'
+    | 'together'
+    | 'fireworks'
+    | 'deepseek'
+    | 'mistral'
+    | 'cohere'
+    | 'perplexity'
+    // Local Providers
+    | 'ollama'
+    | 'lmstudio'
+    | 'jan'
+    | 'gpt4all'
+    | 'localai'
+    | 'llamafile'
+    | 'textgenwebui'
+    | 'vllm'
+    | 'koboldcpp'
+    | 'tabbyml'
+    | 'exo'
+    // Generic
+    | 'openai_compatible'
+    | 'custom';
+
+/**
+ * Model configuration - matches Rust Agency ModelConfig
+ */
+export interface ModelConfig {
+    model: string;
+    provider: ModelProvider;
+    endpoint?: string | null;
+    apiKey?: string | null;
+    temperature?: number;
+    maxTokens?: number | null;
+    topP?: number | null;
+}
+
+/**
  * LLM provider configuration
  */
 export interface Provider {
