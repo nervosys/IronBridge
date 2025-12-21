@@ -34,6 +34,7 @@ pub mod memory;
 pub mod models;
 pub mod orchestrator;
 pub mod proactive;
+pub mod remote;
 pub mod runtime;
 pub mod session;
 pub mod tools;
@@ -56,6 +57,14 @@ pub use proactive::{
     DetectedProblem, ProblemCategory, ProblemSeverity, ProblemStatus,
     PermissionLevel, ActionRisk, ActionStatus,
     household_agent_config, business_agent_config,
+};
+pub use remote::{
+    RemoteMonitor, RemoteMonitorConfig, RemoteMonitorError, MonitorStats,
+    RemoteNode, NodeId, NodeStatus, HardwareInfo, GpuInfo,
+    RemoteTask, RemoteTaskId, RemoteTaskStatus, RemoteTaskBuilder, TaskPriority,
+    TaskResult, TaskArtifact, ArtifactType, TaskMetrics, ResourceUsage,
+    TaskLogEntry, LogLevel, RemoteEvent,
+    RemoteAgentClient, generate_task_id, generate_node_id,
 };
 pub use runtime::{Runtime, RuntimeConfig};
 pub use session::{Session, SessionManager, SessionState};

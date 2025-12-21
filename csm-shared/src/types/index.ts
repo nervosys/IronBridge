@@ -555,6 +555,216 @@ export interface RAGConfig {
     maxConversationTurns: number;
 }
 
+// =============================================================================
+// Remote Monitoring Models
+// =============================================================================
+
+/**
+ * Remote node status
+ */
+export type NodeStatus = 'online' | 'degraded' | 'offline' | 'maintenance' | 'unknown';
+
+/**
+ * Remote task status
+ */
+export type RemoteTaskStatus = 'queued' | 'starting' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'timed_out';
+
+/**
+ * Task priority
+ */
+export type TaskPriority = 'low' | 'normal' | 'high' | 'critical';
+
+/**
+ * Log level
+ */
+export type RemoteLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+
+/**
+ * Hardware information for a remote node
+ */
+export interface HardwareInfo {
+    cpuCores: number;
+    ramTotal: number;
+    ramAvailable: number;
+    gpus: GpuInfo[];
+    os: string;
+    arch: string;
+}
+
+/**
+ * GPU information
+ */
+export interface GpuInfo {
+    name: string;
+    vram: number;
+    cudaVersion?: string;
+}
+
+/**
+ * Remote node representing a machine running agents
+ */
+export interface RemoteNode {
+    id: string;
+    name: string;
+    address: string;
+    status: NodeStatus;
+    tags: string[];
+    hardware?: HardwareInfo;
+    activeAgents: number;
+    runningTasks: number;
+    lastHeartbeat: number;
+    registeredAt: number;
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * Resource usage during task execution
+ */
+export interface ResourceUsage {
+    cpuPercent: number;
+    memoryBytes: number;
+    gpuMemoryBytes?: number;
+    networkTxBytes: number;
+    networkRxBytes: number;
+    diskReadBytes: number;
+    diskWriteBytes: number;
+}
+
+/**
+ * Task log entry
+ */
+export interface TaskLogEntry {
+    timestamp: number;
+    level: RemoteLogLevel;
+    message: string;
+    data?: unknown;
+}
+
+/**
+ * Task execution metrics
+ */
+export interface TaskMetrics {
+    durationMs: number;
+    tokensUsed?: number;
+    apiCalls: number;
+    filesProcessed: number;
+    errorsRecovered: number;
+    retries: number;
+}
+
+/**
+ * Artifact type
+ */
+export type ArtifactType = 'file' | 'directory' | 'url' | 'database' | 'model' | 'report' | 'log' | { type: 'custom'; name: string };
+
+/**
+ * Task artifact (output files, etc.)
+ */
+export interface TaskArtifact {
+    name: string;
+    artifactType: ArtifactType;
+    location: string;
+    size?: number;
+    checksum?: string;
+}
+
+/**
+ * Task result
+ */
+export interface RemoteTaskResult {
+    success: boolean;
+    output?: unknown;
+    artifacts: TaskArtifact[];
+    metrics: TaskMetrics;
+}
+
+/**
+ * Remote task running on a node
+ */
+export interface RemoteTask {
+    id: string;
+    nodeId: string;
+    agentId: string;
+    agentName: string;
+    title: string;
+    description?: string;
+    status: RemoteTaskStatus;
+    progress: number;
+    progressMessage?: string;
+    currentStep?: number;
+    totalSteps?: number;
+    priority: TaskPriority;
+    startedAt: number;
+    completedAt?: number;
+    eta?: number;
+    result?: RemoteTaskResult;
+    error?: string;
+    resources: ResourceUsage;
+    logs: TaskLogEntry[];
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * Remote monitor configuration
+ */
+export interface RemoteMonitorConfig {
+    bindAddress: string;
+    port: number;
+    tlsEnabled: boolean;
+    tlsCertPath?: string;
+    tlsKeyPath?: string;
+    authToken?: string;
+    heartbeatIntervalSecs: number;
+    nodeTimeoutSecs: number;
+    maxLogEntries: number;
+    metricsEnabled: boolean;
+}
+
+/**
+ * Monitor statistics
+ */
+export interface MonitorStats {
+    totalNodes: number;
+    onlineNodes: number;
+    totalAgents: number;
+    totalTasks: number;
+    runningTasks: number;
+    queuedTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+}
+
+/**
+ * Remote event types
+ */
+export type RemoteEventType =
+    | 'node_online'
+    | 'node_offline'
+    | 'node_status_changed'
+    | 'node_heartbeat'
+    | 'task_created'
+    | 'task_started'
+    | 'task_progress'
+    | 'task_step_completed'
+    | 'task_completed'
+    | 'task_failed'
+    | 'task_cancelled'
+    | 'task_log'
+    | 'agent_registered'
+    | 'agent_unregistered';
+
+/**
+ * Remote event
+ */
+export interface RemoteEvent {
+    type: RemoteEventType;
+    timestamp: number;
+    nodeId?: string;
+    taskId?: string;
+    agentId?: string;
+    data?: unknown;
+}
+
 /**
  * Agent message for inter-agent communication
  */

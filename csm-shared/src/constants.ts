@@ -1005,6 +1005,124 @@ export const MEMORY_CONFIG = {
 } as const;
 
 // =============================================================================
+// Remote Monitoring Configuration
+// =============================================================================
+
+export const REMOTE_MONITOR_CONFIG = {
+    /** Node status types */
+    nodeStatuses: {
+        online: { id: 'online', name: 'Online', color: '#22c55e', description: 'Node is healthy and responding' },
+        degraded: { id: 'degraded', name: 'Degraded', color: '#f59e0b', description: 'Node is online but experiencing issues' },
+        offline: { id: 'offline', name: 'Offline', color: '#ef4444', description: 'Node is unreachable' },
+        maintenance: { id: 'maintenance', name: 'Maintenance', color: '#3b82f6', description: 'Node is in maintenance mode' },
+        unknown: { id: 'unknown', name: 'Unknown', color: '#6b7280', description: 'Node status is unknown' },
+    },
+    /** Task status types */
+    taskStatuses: {
+        queued: { id: 'queued', name: 'Queued', color: '#6b7280', description: 'Task is waiting to start' },
+        starting: { id: 'starting', name: 'Starting', color: '#8b5cf6', description: 'Task is initializing' },
+        running: { id: 'running', name: 'Running', color: '#3b82f6', description: 'Task is actively executing' },
+        paused: { id: 'paused', name: 'Paused', color: '#f59e0b', description: 'Task is paused' },
+        completed: { id: 'completed', name: 'Completed', color: '#22c55e', description: 'Task finished successfully' },
+        failed: { id: 'failed', name: 'Failed', color: '#ef4444', description: 'Task failed with error' },
+        cancelled: { id: 'cancelled', name: 'Cancelled', color: '#6b7280', description: 'Task was cancelled' },
+        timed_out: { id: 'timed_out', name: 'Timed Out', color: '#ef4444', description: 'Task exceeded time limit' },
+    },
+    /** Task priority levels */
+    taskPriorities: {
+        low: { id: 'low', name: 'Low', value: 0, color: '#6b7280' },
+        normal: { id: 'normal', name: 'Normal', value: 1, color: '#3b82f6' },
+        high: { id: 'high', name: 'High', value: 2, color: '#f59e0b' },
+        critical: { id: 'critical', name: 'Critical', value: 3, color: '#ef4444' },
+    },
+    /** Log levels */
+    logLevels: {
+        trace: { id: 'trace', name: 'Trace', color: '#6b7280' },
+        debug: { id: 'debug', name: 'Debug', color: '#8b5cf6' },
+        info: { id: 'info', name: 'Info', color: '#3b82f6' },
+        warn: { id: 'warn', name: 'Warning', color: '#f59e0b' },
+        error: { id: 'error', name: 'Error', color: '#ef4444' },
+    },
+    /** Remote event types */
+    eventTypes: {
+        node_online: { id: 'node_online', name: 'Node Online', icon: 'server' },
+        node_offline: { id: 'node_offline', name: 'Node Offline', icon: 'server-off' },
+        node_status_changed: { id: 'node_status_changed', name: 'Node Status Changed', icon: 'activity' },
+        node_heartbeat: { id: 'node_heartbeat', name: 'Node Heartbeat', icon: 'heart-pulse' },
+        task_created: { id: 'task_created', name: 'Task Created', icon: 'plus-circle' },
+        task_started: { id: 'task_started', name: 'Task Started', icon: 'play' },
+        task_progress: { id: 'task_progress', name: 'Task Progress', icon: 'loader' },
+        task_step_completed: { id: 'task_step_completed', name: 'Step Completed', icon: 'check-circle' },
+        task_completed: { id: 'task_completed', name: 'Task Completed', icon: 'check-circle-2' },
+        task_failed: { id: 'task_failed', name: 'Task Failed', icon: 'x-circle' },
+        task_cancelled: { id: 'task_cancelled', name: 'Task Cancelled', icon: 'slash' },
+        task_log: { id: 'task_log', name: 'Task Log', icon: 'file-text' },
+        agent_registered: { id: 'agent_registered', name: 'Agent Registered', icon: 'user-plus' },
+        agent_unregistered: { id: 'agent_unregistered', name: 'Agent Unregistered', icon: 'user-minus' },
+    },
+    /** Default configuration */
+    defaults: {
+        bindAddress: '0.0.0.0',
+        port: 9876,
+        tlsEnabled: false,
+        heartbeatIntervalSecs: 30,
+        nodeTimeoutSecs: 90,
+        maxLogEntries: 1000,
+        metricsEnabled: true,
+    },
+    /** Artifact types */
+    artifactTypes: {
+        file: { id: 'file', name: 'File', icon: 'file' },
+        directory: { id: 'directory', name: 'Directory', icon: 'folder' },
+        url: { id: 'url', name: 'URL', icon: 'link' },
+        database: { id: 'database', name: 'Database', icon: 'database' },
+        model: { id: 'model', name: 'Model', icon: 'brain' },
+        report: { id: 'report', name: 'Report', icon: 'file-chart' },
+        log: { id: 'log', name: 'Log', icon: 'scroll' },
+    },
+    /** Monitoring presets */
+    presets: {
+        development: {
+            id: 'development',
+            name: 'Development',
+            description: 'Local development with verbose logging',
+            config: {
+                port: 9876,
+                heartbeatIntervalSecs: 10,
+                nodeTimeoutSecs: 30,
+                maxLogEntries: 5000,
+                metricsEnabled: true,
+            },
+        },
+        production: {
+            id: 'production',
+            name: 'Production',
+            description: 'Production deployment with TLS and authentication',
+            config: {
+                port: 443,
+                tlsEnabled: true,
+                heartbeatIntervalSecs: 30,
+                nodeTimeoutSecs: 90,
+                maxLogEntries: 1000,
+                metricsEnabled: true,
+            },
+        },
+        lightweight: {
+            id: 'lightweight',
+            name: 'Lightweight',
+            description: 'Minimal resource usage for constrained environments',
+            config: {
+                port: 9876,
+                heartbeatIntervalSecs: 60,
+                nodeTimeoutSecs: 180,
+                maxLogEntries: 100,
+                metricsEnabled: false,
+            },
+        },
+    },
+} as const;
+
+// =============================================================================
 // Life Integrations
 // =============================================================================
 
