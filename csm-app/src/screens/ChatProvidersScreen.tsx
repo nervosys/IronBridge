@@ -426,36 +426,251 @@ export function ChatProvidersScreen() {
     );
     const customProviders = providers.filter(p => p.type === 'custom');
 
+    // Quick OAuth setup handlers
+    const handleQuickOAuth = async (providerType: ChatProviderType, oauthProvider: OAuthProviderType) => {
+        const provider = providers.find(p => p.type === providerType);
+        if (provider) {
+            const success = await login(oauthProvider);
+            if (success) {
+                updateProvider({ ...provider, oauthConnected: true, authMethod: 'oauth', isEnabled: true });
+                Alert.alert('Connected!', `Successfully connected to ${provider.name} via OAuth`);
+            }
+        }
+    };
+
+    const handleQuickApiKey = (providerType: ChatProviderType) => {
+        const provider = providers.find(p => p.type === providerType);
+        if (provider) handleGetApiKey(provider);
+    };
+
+    // Check connection status for quick setup
+    const isQuickConnected = (oauthProvider: OAuthProviderType) => isAuthenticated(oauthProvider);
+
     return (
         <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Quick Setup */}
             <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Setup</Text>
                 <Text style={[styles.sectionSubtitle, { color: colors.textTertiary }]}>
-                    Get API keys from your provider accounts
+                    Sign in with your provider accounts or use API keys
                 </Text>
-                <View style={styles.oauthButtonsRow}>
-                    <TouchableOpacity
-                        style={[styles.oauthQuickButton, { backgroundColor: '#10A37F' }]}
-                        onPress={() => {
-                            const openaiProvider = providers.find(p => p.type === 'openai');
-                            if (openaiProvider) handleGetApiKey(openaiProvider);
-                        }}
-                    >
-                        <Ionicons name="logo-electron" size={24} color="#FFFFFF" />
-                        <Text style={styles.oauthQuickButtonText}>OpenAI</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.oauthQuickButton, { backgroundColor: '#D4A06F' }]}
-                        onPress={() => {
-                            const anthropicProvider = providers.find(p => p.type === 'anthropic');
-                            if (anthropicProvider) handleGetApiKey(anthropicProvider);
-                        }}
-                    >
-                        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
-                        <Text style={styles.oauthQuickButtonText}>Claude</Text>
-                    </TouchableOpacity>
+
+                {/* OAuth Providers - Top Row */}
+                <View style={styles.quickSetupGrid}>
+                    {/* OpenAI */}
+                    <View style={[styles.quickSetupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={[styles.quickSetupIcon, { backgroundColor: '#10A37F20' }]}>
+                            <Ionicons name="flash" size={24} color="#10A37F" />
+                        </View>
+                        <Text style={[styles.quickSetupName, { color: colors.text }]}>OpenAI</Text>
+                        {isQuickConnected('openai') ? (
+                            <View style={styles.quickConnectedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                                <Text style={styles.quickConnectedText}>Connected</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.quickSetupActions}>
+                                <TouchableOpacity
+                                    style={[styles.quickOAuthButton, { backgroundColor: '#10A37F' }]}
+                                    onPress={() => handleQuickOAuth('openai', 'openai')}
+                                    disabled={oauthLoading}
+                                >
+                                    {oauthLoading ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+                                            <Text style={styles.quickOAuthText}>Sign In</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.quickApiKeyButton, { borderColor: '#10A37F' }]}
+                                    onPress={() => handleQuickApiKey('openai')}
+                                >
+                                    <Ionicons name="key-outline" size={14} color="#10A37F" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Anthropic */}
+                    <View style={[styles.quickSetupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={[styles.quickSetupIcon, { backgroundColor: '#D4A06F20' }]}>
+                            <Ionicons name="sparkles" size={24} color="#D4A06F" />
+                        </View>
+                        <Text style={[styles.quickSetupName, { color: colors.text }]}>Claude</Text>
+                        {isQuickConnected('anthropic') ? (
+                            <View style={styles.quickConnectedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                                <Text style={styles.quickConnectedText}>Connected</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.quickSetupActions}>
+                                <TouchableOpacity
+                                    style={[styles.quickOAuthButton, { backgroundColor: '#D4A06F' }]}
+                                    onPress={() => handleQuickOAuth('anthropic', 'anthropic')}
+                                    disabled={oauthLoading}
+                                >
+                                    {oauthLoading ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+                                            <Text style={styles.quickOAuthText}>Sign In</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.quickApiKeyButton, { borderColor: '#D4A06F' }]}
+                                    onPress={() => handleQuickApiKey('anthropic')}
+                                >
+                                    <Ionicons name="key-outline" size={14} color="#D4A06F" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Azure */}
+                    <View style={[styles.quickSetupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={[styles.quickSetupIcon, { backgroundColor: '#0078D420' }]}>
+                            <Ionicons name="cloud" size={24} color="#0078D4" />
+                        </View>
+                        <Text style={[styles.quickSetupName, { color: colors.text }]}>Azure AI</Text>
+                        {isQuickConnected('azure') ? (
+                            <View style={styles.quickConnectedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                                <Text style={styles.quickConnectedText}>Connected</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.quickSetupActions}>
+                                <TouchableOpacity
+                                    style={[styles.quickOAuthButton, { backgroundColor: '#0078D4' }]}
+                                    onPress={() => handleQuickOAuth('azure-openai', 'azure')}
+                                    disabled={oauthLoading}
+                                >
+                                    {oauthLoading ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+                                            <Text style={styles.quickOAuthText}>Sign In</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.quickApiKeyButton, { borderColor: '#0078D4' }]}
+                                    onPress={() => handleQuickApiKey('azure-openai')}
+                                >
+                                    <Ionicons name="key-outline" size={14} color="#0078D4" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Google */}
+                    <View style={[styles.quickSetupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={[styles.quickSetupIcon, { backgroundColor: '#4285F420' }]}>
+                            <Ionicons name="logo-google" size={24} color="#4285F4" />
+                        </View>
+                        <Text style={[styles.quickSetupName, { color: colors.text }]}>Google AI</Text>
+                        {isQuickConnected('google') ? (
+                            <View style={styles.quickConnectedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                                <Text style={styles.quickConnectedText}>Connected</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.quickSetupActions}>
+                                <TouchableOpacity
+                                    style={[styles.quickOAuthButton, { backgroundColor: '#4285F4' }]}
+                                    onPress={() => handleQuickOAuth('google', 'google')}
+                                    disabled={oauthLoading}
+                                >
+                                    {oauthLoading ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+                                            <Text style={styles.quickOAuthText}>Sign In</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.quickApiKeyButton, { borderColor: '#4285F4' }]}
+                                    onPress={() => handleQuickApiKey('google')}
+                                >
+                                    <Ionicons name="key-outline" size={14} color="#4285F4" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* GitHub */}
+                    <View style={[styles.quickSetupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={[styles.quickSetupIcon, { backgroundColor: '#24292E20' }]}>
+                            <Ionicons name="logo-github" size={24} color={isDark ? '#FFFFFF' : '#24292E'} />
+                        </View>
+                        <Text style={[styles.quickSetupName, { color: colors.text }]}>GitHub</Text>
+                        {isQuickConnected('github') ? (
+                            <View style={styles.quickConnectedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                                <Text style={styles.quickConnectedText}>Connected</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.quickSetupActions}>
+                                <TouchableOpacity
+                                    style={[styles.quickOAuthButton, { backgroundColor: isDark ? '#333' : '#24292E' }]}
+                                    onPress={() => login('github')}
+                                    disabled={oauthLoading}
+                                >
+                                    {oauthLoading ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+                                            <Text style={styles.quickOAuthText}>Sign In</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Microsoft 365 Copilot */}
+                    <View style={[styles.quickSetupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={[styles.quickSetupIcon, { backgroundColor: '#00A4EF20' }]}>
+                            <Ionicons name="logo-microsoft" size={24} color="#00A4EF" />
+                        </View>
+                        <Text style={[styles.quickSetupName, { color: colors.text }]}>MS Copilot</Text>
+                        {isQuickConnected('microsoft') ? (
+                            <View style={styles.quickConnectedBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                                <Text style={styles.quickConnectedText}>Connected</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.quickSetupActions}>
+                                <TouchableOpacity
+                                    style={[styles.quickOAuthButton, { backgroundColor: '#00A4EF' }]}
+                                    onPress={() => login('microsoft')}
+                                    disabled={oauthLoading}
+                                >
+                                    {oauthLoading ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+                                            <Text style={styles.quickOAuthText}>Sign In</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 </View>
+
+                <Text style={[styles.quickSetupNote, { color: colors.textTertiary }]}>
+                    Sign in directly with OAuth or tap the key icon to use API keys
+                </Text>
             </View>
 
             {/* Cloud Providers */}
@@ -744,6 +959,77 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#FFFFFF',
+    },
+    quickSetupGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginTop: 8,
+    },
+    quickSetupCard: {
+        width: '47%',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+    },
+    quickSetupIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    quickSetupName: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 8,
+    },
+    quickSetupActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    quickOAuthButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        gap: 4,
+    },
+    quickOAuthText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    quickApiKeyButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    quickConnectedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#E8F5E9',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+    },
+    quickConnectedText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#34C759',
+    },
+    quickSetupNote: {
+        fontSize: 12,
+        textAlign: 'center',
+        marginTop: 12,
     },
     emptyText: {
         fontSize: 14,
