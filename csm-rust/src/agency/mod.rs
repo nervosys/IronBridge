@@ -31,6 +31,7 @@ pub mod agent;
 pub mod error;
 pub mod executor;
 pub mod memory;
+pub mod modality;
 pub mod models;
 pub mod orchestrator;
 pub mod proactive;
@@ -44,28 +45,32 @@ pub use agent::{Agent, AgentBuilder, AgentConfig, AgentRole, AgentStatus};
 pub use error::AgencyError;
 pub use executor::{ExecutionContext, ExecutionResult, Executor};
 pub use memory::{
-    MemoryManager, MemoryConfig, MemoryEntry, MemoryType, MemorySource, MemoryError, MemoryStats,
-    VectorStore, VectorStoreConfig, VectorStoreStats, Embedding, SearchResult, SimilarityMetric,
-    KnowledgeBase, Document, DocumentType, DocumentChunk, ChunkingConfig, ChunkingStrategy,
-    ContextWindow, ContextSegment, ContextSegmentType,
-    AgentCache, CacheEntry, EmbeddingModel, EmbeddingProvider,
+    AgentCache, CacheEntry, ChunkingConfig, ChunkingStrategy, ContextSegment, ContextSegmentType,
+    ContextWindow, Document, DocumentChunk, DocumentType, Embedding, EmbeddingModel,
+    EmbeddingProvider, KnowledgeBase, MemoryConfig, MemoryEntry, MemoryError, MemoryManager,
+    MemorySource, MemoryStats, MemoryType, SearchResult, SimilarityMetric, VectorStore,
+    VectorStoreConfig, VectorStoreStats,
 };
-pub use models::{AgencyMessage, AgencyEvent, EventType, ToolCall, ToolResult};
-pub use orchestrator::{Orchestrator, OrchestrationType, Pipeline, Swarm};
+pub use modality::{
+    vla_models, vlm_models, ActionCommand, ActionParameters, ActionType, AudioContent, AudioData,
+    BoundingBoxRegion, ContentPart, ImageContent, ImageData, ImageDetail, ImageFormat, Modality,
+    ModalityCapabilities, ModelCategory, MultimodalMessage, MultimodalModel, SensorData,
+    SensorType, SensorValues, VideoContent, VideoData, Waypoint,
+};
+pub use models::{AgencyEvent, AgencyMessage, EventType, ToolCall, ToolResult};
+pub use orchestrator::{OrchestrationType, Orchestrator, Pipeline, Swarm};
 pub use proactive::{
-    ProactiveAgentConfig, ProactiveAction, ProactiveMonitor,
-    DetectedProblem, ProblemCategory, ProblemSeverity, ProblemStatus,
-    PermissionLevel, ActionRisk, ActionStatus,
-    household_agent_config, business_agent_config,
+    business_agent_config, household_agent_config, ActionRisk, ActionStatus, DetectedProblem,
+    PermissionLevel, ProactiveAction, ProactiveAgentConfig, ProactiveMonitor, ProblemCategory,
+    ProblemSeverity, ProblemStatus,
 };
 pub use remote::{
-    RemoteMonitor, RemoteMonitorConfig, RemoteMonitorError, MonitorStats,
-    RemoteNode, NodeId, NodeStatus, HardwareInfo, GpuInfo,
-    RemoteTask, RemoteTaskId, RemoteTaskStatus, RemoteTaskBuilder, TaskPriority,
-    TaskResult, TaskArtifact, ArtifactType, TaskMetrics, ResourceUsage,
-    TaskLogEntry, LogLevel, RemoteEvent,
-    RemoteAgentClient, generate_task_id, generate_node_id,
+    generate_node_id, generate_task_id, ArtifactType, GpuInfo, HardwareInfo, LogLevel,
+    MonitorStats, NodeId, NodeStatus, RemoteAgentClient, RemoteEvent, RemoteMonitor,
+    RemoteMonitorConfig, RemoteMonitorError, RemoteNode, RemoteTask, RemoteTaskBuilder,
+    RemoteTaskId, RemoteTaskStatus, ResourceUsage, TaskArtifact, TaskLogEntry, TaskMetrics,
+    TaskPriority, TaskResult,
 };
 pub use runtime::{Runtime, RuntimeConfig};
 pub use session::{Session, SessionManager, SessionState};
-pub use tools::{Tool, ToolBuilder, ToolRegistry, BuiltinTools};
+pub use tools::{BuiltinTools, Tool, ToolBuilder, ToolRegistry};

@@ -232,6 +232,323 @@ export interface ProviderHealth {
 }
 
 // =============================================================================
+// Modality Models - VLM/VLA Support
+// =============================================================================
+
+/**
+ * Input/output modality types
+ */
+export type Modality =
+    | 'text'           // Natural language text
+    | 'image'          // Static images (PNG, JPEG, WebP)
+    | 'video'          // Video sequences
+    | 'audio'          // Audio/speech
+    | 'point_cloud'    // 3D point cloud data
+    | 'action'         // Robot/agent actions
+    | 'sensor'         // Sensor readings
+    | 'depth'          // Depth maps
+    | 'segmentation'   // Semantic/instance segmentation
+    | 'bounding_box'   // Object detection boxes
+    | 'pose'           // Pose estimation (skeleton)
+    | 'trajectory';    // Motion trajectories
+
+/**
+ * Model category by capabilities
+ */
+export type ModelCategory =
+    | 'llm'         // Language-only (GPT-3.5, Llama)
+    | 'vlm'         // Vision-Language (GPT-4o, Claude 3.5, Gemini)
+    | 'vla'         // Vision-Language-Action (RT-2, PaLM-E)
+    | 'alm'         // Audio-Language (Whisper+GPT, Gemini)
+    | 'valm'        // Vision-Audio-Language (Gemini 2.0)
+    | 'multimodal'  // Generic multimodal
+    | 'embodied';   // Full embodied agent
+
+/**
+ * Modality capabilities for a model
+ */
+export interface ModalityCapabilities {
+    category: ModelCategory;
+    inputModalities: Modality[];
+    outputModalities: Modality[];
+    supportsStreaming: boolean;
+    supportsRealtime: boolean;
+    maxImageSize?: number | null;
+    maxVideoLength?: number | null;
+    maxAudioLength?: number | null;
+    supportedImageFormats: string[];
+    supportedVideoFormats: string[];
+    supportedAudioFormats: string[];
+}
+
+/**
+ * Image format types
+ */
+export type ImageFormat = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'tiff';
+
+/**
+ * Image content for multimodal messages
+ */
+export interface ImageContent {
+    format: ImageFormat;
+    data: ImageData;
+    width?: number | null;
+    height?: number | null;
+    altText?: string | null;
+}
+
+/**
+ * Image data (URL or base64)
+ */
+export type ImageData =
+    | { type: 'url'; url: string }
+    | { type: 'base64'; base64: string };
+
+/**
+ * Video content for multimodal messages
+ */
+export interface VideoContent {
+    format: string;
+    source: VideoSource;
+    durationSeconds?: number | null;
+    fps?: number | null;
+    width?: number | null;
+    height?: number | null;
+}
+
+/**
+ * Video source
+ */
+export type VideoSource =
+    | { type: 'url'; url: string }
+    | { type: 'base64'; base64: string }
+    | { type: 'frames'; frames: ImageContent[] };
+
+/**
+ * Audio format types
+ */
+export type AudioFormat = 'mp3' | 'wav' | 'ogg' | 'flac' | 'webm' | 'pcm';
+
+/**
+ * Audio content for multimodal messages
+ */
+export interface AudioContent {
+    format: AudioFormat;
+    data: AudioData;
+    durationSeconds?: number | null;
+    sampleRate?: number | null;
+    channels?: number | null;
+    transcript?: string | null;
+}
+
+/**
+ * Audio data (URL or base64)
+ */
+export type AudioData =
+    | { type: 'url'; url: string }
+    | { type: 'base64'; base64: string };
+
+/**
+ * Sensor types for VLA models
+ */
+export type SensorType =
+    | 'joint_state'
+    | 'imu'
+    | 'force_torque'
+    | 'camera_rgb'
+    | 'camera_depth'
+    | 'lidar'
+    | 'tactile'
+    | 'temperature'
+    | 'proximity'
+    | { type: 'custom'; name: string };
+
+/**
+ * Sensor data for VLA input
+ */
+export interface SensorData {
+    sensorType: SensorType;
+    timestamp: number;
+    values: SensorValues;
+    frameId?: string | null;
+}
+
+/**
+ * Sensor value types
+ */
+export type SensorValues =
+    | { type: 'joint_state'; positions: number[]; velocities?: number[] | null; efforts?: number[] | null }
+    | { type: 'imu'; orientation: number[]; angularVelocity: number[]; linearAcceleration: number[] }
+    | { type: 'force_torque'; force: number[]; torque: number[] }
+    | { type: 'depth'; data: number[]; width: number; height: number }
+    | { type: 'lidar'; ranges: number[]; angleMin: number; angleMax: number }
+    | { type: 'tactile'; forces: number[] }
+    | { type: 'temperature'; value: number }
+    | { type: 'proximity'; distance: number }
+    | { type: 'raw'; data: number[] };
+
+/**
+ * Robot joint state
+ */
+export interface JointState {
+    name: string;
+    position: number;
+    velocity?: number | null;
+    effort?: number | null;
+}
+
+/**
+ * Action types for VLA models
+ */
+export type ActionType =
+    | 'move'           // Move to position
+    | 'rotate'         // Rotate to orientation
+    | 'grasp'          // Grasp object
+    | 'release'        // Release object
+    | 'push'           // Push object
+    | 'pull'           // Pull object
+    | 'place'          // Place object at location
+    | 'pick'           // Pick up object
+    | 'move_arm'       // Move arm to pose
+    | 'move_joint'     // Move specific joint
+    | 'velocity'       // Velocity command
+    | 'torque'         // Torque/force command
+    | 'navigate'       // Navigate to goal
+    | 'look_at'        // Point camera at target
+    | 'speak'          // Speech output
+    | 'wait'           // Wait for condition
+    | 'stop'           // Emergency stop
+    | { type: 'custom'; name: string };
+
+/**
+ * Action command for VLA output
+ */
+export interface ActionCommand {
+    actionType: ActionType;
+    parameters: ActionParameters;
+    targetObject?: string | null;
+    confidence?: number | null;
+    duration?: number | null;
+    priority?: number;
+}
+
+/**
+ * Action parameters
+ */
+export type ActionParameters =
+    | { type: 'position'; position: number[]; velocity?: number | null }
+    | { type: 'pose'; position: number[]; orientation: number[] }
+    | { type: 'joint'; jointPositions: number[]; jointVelocities?: number[] | null }
+    | { type: 'velocity'; linear: number[]; angular: number[] }
+    | { type: 'force'; force: number[]; torque: number[] }
+    | { type: 'gripper'; width: number; force?: number | null }
+    | { type: 'navigation'; goal: number[]; constraints?: Record<string, unknown> | null }
+    | { type: 'speech'; text: string; language?: string | null }
+    | { type: 'wait'; duration?: number | null; condition?: string | null }
+    | { type: 'custom'; data: Record<string, unknown> };
+
+/**
+ * Action space types for VLA models
+ */
+export type ActionSpaceType =
+    | 'discrete'        // Finite set of actions
+    | 'continuous'      // Continuous action space
+    | 'hybrid';         // Mixed discrete/continuous
+
+/**
+ * Action space configuration
+ */
+export interface ActionSpace {
+    spaceType: ActionSpaceType;
+    dimensions?: number | null;
+    actionLabels?: string[] | null;
+    bounds?: ActionBounds | null;
+}
+
+/**
+ * Action bounds for continuous spaces
+ */
+export interface ActionBounds {
+    low: number[];
+    high: number[];
+}
+
+/**
+ * Manipulator types for robot capabilities
+ */
+export type ManipulatorType =
+    | 'parallel_gripper'
+    | 'suction'
+    | 'dexterous_hand'
+    | 'soft_gripper'
+    | 'magnetic'
+    | { type: 'custom'; name: string };
+
+/**
+ * Navigation capabilities
+ */
+export type NavigationCapability = 'wheeled' | 'legged' | 'flying' | 'swimming' | 'stationary';
+
+/**
+ * Robot capabilities for VLA models
+ */
+export interface RobotCapabilities {
+    manipulators: ManipulatorType[];
+    navigation?: NavigationCapability | null;
+    dof: number;
+    maxPayload?: number | null;
+    workspace?: WorkspaceBounds | null;
+    sensors: SensorType[];
+    actionSpace: ActionSpace;
+}
+
+/**
+ * Workspace bounds for robot
+ */
+export interface WorkspaceBounds {
+    minBounds: number[];
+    maxBounds: number[];
+}
+
+/**
+ * Content part for multimodal messages
+ */
+export type ContentPart =
+    | { type: 'text'; text: string }
+    | { type: 'image'; image: ImageContent }
+    | { type: 'video'; video: VideoContent }
+    | { type: 'audio'; audio: AudioContent }
+    | { type: 'sensor'; sensor: SensorData }
+    | { type: 'action'; action: ActionCommand };
+
+/**
+ * Multimodal message supporting mixed content
+ */
+export interface MultimodalMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: ContentPart[];
+    name?: string | null;
+    toolCalls?: ToolInvocation[] | null;
+    actions?: ActionCommand[] | null;
+    timestamp?: number | null;
+}
+
+/**
+ * Multimodal model definition
+ */
+export interface MultimodalModel {
+    id: string;
+    name: string;
+    provider: ModelProvider;
+    category: ModelCategory;
+    capabilities: ModalityCapabilities;
+    contextLength: number;
+    description?: string | null;
+    releaseDate?: string | null;
+    deprecated?: boolean;
+}
+
+// =============================================================================
 // Agent & Swarm Models
 // =============================================================================
 

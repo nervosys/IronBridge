@@ -229,6 +229,408 @@ export const PROVIDERS = {
 export type ProviderId = keyof typeof PROVIDERS;
 
 // =============================================================================
+// Vision-Language Models (VLM)
+// =============================================================================
+
+import type { ModelCategory, ModalityCapabilities, MultimodalModel } from './types';
+
+/**
+ * Vision-Language Models that support image understanding
+ */
+export const VLM_MODELS: MultimodalModel[] = [
+    {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        provider: 'openai',
+        category: 'vlm',
+        contextLength: 128000,
+        description: 'OpenAI\'s flagship multimodal model',
+        releaseDate: '2024-05',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image', 'audio'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: true,
+            maxImageSize: 20 * 1024 * 1024,
+            maxAudioLength: 600,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: ['mp3', 'wav', 'ogg'],
+        },
+    },
+    {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o Mini',
+        provider: 'openai',
+        category: 'vlm',
+        contextLength: 128000,
+        description: 'Smaller, faster version of GPT-4o',
+        releaseDate: '2024-07',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: false,
+            maxImageSize: 20 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'gemini-2.0-flash-exp',
+        name: 'Gemini 2.0 Flash',
+        provider: 'google',
+        category: 'valm',
+        contextLength: 1000000,
+        description: 'Google\'s multimodal model with vision, audio, and video',
+        releaseDate: '2024-12',
+        capabilities: {
+            category: 'valm',
+            inputModalities: ['text', 'image', 'video', 'audio'],
+            outputModalities: ['text', 'audio'],
+            supportsStreaming: true,
+            supportsRealtime: true,
+            maxImageSize: 20 * 1024 * 1024,
+            maxVideoLength: 3600,
+            maxAudioLength: 9.5 * 3600,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: ['mp4', 'mpeg', 'mov', 'avi', 'webm'],
+            supportedAudioFormats: ['mp3', 'wav', 'ogg', 'flac'],
+        },
+    },
+    {
+        id: 'gemini-1.5-pro',
+        name: 'Gemini 1.5 Pro',
+        provider: 'google',
+        category: 'vlm',
+        contextLength: 2000000,
+        description: 'Long-context multimodal model',
+        releaseDate: '2024-02',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image', 'video', 'audio'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: false,
+            maxImageSize: 20 * 1024 * 1024,
+            maxVideoLength: 3600,
+            maxAudioLength: 9.5 * 3600,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: ['mp4', 'mpeg', 'mov', 'avi', 'webm'],
+            supportedAudioFormats: ['mp3', 'wav', 'ogg', 'flac'],
+        },
+    },
+    {
+        id: 'claude-3-5-sonnet-latest',
+        name: 'Claude 3.5 Sonnet',
+        provider: 'anthropic',
+        category: 'vlm',
+        contextLength: 200000,
+        description: 'Anthropic\'s vision model with strong reasoning',
+        releaseDate: '2024-10',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: false,
+            maxImageSize: 20 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'llava-v1.6',
+        name: 'LLaVA 1.6',
+        provider: 'ollama',
+        category: 'vlm',
+        contextLength: 4096,
+        description: 'Open-source vision-language model',
+        releaseDate: '2024-01',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: false,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg', 'webp'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'qwen2-vl',
+        name: 'Qwen2-VL',
+        provider: 'ollama',
+        category: 'vlm',
+        contextLength: 32000,
+        description: 'Alibaba\'s vision-language model',
+        releaseDate: '2024-08',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image', 'video'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: false,
+            maxImageSize: 20 * 1024 * 1024,
+            maxVideoLength: 600,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: ['mp4', 'webm'],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'pixtral-12b',
+        name: 'Pixtral 12B',
+        provider: 'mistral',
+        category: 'vlm',
+        contextLength: 128000,
+        description: 'Mistral\'s vision-language model',
+        releaseDate: '2024-09',
+        capabilities: {
+            category: 'vlm',
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsStreaming: true,
+            supportsRealtime: false,
+            maxImageSize: 20 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg', 'webp', 'gif'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+];
+
+// =============================================================================
+// Vision-Language-Action Models (VLA) for Robotics
+// =============================================================================
+
+/**
+ * Vision-Language-Action Models for robotics and embodied AI
+ */
+export const VLA_MODELS: MultimodalModel[] = [
+    {
+        id: 'rt-2',
+        name: 'RT-2',
+        provider: 'google',
+        category: 'vla',
+        contextLength: 4096,
+        description: 'Google\'s Robotics Transformer 2 for vision-language-action',
+        releaseDate: '2023-07',
+        capabilities: {
+            category: 'vla',
+            inputModalities: ['text', 'image', 'sensor'],
+            outputModalities: ['text', 'action'],
+            supportsStreaming: false,
+            supportsRealtime: true,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'rt-x',
+        name: 'RT-X',
+        provider: 'google',
+        category: 'vla',
+        contextLength: 4096,
+        description: 'Cross-robot transfer model from Open X-Embodiment',
+        releaseDate: '2023-10',
+        capabilities: {
+            category: 'vla',
+            inputModalities: ['text', 'image', 'sensor'],
+            outputModalities: ['text', 'action'],
+            supportsStreaming: false,
+            supportsRealtime: true,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'octo',
+        name: 'Octo',
+        provider: 'custom',
+        category: 'vla',
+        contextLength: 4096,
+        description: 'Open-source generalist robot policy from Berkeley',
+        releaseDate: '2024-05',
+        capabilities: {
+            category: 'vla',
+            inputModalities: ['text', 'image', 'sensor'],
+            outputModalities: ['action'],
+            supportsStreaming: false,
+            supportsRealtime: true,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'openvla',
+        name: 'OpenVLA',
+        provider: 'custom',
+        category: 'vla',
+        contextLength: 4096,
+        description: 'Open-source VLA from Stanford/Berkeley',
+        releaseDate: '2024-06',
+        capabilities: {
+            category: 'vla',
+            inputModalities: ['text', 'image'],
+            outputModalities: ['action'],
+            supportsStreaming: false,
+            supportsRealtime: true,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'palm-e',
+        name: 'PaLM-E',
+        provider: 'google',
+        category: 'embodied',
+        contextLength: 8192,
+        description: 'Embodied multimodal language model',
+        releaseDate: '2023-03',
+        capabilities: {
+            category: 'embodied',
+            inputModalities: ['text', 'image', 'sensor', 'point_cloud'],
+            outputModalities: ['text', 'action'],
+            supportsStreaming: false,
+            supportsRealtime: false,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'gr-1',
+        name: 'GR-1',
+        provider: 'custom',
+        category: 'vla',
+        contextLength: 4096,
+        description: 'Fourier Intelligence humanoid robot model',
+        releaseDate: '2024-03',
+        capabilities: {
+            category: 'vla',
+            inputModalities: ['text', 'image', 'sensor'],
+            outputModalities: ['action'],
+            supportsStreaming: false,
+            supportsRealtime: true,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+    {
+        id: 'pi-zero',
+        name: 'π₀ (Pi-Zero)',
+        provider: 'custom',
+        category: 'vla',
+        contextLength: 8192,
+        description: 'Physical Intelligence foundation model for dexterous manipulation',
+        releaseDate: '2024-10',
+        capabilities: {
+            category: 'vla',
+            inputModalities: ['text', 'image', 'sensor'],
+            outputModalities: ['action'],
+            supportsStreaming: false,
+            supportsRealtime: true,
+            maxImageSize: 10 * 1024 * 1024,
+            supportedImageFormats: ['png', 'jpeg'],
+            supportedVideoFormats: [],
+            supportedAudioFormats: [],
+        },
+    },
+];
+
+/**
+ * All multimodal models (VLM + VLA)
+ */
+export const MULTIMODAL_MODELS: MultimodalModel[] = [...VLM_MODELS, ...VLA_MODELS];
+
+/**
+ * Model categories with descriptions
+ */
+export const MODEL_CATEGORIES: Record<ModelCategory, { name: string; description: string; icon: string }> = {
+    llm: {
+        name: 'Language Model',
+        description: 'Text-only models for chat and generation',
+        icon: '💬',
+    },
+    vlm: {
+        name: 'Vision-Language Model',
+        description: 'Models that understand images and text',
+        icon: '👁️',
+    },
+    vla: {
+        name: 'Vision-Language-Action',
+        description: 'Robotics models that output actions',
+        icon: '🤖',
+    },
+    alm: {
+        name: 'Audio-Language Model',
+        description: 'Models that understand speech and audio',
+        icon: '🎤',
+    },
+    valm: {
+        name: 'Vision-Audio-Language',
+        description: 'Full multimodal with vision, audio, and text',
+        icon: '🎬',
+    },
+    multimodal: {
+        name: 'Multimodal',
+        description: 'Generic multimodal model',
+        icon: '🔮',
+    },
+    embodied: {
+        name: 'Embodied AI',
+        description: 'Full embodied agent with world understanding',
+        icon: '🦾',
+    },
+};
+
+/**
+ * Helper function to get models by category
+ */
+export function getModelsByCategory(category: ModelCategory): MultimodalModel[] {
+    return MULTIMODAL_MODELS.filter(m => m.category === category);
+}
+
+/**
+ * Helper function to get VLM-capable models
+ */
+export function getVLMModels(): MultimodalModel[] {
+    return MULTIMODAL_MODELS.filter(m =>
+        m.capabilities.inputModalities.includes('image') &&
+        (m.category === 'vlm' || m.category === 'valm' || m.category === 'vla' || m.category === 'embodied')
+    );
+}
+
+/**
+ * Helper function to get VLA-capable models
+ */
+export function getVLAModels(): MultimodalModel[] {
+    return MULTIMODAL_MODELS.filter(m =>
+        m.capabilities.outputModalities.includes('action') ||
+        m.category === 'vla' ||
+        m.category === 'embodied'
+    );
+}
+
+// =============================================================================
 // Agent Roles
 // =============================================================================
 
