@@ -19,9 +19,9 @@ mod workspace;
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    AgencyCommands, ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands, FindCommands, GitCommands,
-    HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands, MergeCommands,
-    MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
+    AgencyCommands, ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands,
+    FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands,
+    MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
 };
 
 /// Get the current directory name as a default pattern
@@ -506,6 +506,7 @@ fn main() -> Result<()> {
                 checkpoint,
                 path,
             } => commands::harvest_restore_checkpoint(path.as_deref(), &session, checkpoint),
+            HarvestCommands::Rebuild { path } => commands::harvest_rebuild_fts(path.as_deref()),
             HarvestCommands::Search {
                 query,
                 path,
@@ -548,7 +549,11 @@ fn main() -> Result<()> {
         // API Server
         // ====================================================================
         Commands::Api { command } => match command {
-            ApiCommands::Serve { host, port, database } => {
+            ApiCommands::Serve {
+                host,
+                port,
+                database,
+            } => {
                 let config = api::ServerConfig {
                     host,
                     port,
@@ -559,7 +564,7 @@ fn main() -> Result<()> {
                     }),
                     ..Default::default()
                 };
-                
+
                 // Create tokio runtime and run the server
                 let rt = tokio::runtime::Runtime::new()?;
                 rt.block_on(api::start_server(config))
@@ -570,27 +575,24 @@ fn main() -> Result<()> {
         // Agency (Agent Development Kit)
         // ====================================================================
         Commands::Agency { command } => match command {
-            AgencyCommands::List { verbose } => {
-                commands::list_agents(verbose)
-            }
-            AgencyCommands::Info { name } => {
-                commands::show_agent_info(&name)
-            }
-            AgencyCommands::Modes => {
-                commands::list_modes()
-            }
-            AgencyCommands::Run { agent, prompt, model, orchestration, verbose } => {
-                commands::run_agent(&agent, &prompt, model.as_deref(), &orchestration, verbose)
-            }
-            AgencyCommands::Create { name, role, instruction, model } => {
-                commands::create_agent(&name, &role, instruction.as_deref(), model.as_deref())
-            }
-            AgencyCommands::Tools => {
-                commands::list_tools()
-            }
-            AgencyCommands::Templates => {
-                commands::list_templates()
-            }
+            AgencyCommands::List { verbose } => commands::list_agents(verbose),
+            AgencyCommands::Info { name } => commands::show_agent_info(&name),
+            AgencyCommands::Modes => commands::list_modes(),
+            AgencyCommands::Run {
+                agent,
+                prompt,
+                model,
+                orchestration,
+                verbose,
+            } => commands::run_agent(&agent, &prompt, model.as_deref(), &orchestration, verbose),
+            AgencyCommands::Create {
+                name,
+                role,
+                instruction,
+                model,
+            } => commands::create_agent(&name, &role, instruction.as_deref(), model.as_deref()),
+            AgencyCommands::Tools => commands::list_tools(),
+            AgencyCommands::Templates => commands::list_templates(),
         },
 
         // ====================================================================
@@ -605,7 +607,7 @@ fn main() -> Result<()> {
 
 fn print_banner() {
     use colored::Colorize;
-    
+
     let banner = r#"
      ██████╗██╗  ██╗ █████╗ ███████╗███╗   ███╗
     ██╔════╝██║  ██║██╔══██╗██╔════╝████╗ ████║
@@ -614,17 +616,17 @@ fn print_banner() {
     ╚██████╗██║  ██║██║  ██║███████║██║ ╚═╝ ██║
      ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
     "#;
-    
+
     let subtitle = "CHAt System Manager (Chasm) for Bridging LLM Providers";
-    let tagline  = "     Your AI providers and chat sessions, unified";
-    let version  = format!("                       v{}", env!("CARGO_PKG_VERSION"));
-    
+    let tagline = "     Your AI providers and chat sessions, unified";
+    let version = format!("                       v{}", env!("CARGO_PKG_VERSION"));
+
     println!("{}", banner.cyan().bold());
     println!("{}", subtitle.white().bold());
     println!("{}", tagline.bright_black());
     println!("{}", version.bright_black());
     println!();
-    
+
     // Random fun messages
     let messages = [
         "🧠 Managing your AI memories since 2024",
@@ -637,12 +639,12 @@ fn print_banner() {
         "🔧 Built with Rust, powered by caffeine",
         "🕳️ Bridging the chasm between your chat sessions",
     ];
-    
+
     let idx = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as usize % messages.len())
         .unwrap_or(0);
-    
+
     println!("    {}", messages[idx].bright_yellow());
     println!();
 }

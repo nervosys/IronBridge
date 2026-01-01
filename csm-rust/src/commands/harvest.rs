@@ -35,7 +35,7 @@ fn is_empty_code_block(s: &str) -> bool {
     let lines: Vec<&str> = s.lines().collect();
     if lines.len() >= 2 && lines[0].starts_with("```") && lines.last() == Some(&"```") {
         // Check if all lines between opening and closing are empty or whitespace
-        let content_lines = &lines[1..lines.len()-1];
+        let content_lines = &lines[1..lines.len() - 1];
         if content_lines.iter().all(|line| line.trim().is_empty()) {
             return true;
         }
@@ -1560,15 +1560,27 @@ fn create_harvest_database(path: &Path) -> Result<()> {
         );
 
         INSERT OR REPLACE INTO harvest_metadata (key, value) 
-        VALUES ('version', '2.0'),
+        VALUES ('version', '2.1'),
                ('created_at', datetime('now'));
                
-        -- Full-text search for messages (optional, created if supported)
+        -- Full-text search for messages (standalone FTS table)
         CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-            content,
-            content='messages',
-            content_rowid='id'
+            content_raw
         );
+        
+        -- Triggers to keep FTS index in sync with messages_v2
+        CREATE TRIGGER IF NOT EXISTS messages_v2_ai AFTER INSERT ON messages_v2 BEGIN
+            INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
+        END;
+        
+        CREATE TRIGGER IF NOT EXISTS messages_v2_ad AFTER DELETE ON messages_v2 BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+        END;
+        
+        CREATE TRIGGER IF NOT EXISTS messages_v2_au AFTER UPDATE ON messages_v2 BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+            INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
+        END;
         "#,
     )?;
 
@@ -1637,16 +1649,22 @@ fn populate_enhanced_messages(
 ) -> Result<()> {
     // Delete existing messages for this session to avoid duplicates
     conn.execute("DELETE FROM messages_v2 WHERE session_id = ?", [session_id])?;
-    conn.execute("DELETE FROM tool_invocations WHERE session_id = ?", [session_id])?;
-    conn.execute("DELETE FROM file_changes WHERE session_id = ?", [session_id])?;
-    
+    conn.execute(
+        "DELETE FROM tool_invocations WHERE session_id = ?",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM file_changes WHERE session_id = ?",
+        [session_id],
+    )?;
+
     for (idx, request) in session.requests.iter().enumerate() {
         let timestamp = request.timestamp;
         let request_id = request.request_id.as_deref();
         let response_id = request.response_id.as_deref();
         let model_id = request.model_id.as_deref();
         let is_canceled = request.is_canceled.unwrap_or(false);
-        
+
         // Insert user message
         if let Some(ref message) = request.message {
             let content = message.text.clone().unwrap_or_default();
@@ -1654,7 +1672,7 @@ fn populate_enhanced_messages(
                 let metadata = serde_json::json!({
                     "variable_data": request.variable_data,
                 });
-                
+
                 conn.execute(
                     r#"
                     INSERT OR REPLACE INTO messages_v2 
@@ -1668,7 +1686,7 @@ fn populate_enhanced_messages(
                         request_id,
                         response_id,
                         &content,
-                        &content,  // content_markdown same as raw for user messages
+                        &content, // content_markdown same as raw for user messages
                         model_id,
                         timestamp,
                         serde_json::to_string(&metadata).ok(),
@@ -1676,18 +1694,18 @@ fn populate_enhanced_messages(
                 )?;
             }
         }
-        
+
         // Insert assistant response with tool invocations
         if let Some(ref response) = request.response {
             let (content, tool_invocations) = extract_response_content_and_tools(response);
-            
+
             if !content.is_empty() || !tool_invocations.is_empty() {
                 let metadata = serde_json::json!({
                     "content_references": request.content_references,
                     "code_citations": request.code_citations,
                     "response_markdown_info": request.response_markdown_info,
                 });
-                
+
                 conn.execute(
                     r#"
                     INSERT OR REPLACE INTO messages_v2 
@@ -1708,30 +1726,34 @@ fn populate_enhanced_messages(
                         serde_json::to_string(&metadata).ok(),
                     ],
                 )?;
-                
+
                 // Get the message_id we just inserted
                 let message_id: i64 = conn.last_insert_rowid();
-                
+
                 // Insert tool invocations and file changes
                 for (inv_idx, invocation) in tool_invocations.iter().enumerate() {
-                    insert_tool_invocation(conn, message_id, session_id, inv_idx, invocation, timestamp)?;
+                    insert_tool_invocation(
+                        conn, message_id, session_id, inv_idx, invocation, timestamp,
+                    )?;
                 }
             }
         }
     }
-    
+
     Ok(())
 }
 
 /// Extract response content and tool invocations from the response JSON
-fn extract_response_content_and_tools(response: &serde_json::Value) -> (String, Vec<serde_json::Value>) {
+fn extract_response_content_and_tools(
+    response: &serde_json::Value,
+) -> (String, Vec<serde_json::Value>) {
     let mut text_parts = Vec::new();
     let mut tool_invocations = Vec::new();
-    
+
     if let Some(items) = response.as_array() {
         for item in items {
             let kind = item.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-            
+
             match kind {
                 "toolInvocationSerialized" => {
                     tool_invocations.push(item.clone());
@@ -1752,7 +1774,7 @@ fn extract_response_content_and_tools(response: &serde_json::Value) -> (String, 
             }
         }
     }
-    
+
     (text_parts.join("\n\n"), tool_invocations)
 }
 
@@ -1765,21 +1787,29 @@ fn insert_tool_invocation(
     invocation: &serde_json::Value,
     timestamp: Option<i64>,
 ) -> Result<()> {
-    let tool_name = invocation.get("toolId")
+    let tool_name = invocation
+        .get("toolId")
         .and_then(|t| t.as_str())
         .unwrap_or("unknown");
     let tool_call_id = invocation.get("toolCallId").and_then(|t| t.as_str());
-    let is_complete = invocation.get("isComplete").and_then(|c| c.as_bool()).unwrap_or(false);
+    let is_complete = invocation
+        .get("isComplete")
+        .and_then(|c| c.as_bool())
+        .unwrap_or(false);
     let is_confirmed = invocation.get("isConfirmed");
     let tool_data = invocation.get("toolSpecificData");
-    
+
     let input_json = tool_data.map(|d| serde_json::to_string(d).unwrap_or_default());
     let status = if is_complete { "complete" } else { "pending" };
     let confirmed = match is_confirmed {
-        Some(v) => v.get("type").and_then(|t| t.as_i64()).map(|t| t > 0).unwrap_or(false),
+        Some(v) => v
+            .get("type")
+            .and_then(|t| t.as_i64())
+            .map(|t| t > 0)
+            .unwrap_or(false),
         None => false,
     };
-    
+
     conn.execute(
         r#"
         INSERT INTO tool_invocations 
@@ -1799,14 +1829,14 @@ fn insert_tool_invocation(
             timestamp,
         ],
     )?;
-    
+
     let tool_invocation_id = conn.last_insert_rowid();
-    
+
     // Extract and insert file changes based on tool type
     if let Some(data) = tool_data {
         insert_file_changes(conn, tool_invocation_id, session_id, data, timestamp)?;
     }
-    
+
     Ok(())
 }
 
@@ -1819,16 +1849,17 @@ fn insert_file_changes(
     timestamp: Option<i64>,
 ) -> Result<()> {
     let kind = tool_data.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-    
+
     match kind {
         "terminal" => {
             // Terminal command execution
             if let Some(cmd_line) = tool_data.get("commandLine") {
                 let original = cmd_line.get("original").and_then(|o| o.as_str());
                 let edited = cmd_line.get("toolEdited").and_then(|e| e.as_str());
-                let output = tool_data.get("terminalCommandOutput")
+                let output = tool_data
+                    .get("terminalCommandOutput")
                     .map(|o| serde_json::to_string(o).unwrap_or_default());
-                
+
                 conn.execute(
                     r#"
                     INSERT INTO file_changes 
@@ -1849,20 +1880,21 @@ fn insert_file_changes(
         }
         "replaceFile" | "editFile" => {
             // File edit with old/new strings
-            let file_path = tool_data.get("uri")
+            let file_path = tool_data
+                .get("uri")
                 .or_else(|| tool_data.get("filePath"))
                 .and_then(|p| p.as_str())
                 .unwrap_or("[unknown]");
             let old_string = tool_data.get("oldString").and_then(|s| s.as_str());
             let new_string = tool_data.get("newString").and_then(|s| s.as_str());
-            
+
             // Generate unified diff if we have both old and new content
             let diff = if let (Some(old), Some(new)) = (old_string, new_string) {
                 Some(generate_unified_diff(old, new, file_path))
             } else {
                 None
             };
-            
+
             conn.execute(
                 r#"
                 INSERT INTO file_changes 
@@ -1882,12 +1914,13 @@ fn insert_file_changes(
             )?;
         }
         "createFile" => {
-            let file_path = tool_data.get("uri")
+            let file_path = tool_data
+                .get("uri")
                 .or_else(|| tool_data.get("filePath"))
                 .and_then(|p| p.as_str())
                 .unwrap_or("[unknown]");
             let content = tool_data.get("content").and_then(|c| c.as_str());
-            
+
             conn.execute(
                 r#"
                 INSERT INTO file_changes 
@@ -1905,23 +1938,19 @@ fn insert_file_changes(
             )?;
         }
         "readFile" => {
-            let file_path = tool_data.get("uri")
+            let file_path = tool_data
+                .get("uri")
                 .or_else(|| tool_data.get("filePath"))
                 .and_then(|p| p.as_str())
                 .unwrap_or("[unknown]");
-            
+
             conn.execute(
                 r#"
                 INSERT INTO file_changes 
                 (tool_invocation_id, session_id, file_path, change_type, timestamp)
                 VALUES (?, ?, ?, 'read', ?)
                 "#,
-                params![
-                    tool_invocation_id,
-                    session_id,
-                    file_path,
-                    timestamp,
-                ],
+                params![tool_invocation_id, session_id, file_path, timestamp,],
             )?;
         }
         _ => {
@@ -1947,7 +1976,7 @@ fn insert_file_changes(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -1955,19 +1984,19 @@ fn insert_file_changes(
 fn generate_unified_diff(old: &str, new: &str, file_path: &str) -> String {
     let old_lines: Vec<&str> = old.lines().collect();
     let new_lines: Vec<&str> = new.lines().collect();
-    
+
     let mut diff = format!("--- a/{}\n+++ b/{}\n", file_path, file_path);
-    
+
     // Simple line-by-line diff (not a full Myers diff, but good enough for storage)
     let max_lines = old_lines.len().max(new_lines.len());
     let mut in_hunk = false;
     let mut hunk_start = 0;
     let mut hunk_lines = Vec::new();
-    
+
     for i in 0..max_lines {
         let old_line = old_lines.get(i).copied();
         let new_line = new_lines.get(i).copied();
-        
+
         match (old_line, new_line) {
             (Some(o), Some(n)) if o == n => {
                 if in_hunk {
@@ -1999,18 +2028,21 @@ fn generate_unified_diff(old: &str, new: &str, file_path: &str) -> String {
             (None, None) => break,
         }
     }
-    
+
     if !hunk_lines.is_empty() {
         diff.push_str(&format!(
             "@@ -{},{} +{},{} @@\n",
-            hunk_start, old_lines.len(), hunk_start, new_lines.len()
+            hunk_start,
+            old_lines.len(),
+            hunk_start,
+            new_lines.len()
         ));
         for line in hunk_lines {
             diff.push_str(&line);
             diff.push('\n');
         }
     }
-    
+
     diff
 }
 
@@ -2696,6 +2728,77 @@ pub fn harvest_restore_checkpoint(
 // Search Commands
 // ============================================================================
 
+/// Rebuild the FTS index from messages_v2 table
+pub fn harvest_rebuild_fts(db_path: Option<&str>) -> Result<()> {
+    let db_path = get_db_path(db_path)?;
+
+    if !db_path.exists() {
+        anyhow::bail!("Harvest database not found. Run 'csm harvest init' first.");
+    }
+
+    let conn = Connection::open(&db_path)?;
+
+    println!("{}", "=".repeat(70).cyan());
+    println!("{} Rebuilding Full-Text Search Index", "[*]".bold());
+    println!("{}", "=".repeat(70).cyan());
+    println!();
+
+    // Drop existing FTS table and triggers
+    println!("{} Dropping old FTS index...", "[*]".blue());
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER IF EXISTS messages_v2_ai;
+        DROP TRIGGER IF EXISTS messages_v2_ad;
+        DROP TRIGGER IF EXISTS messages_v2_au;
+        DROP TABLE IF EXISTS messages_fts;
+        "#,
+    )?;
+
+    // Create new FTS table with triggers
+    println!("{} Creating new FTS index...", "[*]".blue());
+    conn.execute_batch(
+        r#"
+        CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+            content_raw
+        );
+        
+        CREATE TRIGGER IF NOT EXISTS messages_v2_ai AFTER INSERT ON messages_v2 BEGIN
+            INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
+        END;
+        
+        CREATE TRIGGER IF NOT EXISTS messages_v2_ad AFTER DELETE ON messages_v2 BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+        END;
+        
+        CREATE TRIGGER IF NOT EXISTS messages_v2_au AFTER UPDATE ON messages_v2 BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+            INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
+        END;
+        "#,
+    )?;
+
+    // Count total messages
+    let total_messages: i64 =
+        conn.query_row("SELECT COUNT(*) FROM messages_v2", [], |row| row.get(0))?;
+
+    // Populate FTS from existing messages
+    println!("{} Indexing {} messages...", "[*]".blue(), total_messages);
+
+    conn.execute(
+        "INSERT INTO messages_fts(rowid, content_raw) SELECT id, content_raw FROM messages_v2",
+        [],
+    )?;
+
+    // Verify the index
+    let indexed: i64 = conn.query_row("SELECT COUNT(*) FROM messages_fts", [], |row| row.get(0))?;
+
+    println!();
+    println!("{} FTS index rebuilt successfully!", "[✓]".green().bold());
+    println!("   {} messages indexed", indexed);
+
+    Ok(())
+}
+
 /// Full-text search across all sessions
 pub fn harvest_search(
     db_path: Option<&str>,
@@ -2717,8 +2820,8 @@ pub fn harvest_search(
     println!("{}", "=".repeat(70).cyan());
     println!();
 
-    // Try FTS search first, fall back to LIKE if FTS table doesn't exist
-    let results: Vec<(i64, String, String, String, String)> = {
+    // Results: (session_id, provider, title, content)
+    let results: Vec<(String, String, String, String)> = {
         // Check if FTS table exists
         let fts_exists: bool = conn
             .query_row(
@@ -2729,12 +2832,12 @@ pub fn harvest_search(
             .unwrap_or(false);
 
         if fts_exists {
-            // Use FTS search
+            // Use FTS search - query the FTS table and join with messages/sessions
             let sql = format!(
-                "SELECT m.session_id, s.id, s.provider, s.title, m.content
-                 FROM messages m
+                "SELECT s.id, s.provider, s.title, m.content_raw
+                 FROM messages_fts fts
+                 JOIN messages_v2 m ON m.id = fts.rowid
                  JOIN sessions s ON m.session_id = s.id
-                 JOIN messages_fts fts ON m.id = fts.rowid
                  WHERE messages_fts MATCH ?
                  {}
                  LIMIT {}",
@@ -2751,22 +2854,20 @@ pub fn harvest_search(
             if let Some(provider) = provider_filter {
                 stmt.query_map(params![query, provider], |row| {
                     Ok((
-                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                        row.get::<_, String>(3)?,
                     ))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
             } else {
                 stmt.query_map([query], |row| {
                     Ok((
-                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                        row.get::<_, String>(3)?,
                     ))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
@@ -2775,10 +2876,10 @@ pub fn harvest_search(
             // Fall back to LIKE search
             let search_pattern = format!("%{}%", query);
             let sql = format!(
-                "SELECT m.session_id, s.id, s.provider, s.title, m.content
-                 FROM messages m
+                "SELECT s.id, s.provider, s.title, m.content_raw
+                 FROM messages_v2 m
                  JOIN sessions s ON m.session_id = s.id
-                 WHERE m.content LIKE ?
+                 WHERE m.content_raw LIKE ?
                  {}
                  LIMIT {}",
                 if provider_filter.is_some() {
@@ -2794,22 +2895,20 @@ pub fn harvest_search(
             if let Some(provider) = provider_filter {
                 stmt.query_map(params![search_pattern, provider], |row| {
                     Ok((
-                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                        row.get::<_, String>(3)?,
                     ))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
             } else {
                 stmt.query_map([search_pattern], |row| {
                     Ok((
-                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                        row.get::<_, String>(3)?,
                     ))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
@@ -2825,12 +2924,12 @@ pub fn harvest_search(
     println!("{} Found {} result(s):", "[i]".blue(), results.len());
     println!();
 
-    for (_internal_id, session_id, provider, name, content) in results {
+    for (session_id, provider, title, content) in results {
         // Highlight the search term in content
-        let display_name = if name.is_empty() {
+        let display_name = if title.is_empty() {
             session_id.clone()
         } else {
-            format!("{} ({})", name, &session_id[..8.min(session_id.len())])
+            format!("{} ({})", title, &session_id[..8.min(session_id.len())])
         };
 
         println!(

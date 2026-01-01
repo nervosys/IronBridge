@@ -1117,6 +1117,13 @@ pub enum HarvestCommands {
         path: Option<String>,
     },
 
+    /// Rebuild the full-text search index
+    Rebuild {
+        /// Path to the harvest database
+        #[arg(long)]
+        path: Option<String>,
+    },
+
     /// Search messages across all sessions (full-text search)
     Search {
         /// Search query
