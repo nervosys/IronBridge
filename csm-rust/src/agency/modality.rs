@@ -1145,8 +1145,7 @@ mod tests {
 
     #[test]
     fn test_multimodal_message() {
-        let mut msg =
-            MultimodalMessage::text(MessageRole::User, "What's in this image?");
+        let mut msg = MultimodalMessage::text(MessageRole::User, "What's in this image?");
         msg.add_image(ImageContent {
             data: ImageData::Url {
                 url: "https://example.com/image.jpg".to_string(),

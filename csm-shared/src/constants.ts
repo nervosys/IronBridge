@@ -232,7 +232,7 @@ export type ProviderId = keyof typeof PROVIDERS;
 // Vision-Language Models (VLM)
 // =============================================================================
 
-import type { ModelCategory, ModalityCapabilities, MultimodalModel } from './types';
+import type { ModelCategory, MultimodalModel } from './types';
 
 /**
  * Vision-Language Models that support image understanding
