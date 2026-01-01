@@ -129,35 +129,35 @@ export class CsmExecutor {
     }
 
     async listWorkspaces(): Promise<CsmResult> {
-        return this.execute(['ls']);
+        return this.execute(['list', 'workspaces']);
     }
 
     async listSessions(projectPath: string): Promise<CsmResult> {
-        return this.execute(['list-sessions', '--project-path', `"${projectPath}"`]);
+        return this.execute(['list', 'path', `"${projectPath}"`]);
     }
 
     async findWorkspace(pattern: string): Promise<CsmResult> {
-        return this.execute(['find', `"${pattern}"`]);
+        return this.execute(['find', 'workspace', `"${pattern}"`]);
     }
 
     async showHistory(projectPath: string): Promise<CsmResult> {
-        return this.execute(['history', 'show', `"${projectPath}"`]);
+        return this.execute(['show', 'path', `"${projectPath}"`]);
     }
 
     async fetchHistory(projectPath: string): Promise<CsmResult> {
-        return this.execute(['history', 'fetch', `"${projectPath}"`]);
+        return this.execute(['fetch', 'path', `"${projectPath}"`]);
     }
 
     async mergeHistory(projectPath: string): Promise<CsmResult> {
-        return this.execute(['history', 'merge', `"${projectPath}"`]);
+        return this.execute(['merge', 'path', `"${projectPath}"`]);
     }
 
     async exportSessions(dest: string, projectPath: string): Promise<CsmResult> {
-        return this.execute(['export', `"${dest}"`, '--path', `"${projectPath}"`]);
+        return this.execute(['export', 'path', `"${dest}"`, `"${projectPath}"`]);
     }
 
     async importSessions(src: string, targetPath: string): Promise<CsmResult> {
-        return this.execute(['import', `"${src}"`, '--path', `"${targetPath}"`]);
+        return this.execute(['import', 'path', `"${src}"`, `"${targetPath}"`]);
     }
 
     async moveSessions(sourceHash: string, targetPath: string): Promise<CsmResult> {
@@ -170,23 +170,23 @@ export class CsmExecutor {
 
     // Git operations
     async gitInit(projectPath: string): Promise<CsmResult> {
-        return this.execute(['git-init', `"${projectPath}"`]);
+        return this.execute(['git', 'init', `"${projectPath}"`]);
     }
 
     async gitAdd(projectPath: string, commitMessage?: string): Promise<CsmResult> {
-        const args = ['git-add', `"${projectPath}"`];
+        const args = ['git', 'add', `"${projectPath}"`];
         if (commitMessage) {
-            args.push('--commit', '-m', `"${commitMessage}"`);
+            args.push('--message', `"${commitMessage}"`);
         }
         return this.execute(args);
     }
 
     async gitStatus(projectPath: string): Promise<CsmResult> {
-        return this.execute(['git-status', `"${projectPath}"`]);
+        return this.execute(['git', 'status', `"${projectPath}"`]);
     }
 
     async gitSnapshot(projectPath: string, tag?: string): Promise<CsmResult> {
-        const args = ['git-snapshot', `"${projectPath}"`];
+        const args = ['git', 'snapshot', `"${projectPath}"`];
         if (tag) {
             args.push('--tag', `"${tag}"`);
         }
@@ -195,7 +195,7 @@ export class CsmExecutor {
 
     // Migration operations
     async createMigration(destPath: string, includeAll: boolean = true): Promise<CsmResult> {
-        const args = ['create-migration', `"${destPath}"`];
+        const args = ['migration', 'create', `"${destPath}"`];
         if (includeAll) {
             args.push('--all');
         }
@@ -203,7 +203,7 @@ export class CsmExecutor {
     }
 
     async restoreMigration(srcPath: string, dryRun: boolean = false): Promise<CsmResult> {
-        const args = ['restore-migration', `"${srcPath}"`];
+        const args = ['migration', 'restore', `"${srcPath}"`];
         if (dryRun) {
             args.push('--dry-run');
         }
