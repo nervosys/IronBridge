@@ -1,4 +1,5 @@
-export { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats } from './types/index.js';
+import { MultimodalModel, ModelCategory } from './types/index.js';
+export { ActionBounds, ActionCommand, ActionParameters, ActionSpace, ActionSpaceType, ActionType, AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ArtifactType, AudioContent, AudioData, AudioFormat, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContentPart, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, GpuInfo, HardwareInfo, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImageContent, ImageData, ImageFormat, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, JointState, ManipulatorType, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, Modality, ModalityCapabilities, ModelConfig, ModelProvider, MonitorStats, MultimodalMessage, NavigationCapability, NodeStatus, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, RemoteEvent, RemoteEventType, RemoteLogLevel, RemoteMonitorConfig, RemoteNode, RemoteTask, RemoteTaskResult, RemoteTaskStatus, ResourceUsage, RobotCapabilities, SearchResult, SensorData, SensorType, SensorValues, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskArtifact, TaskLogEntry, TaskMetrics, TaskPriority, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, VideoContent, VideoSource, WorkflowEdge, WorkflowNode, Workspace, WorkspaceBounds, WorkspaceFilter, WorkspaceStats } from './types/index.js';
 export { ApiClientConfig, api, createApiClient } from './api/index.js';
 export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy } from './utils/index.js';
 
@@ -210,6 +211,39 @@ declare const PROVIDERS: {
     };
 };
 type ProviderId = keyof typeof PROVIDERS;
+
+/**
+ * Vision-Language Models that support image understanding
+ */
+declare const VLM_MODELS: MultimodalModel[];
+/**
+ * Vision-Language-Action Models for robotics and embodied AI
+ */
+declare const VLA_MODELS: MultimodalModel[];
+/**
+ * All multimodal models (VLM + VLA)
+ */
+declare const MULTIMODAL_MODELS: MultimodalModel[];
+/**
+ * Model categories with descriptions
+ */
+declare const MODEL_CATEGORIES: Record<ModelCategory, {
+    name: string;
+    description: string;
+    icon: string;
+}>;
+/**
+ * Helper function to get models by category
+ */
+declare function getModelsByCategory(category: ModelCategory): MultimodalModel[];
+/**
+ * Helper function to get VLM-capable models
+ */
+declare function getVLMModels(): MultimodalModel[];
+/**
+ * Helper function to get VLA-capable models
+ */
+declare function getVLAModels(): MultimodalModel[];
 declare const AGENT_ROLES: {
     readonly coordinator: {
         readonly id: "coordinator";
@@ -827,6 +861,308 @@ declare const MEMORY_CONFIG: {
         };
     };
 };
+declare const REMOTE_MONITOR_CONFIG: {
+    /** Node status types */
+    readonly nodeStatuses: {
+        readonly online: {
+            readonly id: "online";
+            readonly name: "Online";
+            readonly color: "#22c55e";
+            readonly description: "Node is healthy and responding";
+        };
+        readonly degraded: {
+            readonly id: "degraded";
+            readonly name: "Degraded";
+            readonly color: "#f59e0b";
+            readonly description: "Node is online but experiencing issues";
+        };
+        readonly offline: {
+            readonly id: "offline";
+            readonly name: "Offline";
+            readonly color: "#ef4444";
+            readonly description: "Node is unreachable";
+        };
+        readonly maintenance: {
+            readonly id: "maintenance";
+            readonly name: "Maintenance";
+            readonly color: "#3b82f6";
+            readonly description: "Node is in maintenance mode";
+        };
+        readonly unknown: {
+            readonly id: "unknown";
+            readonly name: "Unknown";
+            readonly color: "#6b7280";
+            readonly description: "Node status is unknown";
+        };
+    };
+    /** Task status types */
+    readonly taskStatuses: {
+        readonly queued: {
+            readonly id: "queued";
+            readonly name: "Queued";
+            readonly color: "#6b7280";
+            readonly description: "Task is waiting to start";
+        };
+        readonly starting: {
+            readonly id: "starting";
+            readonly name: "Starting";
+            readonly color: "#8b5cf6";
+            readonly description: "Task is initializing";
+        };
+        readonly running: {
+            readonly id: "running";
+            readonly name: "Running";
+            readonly color: "#3b82f6";
+            readonly description: "Task is actively executing";
+        };
+        readonly paused: {
+            readonly id: "paused";
+            readonly name: "Paused";
+            readonly color: "#f59e0b";
+            readonly description: "Task is paused";
+        };
+        readonly completed: {
+            readonly id: "completed";
+            readonly name: "Completed";
+            readonly color: "#22c55e";
+            readonly description: "Task finished successfully";
+        };
+        readonly failed: {
+            readonly id: "failed";
+            readonly name: "Failed";
+            readonly color: "#ef4444";
+            readonly description: "Task failed with error";
+        };
+        readonly cancelled: {
+            readonly id: "cancelled";
+            readonly name: "Cancelled";
+            readonly color: "#6b7280";
+            readonly description: "Task was cancelled";
+        };
+        readonly timed_out: {
+            readonly id: "timed_out";
+            readonly name: "Timed Out";
+            readonly color: "#ef4444";
+            readonly description: "Task exceeded time limit";
+        };
+    };
+    /** Task priority levels */
+    readonly taskPriorities: {
+        readonly low: {
+            readonly id: "low";
+            readonly name: "Low";
+            readonly value: 0;
+            readonly color: "#6b7280";
+        };
+        readonly normal: {
+            readonly id: "normal";
+            readonly name: "Normal";
+            readonly value: 1;
+            readonly color: "#3b82f6";
+        };
+        readonly high: {
+            readonly id: "high";
+            readonly name: "High";
+            readonly value: 2;
+            readonly color: "#f59e0b";
+        };
+        readonly critical: {
+            readonly id: "critical";
+            readonly name: "Critical";
+            readonly value: 3;
+            readonly color: "#ef4444";
+        };
+    };
+    /** Log levels */
+    readonly logLevels: {
+        readonly trace: {
+            readonly id: "trace";
+            readonly name: "Trace";
+            readonly color: "#6b7280";
+        };
+        readonly debug: {
+            readonly id: "debug";
+            readonly name: "Debug";
+            readonly color: "#8b5cf6";
+        };
+        readonly info: {
+            readonly id: "info";
+            readonly name: "Info";
+            readonly color: "#3b82f6";
+        };
+        readonly warn: {
+            readonly id: "warn";
+            readonly name: "Warning";
+            readonly color: "#f59e0b";
+        };
+        readonly error: {
+            readonly id: "error";
+            readonly name: "Error";
+            readonly color: "#ef4444";
+        };
+    };
+    /** Remote event types */
+    readonly eventTypes: {
+        readonly node_online: {
+            readonly id: "node_online";
+            readonly name: "Node Online";
+            readonly icon: "server";
+        };
+        readonly node_offline: {
+            readonly id: "node_offline";
+            readonly name: "Node Offline";
+            readonly icon: "server-off";
+        };
+        readonly node_status_changed: {
+            readonly id: "node_status_changed";
+            readonly name: "Node Status Changed";
+            readonly icon: "activity";
+        };
+        readonly node_heartbeat: {
+            readonly id: "node_heartbeat";
+            readonly name: "Node Heartbeat";
+            readonly icon: "heart-pulse";
+        };
+        readonly task_created: {
+            readonly id: "task_created";
+            readonly name: "Task Created";
+            readonly icon: "plus-circle";
+        };
+        readonly task_started: {
+            readonly id: "task_started";
+            readonly name: "Task Started";
+            readonly icon: "play";
+        };
+        readonly task_progress: {
+            readonly id: "task_progress";
+            readonly name: "Task Progress";
+            readonly icon: "loader";
+        };
+        readonly task_step_completed: {
+            readonly id: "task_step_completed";
+            readonly name: "Step Completed";
+            readonly icon: "check-circle";
+        };
+        readonly task_completed: {
+            readonly id: "task_completed";
+            readonly name: "Task Completed";
+            readonly icon: "check-circle-2";
+        };
+        readonly task_failed: {
+            readonly id: "task_failed";
+            readonly name: "Task Failed";
+            readonly icon: "x-circle";
+        };
+        readonly task_cancelled: {
+            readonly id: "task_cancelled";
+            readonly name: "Task Cancelled";
+            readonly icon: "slash";
+        };
+        readonly task_log: {
+            readonly id: "task_log";
+            readonly name: "Task Log";
+            readonly icon: "file-text";
+        };
+        readonly agent_registered: {
+            readonly id: "agent_registered";
+            readonly name: "Agent Registered";
+            readonly icon: "user-plus";
+        };
+        readonly agent_unregistered: {
+            readonly id: "agent_unregistered";
+            readonly name: "Agent Unregistered";
+            readonly icon: "user-minus";
+        };
+    };
+    /** Default configuration */
+    readonly defaults: {
+        readonly bindAddress: "0.0.0.0";
+        readonly port: 9876;
+        readonly tlsEnabled: false;
+        readonly heartbeatIntervalSecs: 30;
+        readonly nodeTimeoutSecs: 90;
+        readonly maxLogEntries: 1000;
+        readonly metricsEnabled: true;
+    };
+    /** Artifact types */
+    readonly artifactTypes: {
+        readonly file: {
+            readonly id: "file";
+            readonly name: "File";
+            readonly icon: "file";
+        };
+        readonly directory: {
+            readonly id: "directory";
+            readonly name: "Directory";
+            readonly icon: "folder";
+        };
+        readonly url: {
+            readonly id: "url";
+            readonly name: "URL";
+            readonly icon: "link";
+        };
+        readonly database: {
+            readonly id: "database";
+            readonly name: "Database";
+            readonly icon: "database";
+        };
+        readonly model: {
+            readonly id: "model";
+            readonly name: "Model";
+            readonly icon: "brain";
+        };
+        readonly report: {
+            readonly id: "report";
+            readonly name: "Report";
+            readonly icon: "file-chart";
+        };
+        readonly log: {
+            readonly id: "log";
+            readonly name: "Log";
+            readonly icon: "scroll";
+        };
+    };
+    /** Monitoring presets */
+    readonly presets: {
+        readonly development: {
+            readonly id: "development";
+            readonly name: "Development";
+            readonly description: "Local development with verbose logging";
+            readonly config: {
+                readonly port: 9876;
+                readonly heartbeatIntervalSecs: 10;
+                readonly nodeTimeoutSecs: 30;
+                readonly maxLogEntries: 5000;
+                readonly metricsEnabled: true;
+            };
+        };
+        readonly production: {
+            readonly id: "production";
+            readonly name: "Production";
+            readonly description: "Production deployment with TLS and authentication";
+            readonly config: {
+                readonly port: 443;
+                readonly tlsEnabled: true;
+                readonly heartbeatIntervalSecs: 30;
+                readonly nodeTimeoutSecs: 90;
+                readonly maxLogEntries: 1000;
+                readonly metricsEnabled: true;
+            };
+        };
+        readonly lightweight: {
+            readonly id: "lightweight";
+            readonly name: "Lightweight";
+            readonly description: "Minimal resource usage for constrained environments";
+            readonly config: {
+                readonly port: 9876;
+                readonly heartbeatIntervalSecs: 60;
+                readonly nodeTimeoutSecs: 180;
+                readonly maxLogEntries: 100;
+                readonly metricsEnabled: false;
+            };
+        };
+    };
+};
 declare const INTEGRATIONS: {
     readonly googleCalendar: {
         readonly id: "google_calendar";
@@ -1306,4 +1642,4 @@ declare const HOOK_ACTIONS: {
 };
 type HookActionId = keyof typeof HOOK_ACTIONS;
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, MEMORY_CONFIG, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId };
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ModelCategory, MultimodalModel, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId, VLA_MODELS, VLM_MODELS, getModelsByCategory, getVLAModels, getVLMModels };

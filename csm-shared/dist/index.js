@@ -703,6 +703,367 @@ var PROVIDERS = {
     icon: "exo"
   }
 };
+var VLM_MODELS = [
+  {
+    id: "gpt-4o",
+    name: "GPT-4o",
+    provider: "openai",
+    category: "vlm",
+    contextLength: 128e3,
+    description: "OpenAI's flagship multimodal model",
+    releaseDate: "2024-05",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image", "audio"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: true,
+      maxImageSize: 20 * 1024 * 1024,
+      maxAudioLength: 600,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: ["mp3", "wav", "ogg"]
+    }
+  },
+  {
+    id: "gpt-4o-mini",
+    name: "GPT-4o Mini",
+    provider: "openai",
+    category: "vlm",
+    contextLength: 128e3,
+    description: "Smaller, faster version of GPT-4o",
+    releaseDate: "2024-07",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: false,
+      maxImageSize: 20 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "gemini-2.0-flash-exp",
+    name: "Gemini 2.0 Flash",
+    provider: "google",
+    category: "valm",
+    contextLength: 1e6,
+    description: "Google's multimodal model with vision, audio, and video",
+    releaseDate: "2024-12",
+    capabilities: {
+      category: "valm",
+      inputModalities: ["text", "image", "video", "audio"],
+      outputModalities: ["text", "audio"],
+      supportsStreaming: true,
+      supportsRealtime: true,
+      maxImageSize: 20 * 1024 * 1024,
+      maxVideoLength: 3600,
+      maxAudioLength: 9.5 * 3600,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: ["mp4", "mpeg", "mov", "avi", "webm"],
+      supportedAudioFormats: ["mp3", "wav", "ogg", "flac"]
+    }
+  },
+  {
+    id: "gemini-1.5-pro",
+    name: "Gemini 1.5 Pro",
+    provider: "google",
+    category: "vlm",
+    contextLength: 2e6,
+    description: "Long-context multimodal model",
+    releaseDate: "2024-02",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image", "video", "audio"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: false,
+      maxImageSize: 20 * 1024 * 1024,
+      maxVideoLength: 3600,
+      maxAudioLength: 9.5 * 3600,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: ["mp4", "mpeg", "mov", "avi", "webm"],
+      supportedAudioFormats: ["mp3", "wav", "ogg", "flac"]
+    }
+  },
+  {
+    id: "claude-3-5-sonnet-latest",
+    name: "Claude 3.5 Sonnet",
+    provider: "anthropic",
+    category: "vlm",
+    contextLength: 2e5,
+    description: "Anthropic's vision model with strong reasoning",
+    releaseDate: "2024-10",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: false,
+      maxImageSize: 20 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "llava-v1.6",
+    name: "LLaVA 1.6",
+    provider: "ollama",
+    category: "vlm",
+    contextLength: 4096,
+    description: "Open-source vision-language model",
+    releaseDate: "2024-01",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: false,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg", "webp"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "qwen2-vl",
+    name: "Qwen2-VL",
+    provider: "ollama",
+    category: "vlm",
+    contextLength: 32e3,
+    description: "Alibaba's vision-language model",
+    releaseDate: "2024-08",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image", "video"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: false,
+      maxImageSize: 20 * 1024 * 1024,
+      maxVideoLength: 600,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: ["mp4", "webm"],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "pixtral-12b",
+    name: "Pixtral 12B",
+    provider: "mistral",
+    category: "vlm",
+    contextLength: 128e3,
+    description: "Mistral's vision-language model",
+    releaseDate: "2024-09",
+    capabilities: {
+      category: "vlm",
+      inputModalities: ["text", "image"],
+      outputModalities: ["text"],
+      supportsStreaming: true,
+      supportsRealtime: false,
+      maxImageSize: 20 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg", "webp", "gif"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  }
+];
+var VLA_MODELS = [
+  {
+    id: "rt-2",
+    name: "RT-2",
+    provider: "google",
+    category: "vla",
+    contextLength: 4096,
+    description: "Google's Robotics Transformer 2 for vision-language-action",
+    releaseDate: "2023-07",
+    capabilities: {
+      category: "vla",
+      inputModalities: ["text", "image", "sensor"],
+      outputModalities: ["text", "action"],
+      supportsStreaming: false,
+      supportsRealtime: true,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "rt-x",
+    name: "RT-X",
+    provider: "google",
+    category: "vla",
+    contextLength: 4096,
+    description: "Cross-robot transfer model from Open X-Embodiment",
+    releaseDate: "2023-10",
+    capabilities: {
+      category: "vla",
+      inputModalities: ["text", "image", "sensor"],
+      outputModalities: ["text", "action"],
+      supportsStreaming: false,
+      supportsRealtime: true,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "octo",
+    name: "Octo",
+    provider: "custom",
+    category: "vla",
+    contextLength: 4096,
+    description: "Open-source generalist robot policy from Berkeley",
+    releaseDate: "2024-05",
+    capabilities: {
+      category: "vla",
+      inputModalities: ["text", "image", "sensor"],
+      outputModalities: ["action"],
+      supportsStreaming: false,
+      supportsRealtime: true,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "openvla",
+    name: "OpenVLA",
+    provider: "custom",
+    category: "vla",
+    contextLength: 4096,
+    description: "Open-source VLA from Stanford/Berkeley",
+    releaseDate: "2024-06",
+    capabilities: {
+      category: "vla",
+      inputModalities: ["text", "image"],
+      outputModalities: ["action"],
+      supportsStreaming: false,
+      supportsRealtime: true,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "palm-e",
+    name: "PaLM-E",
+    provider: "google",
+    category: "embodied",
+    contextLength: 8192,
+    description: "Embodied multimodal language model",
+    releaseDate: "2023-03",
+    capabilities: {
+      category: "embodied",
+      inputModalities: ["text", "image", "sensor", "point_cloud"],
+      outputModalities: ["text", "action"],
+      supportsStreaming: false,
+      supportsRealtime: false,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "gr-1",
+    name: "GR-1",
+    provider: "custom",
+    category: "vla",
+    contextLength: 4096,
+    description: "Fourier Intelligence humanoid robot model",
+    releaseDate: "2024-03",
+    capabilities: {
+      category: "vla",
+      inputModalities: ["text", "image", "sensor"],
+      outputModalities: ["action"],
+      supportsStreaming: false,
+      supportsRealtime: true,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  },
+  {
+    id: "pi-zero",
+    name: "\u03C0\u2080 (Pi-Zero)",
+    provider: "custom",
+    category: "vla",
+    contextLength: 8192,
+    description: "Physical Intelligence foundation model for dexterous manipulation",
+    releaseDate: "2024-10",
+    capabilities: {
+      category: "vla",
+      inputModalities: ["text", "image", "sensor"],
+      outputModalities: ["action"],
+      supportsStreaming: false,
+      supportsRealtime: true,
+      maxImageSize: 10 * 1024 * 1024,
+      supportedImageFormats: ["png", "jpeg"],
+      supportedVideoFormats: [],
+      supportedAudioFormats: []
+    }
+  }
+];
+var MULTIMODAL_MODELS = [...VLM_MODELS, ...VLA_MODELS];
+var MODEL_CATEGORIES = {
+  llm: {
+    name: "Language Model",
+    description: "Text-only models for chat and generation",
+    icon: "\u{1F4AC}"
+  },
+  vlm: {
+    name: "Vision-Language Model",
+    description: "Models that understand images and text",
+    icon: "\u{1F441}\uFE0F"
+  },
+  vla: {
+    name: "Vision-Language-Action",
+    description: "Robotics models that output actions",
+    icon: "\u{1F916}"
+  },
+  alm: {
+    name: "Audio-Language Model",
+    description: "Models that understand speech and audio",
+    icon: "\u{1F3A4}"
+  },
+  valm: {
+    name: "Vision-Audio-Language",
+    description: "Full multimodal with vision, audio, and text",
+    icon: "\u{1F3AC}"
+  },
+  multimodal: {
+    name: "Multimodal",
+    description: "Generic multimodal model",
+    icon: "\u{1F52E}"
+  },
+  embodied: {
+    name: "Embodied AI",
+    description: "Full embodied agent with world understanding",
+    icon: "\u{1F9BE}"
+  }
+};
+function getModelsByCategory(category) {
+  return MULTIMODAL_MODELS.filter((m) => m.category === category);
+}
+function getVLMModels() {
+  return MULTIMODAL_MODELS.filter(
+    (m) => m.capabilities.inputModalities.includes("image") && (m.category === "vlm" || m.category === "valm" || m.category === "vla" || m.category === "embodied")
+  );
+}
+function getVLAModels() {
+  return MULTIMODAL_MODELS.filter(
+    (m) => m.capabilities.outputModalities.includes("action") || m.category === "vla" || m.category === "embodied"
+  );
+}
 var AGENT_ROLES = {
   coordinator: {
     id: "coordinator",
@@ -1404,6 +1765,119 @@ var MEMORY_CONFIG = {
     }
   }
 };
+var REMOTE_MONITOR_CONFIG = {
+  /** Node status types */
+  nodeStatuses: {
+    online: { id: "online", name: "Online", color: "#22c55e", description: "Node is healthy and responding" },
+    degraded: { id: "degraded", name: "Degraded", color: "#f59e0b", description: "Node is online but experiencing issues" },
+    offline: { id: "offline", name: "Offline", color: "#ef4444", description: "Node is unreachable" },
+    maintenance: { id: "maintenance", name: "Maintenance", color: "#3b82f6", description: "Node is in maintenance mode" },
+    unknown: { id: "unknown", name: "Unknown", color: "#6b7280", description: "Node status is unknown" }
+  },
+  /** Task status types */
+  taskStatuses: {
+    queued: { id: "queued", name: "Queued", color: "#6b7280", description: "Task is waiting to start" },
+    starting: { id: "starting", name: "Starting", color: "#8b5cf6", description: "Task is initializing" },
+    running: { id: "running", name: "Running", color: "#3b82f6", description: "Task is actively executing" },
+    paused: { id: "paused", name: "Paused", color: "#f59e0b", description: "Task is paused" },
+    completed: { id: "completed", name: "Completed", color: "#22c55e", description: "Task finished successfully" },
+    failed: { id: "failed", name: "Failed", color: "#ef4444", description: "Task failed with error" },
+    cancelled: { id: "cancelled", name: "Cancelled", color: "#6b7280", description: "Task was cancelled" },
+    timed_out: { id: "timed_out", name: "Timed Out", color: "#ef4444", description: "Task exceeded time limit" }
+  },
+  /** Task priority levels */
+  taskPriorities: {
+    low: { id: "low", name: "Low", value: 0, color: "#6b7280" },
+    normal: { id: "normal", name: "Normal", value: 1, color: "#3b82f6" },
+    high: { id: "high", name: "High", value: 2, color: "#f59e0b" },
+    critical: { id: "critical", name: "Critical", value: 3, color: "#ef4444" }
+  },
+  /** Log levels */
+  logLevels: {
+    trace: { id: "trace", name: "Trace", color: "#6b7280" },
+    debug: { id: "debug", name: "Debug", color: "#8b5cf6" },
+    info: { id: "info", name: "Info", color: "#3b82f6" },
+    warn: { id: "warn", name: "Warning", color: "#f59e0b" },
+    error: { id: "error", name: "Error", color: "#ef4444" }
+  },
+  /** Remote event types */
+  eventTypes: {
+    node_online: { id: "node_online", name: "Node Online", icon: "server" },
+    node_offline: { id: "node_offline", name: "Node Offline", icon: "server-off" },
+    node_status_changed: { id: "node_status_changed", name: "Node Status Changed", icon: "activity" },
+    node_heartbeat: { id: "node_heartbeat", name: "Node Heartbeat", icon: "heart-pulse" },
+    task_created: { id: "task_created", name: "Task Created", icon: "plus-circle" },
+    task_started: { id: "task_started", name: "Task Started", icon: "play" },
+    task_progress: { id: "task_progress", name: "Task Progress", icon: "loader" },
+    task_step_completed: { id: "task_step_completed", name: "Step Completed", icon: "check-circle" },
+    task_completed: { id: "task_completed", name: "Task Completed", icon: "check-circle-2" },
+    task_failed: { id: "task_failed", name: "Task Failed", icon: "x-circle" },
+    task_cancelled: { id: "task_cancelled", name: "Task Cancelled", icon: "slash" },
+    task_log: { id: "task_log", name: "Task Log", icon: "file-text" },
+    agent_registered: { id: "agent_registered", name: "Agent Registered", icon: "user-plus" },
+    agent_unregistered: { id: "agent_unregistered", name: "Agent Unregistered", icon: "user-minus" }
+  },
+  /** Default configuration */
+  defaults: {
+    bindAddress: "0.0.0.0",
+    port: 9876,
+    tlsEnabled: false,
+    heartbeatIntervalSecs: 30,
+    nodeTimeoutSecs: 90,
+    maxLogEntries: 1e3,
+    metricsEnabled: true
+  },
+  /** Artifact types */
+  artifactTypes: {
+    file: { id: "file", name: "File", icon: "file" },
+    directory: { id: "directory", name: "Directory", icon: "folder" },
+    url: { id: "url", name: "URL", icon: "link" },
+    database: { id: "database", name: "Database", icon: "database" },
+    model: { id: "model", name: "Model", icon: "brain" },
+    report: { id: "report", name: "Report", icon: "file-chart" },
+    log: { id: "log", name: "Log", icon: "scroll" }
+  },
+  /** Monitoring presets */
+  presets: {
+    development: {
+      id: "development",
+      name: "Development",
+      description: "Local development with verbose logging",
+      config: {
+        port: 9876,
+        heartbeatIntervalSecs: 10,
+        nodeTimeoutSecs: 30,
+        maxLogEntries: 5e3,
+        metricsEnabled: true
+      }
+    },
+    production: {
+      id: "production",
+      name: "Production",
+      description: "Production deployment with TLS and authentication",
+      config: {
+        port: 443,
+        tlsEnabled: true,
+        heartbeatIntervalSecs: 30,
+        nodeTimeoutSecs: 90,
+        maxLogEntries: 1e3,
+        metricsEnabled: true
+      }
+    },
+    lightweight: {
+      id: "lightweight",
+      name: "Lightweight",
+      description: "Minimal resource usage for constrained environments",
+      config: {
+        port: 9876,
+        heartbeatIntervalSecs: 60,
+        nodeTimeoutSecs: 180,
+        maxLogEntries: 100,
+        metricsEnabled: false
+      }
+    }
+  }
+};
 var INTEGRATIONS = {
   // =========================================================================
   // Productivity
@@ -1809,15 +2283,20 @@ exports.INTEGRATIONS = INTEGRATIONS;
 exports.INTEGRATION_CATEGORIES = INTEGRATION_CATEGORIES;
 exports.LIMITS = LIMITS;
 exports.MEMORY_CONFIG = MEMORY_CONFIG;
+exports.MODEL_CATEGORIES = MODEL_CATEGORIES;
+exports.MULTIMODAL_MODELS = MULTIMODAL_MODELS;
 exports.ORCHESTRATION_MODES = ORCHESTRATION_MODES;
 exports.PROACTIVE_AGENT_CONFIG = PROACTIVE_AGENT_CONFIG;
 exports.PROVIDERS = PROVIDERS;
 exports.PROVIDER_STATUSES = PROVIDER_STATUSES;
+exports.REMOTE_MONITOR_CONFIG = REMOTE_MONITOR_CONFIG;
 exports.SESSION_FORMAT = SESSION_FORMAT;
 exports.SWARM_STATUSES = SWARM_STATUSES;
 exports.SWARM_TEMPLATES = SWARM_TEMPLATES;
 exports.TASK_STATUSES = TASK_STATUSES;
 exports.TOOL_CATEGORIES = TOOL_CATEGORIES;
+exports.VLA_MODELS = VLA_MODELS;
+exports.VLM_MODELS = VLM_MODELS;
 exports.api = api;
 exports.capitalize = capitalize;
 exports.chunk = chunk;
@@ -1844,6 +2323,9 @@ exports.generateUUID = generateUUID;
 exports.getDirectory = getDirectory;
 exports.getExtension = getExtension;
 exports.getFileName = getFileName;
+exports.getModelsByCategory = getModelsByCategory;
+exports.getVLAModels = getVLAModels;
+exports.getVLMModels = getVLMModels;
 exports.groupBy = groupBy;
 exports.hexToRgb = hexToRgb;
 exports.isColorDark = isColorDark;

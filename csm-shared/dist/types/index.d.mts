@@ -178,6 +178,326 @@ interface ProviderHealth {
     version?: string | null;
     models: string[];
 }
+/**
+ * Input/output modality types
+ */
+type Modality = 'text' | 'image' | 'video' | 'audio' | 'point_cloud' | 'action' | 'sensor' | 'depth' | 'segmentation' | 'bounding_box' | 'pose' | 'trajectory';
+/**
+ * Model category by capabilities
+ */
+type ModelCategory = 'llm' | 'vlm' | 'vla' | 'alm' | 'valm' | 'multimodal' | 'embodied';
+/**
+ * Modality capabilities for a model
+ */
+interface ModalityCapabilities {
+    category: ModelCategory;
+    inputModalities: Modality[];
+    outputModalities: Modality[];
+    supportsStreaming: boolean;
+    supportsRealtime: boolean;
+    maxImageSize?: number | null;
+    maxVideoLength?: number | null;
+    maxAudioLength?: number | null;
+    supportedImageFormats: string[];
+    supportedVideoFormats: string[];
+    supportedAudioFormats: string[];
+}
+/**
+ * Image format types
+ */
+type ImageFormat = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'tiff';
+/**
+ * Image content for multimodal messages
+ */
+interface ImageContent {
+    format: ImageFormat;
+    data: ImageData;
+    width?: number | null;
+    height?: number | null;
+    altText?: string | null;
+}
+/**
+ * Image data (URL or base64)
+ */
+type ImageData = {
+    type: 'url';
+    url: string;
+} | {
+    type: 'base64';
+    base64: string;
+};
+/**
+ * Video content for multimodal messages
+ */
+interface VideoContent {
+    format: string;
+    source: VideoSource;
+    durationSeconds?: number | null;
+    fps?: number | null;
+    width?: number | null;
+    height?: number | null;
+}
+/**
+ * Video source
+ */
+type VideoSource = {
+    type: 'url';
+    url: string;
+} | {
+    type: 'base64';
+    base64: string;
+} | {
+    type: 'frames';
+    frames: ImageContent[];
+};
+/**
+ * Audio format types
+ */
+type AudioFormat = 'mp3' | 'wav' | 'ogg' | 'flac' | 'webm' | 'pcm';
+/**
+ * Audio content for multimodal messages
+ */
+interface AudioContent {
+    format: AudioFormat;
+    data: AudioData;
+    durationSeconds?: number | null;
+    sampleRate?: number | null;
+    channels?: number | null;
+    transcript?: string | null;
+}
+/**
+ * Audio data (URL or base64)
+ */
+type AudioData = {
+    type: 'url';
+    url: string;
+} | {
+    type: 'base64';
+    base64: string;
+};
+/**
+ * Sensor types for VLA models
+ */
+type SensorType = 'joint_state' | 'imu' | 'force_torque' | 'camera_rgb' | 'camera_depth' | 'lidar' | 'tactile' | 'temperature' | 'proximity' | {
+    type: 'custom';
+    name: string;
+};
+/**
+ * Sensor data for VLA input
+ */
+interface SensorData {
+    sensorType: SensorType;
+    timestamp: number;
+    values: SensorValues;
+    frameId?: string | null;
+}
+/**
+ * Sensor value types
+ */
+type SensorValues = {
+    type: 'joint_state';
+    positions: number[];
+    velocities?: number[] | null;
+    efforts?: number[] | null;
+} | {
+    type: 'imu';
+    orientation: number[];
+    angularVelocity: number[];
+    linearAcceleration: number[];
+} | {
+    type: 'force_torque';
+    force: number[];
+    torque: number[];
+} | {
+    type: 'depth';
+    data: number[];
+    width: number;
+    height: number;
+} | {
+    type: 'lidar';
+    ranges: number[];
+    angleMin: number;
+    angleMax: number;
+} | {
+    type: 'tactile';
+    forces: number[];
+} | {
+    type: 'temperature';
+    value: number;
+} | {
+    type: 'proximity';
+    distance: number;
+} | {
+    type: 'raw';
+    data: number[];
+};
+/**
+ * Robot joint state
+ */
+interface JointState {
+    name: string;
+    position: number;
+    velocity?: number | null;
+    effort?: number | null;
+}
+/**
+ * Action types for VLA models
+ */
+type ActionType = 'move' | 'rotate' | 'grasp' | 'release' | 'push' | 'pull' | 'place' | 'pick' | 'move_arm' | 'move_joint' | 'velocity' | 'torque' | 'navigate' | 'look_at' | 'speak' | 'wait' | 'stop' | {
+    type: 'custom';
+    name: string;
+};
+/**
+ * Action command for VLA output
+ */
+interface ActionCommand {
+    actionType: ActionType;
+    parameters: ActionParameters;
+    targetObject?: string | null;
+    confidence?: number | null;
+    duration?: number | null;
+    priority?: number;
+}
+/**
+ * Action parameters
+ */
+type ActionParameters = {
+    type: 'position';
+    position: number[];
+    velocity?: number | null;
+} | {
+    type: 'pose';
+    position: number[];
+    orientation: number[];
+} | {
+    type: 'joint';
+    jointPositions: number[];
+    jointVelocities?: number[] | null;
+} | {
+    type: 'velocity';
+    linear: number[];
+    angular: number[];
+} | {
+    type: 'force';
+    force: number[];
+    torque: number[];
+} | {
+    type: 'gripper';
+    width: number;
+    force?: number | null;
+} | {
+    type: 'navigation';
+    goal: number[];
+    constraints?: Record<string, unknown> | null;
+} | {
+    type: 'speech';
+    text: string;
+    language?: string | null;
+} | {
+    type: 'wait';
+    duration?: number | null;
+    condition?: string | null;
+} | {
+    type: 'custom';
+    data: Record<string, unknown>;
+};
+/**
+ * Action space types for VLA models
+ */
+type ActionSpaceType = 'discrete' | 'continuous' | 'hybrid';
+/**
+ * Action space configuration
+ */
+interface ActionSpace {
+    spaceType: ActionSpaceType;
+    dimensions?: number | null;
+    actionLabels?: string[] | null;
+    bounds?: ActionBounds | null;
+}
+/**
+ * Action bounds for continuous spaces
+ */
+interface ActionBounds {
+    low: number[];
+    high: number[];
+}
+/**
+ * Manipulator types for robot capabilities
+ */
+type ManipulatorType = 'parallel_gripper' | 'suction' | 'dexterous_hand' | 'soft_gripper' | 'magnetic' | {
+    type: 'custom';
+    name: string;
+};
+/**
+ * Navigation capabilities
+ */
+type NavigationCapability = 'wheeled' | 'legged' | 'flying' | 'swimming' | 'stationary';
+/**
+ * Robot capabilities for VLA models
+ */
+interface RobotCapabilities {
+    manipulators: ManipulatorType[];
+    navigation?: NavigationCapability | null;
+    dof: number;
+    maxPayload?: number | null;
+    workspace?: WorkspaceBounds | null;
+    sensors: SensorType[];
+    actionSpace: ActionSpace;
+}
+/**
+ * Workspace bounds for robot
+ */
+interface WorkspaceBounds {
+    minBounds: number[];
+    maxBounds: number[];
+}
+/**
+ * Content part for multimodal messages
+ */
+type ContentPart = {
+    type: 'text';
+    text: string;
+} | {
+    type: 'image';
+    image: ImageContent;
+} | {
+    type: 'video';
+    video: VideoContent;
+} | {
+    type: 'audio';
+    audio: AudioContent;
+} | {
+    type: 'sensor';
+    sensor: SensorData;
+} | {
+    type: 'action';
+    action: ActionCommand;
+};
+/**
+ * Multimodal message supporting mixed content
+ */
+interface MultimodalMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: ContentPart[];
+    name?: string | null;
+    toolCalls?: ToolInvocation[] | null;
+    actions?: ActionCommand[] | null;
+    timestamp?: number | null;
+}
+/**
+ * Multimodal model definition
+ */
+interface MultimodalModel {
+    id: string;
+    name: string;
+    provider: ModelProvider;
+    category: ModelCategory;
+    capabilities: ModalityCapabilities;
+    contextLength: number;
+    description?: string | null;
+    releaseDate?: string | null;
+    deprecated?: boolean;
+}
 type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
 type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'writer' | 'tester' | 'household' | 'business' | 'custom';
 type AgentAutonomy = 'none' | 'low' | 'medium' | 'high' | 'supervised';
@@ -461,6 +781,183 @@ interface RAGConfig {
     minRelevanceScore: number;
     includeConversationHistory: boolean;
     maxConversationTurns: number;
+}
+/**
+ * Remote node status
+ */
+type NodeStatus = 'online' | 'degraded' | 'offline' | 'maintenance' | 'unknown';
+/**
+ * Remote task status
+ */
+type RemoteTaskStatus = 'queued' | 'starting' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'timed_out';
+/**
+ * Task priority
+ */
+type TaskPriority = 'low' | 'normal' | 'high' | 'critical';
+/**
+ * Log level
+ */
+type RemoteLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+/**
+ * Hardware information for a remote node
+ */
+interface HardwareInfo {
+    cpuCores: number;
+    ramTotal: number;
+    ramAvailable: number;
+    gpus: GpuInfo[];
+    os: string;
+    arch: string;
+}
+/**
+ * GPU information
+ */
+interface GpuInfo {
+    name: string;
+    vram: number;
+    cudaVersion?: string;
+}
+/**
+ * Remote node representing a machine running agents
+ */
+interface RemoteNode {
+    id: string;
+    name: string;
+    address: string;
+    status: NodeStatus;
+    tags: string[];
+    hardware?: HardwareInfo;
+    activeAgents: number;
+    runningTasks: number;
+    lastHeartbeat: number;
+    registeredAt: number;
+    metadata?: Record<string, unknown>;
+}
+/**
+ * Resource usage during task execution
+ */
+interface ResourceUsage {
+    cpuPercent: number;
+    memoryBytes: number;
+    gpuMemoryBytes?: number;
+    networkTxBytes: number;
+    networkRxBytes: number;
+    diskReadBytes: number;
+    diskWriteBytes: number;
+}
+/**
+ * Task log entry
+ */
+interface TaskLogEntry {
+    timestamp: number;
+    level: RemoteLogLevel;
+    message: string;
+    data?: unknown;
+}
+/**
+ * Task execution metrics
+ */
+interface TaskMetrics {
+    durationMs: number;
+    tokensUsed?: number;
+    apiCalls: number;
+    filesProcessed: number;
+    errorsRecovered: number;
+    retries: number;
+}
+/**
+ * Artifact type
+ */
+type ArtifactType = 'file' | 'directory' | 'url' | 'database' | 'model' | 'report' | 'log' | {
+    type: 'custom';
+    name: string;
+};
+/**
+ * Task artifact (output files, etc.)
+ */
+interface TaskArtifact {
+    name: string;
+    artifactType: ArtifactType;
+    location: string;
+    size?: number;
+    checksum?: string;
+}
+/**
+ * Task result
+ */
+interface RemoteTaskResult {
+    success: boolean;
+    output?: unknown;
+    artifacts: TaskArtifact[];
+    metrics: TaskMetrics;
+}
+/**
+ * Remote task running on a node
+ */
+interface RemoteTask {
+    id: string;
+    nodeId: string;
+    agentId: string;
+    agentName: string;
+    title: string;
+    description?: string;
+    status: RemoteTaskStatus;
+    progress: number;
+    progressMessage?: string;
+    currentStep?: number;
+    totalSteps?: number;
+    priority: TaskPriority;
+    startedAt: number;
+    completedAt?: number;
+    eta?: number;
+    result?: RemoteTaskResult;
+    error?: string;
+    resources: ResourceUsage;
+    logs: TaskLogEntry[];
+    metadata?: Record<string, unknown>;
+}
+/**
+ * Remote monitor configuration
+ */
+interface RemoteMonitorConfig {
+    bindAddress: string;
+    port: number;
+    tlsEnabled: boolean;
+    tlsCertPath?: string;
+    tlsKeyPath?: string;
+    authToken?: string;
+    heartbeatIntervalSecs: number;
+    nodeTimeoutSecs: number;
+    maxLogEntries: number;
+    metricsEnabled: boolean;
+}
+/**
+ * Monitor statistics
+ */
+interface MonitorStats {
+    totalNodes: number;
+    onlineNodes: number;
+    totalAgents: number;
+    totalTasks: number;
+    runningTasks: number;
+    queuedTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+}
+/**
+ * Remote event types
+ */
+type RemoteEventType = 'node_online' | 'node_offline' | 'node_status_changed' | 'node_heartbeat' | 'task_created' | 'task_started' | 'task_progress' | 'task_step_completed' | 'task_completed' | 'task_failed' | 'task_cancelled' | 'task_log' | 'agent_registered' | 'agent_unregistered';
+/**
+ * Remote event
+ */
+interface RemoteEvent {
+    type: RemoteEventType;
+    timestamp: number;
+    nodeId?: string;
+    taskId?: string;
+    agentId?: string;
+    data?: unknown;
 }
 /**
  * Agent message for inter-agent communication
@@ -956,4 +1453,4 @@ interface HookPreset {
     requiredIntegrations: string[];
 }
 
-export type { AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, ModelConfig, ModelProvider, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, SearchResult, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, WorkflowEdge, WorkflowNode, Workspace, WorkspaceFilter, WorkspaceStats };
+export type { ActionBounds, ActionCommand, ActionParameters, ActionSpace, ActionSpaceType, ActionType, AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ArtifactType, AudioContent, AudioData, AudioFormat, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContentPart, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, GpuInfo, HardwareInfo, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImageContent, ImageData, ImageFormat, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, JointState, ManipulatorType, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, Modality, ModalityCapabilities, ModelCategory, ModelConfig, ModelProvider, MonitorStats, MultimodalMessage, MultimodalModel, NavigationCapability, NodeStatus, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, RemoteEvent, RemoteEventType, RemoteLogLevel, RemoteMonitorConfig, RemoteNode, RemoteTask, RemoteTaskResult, RemoteTaskStatus, ResourceUsage, RobotCapabilities, SearchResult, SensorData, SensorType, SensorValues, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskArtifact, TaskLogEntry, TaskMetrics, TaskPriority, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, VideoContent, VideoSource, WorkflowEdge, WorkflowNode, Workspace, WorkspaceBounds, WorkspaceFilter, WorkspaceStats };
