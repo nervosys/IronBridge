@@ -781,7 +781,7 @@ export default function Protocols() {
                         </div>
                         <div className="flex items-center gap-4 mt-3">
                             <Link
-                                to="/agents"
+                                to="/agency"
                                 className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors group"
                             >
                                 <Bot size={18} className="text-[hsl(var(--primary))] group-hover:scale-110 transition-transform" />
@@ -789,7 +789,7 @@ export default function Protocols() {
                                 <ExternalLink size={14} className="text-[hsl(var(--muted-foreground))]" />
                             </Link>
                             <Link
-                                to="/swarms"
+                                to="/agency"
                                 className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors group"
                             >
                                 <Users size={18} className="text-purple-500 group-hover:scale-110 transition-transform" />

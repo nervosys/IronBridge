@@ -23,9 +23,9 @@ pub fn print_provider_summary(registry: &ProviderRegistry) {
 
     for provider in all_providers {
         let status = if provider.is_available() {
-            "✓".green()
+            "+".green()
         } else {
-            "✗".red()
+            "x".red()
         };
 
         let name = provider.name();

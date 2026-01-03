@@ -344,16 +344,16 @@ pub fn show_workspace(workspace: &str) -> Result<()> {
     if matching.is_empty() {
         println!(
             "{} No workspace found matching '{}'",
-            "⚠".yellow(),
+            "!".yellow(),
             workspace
         );
         return Ok(());
     }
 
     for ws in matching {
-        println!("\n{}", "═".repeat(60).bright_blue());
+        println!("\n{}", "=".repeat(60).bright_blue());
         println!("{}", "Workspace Details".bright_blue().bold());
-        println!("{}", "═".repeat(60).bright_blue());
+        println!("{}", "=".repeat(60).bright_blue());
 
         println!("{}: {}", "Hash".bright_white().bold(), ws.hash);
         println!(
@@ -448,9 +448,9 @@ pub fn show_session(session_id: &str, project_path: Option<&str>) -> Result<()> 
                 || filename.to_lowercase().contains(&session_id_lower);
 
             if matches {
-                println!("\n{}", "═".repeat(60).bright_blue());
+                println!("\n{}", "=".repeat(60).bright_blue());
                 println!("{}", "Session Details".bright_blue().bold());
-                println!("{}", "═".repeat(60).bright_blue());
+                println!("{}", "=".repeat(60).bright_blue());
 
                 println!(
                     "{}: {}",
@@ -496,7 +496,7 @@ pub fn show_session(session_id: &str, project_path: Option<&str>) -> Result<()> 
 
     println!(
         "{} No session found matching '{}'",
-        "⚠".yellow(),
+        "!".yellow(),
         session_id
     );
     Ok(())

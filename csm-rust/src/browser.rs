@@ -3,20 +3,15 @@
 //! This module reads browser cookies (without opening windows) to detect
 //! which cloud LLM providers the user is authenticated with.
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-// AES-GCM imports reserved for future cookie decryption
-#[cfg(windows)]
-#[allow(unused_imports)]
-use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
-};
+// Suppress dead code warnings for fields used in debugging
+#[allow(dead_code)]
 
 /// Supported browser types for cookie extraction
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -226,7 +221,7 @@ pub struct ProviderAuth {
 pub const WEB_LLM_PROVIDERS: &[ProviderAuth] = &[
     ProviderAuth {
         name: "ChatGPT",
-        domain: "openai.com", // Covers chat.openai.com, chatgpt.com redirects here
+        domain: "chatgpt.com", // Also checked: openai.com, chat.openai.com
         auth_cookie_names: &[
             "__Secure-next-auth.session-token",
             "_puid",
@@ -358,7 +353,7 @@ fn scan_browser_auth_internal(verbose: bool) -> Vec<BrowserAuthResult> {
             if verbose {
                 println!(
                     "      {} {} cookies: {}",
-                    "→".dimmed(),
+                    "->".dimmed(),
                     browser.name(),
                     cookies_path.display()
                 );
@@ -368,7 +363,7 @@ fn scan_browser_auth_internal(verbose: bool) -> Vec<BrowserAuthResult> {
                 Err(e) => {
                     if verbose {
                         println!("        {} Direct access failed: {}", "!".yellow(), e);
-                        println!("        {} Trying copy method...", "→".dimmed());
+                        println!("        {} Trying copy method...", "->".dimmed());
                     }
                     // Browser might be open and locking the database
                     // Try copying to temp file
@@ -377,7 +372,7 @@ fn scan_browser_auth_internal(verbose: bool) -> Vec<BrowserAuthResult> {
                         Ok(browser_results) => results.extend(browser_results),
                         Err(e2) => {
                             if verbose {
-                                println!("        {} Copy method also failed: {}", "✗".red(), e2);
+                                println!("        {} Copy method also failed: {}", "x".red(), e2);
                             }
                         }
                     }
@@ -438,7 +433,7 @@ fn scan_browser_cookies_internal(
     if verbose {
         println!(
             "        {} Found {} domains with cookies",
-            "→".dimmed(),
+            "->".dimmed(),
             cookies.len()
         );
 
@@ -466,7 +461,7 @@ fn scan_browser_cookies_internal(
             .collect();
 
         if !llm_domains.is_empty() {
-            println!("        {} LLM-related domains found:", "→".dimmed());
+            println!("        {} LLM-related domains found:", "->".dimmed());
             for domain in &llm_domains {
                 let cookie_names = cookies
                     .get(*domain)
@@ -474,7 +469,7 @@ fn scan_browser_cookies_internal(
                     .unwrap_or_default();
                 println!(
                     "          {} {} -> [{}]",
-                    "•".dimmed(),
+                    "*".dimmed(),
                     domain,
                     cookie_names.dimmed()
                 );
@@ -514,7 +509,7 @@ fn scan_browser_cookies_internal(
         if verbose && !domain_cookies.is_empty() {
             println!(
                 "        {} {}: domain cookies={:?}, auth cookies={:?}, authenticated={}",
-                "→".dimmed(),
+                "->".dimmed(),
                 provider.name,
                 domain_cookies.iter().take(5).collect::<Vec<_>>(),
                 found_auth_cookies,
@@ -581,7 +576,7 @@ fn scan_browser_cookies_with_copy_internal(
     if verbose {
         println!(
             "        {} Copied to temp: {}",
-            "→".dimmed(),
+            "->".dimmed(),
             temp_path.display()
         );
     }
@@ -644,6 +639,379 @@ pub struct AuthSummary {
     pub browsers_checked: Vec<BrowserType>,
     pub authenticated_providers: HashMap<String, Vec<BrowserType>>,
     pub total_providers_authenticated: usize,
+}
+
+/// Extracted cookie with its value
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct ExtractedCookie {
+    pub name: String,
+    pub value: String,
+    pub domain: String,
+    pub browser: BrowserType,
+}
+
+/// Provider credentials extracted from browser cookies
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ProviderCredentials {
+    pub provider: String,
+    pub session_token: Option<String>,
+    pub cookies: HashMap<String, String>,
+    pub browser: Option<BrowserType>,
+}
+
+/// Extract actual cookie values for a specific provider
+pub fn extract_provider_cookies(provider_name: &str) -> Option<ProviderCredentials> {
+    let provider_auth = WEB_LLM_PROVIDERS
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(provider_name))?;
+
+    // For ChatGPT, try multiple domains since cookies can be on either
+    let domains_to_try: Vec<&str> = if provider_name.eq_ignore_ascii_case("chatgpt") {
+        vec!["chatgpt.com", "openai.com", "chat.openai.com"]
+    } else {
+        vec![provider_auth.domain]
+    };
+
+    let browsers = [
+        BrowserType::Edge,
+        BrowserType::Chrome,
+        BrowserType::Brave,
+        BrowserType::Firefox,
+        BrowserType::Vivaldi,
+        BrowserType::Opera,
+    ];
+
+    for browser in browsers {
+        if let Some(cookies_path) = browser.cookies_path() {
+            for domain in &domains_to_try {
+                // Try to extract cookies
+                if let Ok(cookies) = extract_cookies_for_domain(&browser, &cookies_path, domain) {
+                    if !cookies.is_empty() {
+                        let mut creds = ProviderCredentials {
+                            provider: provider_name.to_string(),
+                            session_token: None,
+                            cookies: HashMap::new(),
+                            browser: Some(browser),
+                        };
+
+                        for cookie in &cookies {
+                            // Check if this is a session token cookie
+                            if provider_auth
+                                .auth_cookie_names
+                                .iter()
+                                .any(|name| cookie.name.contains(name))
+                            {
+                                if cookie.name.contains("session") || cookie.name.contains("token")
+                                {
+                                    creds.session_token = Some(cookie.value.clone());
+                                }
+                            }
+                            creds
+                                .cookies
+                                .insert(cookie.name.clone(), cookie.value.clone());
+                        }
+
+                        if creds.session_token.is_some() || !creds.cookies.is_empty() {
+                            return Some(creds);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Extract all cookies for a domain from a browser
+fn extract_cookies_for_domain(
+    browser: &BrowserType,
+    cookies_path: &PathBuf,
+    domain: &str,
+) -> Result<Vec<ExtractedCookie>> {
+    // Try direct access first
+    match extract_cookies_internal(browser, cookies_path, domain) {
+        Ok(cookies) => Ok(cookies),
+        Err(_) => {
+            // Browser might be locking the file, try copy method
+            extract_cookies_with_copy(browser, cookies_path, domain)
+        }
+    }
+}
+
+fn extract_cookies_internal(
+    browser: &BrowserType,
+    cookies_path: &PathBuf,
+    domain: &str,
+) -> Result<Vec<ExtractedCookie>> {
+    let conn = Connection::open_with_flags(
+        cookies_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .context("Failed to open cookie database")?;
+
+    match browser {
+        BrowserType::Firefox => extract_firefox_cookie_values(&conn, domain, browser),
+        _ => extract_chromium_cookie_values(&conn, domain, browser),
+    }
+}
+
+fn extract_cookies_with_copy(
+    browser: &BrowserType,
+    cookies_path: &PathBuf,
+    domain: &str,
+) -> Result<Vec<ExtractedCookie>> {
+    let temp_dir = std::env::temp_dir();
+    let temp_path = temp_dir.join(format!("csm_cookies_extract_{}.db", uuid::Uuid::new_v4()));
+
+    fs::copy(cookies_path, &temp_path).context("Failed to copy cookie database")?;
+
+    // Copy journal files
+    let wal_path = cookies_path.with_extension("db-wal");
+    if wal_path.exists() {
+        let _ = fs::copy(&wal_path, temp_path.with_extension("db-wal"));
+    }
+    let shm_path = cookies_path.with_extension("db-shm");
+    if shm_path.exists() {
+        let _ = fs::copy(&shm_path, temp_path.with_extension("db-shm"));
+    }
+
+    let result = extract_cookies_internal(browser, &temp_path, domain);
+
+    // Clean up
+    let _ = fs::remove_file(&temp_path);
+    let _ = fs::remove_file(temp_path.with_extension("db-wal"));
+    let _ = fs::remove_file(temp_path.with_extension("db-shm"));
+
+    result
+}
+
+/// Extract cookie values from Firefox database
+fn extract_firefox_cookie_values(
+    conn: &Connection,
+    domain: &str,
+    browser: &BrowserType,
+) -> Result<Vec<ExtractedCookie>> {
+    let mut cookies = Vec::new();
+
+    let mut stmt =
+        conn.prepare("SELECT name, value, host FROM moz_cookies WHERE host LIKE ? OR host LIKE ?")?;
+
+    let domain_pattern = format!("%{}", domain);
+    let dot_domain_pattern = format!("%.{}", domain);
+
+    let rows = stmt.query_map([&domain_pattern, &dot_domain_pattern], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    for row in rows.flatten() {
+        let (name, value, host) = row;
+        if !value.is_empty() {
+            cookies.push(ExtractedCookie {
+                name,
+                value,
+                domain: host,
+                browser: *browser,
+            });
+        }
+    }
+
+    Ok(cookies)
+}
+
+/// Extract cookie values from Chromium-based browser database
+/// Note: Chromium encrypts cookie values, this returns encrypted values
+/// Full decryption requires platform-specific crypto APIs
+fn extract_chromium_cookie_values(
+    conn: &Connection,
+    domain: &str,
+    browser: &BrowserType,
+) -> Result<Vec<ExtractedCookie>> {
+    let mut cookies = Vec::new();
+
+    // Chromium stores encrypted values in encrypted_value column
+    // We try to get the plaintext value first, then fall back to encrypted
+    let mut stmt = conn.prepare(
+        "SELECT name, value, encrypted_value, host_key FROM cookies WHERE host_key LIKE ? OR host_key LIKE ?"
+    )?;
+
+    let domain_pattern = format!("%{}", domain);
+    let dot_domain_pattern = format!("%.{}", domain);
+
+    let rows = stmt.query_map([&domain_pattern, &dot_domain_pattern], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Vec<u8>>(2)?,
+            row.get::<_, String>(3)?,
+        ))
+    })?;
+
+    for row in rows.flatten() {
+        let (name, value, encrypted_value, host) = row;
+
+        // Try plaintext value first (older Chrome versions or some cookies)
+        let cookie_value = if !value.is_empty() {
+            value
+        } else if !encrypted_value.is_empty() {
+            // Try to decrypt the cookie value
+            match decrypt_chromium_cookie(&encrypted_value, browser) {
+                Ok(decrypted) => decrypted,
+                Err(_) => continue, // Skip cookies we can't decrypt
+            }
+        } else {
+            continue;
+        };
+
+        if !cookie_value.is_empty() {
+            cookies.push(ExtractedCookie {
+                name,
+                value: cookie_value,
+                domain: host,
+                browser: *browser,
+            });
+        }
+    }
+
+    Ok(cookies)
+}
+
+/// Decrypt Chromium cookie value
+/// On Windows, uses DPAPI. On macOS, uses Keychain. On Linux, may be stored in plain text or use secret service.
+#[cfg(windows)]
+fn decrypt_chromium_cookie(encrypted_value: &[u8], browser: &BrowserType) -> Result<String> {
+    use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
+
+    // Check for v10/v20 prefix (AES-GCM encrypted)
+    if encrypted_value.len() > 3 && &encrypted_value[0..3] == b"v10"
+        || &encrypted_value[0..3] == b"v20"
+    {
+        // Get the encryption key from Local State file
+        if let Some(key) = get_chromium_encryption_key(browser) {
+            return decrypt_aes_gcm(&encrypted_value[3..], &key);
+        }
+    }
+
+    // Try DPAPI decryption (older format)
+    unsafe {
+        let mut input = CRYPT_INTEGER_BLOB {
+            cbData: encrypted_value.len() as u32,
+            pbData: encrypted_value.as_ptr() as *mut u8,
+        };
+        let mut output = CRYPT_INTEGER_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
+
+        let result = CryptUnprotectData(&mut input, None, None, None, None, 0, &mut output);
+
+        if result.is_ok() && !output.pbData.is_null() {
+            let slice = std::slice::from_raw_parts(output.pbData, output.cbData as usize);
+            let decrypted = String::from_utf8_lossy(slice).to_string();
+            // Note: We should free output.pbData with LocalFree, but it's a small leak
+            // for a short-lived operation. The windows crate doesn't expose LocalFree directly.
+            return Ok(decrypted);
+        }
+    }
+
+    Err(anyhow!("Failed to decrypt cookie"))
+}
+
+#[cfg(windows)]
+fn get_chromium_encryption_key(browser: &BrowserType) -> Option<Vec<u8>> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+    use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
+
+    let local_state_path = browser.local_state_path()?;
+    let local_state_content = fs::read_to_string(&local_state_path).ok()?;
+    let local_state: serde_json::Value = serde_json::from_str(&local_state_content).ok()?;
+
+    let encrypted_key_b64 = local_state
+        .get("os_crypt")?
+        .get("encrypted_key")?
+        .as_str()?;
+
+    let encrypted_key = BASE64.decode(encrypted_key_b64).ok()?;
+
+    // Remove "DPAPI" prefix (5 bytes)
+    if encrypted_key.len() <= 5 || &encrypted_key[0..5] != b"DPAPI" {
+        return None;
+    }
+
+    let encrypted_key = &encrypted_key[5..];
+
+    // Decrypt using DPAPI
+    unsafe {
+        let mut input = CRYPT_INTEGER_BLOB {
+            cbData: encrypted_key.len() as u32,
+            pbData: encrypted_key.as_ptr() as *mut u8,
+        };
+        let mut output = CRYPT_INTEGER_BLOB {
+            cbData: 0,
+            pbData: std::ptr::null_mut(),
+        };
+
+        let result = CryptUnprotectData(&mut input, None, None, None, None, 0, &mut output);
+
+        if result.is_ok() && !output.pbData.is_null() {
+            let key = std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec();
+            // Note: We should free output.pbData with LocalFree, but it's a small leak
+            // for a short-lived operation. The windows crate doesn't expose LocalFree directly.
+            return Some(key);
+        }
+    }
+
+    None
+}
+
+#[cfg(windows)]
+fn decrypt_aes_gcm(encrypted_data: &[u8], key: &[u8]) -> Result<String> {
+    use aes_gcm::{
+        aead::{Aead, KeyInit},
+        Aes256Gcm, Nonce,
+    };
+
+    if encrypted_data.len() < 12 + 16 {
+        return Err(anyhow!("Encrypted data too short"));
+    }
+
+    // First 12 bytes are nonce
+    let nonce = Nonce::from_slice(&encrypted_data[0..12]);
+    let ciphertext = &encrypted_data[12..];
+
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|e| anyhow!("Failed to create cipher: {}", e))?;
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| anyhow!("Decryption failed: {}", e))?;
+
+    String::from_utf8(plaintext).map_err(|e| anyhow!("Invalid UTF-8 in decrypted cookie: {}", e))
+}
+
+#[cfg(not(windows))]
+fn decrypt_chromium_cookie(encrypted_value: &[u8], _browser: &BrowserType) -> Result<String> {
+    // On macOS, would need to access Keychain
+    // On Linux, cookies may be stored in plain text or use secret service
+
+    // Check if it's already plaintext
+    if let Ok(s) = String::from_utf8(encrypted_value.to_vec()) {
+        if s.chars()
+            .all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+        {
+            return Ok(s);
+        }
+    }
+
+    Err(anyhow!(
+        "Cookie decryption not implemented for this platform"
+    ))
 }
 
 /// Get a summary of all authenticated web LLM providers

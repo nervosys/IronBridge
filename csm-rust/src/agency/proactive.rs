@@ -14,9 +14,11 @@
 //! - Meeting preparation
 //! - Project health monitoring
 
+#![allow(dead_code)]
+
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 // =============================================================================
 // Permission System
@@ -98,7 +100,7 @@ impl PermissionLevel {
         if Self::always_require_approval().contains(&action) {
             return false;
         }
-        
+
         let allowed = self.auto_approve_actions();
         allowed.contains(&"*") || allowed.contains(&action)
     }
@@ -144,31 +146,107 @@ pub enum ProblemStatus {
 #[serde(rename_all = "snake_case")]
 pub enum ProblemCategory {
     // Household
-    BillDue { amount: f64, due_date: DateTime<Utc>, vendor: String },
-    MaintenanceNeeded { item: String, urgency: String },
-    SupplyLow { item: String, current_quantity: u32, reorder_threshold: u32 },
-    EnergyAnomaly { device: String, expected_kwh: f64, actual_kwh: f64 },
-    DeviceOffline { device_id: String, device_name: String, last_seen: DateTime<Utc> },
-    SecurityAlert { alert_type: String, location: String },
-    PackageDelayed { tracking_id: String, carrier: String, expected_date: String },
-    AppointmentReminder { title: String, time: DateTime<Utc>, location: Option<String> },
-    WeatherAlert { alert_type: String, severity: String },
-    SubscriptionRenewal { service: String, amount: f64, renewal_date: DateTime<Utc> },
-    
+    BillDue {
+        amount: f64,
+        due_date: DateTime<Utc>,
+        vendor: String,
+    },
+    MaintenanceNeeded {
+        item: String,
+        urgency: String,
+    },
+    SupplyLow {
+        item: String,
+        current_quantity: u32,
+        reorder_threshold: u32,
+    },
+    EnergyAnomaly {
+        device: String,
+        expected_kwh: f64,
+        actual_kwh: f64,
+    },
+    DeviceOffline {
+        device_id: String,
+        device_name: String,
+        last_seen: DateTime<Utc>,
+    },
+    SecurityAlert {
+        alert_type: String,
+        location: String,
+    },
+    PackageDelayed {
+        tracking_id: String,
+        carrier: String,
+        expected_date: String,
+    },
+    AppointmentReminder {
+        title: String,
+        time: DateTime<Utc>,
+        location: Option<String>,
+    },
+    WeatherAlert {
+        alert_type: String,
+        severity: String,
+    },
+    SubscriptionRenewal {
+        service: String,
+        amount: f64,
+        renewal_date: DateTime<Utc>,
+    },
+
     // Business
-    CalendarConflict { event1: String, event2: String, overlap_minutes: u32 },
-    DeadlineApproaching { project: String, deadline: DateTime<Utc>, days_remaining: u32 },
-    EmailUrgent { from: String, subject: String, received_at: DateTime<Utc> },
-    MeetingPrepNeeded { meeting: String, time: DateTime<Utc>, prep_items: Vec<String> },
-    FollowUpDue { context: String, person: String, due_date: DateTime<Utc> },
-    ExpensePending { amount: f64, category: String, days_pending: u32 },
-    ProjectAtRisk { project: String, risk_factors: Vec<String> },
-    CompetitorNews { competitor: String, headline: String },
-    TeamBlocker { team_member: String, blocker: String },
-    ReportDue { report_name: String, due_date: DateTime<Utc> },
-    
+    CalendarConflict {
+        event1: String,
+        event2: String,
+        overlap_minutes: u32,
+    },
+    DeadlineApproaching {
+        project: String,
+        deadline: DateTime<Utc>,
+        days_remaining: u32,
+    },
+    EmailUrgent {
+        from: String,
+        subject: String,
+        received_at: DateTime<Utc>,
+    },
+    MeetingPrepNeeded {
+        meeting: String,
+        time: DateTime<Utc>,
+        prep_items: Vec<String>,
+    },
+    FollowUpDue {
+        context: String,
+        person: String,
+        due_date: DateTime<Utc>,
+    },
+    ExpensePending {
+        amount: f64,
+        category: String,
+        days_pending: u32,
+    },
+    ProjectAtRisk {
+        project: String,
+        risk_factors: Vec<String>,
+    },
+    CompetitorNews {
+        competitor: String,
+        headline: String,
+    },
+    TeamBlocker {
+        team_member: String,
+        blocker: String,
+    },
+    ReportDue {
+        report_name: String,
+        due_date: DateTime<Utc>,
+    },
+
     /// Custom problem type
-    Custom { category: String, details: HashMap<String, serde_json::Value> },
+    Custom {
+        category: String,
+        details: HashMap<String, serde_json::Value>,
+    },
 }
 
 /// A detected problem requiring attention
@@ -406,20 +484,16 @@ pub fn household_agent_config() -> ProactiveAgentConfig {
             allow_critical: true,
         }),
         max_pending_actions: 10,
-        custom_rules: vec![
-            ApprovalRule {
-                name: "auto_remind_low_supplies".to_string(),
-                action_type: "send_notification".to_string(),
-                conditions: vec![
-                    RuleCondition {
-                        field: "category".to_string(),
-                        operator: ConditionOperator::Equals,
-                        value: serde_json::json!("supply_low"),
-                    },
-                ],
-                auto_approve: true,
-            },
-        ],
+        custom_rules: vec![ApprovalRule {
+            name: "auto_remind_low_supplies".to_string(),
+            action_type: "send_notification".to_string(),
+            conditions: vec![RuleCondition {
+                field: "category".to_string(),
+                operator: ConditionOperator::Equals,
+                value: serde_json::json!("supply_low"),
+            }],
+            auto_approve: true,
+        }],
     }
 }
 
@@ -467,25 +541,21 @@ pub fn business_agent_config() -> ProactiveAgentConfig {
             ApprovalRule {
                 name: "auto_prep_meeting_docs".to_string(),
                 action_type: "document_create".to_string(),
-                conditions: vec![
-                    RuleCondition {
-                        field: "category".to_string(),
-                        operator: ConditionOperator::Equals,
-                        value: serde_json::json!("meeting_prep_needed"),
-                    },
-                ],
+                conditions: vec![RuleCondition {
+                    field: "category".to_string(),
+                    operator: ConditionOperator::Equals,
+                    value: serde_json::json!("meeting_prep_needed"),
+                }],
                 auto_approve: true,
             },
             ApprovalRule {
                 name: "auto_flag_deadline".to_string(),
                 action_type: "send_notification".to_string(),
-                conditions: vec![
-                    RuleCondition {
-                        field: "days_remaining".to_string(),
-                        operator: ConditionOperator::LessThan,
-                        value: serde_json::json!(3),
-                    },
-                ],
+                conditions: vec![RuleCondition {
+                    field: "days_remaining".to_string(),
+                    operator: ConditionOperator::LessThan,
+                    value: serde_json::json!(3),
+                }],
                 auto_approve: true,
             },
         ],
@@ -501,13 +571,19 @@ pub fn business_agent_config() -> ProactiveAgentConfig {
 pub trait ProactiveMonitor: Send + Sync {
     /// Scan integrations for problems
     async fn scan(&self) -> Result<Vec<DetectedProblem>, Box<dyn std::error::Error + Send + Sync>>;
-    
+
     /// Propose actions for a detected problem
-    async fn propose_actions(&self, problem: &DetectedProblem) -> Result<Vec<ProactiveAction>, Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn propose_actions(
+        &self,
+        problem: &DetectedProblem,
+    ) -> Result<Vec<ProactiveAction>, Box<dyn std::error::Error + Send + Sync>>;
+
     /// Execute an approved action
-    async fn execute_action(&self, action: &ProactiveAction) -> Result<String, Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn execute_action(
+        &self,
+        action: &ProactiveAction,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>;
+
     /// Check if an action can be auto-approved
     fn can_auto_approve(&self, action: &ProactiveAction) -> bool;
 }
@@ -530,13 +606,17 @@ mod tests {
     fn test_household_config() {
         let config = household_agent_config();
         assert_eq!(config.agent_id, "household");
-        assert!(config.monitored_integrations.contains(&"home_assistant".to_string()));
+        assert!(config
+            .monitored_integrations
+            .contains(&"home_assistant".to_string()));
     }
 
     #[test]
     fn test_business_config() {
         let config = business_agent_config();
         assert_eq!(config.agent_id, "business");
-        assert!(config.watch_categories.contains(&"calendar_conflict".to_string()));
+        assert!(config
+            .watch_categories
+            .contains(&"calendar_conflict".to_string()));
     }
 }

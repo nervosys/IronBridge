@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
 
     for (provider, env_var) in &cloud_providers {
         let has_key = std::env::var(env_var).is_ok();
-        let status = if has_key { "✓" } else { "○" };
+        let status = if has_key { "+" } else { "o" };
         println!("   {} {} ({})", status, provider.display_name(), env_var);
     }
 
@@ -209,7 +209,7 @@ fn main() -> anyhow::Result<()> {
         "Bing",
     ];
     for app in &app_classes {
-        println!("     {} → {}", app, get_friendly_app_name(app));
+        println!("     {} -> {}", app, get_friendly_app_name(app));
     }
 
     // ========================================================================
@@ -339,7 +339,7 @@ fn main() -> anyhow::Result<()> {
 
     for (data, expected) in &test_formats {
         let detected = detect_export_format(data);
-        println!("   {} → {}", expected, detected);
+        println!("   {} -> {}", expected, detected);
     }
 
     // ========================================================================

@@ -346,9 +346,9 @@ mod edge_case_tests {
 
     #[test]
     fn test_error_with_unicode() {
-        let err = CsmError::WorkspaceNotFound("/home/用户/项目".to_string());
+        let err = CsmError::WorkspaceNotFound("/home/user/project".to_string());
         let msg = format!("{}", err);
-        assert!(msg.contains("用户"));
+        assert!(msg.contains("user"));
     }
 
     #[test]

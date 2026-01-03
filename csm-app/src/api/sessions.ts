@@ -46,10 +46,19 @@ import type {
 // Response Helpers
 // =============================================================================
 
+/**
+ * Unwrap API response data, handling both wrapped and unwrapped formats.
+ * Also ensures arrays are proper JavaScript arrays to avoid iterator issues
+ * with Hermes engine.
+ */
 function unwrapResponse<T>(response: { data: { data?: T } | T }): T {
-    const data = response.data;
+    let data = response.data;
     if (data && typeof data === 'object' && 'data' in data) {
-        return data.data as T;
+        data = (data as { data: T }).data;
+    }
+    // Ensure arrays are proper arrays (fixes Hermes iterator issues)
+    if (Array.isArray(data)) {
+        return [...data] as T;
     }
     return data as T;
 }

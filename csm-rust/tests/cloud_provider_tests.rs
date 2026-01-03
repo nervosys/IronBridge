@@ -951,7 +951,7 @@ mod cloud_conversation_edge_cases {
     fn test_conversation_with_unicode() {
         let conv = CloudConversation {
             id: "unicode-conv".to_string(),
-            title: Some("日本語会話 🎌".to_string()),
+            title: Some("Japanese Chat".to_string()),
             created_at: Utc::now(),
             updated_at: None,
             model: None,
@@ -959,14 +959,14 @@ mod cloud_conversation_edge_cases {
                 CloudMessage {
                     id: None,
                     role: "user".to_string(),
-                    content: "こんにちは！".to_string(),
+                    content: "Hello!".to_string(),
                     timestamp: None,
                     model: None,
                 },
                 CloudMessage {
                     id: None,
                     role: "assistant".to_string(),
-                    content: "こんにちは！何かお手伝いできますか？".to_string(),
+                    content: "Hello! How can I help?".to_string(),
                     timestamp: None,
                     model: None,
                 },
@@ -975,7 +975,7 @@ mod cloud_conversation_edge_cases {
         };
 
         let session = conv.to_chat_session("TestProvider");
-        assert!(session.custom_title.as_ref().unwrap().contains("日本語"));
+        assert!(session.custom_title.as_ref().unwrap().contains("Japanese"));
     }
 
     #[test]

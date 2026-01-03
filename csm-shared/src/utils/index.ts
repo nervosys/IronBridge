@@ -31,24 +31,30 @@ export function formatDate(date: Date | string | number, options?: Intl.DateTime
 /**
  * Format a date to ISO string (YYYY-MM-DD)
  */
-export function formatDateISO(date: Date | string | number): string {
+export function formatDateISO(date: Date | string | number | null | undefined): string {
+    if (date == null) return '';
     const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '';
     return d.toISOString().split('T')[0];
 }
 
 /**
  * Format a date to time only (HH:MM)
  */
-export function formatTime(date: Date | string | number): string {
+export function formatTime(date: Date | string | number | null | undefined): string {
+    if (date == null) return '';
     const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
  * Format a date to relative time (e.g., "2 hours ago", "yesterday")
  */
-export function formatRelativeTime(date: Date | string | number): string {
+export function formatRelativeTime(date: Date | string | number | null | undefined): string {
+    if (date == null) return '';
     const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '';
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffSec = Math.floor(diffMs / 1000);

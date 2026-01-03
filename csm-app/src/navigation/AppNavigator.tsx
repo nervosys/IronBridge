@@ -18,6 +18,15 @@ import {
     AgentsScreen,
     AgentRunDetailScreen,
     SwarmDetailScreen,
+    MoreScreen,
+    ComparisonScreen,
+    HarvestScreen,
+    ProvidersScreen,
+    ProtocolsScreen,
+    AccountsScreen,
+    DeveloperScreen,
+    ResearchScreen,
+    SWEScreen,
 } from '../screens';
 import { OAuthLoginScreen } from '../screens/OAuthLoginScreen';
 import { RootStackParamList, TabParamList } from './types';
@@ -205,6 +214,58 @@ function AgentsStack() {
     );
 }
 
+function MoreStack() {
+    return (
+        <Stack.Navigator>
+            <Stack.Screen
+                name="More"
+                component={MoreScreen}
+                options={{ title: 'More' }}
+            />
+            <Stack.Screen
+                name="Comparison"
+                component={ComparisonScreen}
+                options={{ title: 'Model Comparison' }}
+            />
+            <Stack.Screen
+                name="Harvest"
+                component={HarvestScreen}
+                options={{ title: 'Harvest' }}
+            />
+            <Stack.Screen
+                name="Providers"
+                component={ProvidersScreen}
+                options={{ title: 'Providers' }}
+            />
+            <Stack.Screen
+                name="Protocols"
+                component={ProtocolsScreen}
+                options={{ title: 'Protocols' }}
+            />
+            <Stack.Screen
+                name="Accounts"
+                component={AccountsScreen}
+                options={{ title: 'Accounts' }}
+            />
+            <Stack.Screen
+                name="Developer"
+                component={DeveloperScreen}
+                options={{ title: 'Developer' }}
+            />
+            <Stack.Screen
+                name="Research"
+                component={ResearchScreen}
+                options={{ title: 'Research' }}
+            />
+            <Stack.Screen
+                name="SWE"
+                component={SWEScreen}
+                options={{ title: 'SWE Memory' }}
+            />
+        </Stack.Navigator>
+    );
+}
+
 export function AppNavigator() {
     const { colors, isDark } = useTheme();
 
@@ -252,6 +313,9 @@ export function AppNavigator() {
                             case 'SettingsTab':
                                 iconName = focused ? 'settings' : 'settings-outline';
                                 break;
+                            case 'MoreTab':
+                                iconName = focused ? 'grid' : 'grid-outline';
+                                break;
                             default:
                                 iconName = 'help-outline';
                         }
@@ -285,6 +349,11 @@ export function AppNavigator() {
                     name="SearchTab"
                     component={SearchStack}
                     options={{ title: 'Search' }}
+                />
+                <Tab.Screen
+                    name="MoreTab"
+                    component={MoreStack}
+                    options={{ title: 'More' }}
                 />
                 <Tab.Screen
                     name="SettingsTab"

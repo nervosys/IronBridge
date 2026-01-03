@@ -16,15 +16,21 @@ function formatDate(date, options) {
   return d.toLocaleString(void 0, options || defaultOptions);
 }
 function formatDateISO(date) {
+  if (date == null) return "";
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
   return d.toISOString().split("T")[0];
 }
 function formatTime(date) {
+  if (date == null) return "";
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
   return d.toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit" });
 }
 function formatRelativeTime(date) {
+  if (date == null) return "";
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
   const now = /* @__PURE__ */ new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffSec = Math.floor(diffMs / 1e3);

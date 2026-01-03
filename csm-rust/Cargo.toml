@@ -26,6 +26,7 @@ rusqlite = { version = "0.30", features = ["bundled"] }
 # File system utilities
 walkdir = "2.4"
 dirs = "5.0"
+glob = "0.3"
 
 # URL encoding/decoding
 urlencoding = "2.1"
@@ -78,16 +79,16 @@ aes-gcm = "0.10"
 
 # Windows DPAPI for cookie decryption
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = ["Win32_Security_Cryptography"] }
+windows = { version = "0.58", features = [
+    "Win32_Security_Cryptography",
+    "Win32_System_Memory",
+    "Win32_Foundation",
+] }
 
 [dev-dependencies]
 tempfile = "3.9"
 assert_cmd = "2.0"
 predicates = "3.0"
-
-[[bin]]
-name = "csm"
-path = "src/main.rs"
 
 [[bin]]
 name = "chasm"

@@ -23,7 +23,7 @@ pub fn detect_workspace(path: Option<&str>) -> Result<()> {
 
     match find_workspace_by_path(&project_path)? {
         Some((ws_id, ws_dir, ws_name)) => {
-            println!("\n{} Workspace Found!", "[✓]".green().bold());
+            println!("\n{} Workspace Found!", "[+]".green().bold());
             println!("   {} ID: {}", "[*]".blue(), &ws_id[..16.min(ws_id.len())]);
             println!("   {} Directory: {}", "[*]".blue(), ws_dir.display());
             if let Some(name) = ws_name {
@@ -132,14 +132,14 @@ pub fn detect_providers(with_sessions: bool) -> Result<()> {
                 if session_count > 0 {
                     format!(
                         "{} ({} sessions)",
-                        "✓".green(),
+                        "+".green(),
                         session_count.to_string().cyan()
                     )
                 } else {
-                    format!("{} (no sessions)", "✓".green())
+                    format!("{} (no sessions)", "+".green())
                 }
             } else {
-                format!("{} not available", "✗".red())
+                format!("{} not available", "x".red())
             };
 
             println!("   {} {}: {}", "[*]".blue(), provider.name().bold(), status);
@@ -147,12 +147,12 @@ pub fn detect_providers(with_sessions: bool) -> Result<()> {
             // Show endpoint for API-based providers
             if available {
                 if let Some(endpoint) = provider_type.default_endpoint() {
-                    println!("      {} Endpoint: {}", "└".dimmed(), endpoint.dimmed());
+                    println!("      {} Endpoint: {}", "`".dimmed(), endpoint.dimmed());
                 }
                 if let Some(path) = provider.sessions_path() {
                     println!(
                         "      {} Path: {}",
-                        "└".dimmed(),
+                        "`".dimmed(),
                         path.display().to_string().dimmed()
                     );
                 }
@@ -209,7 +209,7 @@ pub fn detect_session(session_id: &str, path: Option<&str>) -> Result<()> {
                     || filename.contains(&session_lower)
                 {
                     found = true;
-                    println!("\n{} Session Found!", "[✓]".green().bold());
+                    println!("\n{} Session Found!", "[+]".green().bold());
                     println!("   {} Provider: {}", "[*]".blue(), "GitHub Copilot".cyan());
                     println!("   {} Title: {}", "[*]".blue(), swp.session.title());
                     println!("   {} File: {}", "[*]".blue(), swp.path.display());
@@ -251,7 +251,7 @@ pub fn detect_session(session_id: &str, path: Option<&str>) -> Result<()> {
 
                             if sid.contains(&session_lower) || title.contains(&session_lower) {
                                 found = true;
-                                println!("\n{} Session Found!", "[✓]".green().bold());
+                                println!("\n{} Session Found!", "[+]".green().bold());
                                 println!(
                                     "   {} Provider: {}",
                                     "[*]".blue(),
@@ -300,12 +300,12 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
     println!();
 
     // 1. Workspace Detection
-    println!("{} Workspace", "━━━".dimmed());
+    println!("{} Workspace", "---".dimmed());
     let workspace_info = find_workspace_by_path(&project_path)?;
 
     match &workspace_info {
         Some((ws_id, ws_dir, ws_name)) => {
-            println!("   {} Status: {}", "[✓]".green(), "Found".green());
+            println!("   {} Status: {}", "[+]".green(), "Found".green());
             println!(
                 "   {} ID: {}...",
                 "[*]".blue(),
@@ -346,7 +346,7 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
     println!();
 
     // 2. Provider Detection
-    println!("{} Available Providers", "━━━".dimmed());
+    println!("{} Available Providers", "---".dimmed());
 
     let registry = ProviderRegistry::new();
     let provider_types = vec![
@@ -377,7 +377,7 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
                     } else {
                         "ready".dimmed().to_string()
                     };
-                    println!("   {} {}: {}", "[✓]".green(), provider.name(), status);
+                    println!("   {} {}: {}", "[+]".green(), provider.name(), status);
 
                     total_sessions += session_count;
                     if session_count > 0 {
@@ -398,7 +398,7 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
     println!();
 
     // 3. Summary
-    println!("{} Summary", "━━━".dimmed());
+    println!("{} Summary", "---".dimmed());
 
     let ws_status = if workspace_info.is_some() {
         "Yes".green()
@@ -420,19 +420,19 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
     // 4. Recommendations
     if workspace_info.is_none() || total_sessions == 0 {
         println!();
-        println!("{} Recommendations", "━━━".dimmed());
+        println!("{} Recommendations", "---".dimmed());
 
         if workspace_info.is_none() {
             println!(
                 "   {} Open this project in VS Code to enable chat history tracking",
-                "[→]".cyan()
+                "[->]".cyan()
             );
         }
 
         if total_sessions == 0 {
             println!(
                 "   {} Start a chat session in your IDE to create history",
-                "[→]".cyan()
+                "[->]".cyan()
             );
         }
     }

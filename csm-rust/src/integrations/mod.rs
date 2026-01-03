@@ -13,6 +13,8 @@
 //! - **Finance**: Banking, Crypto, Trading
 //! - **Health**: Apple Health, Fitness trackers
 //! - **Media**: Spotify, YouTube, Podcasts
+
+#![allow(dead_code, unused_imports)]
 //! - **Travel**: Maps, Uber, Flights
 //! - **Shopping**: Amazon, Groceries
 

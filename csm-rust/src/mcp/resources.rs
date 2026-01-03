@@ -1,5 +1,7 @@
 //! MCP Resources - Expose csm data as MCP resources
 
+#![allow(dead_code, unused_imports)]
+
 use super::types::*;
 use serde_json::json;
 

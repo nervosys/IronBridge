@@ -39,6 +39,7 @@ export function WorkspacesScreen({ navigation }: Props) {
     } = useQuery({
         queryKey: ['workspaces'],
         queryFn: getWorkspaces,
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const renderWorkspace = ({ item }: { item: Workspace }) => {

@@ -1,5 +1,7 @@
 //! MCP Tools - Expose csm functionality as MCP tools
 
+#![allow(dead_code, unused_imports)]
+
 use super::types::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

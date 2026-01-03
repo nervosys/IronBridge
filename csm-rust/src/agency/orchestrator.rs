@@ -6,6 +6,8 @@
 //! - Loop: Agent repeats until condition met
 //! - Hierarchical: Coordinator delegates to sub-agents
 
+#![allow(dead_code)]
+
 use crate::agency::agent::Agent;
 use crate::agency::error::{AgencyError, AgencyResult};
 use crate::agency::executor::{ExecutionContext, ExecutionResult, Executor};

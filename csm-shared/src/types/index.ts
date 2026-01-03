@@ -1734,3 +1734,471 @@ export interface HookPreset {
     requiredIntegrations: string[];
 }
 
+// =============================================================================
+// SWE Mode Types
+// =============================================================================
+// Types for the Software Engineering mode with persistent project memory
+
+/**
+ * A software project directory with persistent memory
+ */
+export interface SweProject {
+    id: string;
+    name: string;
+    path: string;
+    description?: string | null;
+    gitRemote?: string | null;
+    gitBranch?: string | null;
+    language?: string | null;
+    framework?: string | null;
+    lastOpened: number;
+    createdAt: number;
+    updatedAt: number;
+    memoryCount: number;
+    ruleCount: number;
+    sessionCount: number;
+    metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Memory entry in the project key-value store
+ * Used for persistent facts, context, and learned information
+ */
+export interface SweMemory {
+    id: string;
+    projectId: string;
+    key: string;
+    value: string;
+    category: SweMemoryCategory;
+    importance: SweImportance;
+    source?: SweMemorySource;
+    sourceMessageId?: string | null;
+    expiresAt?: number | null;
+    accessCount: number;
+    lastAccessed?: number | null;
+    createdAt: number;
+    updatedAt: number;
+    metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Categories for organizing memory entries
+ */
+export type SweMemoryCategory =
+    | 'fact'           // Learned facts about the project
+    | 'decision'       // Design decisions and rationale
+    | 'pattern'        // Code patterns and conventions
+    | 'dependency'     // Package/dependency information
+    | 'architecture'   // Architecture notes
+    | 'bug'            // Known bugs and issues
+    | 'todo'           // Tasks and todos
+    | 'context'        // Contextual information
+    | 'preference'     // User preferences
+    | 'custom';
+
+/**
+ * Source of a memory entry
+ */
+export type SweMemorySource =
+    | 'user'           // Explicitly added by user
+    | 'assistant'      // Inferred by assistant
+    | 'file'           // Extracted from file
+    | 'git'            // From git history
+    | 'import';        // Imported from external source
+
+/**
+ * Importance level for prioritizing memory in context
+ */
+export type SweImportance = 'critical' | 'high' | 'medium' | 'low';
+
+/**
+ * User-defined rules that are always injected into context
+ * These are "never do X", "always do Y" type instructions
+ */
+export interface SweRule {
+    id: string;
+    projectId: string;
+    rule: string;
+    description?: string | null;
+    category: SweRuleCategory;
+    priority: number;
+    enabled: boolean;
+    scope?: SweRuleScope;
+    conditions?: SweRuleCondition[];
+    createdAt: number;
+    updatedAt: number;
+    metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Rule categories for organization
+ */
+export type SweRuleCategory =
+    | 'constraint'     // "Never do X"
+    | 'requirement'    // "Always do Y"
+    | 'style'          // Code style preferences
+    | 'architecture'   // Architecture rules
+    | 'security'       // Security requirements
+    | 'testing'        // Testing requirements
+    | 'documentation'  // Documentation standards
+    | 'custom';
+
+/**
+ * Scope for when a rule applies
+ */
+export interface SweRuleScope {
+    filePatterns?: string[];      // Glob patterns for files
+    directories?: string[];        // Specific directories
+    languages?: string[];          // Programming languages
+    operations?: SweOperation[];   // Specific operations
+}
+
+/**
+ * Operations that can trigger rules
+ */
+export type SweOperation =
+    | 'file_create'
+    | 'file_edit'
+    | 'file_delete'
+    | 'terminal_command'
+    | 'code_review'
+    | 'refactor'
+    | 'test'
+    | 'deploy'
+    | 'all';
+
+/**
+ * Conditional rule application
+ */
+export interface SweRuleCondition {
+    type: 'file_exists' | 'file_contains' | 'env_set' | 'branch_matches' | 'custom';
+    value: string;
+    negate?: boolean;
+}
+
+/**
+ * SWE session - extends regular session with project context
+ */
+export interface SweSession {
+    id: string;
+    projectId: string;
+    title: string;
+    model?: string | null;
+    provider: string;
+    messageCount: number;
+    tokenCount?: number | null;
+    workingDirectory?: string | null;
+    gitBranch?: string | null;
+    createdAt: number;
+    updatedAt: number;
+    archived?: boolean;
+    metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * SWE session with full details including messages and context
+ */
+export interface SweSessionWithMessages extends SweSession {
+    messages: SweMessage[];
+    project: SweProject;
+    activeRules: SweRule[];
+    relevantMemory: SweMemory[];
+}
+
+/**
+ * SWE message - extends regular message with tool execution context
+ */
+export interface SweMessage {
+    id: string;
+    sessionId: string;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+    model?: string | null;
+    tokenCount?: number | null;
+    createdAt: number;
+    toolCalls?: SweToolCall[];
+    toolResults?: SweToolResult[];
+    contextSnapshot?: SweContextSnapshot;
+    metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Tool call made by the assistant
+ */
+export interface SweToolCall {
+    id: string;
+    name: SweTool;
+    input: Record<string, unknown>;
+    status: 'pending' | 'running' | 'success' | 'error';
+    startedAt?: number;
+    completedAt?: number;
+}
+
+/**
+ * Result of a tool execution
+ */
+export interface SweToolResult {
+    callId: string;
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    duration: number;
+    affectedFiles?: string[];
+}
+
+/**
+ * Available SWE tools
+ */
+export type SweTool =
+    | 'read_file'
+    | 'write_file'
+    | 'edit_file'
+    | 'create_file'
+    | 'delete_file'
+    | 'list_directory'
+    | 'search_files'
+    | 'search_code'
+    | 'run_command'
+    | 'git_status'
+    | 'git_diff'
+    | 'git_commit'
+    | 'git_log'
+    | 'add_memory'
+    | 'get_memory'
+    | 'search_memory'
+    | 'add_rule'
+    | 'web_search'
+    | 'fetch_url';
+
+/**
+ * Snapshot of context at message time
+ */
+export interface SweContextSnapshot {
+    workingDirectory: string;
+    gitBranch?: string;
+    gitStatus?: string;
+    openFiles?: string[];
+    recentChanges?: SweFileChange[];
+    injectedRules: string[];
+    injectedMemory: string[];
+}
+
+/**
+ * File change record
+ */
+export interface SweFileChange {
+    path: string;
+    type: 'create' | 'edit' | 'delete' | 'rename';
+    diff?: string;
+    timestamp: number;
+}
+
+/**
+ * Project file tree node
+ */
+export interface SweFileNode {
+    name: string;
+    path: string;
+    type: 'file' | 'directory';
+    size?: number;
+    modified?: number;
+    children?: SweFileNode[];
+    isExpanded?: boolean;
+    isGitIgnored?: boolean;
+}
+
+/**
+ * Git status for the project
+ */
+export interface SweGitStatus {
+    branch: string;
+    ahead: number;
+    behind: number;
+    staged: SweGitChange[];
+    unstaged: SweGitChange[];
+    untracked: string[];
+    hasConflicts: boolean;
+}
+
+/**
+ * Git change entry
+ */
+export interface SweGitChange {
+    path: string;
+    status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+    oldPath?: string;
+}
+
+/**
+ * Search result for code/file search
+ */
+export interface SweSearchResult {
+    file: string;
+    line: number;
+    column?: number;
+    content: string;
+    context?: string;
+    matchType: 'exact' | 'fuzzy' | 'regex';
+}
+
+/**
+ * Terminal execution result
+ */
+export interface SweTerminalResult {
+    command: string;
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+    duration: number;
+    workingDirectory: string;
+}
+
+/**
+ * Context to inject into model prompts
+ */
+export interface SweContextInjection {
+    systemPrompt: string;
+    rules: SweRule[];
+    memory: SweMemory[];
+    recentFiles: string[];
+    gitContext?: SweGitStatus;
+    customContext?: string;
+}
+
+/**
+ * Stats for a SWE project
+ */
+export interface SweProjectStats {
+    projectId: string;
+    totalSessions: number;
+    totalMessages: number;
+    totalTokens: number;
+    totalMemoryEntries: number;
+    totalRules: number;
+    totalFileOperations: number;
+    totalTerminalCommands: number;
+    lastActivity: number;
+    topMemoryCategories: { category: SweMemoryCategory; count: number }[];
+    recentFiles: string[];
+}
+
+/**
+ * Request to create a new SWE project
+ */
+export interface CreateSweProjectRequest {
+    path: string;
+    name?: string;
+    description?: string;
+}
+
+/**
+ * Request to add a memory entry
+ */
+export interface CreateSweMemoryRequest {
+    key: string;
+    value: string;
+    category?: SweMemoryCategory;
+    importance?: SweImportance;
+    expiresAt?: number;
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * Request to add a rule
+ */
+export interface CreateSweRuleRequest {
+    rule: string;
+    description?: string;
+    category?: SweRuleCategory;
+    priority?: number;
+    scope?: SweRuleScope;
+    conditions?: SweRuleCondition[];
+}
+
+/**
+ * Request to execute a tool
+ */
+export interface SweToolExecutionRequest {
+    projectId: string;
+    sessionId?: string;
+    tool: SweTool;
+    input: Record<string, unknown>;
+}
+
+/**
+ * Batch memory import request
+ */
+export interface SweBatchMemoryImport {
+    projectId: string;
+    entries: CreateSweMemoryRequest[];
+    overwriteExisting?: boolean;
+}
+
+/**
+ * Project template for quick setup
+ */
+export interface SweProjectTemplate {
+    id: string;
+    name: string;
+    description: string;
+    language: string;
+    framework?: string;
+    defaultRules: CreateSweRuleRequest[];
+    defaultMemory: CreateSweMemoryRequest[];
+}
+
+/**
+ * Common project templates
+ */
+export const SWE_PROJECT_TEMPLATES: SweProjectTemplate[] = [
+    {
+        id: 'typescript-node',
+        name: 'TypeScript Node.js',
+        description: 'Node.js project with TypeScript',
+        language: 'typescript',
+        framework: 'node',
+        defaultRules: [
+            { rule: 'Use strict TypeScript - no `any` types unless absolutely necessary', category: 'style', priority: 1 },
+            { rule: 'All async functions must have proper error handling', category: 'requirement', priority: 2 },
+            { rule: 'Use ESM imports, not CommonJS require()', category: 'style', priority: 3 },
+        ],
+        defaultMemory: [],
+    },
+    {
+        id: 'react-app',
+        name: 'React Application',
+        description: 'React frontend application',
+        language: 'typescript',
+        framework: 'react',
+        defaultRules: [
+            { rule: 'Use functional components with hooks, not class components', category: 'style', priority: 1 },
+            { rule: 'All components must have proper TypeScript props interfaces', category: 'requirement', priority: 2 },
+            { rule: 'Use Tailwind CSS for styling, avoid inline styles', category: 'style', priority: 3 },
+        ],
+        defaultMemory: [],
+    },
+    {
+        id: 'rust-project',
+        name: 'Rust Project',
+        description: 'Rust application or library',
+        language: 'rust',
+        defaultRules: [
+            { rule: 'Handle all Result and Option types explicitly - no unwrap() in production code', category: 'constraint', priority: 1 },
+            { rule: 'Document all public functions and types with /// doc comments', category: 'documentation', priority: 2 },
+            { rule: 'Run clippy and fix warnings before committing', category: 'requirement', priority: 3 },
+        ],
+        defaultMemory: [],
+    },
+    {
+        id: 'python-project',
+        name: 'Python Project',
+        description: 'Python application or library',
+        language: 'python',
+        defaultRules: [
+            { rule: 'Use type hints for all function parameters and return values', category: 'style', priority: 1 },
+            { rule: 'Follow PEP 8 style guide', category: 'style', priority: 2 },
+            { rule: 'All functions must have docstrings', category: 'documentation', priority: 3 },
+        ],
+        defaultMemory: [],
+    },
+];

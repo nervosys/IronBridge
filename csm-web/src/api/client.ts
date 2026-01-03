@@ -104,6 +104,10 @@ async function request<T>(
         }
 
         const data = await response.json();
+        // If backend already returns { success, data, error } format, use it directly
+        if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+            return data;
+        }
         return { success: true, data };
     } catch (error) {
         clearTimeout(timeoutId);

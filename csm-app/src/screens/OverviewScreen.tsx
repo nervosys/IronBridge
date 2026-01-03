@@ -139,7 +139,7 @@ function ProviderItem({ name, sessionCount, onPress }: ProviderItemProps) {
 export function OverviewScreen({ navigation }: Props) {
     const { colors, isDark } = useTheme();
 
-    // Fetch data from API
+    // Fetch data from API - use select to ensure arrays are always arrays
     const {
         data: workspaces = [],
         isLoading: workspacesLoading,
@@ -147,6 +147,7 @@ export function OverviewScreen({ navigation }: Props) {
     } = useQuery({
         queryKey: ['workspaces'],
         queryFn: getWorkspaces,
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const {
@@ -156,6 +157,7 @@ export function OverviewScreen({ navigation }: Props) {
     } = useQuery({
         queryKey: ['sessions', { limit: 50 }],
         queryFn: () => getSessions({ limit: 50 }),
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const {
@@ -174,6 +176,7 @@ export function OverviewScreen({ navigation }: Props) {
     } = useQuery({
         queryKey: ['providers'],
         queryFn: getProviders,
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const isLoading = workspacesLoading || sessionsLoading || statsLoading || providersLoading;
@@ -218,7 +221,9 @@ export function OverviewScreen({ navigation }: Props) {
 
     // Recent sessions (sorted by updatedAt)
     const recentSessions = useMemo(() => {
-        return [...sessions]
+        if (!Array.isArray(sessions)) return [];
+        return sessions
+            .slice()
             .sort((a, b) => {
                 const aTime = typeof a.updatedAt === 'number' ? a.updatedAt : new Date(a.updatedAt).getTime();
                 const bTime = typeof b.updatedAt === 'number' ? b.updatedAt : new Date(b.updatedAt).getTime();
@@ -229,12 +234,13 @@ export function OverviewScreen({ navigation }: Props) {
 
     // Provider distribution
     const providerDistribution = useMemo(() => {
-        if (stats?.sessionsByProvider) {
+        if (stats?.sessionsByProvider && Array.isArray(stats.sessionsByProvider)) {
             return stats.sessionsByProvider
                 .map((p) => ({ name: p.provider, sessionCount: p.count }))
                 .sort((a, b) => b.sessionCount - a.sessionCount);
         }
 
+        if (!Array.isArray(sessions)) return [];
         const counts = new Map<string, number>();
         sessions.forEach((s) => {
             const count = counts.get(s.provider) || 0;

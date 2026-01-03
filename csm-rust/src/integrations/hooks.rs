@@ -3,6 +3,8 @@
 //! Hooks allow agents to respond to events and automate workflows.
 //! They connect triggers (events) to actions (integrations).
 
+#![allow(dead_code)]
+
 use super::{Capability, IntegrationResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -43,27 +45,33 @@ pub enum HookTrigger {
     // Time-based Triggers
     // =========================================================================
     /// Cron schedule (e.g., "0 9 * * *" for 9 AM daily)
-    Schedule { cron: String, timezone: Option<String> },
+    Schedule {
+        cron: String,
+        timezone: Option<String>,
+    },
     /// Interval (e.g., every 30 minutes)
     Interval { seconds: u64 },
     /// Specific datetime
     DateTime { at: DateTime<Utc> },
     /// Recurring at specific times
     Daily { times: Vec<String> }, // ["09:00", "17:00"]
-    
+
     // =========================================================================
     // Event-based Triggers
     // =========================================================================
     /// Webhook received
-    Webhook { path: String, method: Option<String> },
+    Webhook {
+        path: String,
+        method: Option<String>,
+    },
     /// File system change
-    FileChange { 
-        path: String, 
+    FileChange {
+        path: String,
         events: Vec<FileEvent>,
         recursive: bool,
     },
     /// Email received
-    EmailReceived { 
+    EmailReceived {
         account: String,
         filters: Option<EmailFilters>,
     },
@@ -86,9 +94,7 @@ pub enum HookTrigger {
         events: Vec<GitEventType>,
     },
     /// System event
-    SystemEvent {
-        event: SystemEventType,
-    },
+    SystemEvent { event: SystemEventType },
     /// Smart home device event
     DeviceEvent {
         device_id: String,
@@ -179,15 +185,26 @@ pub enum SystemEventType {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HookCondition {
     /// Time window
-    TimeWindow { start: String, end: String, days: Option<Vec<String>> },
+    TimeWindow {
+        start: String,
+        end: String,
+        days: Option<Vec<String>>,
+    },
     /// Expression evaluation
     Expression { expr: String },
     /// Previous action result
     PreviousResult { action_index: usize, success: bool },
     /// Environment variable
-    EnvVar { name: String, value: Option<String>, exists: Option<bool> },
+    EnvVar {
+        name: String,
+        value: Option<String>,
+        exists: Option<bool>,
+    },
     /// System state
-    SystemState { state: String, value: serde_json::Value },
+    SystemState {
+        state: String,
+        value: serde_json::Value,
+    },
     /// Rate limit
     RateLimit { max_runs: u32, period_seconds: u64 },
     /// Cooldown period
@@ -236,7 +253,7 @@ pub enum HookAction {
         priority: Option<u8>,
         project: Option<String>,
     },
-    
+
     // =========================================================================
     // Communication Actions
     // =========================================================================
@@ -247,25 +264,13 @@ pub enum HookAction {
         thread_ts: Option<String>,
     },
     /// Send Discord message
-    DiscordMessage {
-        channel_id: String,
-        content: String,
-    },
+    DiscordMessage { channel_id: String, content: String },
     /// Send Teams message
-    TeamsMessage {
-        channel: String,
-        content: String,
-    },
+    TeamsMessage { channel: String, content: String },
     /// Send Telegram message
-    TelegramMessage {
-        chat_id: String,
-        text: String,
-    },
+    TelegramMessage { chat_id: String, text: String },
     /// Send SMS
-    SendSms {
-        to: String,
-        message: String,
-    },
+    SendSms { to: String, message: String },
     /// Send notification
     Notification {
         title: String,
@@ -273,7 +278,7 @@ pub enum HookAction {
         sound: Option<String>,
         actions: Option<Vec<String>>,
     },
-    
+
     // =========================================================================
     // Browser/Automation Actions
     // =========================================================================
@@ -283,10 +288,7 @@ pub enum HookAction {
         browser: Option<String>,
     },
     /// Run browser automation
-    BrowserAutomation {
-        script: String,
-        headless: bool,
-    },
+    BrowserAutomation { script: String, headless: bool },
     /// Scrape webpage
     ScrapeWebpage {
         url: String,
@@ -298,7 +300,7 @@ pub enum HookAction {
         fields: HashMap<String, String>,
         submit: bool,
     },
-    
+
     // =========================================================================
     // Development Actions
     // =========================================================================
@@ -328,7 +330,7 @@ pub enum HookAction {
         container: Option<String>,
         args: Vec<String>,
     },
-    
+
     // =========================================================================
     // Smart Home Actions
     // =========================================================================
@@ -339,45 +341,32 @@ pub enum HookAction {
         parameters: Option<HashMap<String, serde_json::Value>>,
     },
     /// Set scene
-    SetScene {
-        scene_id: String,
-    },
+    SetScene { scene_id: String },
     /// Home Assistant service call
     HomeAssistantService {
         domain: String,
         service: String,
         data: Option<serde_json::Value>,
     },
-    
+
     // =========================================================================
     // File Actions
     // =========================================================================
     /// Copy file
-    CopyFile {
-        source: String,
-        destination: String,
-    },
+    CopyFile { source: String, destination: String },
     /// Move file
-    MoveFile {
-        source: String,
-        destination: String,
-    },
+    MoveFile { source: String, destination: String },
     /// Create file
-    CreateFile {
-        path: String,
-        content: String,
-    },
+    CreateFile { path: String, content: String },
     /// Delete file
-    DeleteFile {
-        path: String,
-    },
+    DeleteFile { path: String },
     /// Sync folder
     SyncFolder {
         source: String,
         destination: String,
         delete_extra: bool,
     },
-    
+
     // =========================================================================
     // Data Actions
     // =========================================================================
@@ -400,7 +389,7 @@ pub enum HookAction {
         query: String,
         params: Option<Vec<serde_json::Value>>,
     },
-    
+
     // =========================================================================
     // AI/Agent Actions
     // =========================================================================
@@ -425,7 +414,7 @@ pub enum HookAction {
         content: String,
         schema: serde_json::Value,
     },
-    
+
     // =========================================================================
     // Meta Actions
     // =========================================================================
@@ -441,18 +430,11 @@ pub enum HookAction {
         if_false: Option<Box<HookAction>>,
     },
     /// Parallel execution
-    Parallel {
-        actions: Vec<HookAction>,
-    },
+    Parallel { actions: Vec<HookAction> },
     /// Delay
-    Delay {
-        seconds: u64,
-    },
+    Delay { seconds: u64 },
     /// Log message
-    Log {
-        level: String,
-        message: String,
-    },
+    Log { level: String, message: String },
 }
 
 /// Hook configuration
@@ -590,10 +572,14 @@ pub mod presets {
     pub fn morning_briefing() -> Hook {
         HookBuilder::new("Morning Briefing")
             .description("Daily morning summary of calendar, emails, and tasks")
-            .trigger(HookTrigger::Daily { times: vec!["07:30".to_string()] })
+            .trigger(HookTrigger::Daily {
+                times: vec!["07:30".to_string()],
+            })
             .action(HookAction::RunAgent {
                 agent_name: "assistant".to_string(),
-                input: "Give me a morning briefing: today's calendar, important emails, and top tasks".to_string(),
+                input:
+                    "Give me a morning briefing: today's calendar, important emails, and top tasks"
+                        .to_string(),
                 context: None,
             })
             .action(HookAction::Notification {
@@ -617,7 +603,8 @@ pub mod presets {
             })
             .action(HookAction::RunAgent {
                 agent_name: "researcher".to_string(),
-                input: "Research the attendees and prepare talking points for this meeting".to_string(),
+                input: "Research the attendees and prepare talking points for this meeting"
+                    .to_string(),
                 context: None,
             })
             .action(HookAction::Notification {
@@ -677,17 +664,25 @@ pub mod presets {
     pub fn goodnight_routine() -> Hook {
         HookBuilder::new("Goodnight Routine")
             .description("Turn off lights and set thermostat at bedtime")
-            .trigger(HookTrigger::Daily { times: vec!["23:00".to_string()] })
+            .trigger(HookTrigger::Daily {
+                times: vec!["23:00".to_string()],
+            })
             .condition(HookCondition::TimeWindow {
                 start: "22:00".to_string(),
                 end: "01:00".to_string(),
                 days: None,
             })
-            .action(HookAction::SetScene { scene_id: "goodnight".to_string() })
+            .action(HookAction::SetScene {
+                scene_id: "goodnight".to_string(),
+            })
             .action(HookAction::ControlDevice {
                 device_id: "thermostat".to_string(),
                 action: "set_temperature".to_string(),
-                parameters: Some([("temperature".to_string(), serde_json::json!(68))].into_iter().collect()),
+                parameters: Some(
+                    [("temperature".to_string(), serde_json::json!(68))]
+                        .into_iter()
+                        .collect(),
+                ),
             })
             .build()
     }
@@ -724,12 +719,15 @@ pub mod presets {
             .trigger(HookTrigger::Manual)
             .action(HookAction::SlackMessage {
                 channel: "#status".to_string(),
-                text: "🎯 In focus mode - will respond later".to_string(),
+                text: "[Focus] In focus mode - will respond later".to_string(),
                 thread_ts: None,
             })
             .action(HookAction::RunCommand {
                 command: "osascript".to_string(),
-                args: vec!["-e".to_string(), "tell application \"System Events\" to set do not disturb to true".to_string()],
+                args: vec![
+                    "-e".to_string(),
+                    "tell application \"System Events\" to set do not disturb to true".to_string(),
+                ],
                 cwd: None,
                 env: None,
             })

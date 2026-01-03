@@ -3,6 +3,8 @@
 //! This module provides read-only access to the CSM database, enabling the MCP server
 //! to expose csm-web's chat sessions without modifying VS Code's workspace storage.
 
+#![allow(dead_code, unused_imports)]
+
 use crate::database::{ChatDatabase, Message, Session, Workspace};
 use anyhow::Result;
 use std::path::PathBuf;

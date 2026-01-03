@@ -2,6 +2,8 @@
 //!
 //! Handles the execution of individual agents with tool calling.
 
+#![allow(dead_code)]
+
 use crate::agency::agent::{Agent, AgentStatus};
 use crate::agency::error::{AgencyError, AgencyResult};
 use crate::agency::models::{AgencyEvent, AgencyMessage, EventType, MessageRole, ToolCall, ToolResult, TokenUsage};

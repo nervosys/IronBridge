@@ -1,5 +1,7 @@
 //! Agency Error types
 
+#![allow(dead_code)]
+
 use thiserror::Error;
 
 /// Agency-specific errors

@@ -7,6 +7,8 @@
 //! - ALM (Audio-Language Models) - Text + Audio
 //! - VALM (Video-Audio-Language Models) - Text + Video + Audio
 
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1084,7 +1086,7 @@ pub fn vla_models() -> Vec<MultimodalModel> {
         },
         MultimodalModel {
             id: "pi0".to_string(),
-            name: "π₀ (Pi-Zero)".to_string(),
+            name: "Pi-Zero".to_string(),
             provider: "Physical Intelligence".to_string(),
             category: ModelCategory::VLA,
             capabilities: ModalityCapabilities::vla(),

@@ -1,5 +1,7 @@
 //! MCP Server Types - JSON-RPC message definitions for MCP protocol
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

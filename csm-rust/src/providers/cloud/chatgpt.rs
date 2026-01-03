@@ -17,15 +17,81 @@ use super::common::{
 };
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
-const CHATGPT_API_BASE: &str = "https://chat.openai.com/backend-api";
-const CHATGPT_AUTH_API: &str = "https://api.openai.com/v1";
+const CHATGPT_API_BASE: &str = "https://chatgpt.com/backend-api";
+
+/// Custom deserializer that handles both Unix timestamp (f64) and ISO8601 string
+fn deserialize_timestamp<'de, D>(deserializer: D) -> std::result::Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum TimestampFormat {
+        Float(f64),
+        String(String),
+    }
+
+    match TimestampFormat::deserialize(deserializer)? {
+        TimestampFormat::Float(f) => Ok(f),
+        TimestampFormat::String(s) => {
+            // Try to parse as ISO8601
+            if let Ok(dt) = DateTime::parse_from_rfc3339(&s) {
+                Ok(dt.timestamp() as f64)
+            } else if let Ok(dt) = s.parse::<DateTime<Utc>>() {
+                Ok(dt.timestamp() as f64)
+            } else {
+                Err(D::Error::custom(format!("Invalid timestamp format: {}", s)))
+            }
+        }
+    }
+}
+
+/// Custom deserializer that handles optional timestamps in both formats
+fn deserialize_optional_timestamp<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum TimestampFormat {
+        Float(f64),
+        String(String),
+        Null,
+    }
+
+    match Option::<TimestampFormat>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(TimestampFormat::Null) => Ok(None),
+        Some(TimestampFormat::Float(f)) => Ok(Some(f)),
+        Some(TimestampFormat::String(s)) => {
+            if s.is_empty() {
+                return Ok(None);
+            }
+            // Try to parse as ISO8601
+            if let Ok(dt) = DateTime::parse_from_rfc3339(&s) {
+                Ok(Some(dt.timestamp() as f64))
+            } else if let Ok(dt) = s.parse::<DateTime<Utc>>() {
+                Ok(Some(dt.timestamp() as f64))
+            } else {
+                Err(D::Error::custom(format!("Invalid timestamp format: {}", s)))
+            }
+        }
+    }
+}
 
 /// ChatGPT provider for fetching conversation history
 pub struct ChatGPTProvider {
     api_key: Option<String>,
     session_token: Option<String>,
+    access_token: Option<String>,
     client: Option<reqwest::blocking::Client>,
 }
 
@@ -34,24 +100,93 @@ impl ChatGPTProvider {
         Self {
             api_key,
             session_token: None,
+            access_token: None,
+            client: None,
+        }
+    }
+
+    /// Create provider with session token from browser cookies
+    pub fn with_session_token(session_token: String) -> Self {
+        Self {
+            api_key: None,
+            session_token: Some(session_token),
+            access_token: None,
             client: None,
         }
     }
 
     fn ensure_client(&mut self) -> Result<&reqwest::blocking::Client> {
         if self.client.is_none() {
-            let config = HttpClientConfig::default();
+            let mut config = HttpClientConfig::default();
+            config.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string();
             self.client = Some(build_http_client(&config)?);
         }
         Ok(self.client.as_ref().unwrap())
     }
 
-    fn get_auth_header(&self) -> Option<String> {
-        if let Some(ref token) = self.session_token {
-            Some(format!("Bearer {}", token))
-        } else {
-            self.api_key.as_ref().map(|key| format!("Bearer {}", key))
+    /// Exchange session token for access token
+    fn get_access_token(&mut self) -> Result<String> {
+        if let Some(ref token) = self.access_token {
+            return Ok(token.clone());
         }
+
+        let session_token = self
+            .session_token
+            .clone()
+            .ok_or_else(|| anyhow!("No session token available"))?;
+
+        let client = self.ensure_client()?;
+
+        // Call the session endpoint to get access token
+        let response = client
+            .get("https://chatgpt.com/api/auth/session")
+            .header(
+                "Cookie",
+                format!("__Secure-next-auth.session-token={}", session_token),
+            )
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to get access token: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "Session endpoint returned {}: {}. Authentication may have expired.",
+                status,
+                body
+            ));
+        }
+
+        let session_data: serde_json::Value = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse session response: {}", e))?;
+
+        let access_token = session_data
+            .get("accessToken")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                anyhow!("No access token in session response - authentication may have expired")
+            })?
+            .to_string();
+
+        self.access_token = Some(access_token.clone());
+        Ok(access_token)
+    }
+
+    /// Build authorization header
+    fn get_auth_header(&mut self) -> Result<String> {
+        if let Some(ref token) = self.access_token {
+            return Ok(format!("Bearer {}", token));
+        }
+        if self.session_token.is_some() {
+            let token = self.get_access_token()?;
+            return Ok(format!("Bearer {}", token));
+        }
+        if let Some(ref key) = self.api_key {
+            return Ok(format!("Bearer {}", key));
+        }
+        Err(anyhow!("No authentication credentials available"))
     }
 }
 
@@ -72,7 +207,9 @@ struct ConversationListResponse {
 struct ConversationItem {
     id: String,
     title: Option<String>,
+    #[serde(deserialize_with = "deserialize_timestamp")]
     create_time: f64,
+    #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
     update_time: Option<f64>,
     #[serde(default)]
     is_archived: bool,
@@ -81,7 +218,9 @@ struct ConversationItem {
 #[derive(Debug, Deserialize)]
 struct ConversationDetailResponse {
     title: Option<String>,
+    #[serde(deserialize_with = "deserialize_timestamp")]
     create_time: f64,
+    #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
     update_time: Option<f64>,
     mapping: std::collections::HashMap<String, MessageNode>,
     #[serde(default)]
@@ -106,6 +245,7 @@ struct MessageNode {
 struct MessageContent {
     id: String,
     author: AuthorInfo,
+    #[serde(default, deserialize_with = "deserialize_optional_timestamp")]
     create_time: Option<f64>,
     content: ContentParts,
     #[serde(default)]
@@ -147,49 +287,198 @@ impl CloudProvider for ChatGPTProvider {
     }
 
     fn is_authenticated(&self) -> bool {
-        self.api_key.is_some() || self.session_token.is_some()
+        self.api_key.is_some() || self.session_token.is_some() || self.access_token.is_some()
     }
 
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>) {
         self.api_key = api_key;
         self.session_token = session_token;
+        self.access_token = None; // Clear cached access token when credentials change
     }
 
-    fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
-        // Note: This requires a session token from ChatGPT web interface
-        // The official API doesn't expose conversation history
+    fn list_conversations(&self, options: &FetchOptions) -> Result<Vec<CloudConversation>> {
+        // We need mutable self to get access token, so use interior mutability pattern
+        // For now, create a new instance - this is a workaround for the trait signature
+        let mut provider = ChatGPTProvider {
+            api_key: self.api_key.clone(),
+            session_token: self.session_token.clone(),
+            access_token: self.access_token.clone(),
+            client: None,
+        };
 
-        if !self.is_authenticated() {
+        if !provider.is_authenticated() {
             return Err(anyhow!(
-                "ChatGPT requires authentication. Set OPENAI_API_KEY or provide a session token.\n\
-                Note: The official API doesn't provide conversation history. \n\
-                For web conversations, you'll need to extract your session token from browser cookies."
+                "ChatGPT requires authentication. Provide a session token from browser cookies.\n\
+                Run 'chasm harvest scan --web' to check browser authentication status."
             ));
         }
 
-        // For now, return an empty list with a helpful message
-        // Full implementation would require session token authentication
-        eprintln!("Note: ChatGPT conversation history requires web session authentication.");
-        eprintln!("The official OpenAI API doesn't provide access to ChatGPT web conversations.");
+        // Try to get access token and list conversations
+        let auth_header = provider.get_auth_header()?;
+        let client = provider.ensure_client()?;
 
-        // In a real implementation, we would:
-        // 1. Use the session token to authenticate
-        // 2. Call GET /backend-api/conversations?offset=0&limit=50
-        // 3. Parse and return the results
+        let limit = options.limit.unwrap_or(50).min(100);
+        let url = format!(
+            "{}/conversations?offset=0&limit={}&order=updated",
+            CHATGPT_API_BASE, limit
+        );
 
-        Ok(vec![])
+        let response = client
+            .get(&url)
+            .header("Authorization", &auth_header)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to fetch conversations: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "ChatGPT API returned {}: {}. Session may have expired - log in to chatgpt.com in your browser.",
+                status,
+                body
+            ));
+        }
+
+        let list_response: ConversationListResponse = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse conversation list: {}", e))?;
+
+        // Debug: Found {} conversations (total: {})
+
+        let mut conversations = Vec::new();
+        for item in list_response.items {
+            // Skip archived if not requested
+            if item.is_archived && !options.include_archived {
+                continue;
+            }
+
+            // Apply date filters
+            let created = timestamp_to_datetime(item.create_time);
+            if let Some(after) = options.after {
+                if created < after {
+                    continue;
+                }
+            }
+            if let Some(before) = options.before {
+                if created > before {
+                    continue;
+                }
+            }
+
+            conversations.push(CloudConversation {
+                id: item.id,
+                title: item.title,
+                created_at: created,
+                updated_at: item.update_time.map(timestamp_to_datetime),
+                model: None,
+                messages: Vec::new(), // Will be populated by fetch_conversation
+                metadata: None,
+            });
+        }
+
+        Ok(conversations)
     }
 
-    fn fetch_conversation(&self, _id: &str) -> Result<CloudConversation> {
-        if !self.is_authenticated() {
+    fn fetch_conversation(&self, id: &str) -> Result<CloudConversation> {
+        let mut provider = ChatGPTProvider {
+            api_key: self.api_key.clone(),
+            session_token: self.session_token.clone(),
+            access_token: self.access_token.clone(),
+            client: None,
+        };
+
+        if !provider.is_authenticated() {
             return Err(anyhow!("ChatGPT requires authentication"));
         }
 
-        // Placeholder - would call GET /backend-api/conversation/{id}
-        Err(anyhow!(
-            "Fetching individual ChatGPT conversations requires web session authentication. \
-            Please export your conversations using ChatGPT's built-in export feature."
-        ))
+        let auth_header = provider.get_auth_header()?;
+        let client = provider.ensure_client()?;
+
+        let url = format!("{}/conversation/{}", CHATGPT_API_BASE, id);
+
+        let response = client
+            .get(&url)
+            .header("Authorization", &auth_header)
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to fetch conversation {}: {}", id, e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            return Err(anyhow!(
+                "Failed to fetch conversation {}: HTTP {}",
+                id,
+                status
+            ));
+        }
+
+        let detail: ConversationDetailResponse = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse conversation {}: {}", id, e))?;
+
+        // Extract messages from the mapping tree
+        // Build a map of node IDs to their messages
+        let mut message_order: Vec<(String, CloudMessage)> = Vec::new();
+
+        for (node_id, node) in &detail.mapping {
+            if let Some(ref msg_content) = node.message {
+                let role = &msg_content.author.role;
+
+                // Skip system messages and tool messages
+                if role == "system" || role == "tool" {
+                    continue;
+                }
+
+                let content = msg_content
+                    .content
+                    .parts
+                    .as_ref()
+                    .map(|parts| {
+                        parts
+                            .iter()
+                            .filter_map(|p| p.as_str().map(String::from))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                    .or_else(|| msg_content.content.text.clone())
+                    .unwrap_or_default();
+
+                if content.is_empty() {
+                    continue;
+                }
+
+                let cloud_message = CloudMessage {
+                    id: Some(msg_content.id.clone()),
+                    role: role.clone(),
+                    content,
+                    timestamp: msg_content.create_time.map(timestamp_to_datetime),
+                    model: detail.model.as_ref().and_then(|m| m.slug.clone()),
+                };
+
+                message_order.push((node_id.clone(), cloud_message));
+            }
+        }
+
+        // Sort messages by timestamp if available
+        message_order.sort_by(|a, b| {
+            let ts_a = a.1.timestamp.unwrap_or(DateTime::<Utc>::MIN_UTC);
+            let ts_b = b.1.timestamp.unwrap_or(DateTime::<Utc>::MIN_UTC);
+            ts_a.cmp(&ts_b)
+        });
+
+        let messages: Vec<CloudMessage> = message_order.into_iter().map(|(_, msg)| msg).collect();
+
+        Ok(CloudConversation {
+            id: id.to_string(),
+            title: detail.title,
+            created_at: timestamp_to_datetime(detail.create_time),
+            updated_at: detail.update_time.map(timestamp_to_datetime),
+            model: detail.model.and_then(|m| m.slug),
+            messages,
+            metadata: None,
+        })
     }
 
     fn api_key_env_var(&self) -> &'static str {

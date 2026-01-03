@@ -9,10 +9,12 @@
 //! - Merge sessions across workspaces
 //! - Search chat history with full-text search
 
+#![allow(dead_code, unused_imports)]
+
 pub mod db;
+pub mod resources;
 pub mod server;
 pub mod tools;
-pub mod resources;
 pub mod types;
 
 pub use server::McpServer;

@@ -2,6 +2,8 @@
 //!
 //! Define and register tools that agents can use.
 
+#![allow(dead_code)]
+
 use crate::agency::error::AgencyResult;
 use crate::agency::models::ToolResult;
 use async_trait::async_trait;

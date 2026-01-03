@@ -130,7 +130,7 @@ pub fn configure_provider(
     config.set_provider(provider_config.clone());
     config.save()?;
 
-    println!("{} Configured provider: {}", "✓".green(), provider_name);
+    println!("{} Configured provider: {}", "+".green(), provider_name);
     println!();
     println!(
         "  Endpoint: {}",
@@ -209,7 +209,7 @@ pub fn import_from_provider(
         let content = serde_json::to_string_pretty(&session)?;
         std::fs::write(&session_file, content)?;
 
-        println!("{} Imported session: {}", "✓".green(), session.title());
+        println!("{} Imported session: {}", "+".green(), session.title());
     } else {
         // Import all sessions
         println!("Importing all sessions from {}...", provider.name());
@@ -238,7 +238,7 @@ pub fn import_from_provider(
                 let content = serde_json::to_string_pretty(&session)?;
                 std::fs::write(&session_file, content)?;
                 imported += 1;
-                println!("  {} {}", "✓".green(), session.title());
+                println!("  {} {}", "+".green(), session.title());
             }
         }
 

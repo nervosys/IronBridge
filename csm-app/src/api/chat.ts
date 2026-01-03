@@ -83,7 +83,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
     {
         id: 'openai-gpt4',
         type: 'openai',
-        name: 'OpenAI GPT-4o',
+        name: 'OpenAI',
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-4o',
         isEnabled: false,
@@ -93,7 +93,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
     {
         id: 'openai-gpt4-mini',
         type: 'openai',
-        name: 'OpenAI GPT-4o Mini',
+        name: 'OpenAI',
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-4o-mini',
         isEnabled: false,
@@ -103,7 +103,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
     {
         id: 'anthropic-claude',
         type: 'anthropic',
-        name: 'Claude 3.5 Sonnet',
+        name: 'Anthropic',
         baseUrl: 'https://api.anthropic.com/v1',
         model: 'claude-3-5-sonnet-20241022',
         isEnabled: false,
@@ -113,7 +113,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
     {
         id: 'anthropic-haiku',
         type: 'anthropic',
-        name: 'Claude 3.5 Haiku',
+        name: 'Anthropic',
         baseUrl: 'https://api.anthropic.com/v1',
         model: 'claude-3-5-haiku-20241022',
         isEnabled: false,
@@ -123,7 +123,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
     {
         id: 'google-gemini',
         type: 'google',
-        name: 'Google Gemini Pro',
+        name: 'Google AI',
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
         model: 'gemini-1.5-pro',
         isEnabled: false,
@@ -143,7 +143,7 @@ export const DEFAULT_PROVIDERS: Omit<ChatProvider, 'apiKey'>[] = [
     {
         id: 'groq-llama',
         type: 'groq',
-        name: 'Groq Llama',
+        name: 'Groq',
         baseUrl: 'https://api.groq.com/openai/v1',
         model: 'llama-3.3-70b-versatile',
         isEnabled: false,

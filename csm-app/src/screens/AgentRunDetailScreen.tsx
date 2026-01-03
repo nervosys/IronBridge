@@ -465,7 +465,7 @@ ${run.messages.slice(-10).map(m => `**${m.type}:** ${m.content.slice(0, 100)}...
             {/* Content */}
             {activeTab === 'timeline' && (
                 <FlatList
-                    data={[...run.messages].reverse()}
+                    data={Array.isArray(run.messages) ? run.messages.slice().reverse() : []}
                     renderItem={renderTimelineItem}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}

@@ -20,12 +20,12 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 const ANTHROPIC_WEB_API: &str = "https://claude.ai/api";
-const ANTHROPIC_API: &str = "https://api.anthropic.com/v1";
 
 /// Anthropic Claude provider for fetching conversation history
 pub struct AnthropicProvider {
     api_key: Option<String>,
     session_token: Option<String>,
+    organization_id: Option<String>,
     client: Option<reqwest::blocking::Client>,
 }
 
@@ -34,16 +34,76 @@ impl AnthropicProvider {
         Self {
             api_key,
             session_token: None,
+            organization_id: None,
+            client: None,
+        }
+    }
+
+    /// Create provider with session token from browser cookies
+    pub fn with_session_token(session_token: String) -> Self {
+        Self {
+            api_key: None,
+            session_token: Some(session_token),
+            organization_id: None,
             client: None,
         }
     }
 
     fn ensure_client(&mut self) -> Result<&reqwest::blocking::Client> {
         if self.client.is_none() {
-            let config = HttpClientConfig::default();
+            let mut config = HttpClientConfig::default();
+            config.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string();
             self.client = Some(build_http_client(&config)?);
         }
         Ok(self.client.as_ref().unwrap())
+    }
+
+    /// Get organization ID from the bootstrap endpoint
+    fn get_organization_id(&mut self) -> Result<String> {
+        if let Some(ref org_id) = self.organization_id {
+            return Ok(org_id.clone());
+        }
+
+        let session_token = self
+            .session_token
+            .clone()
+            .ok_or_else(|| anyhow!("No session token available"))?;
+
+        let client = self.ensure_client()?;
+
+        // Get organization info from bootstrap
+        let response = client
+            .get("https://claude.ai/api/bootstrap")
+            .header("Cookie", format!("sessionKey={}", session_token))
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to get organization info: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Bootstrap endpoint returned {}: authentication may have expired",
+                response.status()
+            ));
+        }
+
+        let bootstrap: serde_json::Value = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse bootstrap response: {}", e))?;
+
+        // Try to get organization UUID from various paths
+        let org_id = bootstrap
+            .get("account")
+            .and_then(|a| a.get("memberships"))
+            .and_then(|m| m.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|m| m.get("organization"))
+            .and_then(|o| o.get("uuid"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Could not find organization ID in bootstrap response"))?
+            .to_string();
+
+        self.organization_id = Some(org_id.clone());
+        Ok(org_id)
     }
 }
 
@@ -99,35 +159,159 @@ impl CloudProvider for AnthropicProvider {
     fn set_credentials(&mut self, api_key: Option<String>, session_token: Option<String>) {
         self.api_key = api_key;
         self.session_token = session_token;
+        self.organization_id = None; // Clear cached org ID
     }
 
-    fn list_conversations(&self, _options: &FetchOptions) -> Result<Vec<CloudConversation>> {
-        if !self.is_authenticated() {
+    fn list_conversations(&self, options: &FetchOptions) -> Result<Vec<CloudConversation>> {
+        let mut provider = AnthropicProvider {
+            api_key: self.api_key.clone(),
+            session_token: self.session_token.clone(),
+            organization_id: self.organization_id.clone(),
+            client: None,
+        };
+
+        if !provider.is_authenticated() {
             return Err(anyhow!(
-                "Claude requires authentication. Set ANTHROPIC_API_KEY or provide a session token.\n\
-                Note: The Anthropic API is stateless. For web conversations, extract your session token from browser cookies."
+                "Claude requires authentication. Provide a session token from browser cookies.\n\
+                Run 'chasm harvest scan --web' to check browser authentication status."
             ));
         }
 
-        eprintln!("Note: Claude conversation history requires web session authentication.");
-        eprintln!("The Anthropic API is stateless and doesn't store conversation history.");
-
-        // In a real implementation:
-        // 1. Use session token to call GET /api/organizations/{org_id}/chat_conversations
-        // 2. Parse the conversation list
-
-        Ok(vec![])
-    }
-
-    fn fetch_conversation(&self, _id: &str) -> Result<CloudConversation> {
-        if !self.is_authenticated() {
-            return Err(anyhow!("Claude requires authentication"));
+        if provider.session_token.is_none() {
+            return Err(anyhow!(
+                "Claude conversation history requires web session authentication.\n\
+                The Anthropic API is stateless and doesn't store conversation history."
+            ));
         }
 
-        Err(anyhow!(
-            "Fetching Claude conversations requires web session authentication. \
-            The Anthropic API doesn't store conversation history."
-        ))
+        let session_token = provider.session_token.clone().unwrap();
+        let org_id = provider.get_organization_id()?;
+        let client = provider.ensure_client()?;
+
+        let url = format!(
+            "{}/organizations/{}/chat_conversations",
+            ANTHROPIC_WEB_API, org_id
+        );
+
+        let response = client
+            .get(&url)
+            .header("Cookie", format!("sessionKey={}", session_token))
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to fetch conversations: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            return Err(anyhow!(
+                "Claude API returned {}: session may have expired - log in to claude.ai in your browser.",
+                status
+            ));
+        }
+
+        let conversations: Vec<ClaudeConversationSummary> = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse conversation list: {}", e))?;
+
+        let mut result = Vec::new();
+        let limit = options.limit.unwrap_or(usize::MAX);
+
+        for conv in conversations.into_iter().take(limit) {
+            let created = parse_iso_timestamp(&conv.created_at)?;
+            let updated = parse_iso_timestamp(&conv.updated_at).ok();
+
+            // Apply date filters
+            if let Some(after) = options.after {
+                if created < after {
+                    continue;
+                }
+            }
+            if let Some(before) = options.before {
+                if created > before {
+                    continue;
+                }
+            }
+
+            result.push(CloudConversation {
+                id: conv.uuid,
+                title: conv.name,
+                created_at: created,
+                updated_at: updated,
+                model: conv.model,
+                messages: Vec::new(),
+                metadata: None,
+            });
+        }
+
+        Ok(result)
+    }
+
+    fn fetch_conversation(&self, id: &str) -> Result<CloudConversation> {
+        let mut provider = AnthropicProvider {
+            api_key: self.api_key.clone(),
+            session_token: self.session_token.clone(),
+            organization_id: self.organization_id.clone(),
+            client: None,
+        };
+
+        if provider.session_token.is_none() {
+            return Err(anyhow!(
+                "Claude requires session token for conversation details"
+            ));
+        }
+
+        let session_token = provider.session_token.clone().unwrap();
+        let org_id = provider.get_organization_id()?;
+        let client = provider.ensure_client()?;
+
+        let url = format!(
+            "{}/organizations/{}/chat_conversations/{}",
+            ANTHROPIC_WEB_API, org_id, id
+        );
+
+        let response = client
+            .get(&url)
+            .header("Cookie", format!("sessionKey={}", session_token))
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to fetch conversation {}: {}", id, e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Failed to fetch conversation {}: HTTP {}",
+                id,
+                response.status()
+            ));
+        }
+
+        let detail: ClaudeConversationDetail = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse conversation {}: {}", id, e))?;
+
+        let messages: Vec<CloudMessage> = detail
+            .chat_messages
+            .into_iter()
+            .map(|msg| CloudMessage {
+                id: Some(msg.uuid),
+                role: if msg.sender == "human" {
+                    "user".to_string()
+                } else {
+                    "assistant".to_string()
+                },
+                content: msg.text,
+                timestamp: parse_iso_timestamp(&msg.created_at).ok(),
+                model: detail.model.clone(),
+            })
+            .collect();
+
+        Ok(CloudConversation {
+            id: detail.uuid,
+            title: detail.name,
+            created_at: parse_iso_timestamp(&detail.created_at)?,
+            updated_at: parse_iso_timestamp(&detail.updated_at).ok(),
+            model: detail.model,
+            messages,
+            metadata: None,
+        })
     }
 
     fn api_key_env_var(&self) -> &'static str {

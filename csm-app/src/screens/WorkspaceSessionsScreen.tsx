@@ -35,6 +35,7 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
     } = useQuery({
         queryKey: ['sessions', workspaceId],
         queryFn: () => getSessions({ workspace_id: workspaceId }),
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const renderSession = ({ item }: { item: Session }) => (

@@ -33,9 +33,9 @@ fn main() -> anyhow::Result<()> {
     println!("   Found {} providers:", providers.len());
     for provider in providers {
         let status = if provider.is_available() {
-            "✓"
+            "+"
         } else {
-            "✗"
+            "x"
         };
         let endpoint = provider
             .sessions_path()
@@ -140,9 +140,9 @@ fn main() -> anyhow::Result<()> {
         println!("   Available: {}", ollama.is_available());
 
         if ollama.is_available() {
-            println!("   ✓ Ollama server is running");
+            println!("   + Ollama server is running");
         } else {
-            println!("   ✗ Ollama server not detected (start with: ollama serve)");
+            println!("   x Ollama server not detected (start with: ollama serve)");
         }
     } else {
         println!("   Ollama not found on this system");

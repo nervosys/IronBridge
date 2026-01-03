@@ -214,7 +214,7 @@ fn scan_web_providers(timeout_secs: u64) -> Vec<String> {
                 "reachable".green(),
                 info.dimmed()
             );
-            println!("      {} {}", "└".dimmed(), url.dimmed());
+            println!("      {} {}", "`".dimmed(), url.dimmed());
         } else {
             println!(
                 "   {} {}: {} ({})",
@@ -281,7 +281,7 @@ fn scan_browser_authentication(
         );
         println!(
             "      {} Log into ChatGPT, Claude, etc. in your browser to enable harvesting",
-            "└".dimmed()
+            "`".dimmed()
         );
     } else {
         for (provider, browsers) in &authenticated {
@@ -394,7 +394,7 @@ pub fn harvest_init(path: Option<&str>, git_init: bool) -> Result<()> {
         init_git_tracking(&db_path)?;
     }
 
-    println!("\n{} Harvest database initialized!", "[✓]".green().bold());
+    println!("\n{} Harvest database initialized!", "[+]".green().bold());
     println!("\nNext steps:");
     println!("  1. Run 'csm harvest scan' to see available providers");
     println!("  2. Run 'csm harvest run' to collect sessions");
@@ -458,11 +458,11 @@ pub fn harvest_scan(
                 let status = if session_count > 0 {
                     format!(
                         "{} {} sessions",
-                        "✓".green(),
+                        "+".green(),
                         session_count.to_string().cyan()
                     )
                 } else {
-                    format!("{} no sessions", "✓".green())
+                    format!("{} no sessions", "+".green())
                 };
 
                 println!(
@@ -475,10 +475,10 @@ pub fn harvest_scan(
                 if show_sessions && session_count > 0 {
                     if let Ok(sessions) = provider.list_sessions() {
                         for session in sessions.iter().take(3) {
-                            println!("      {} {}", "└".dimmed(), session.title().dimmed());
+                            println!("      {} {}", "`".dimmed(), session.title().dimmed());
                         }
                         if sessions.len() > 3 {
-                            println!("      {} ... and {} more", "└".dimmed(), sessions.len() - 3);
+                            println!("      {} ... and {} more", "`".dimmed(), sessions.len() - 3);
                         }
                     }
                 }
@@ -486,7 +486,7 @@ pub fn harvest_scan(
                 if let Some(path) = provider.sessions_path() {
                     println!(
                         "      {} {}",
-                        "└".dimmed(),
+                        "`".dimmed(),
                         path.display().to_string().dimmed()
                     );
                 }
@@ -524,7 +524,7 @@ pub fn harvest_scan(
                         .unwrap_or_else(|| ws.hash[..8.min(ws.hash.len())].to_string());
                     println!(
                         "      {} {} ({} sessions)",
-                        "└".dimmed(),
+                        "`".dimmed(),
                         name.dimmed(),
                         ws.chat_session_count
                     );
@@ -532,7 +532,7 @@ pub fn harvest_scan(
                 if workspaces_with_sessions.len() > 5 {
                     println!(
                         "      {} ... and {} more workspaces",
-                        "└".dimmed(),
+                        "`".dimmed(),
                         workspaces_with_sessions.len() - 5
                     );
                 }
@@ -805,11 +805,15 @@ pub fn harvest_run(
         }
     }
 
+    // Harvest from web-based cloud providers (ChatGPT, Claude, etc.)
+    let include_list: Vec<String> = include_providers.clone().unwrap_or_default();
+    harvest_web_providers(&conn, &mut stats, &include_list, &exclude_providers)?;
+
     // Update metadata
     update_harvest_metadata(&conn)?;
 
     // Print summary
-    println!("\n{} Harvest Complete:", "[✓]".green().bold());
+    println!("\n{} Harvest Complete:", "[+]".green().bold());
     println!(
         "   {} providers scanned",
         stats.providers_scanned.to_string().cyan()
@@ -854,7 +858,7 @@ pub fn harvest_run(
         if let Err(e) = git_commit_harvest(&db_path, commit_msg) {
             println!("{} Git commit failed: {}", "[!]".yellow(), e);
         } else {
-            println!("{} Changes committed", "[✓]".green());
+            println!("{} Changes committed", "[+]".green());
         }
     }
 
@@ -998,7 +1002,7 @@ pub fn harvest_status(path: Option<&str>) -> Result<()> {
             Ok(out) => {
                 let status = String::from_utf8_lossy(&out.stdout);
                 if status.is_empty() {
-                    println!("   {} No uncommitted changes", "[✓]".green());
+                    println!("   {} No uncommitted changes", "[+]".green());
                 } else {
                     println!("   {} Uncommitted changes detected", "[!]".yellow());
                     println!("   Run 'csm harvest git commit' to save changes");
@@ -1241,7 +1245,7 @@ pub fn harvest_export(
 
     println!(
         "{} Exported {} sessions to {}",
-        "[✓]".green(),
+        "[+]".green(),
         sessions.len().to_string().cyan(),
         output_path.display()
     );
@@ -1332,7 +1336,7 @@ pub fn harvest_git_diff(path: Option<&str>, commit: Option<&str>) -> Result<()> 
 
     let diff = String::from_utf8_lossy(&output.stdout);
     if diff.trim().is_empty() {
-        println!("{} No changes", "[✓]".green());
+        println!("{} No changes", "[+]".green());
     } else {
         println!("{}", diff);
     }
@@ -1373,7 +1377,7 @@ pub fn harvest_git_restore(path: Option<&str>, commit: &str) -> Result<()> {
 
     println!(
         "{} Restored database from commit: {}",
-        "[✓]".green(),
+        "[+]".green(),
         commit
     );
 
@@ -2046,6 +2050,323 @@ fn generate_unified_diff(old: &str, new: &str, file_path: &str) -> String {
     diff
 }
 
+/// Harvest sessions from web-based cloud providers (ChatGPT, Claude, etc.)
+fn harvest_web_providers(
+    conn: &Connection,
+    stats: &mut HarvestStats,
+    include_providers: &Vec<String>,
+    exclude_providers: &Vec<String>,
+) -> Result<()> {
+    use crate::browser::extract_provider_cookies;
+
+    println!("\n{} Harvesting from web providers...", "[*]".blue());
+
+    // Define web providers to harvest from
+    let web_provider_configs: Vec<(&str, &str, &str)> = vec![
+        ("ChatGPT", "chatgpt", "__Secure-next-auth.session-token"),
+        ("Claude", "claude", "sessionKey"),
+    ];
+
+    let mut web_sessions_harvested = 0;
+
+    for (display_name, provider_key, _cookie_name) in &web_provider_configs {
+        // Check provider filters
+        if !include_providers.is_empty()
+            && !include_providers
+                .iter()
+                .any(|p| p.eq_ignore_ascii_case(provider_key))
+        {
+            continue;
+        }
+        if exclude_providers
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case(provider_key))
+        {
+            continue;
+        }
+
+        print!("   {} Checking {} ... ", "[-]".yellow(), display_name);
+
+        // Try to extract cookies for this provider
+        if let Some(creds) = extract_provider_cookies(provider_key) {
+            if let Some(session_token) = &creds.session_token {
+                println!("{}", "authenticated".green());
+
+                // Create provider and fetch conversations
+                let result = match *provider_key {
+                    "chatgpt" => harvest_chatgpt_sessions(conn, session_token, stats),
+                    "claude" => harvest_claude_sessions(conn, session_token, stats),
+                    _ => Ok(0),
+                };
+
+                match result {
+                    Ok(count) => {
+                        if count > 0 {
+                            println!(
+                                "      {} Harvested {} sessions from {}",
+                                "[+]".green(),
+                                count.to_string().cyan(),
+                                display_name
+                            );
+                            web_sessions_harvested += count;
+                        }
+                    }
+                    Err(e) => {
+                        println!(
+                            "      {} Failed to harvest {}: {:?}",
+                            "[!]".red(),
+                            display_name,
+                            e
+                        );
+                    }
+                }
+            } else {
+                println!("{}", "no session token".yellow());
+            }
+        } else {
+            println!("{}", "not authenticated".yellow());
+        }
+    }
+
+    if web_sessions_harvested > 0 {
+        println!(
+            "   {} Total web sessions harvested: {}",
+            "[+]".green(),
+            web_sessions_harvested.to_string().cyan()
+        );
+    }
+
+    Ok(())
+}
+
+/// Harvest sessions from ChatGPT web interface
+fn harvest_chatgpt_sessions(
+    conn: &Connection,
+    session_token: &str,
+    stats: &mut HarvestStats,
+) -> Result<usize> {
+    use crate::providers::cloud::chatgpt::ChatGPTProvider;
+    use crate::providers::cloud::common::{CloudProvider, FetchOptions};
+
+    let provider = ChatGPTProvider::with_session_token(session_token.to_string());
+
+    // List all conversations
+    let options = FetchOptions {
+        limit: Some(100),
+        include_archived: false,
+        after: None,
+        before: None,
+        session_token: Some(session_token.to_string()),
+    };
+
+    let conversations = provider
+        .list_conversations(&options)
+        .context("Failed to list ChatGPT conversations")?;
+
+    let mut harvested = 0;
+
+    for conv_summary in conversations {
+        // Check if we already have this conversation
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ? AND provider = 'chatgpt')",
+                params![&conv_summary.id],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if exists {
+            // Could add update logic here later
+            continue;
+        }
+
+        // Fetch full conversation
+        match provider.fetch_conversation(&conv_summary.id) {
+            Ok(conv) => {
+                // Insert into database using existing function
+                if let Err(e) =
+                    insert_cloud_conversation_to_harvest_db(conn, &conv, "chatgpt", None)
+                {
+                    eprintln!("Failed to insert ChatGPT session: {}", e);
+                    continue;
+                }
+                harvested += 1;
+                stats.sessions_added += 1;
+            }
+            Err(e) => {
+                eprintln!("Failed to fetch conversation {}: {}", conv_summary.id, e);
+            }
+        }
+
+        // Small delay to avoid rate limiting
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    Ok(harvested)
+}
+
+/// Harvest sessions from Claude web interface
+fn harvest_claude_sessions(
+    conn: &Connection,
+    session_token: &str,
+    stats: &mut HarvestStats,
+) -> Result<usize> {
+    use crate::providers::cloud::anthropic::AnthropicProvider;
+    use crate::providers::cloud::common::{CloudProvider, FetchOptions};
+
+    let provider = AnthropicProvider::with_session_token(session_token.to_string());
+
+    // List all conversations
+    let options = FetchOptions {
+        limit: Some(100),
+        include_archived: false,
+        after: None,
+        before: None,
+        session_token: Some(session_token.to_string()),
+    };
+
+    let conversations = provider
+        .list_conversations(&options)
+        .context("Failed to list Claude conversations")?;
+
+    let mut harvested = 0;
+
+    for conv_summary in conversations {
+        // Check if we already have this conversation
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ? AND provider = 'claude')",
+                params![&conv_summary.id],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if exists {
+            continue;
+        }
+
+        // Fetch full conversation
+        match provider.fetch_conversation(&conv_summary.id) {
+            Ok(conv) => {
+                if let Err(e) = insert_cloud_conversation_to_harvest_db(conn, &conv, "claude", None)
+                {
+                    eprintln!("Failed to insert Claude session: {}", e);
+                    continue;
+                }
+                harvested += 1;
+                stats.sessions_added += 1;
+            }
+            Err(e) => {
+                eprintln!("Failed to fetch conversation {}: {}", conv_summary.id, e);
+            }
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    Ok(harvested)
+}
+
+/// Insert a CloudConversation into the harvest database
+fn insert_cloud_conversation_to_harvest_db(
+    conn: &Connection,
+    conv: &crate::providers::cloud::common::CloudConversation,
+    provider: &str,
+    workspace_name: Option<&str>,
+) -> Result<()> {
+    let now = Utc::now().timestamp_millis();
+    let created_at = conv.created_at.timestamp_millis();
+    let updated_at = conv
+        .updated_at
+        .map(|dt| dt.timestamp_millis())
+        .unwrap_or(created_at);
+
+    // Build a session-like JSON structure for compatibility
+    let session_json = serde_json::json!({
+        "id": conv.id,
+        "title": conv.title,
+        "model": conv.model,
+        "created_at": conv.created_at.to_rfc3339(),
+        "updated_at": conv.updated_at.map(|dt| dt.to_rfc3339()),
+        "messages": conv.messages.iter().map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "timestamp": m.timestamp.map(|dt| dt.to_rfc3339()),
+                "model": m.model,
+            })
+        }).collect::<Vec<_>>(),
+    });
+
+    conn.execute(
+        r#"
+        INSERT OR REPLACE INTO sessions 
+        (id, provider, provider_type, workspace_id, workspace_name, title, 
+         message_count, created_at, updated_at, harvested_at, session_json)
+        VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+        params![
+            conv.id,
+            provider,
+            provider,
+            workspace_name,
+            conv.title.clone().unwrap_or_else(|| "Untitled".to_string()),
+            conv.messages.len() as i64,
+            created_at,
+            updated_at,
+            now,
+            session_json.to_string(),
+        ],
+    )?;
+
+    // Also populate messages_v2 table for detailed message storage
+    populate_cloud_messages(conn, &conv.id, conv)?;
+
+    Ok(())
+}
+
+/// Populate messages_v2 table from a CloudConversation
+fn populate_cloud_messages(
+    conn: &Connection,
+    session_id: &str,
+    conv: &crate::providers::cloud::common::CloudConversation,
+) -> Result<()> {
+    // Delete existing messages for this session to avoid duplicates
+    conn.execute("DELETE FROM messages_v2 WHERE session_id = ?", [session_id])?;
+
+    for (idx, message) in conv.messages.iter().enumerate() {
+        let timestamp = message.timestamp.map(|dt| dt.timestamp_millis());
+        let role = match message.role.as_str() {
+            "user" | "human" => "user",
+            "assistant" => "assistant",
+            "system" => "system",
+            other => other,
+        };
+
+        conn.execute(
+            r#"
+            INSERT INTO messages_v2 
+            (session_id, message_index, request_id, response_id, role, 
+             content_raw, content_markdown, model_id, timestamp, is_canceled, metadata_json)
+            VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 0, NULL)
+            "#,
+            params![
+                session_id,
+                idx as i64,
+                message.id,
+                role,
+                &message.content,
+                &message.content,
+                message.model.as_deref(),
+                timestamp,
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
 fn update_harvest_metadata(conn: &Connection) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO harvest_metadata (key, value) VALUES ('last_harvest', datetime('now'))",
@@ -2116,7 +2437,7 @@ fn init_git_tracking(db_path: &Path) -> Result<()> {
         }
     }
 
-    println!("\n{} Git tracking enabled!", "[✓]".green().bold());
+    println!("\n{} Git tracking enabled!", "[+]".green().bold());
     println!("   Run 'csm harvest git commit -m \"message\"' to save changes");
     println!("   Run 'csm harvest git log' to view history");
 
@@ -2164,7 +2485,7 @@ fn git_commit_harvest(db_path: &Path, message: &str) -> Result<()> {
         .output()?;
 
     let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    println!("{} Committed: {} - {}", "[✓]".green(), hash.cyan(), message);
+    println!("{} Committed: {} - {}", "[+]".green(), hash.cyan(), message);
 
     Ok(())
 }
@@ -2234,7 +2555,7 @@ pub fn harvest_share(
         if imported == 1 {
             println!(
                 "{} Session already imported - no action needed",
-                "[✓]".green()
+                "[+]".green()
             );
             return Ok(());
         }
@@ -2488,10 +2809,10 @@ pub fn harvest_checkpoint(
     println!("{}", " Checkpoint Created ".bold().cyan());
     println!("{}", "=".repeat(60).cyan());
     println!();
-    println!("{} Session: {}", "[✓]".green(), actual_session_id);
+    println!("{} Session: {}", "[+]".green(), actual_session_id);
     println!(
         "{} Checkpoint #{}: {}",
-        "[✓]".green(),
+        "[+]".green(),
         checkpoint_num,
         message_text
     );
@@ -2717,7 +3038,7 @@ pub fn harvest_restore_checkpoint(
     println!();
     println!(
         "{} Session restored to checkpoint #{}",
-        "[✓]".green().bold(),
+        "[+]".green().bold(),
         checkpoint_number
     );
 
@@ -2793,7 +3114,7 @@ pub fn harvest_rebuild_fts(db_path: Option<&str>) -> Result<()> {
     let indexed: i64 = conn.query_row("SELECT COUNT(*) FROM messages_fts", [], |row| row.get(0))?;
 
     println!();
-    println!("{} FTS index rebuilt successfully!", "[✓]".green().bold());
+    println!("{} FTS index rebuilt successfully!", "[+]".green().bold());
     println!("   {} messages indexed", indexed);
 
     Ok(())

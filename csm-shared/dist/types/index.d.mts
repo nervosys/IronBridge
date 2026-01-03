@@ -1452,5 +1452,338 @@ interface HookPreset {
     actions: HookAction[];
     requiredIntegrations: string[];
 }
+/**
+ * A software project directory with persistent memory
+ */
+interface SweProject {
+    id: string;
+    name: string;
+    path: string;
+    description?: string | null;
+    gitRemote?: string | null;
+    gitBranch?: string | null;
+    language?: string | null;
+    framework?: string | null;
+    lastOpened: number;
+    createdAt: number;
+    updatedAt: number;
+    memoryCount: number;
+    ruleCount: number;
+    sessionCount: number;
+    metadata?: Record<string, unknown> | null;
+}
+/**
+ * Memory entry in the project key-value store
+ * Used for persistent facts, context, and learned information
+ */
+interface SweMemory {
+    id: string;
+    projectId: string;
+    key: string;
+    value: string;
+    category: SweMemoryCategory;
+    importance: SweImportance;
+    source?: SweMemorySource;
+    sourceMessageId?: string | null;
+    expiresAt?: number | null;
+    accessCount: number;
+    lastAccessed?: number | null;
+    createdAt: number;
+    updatedAt: number;
+    metadata?: Record<string, unknown> | null;
+}
+/**
+ * Categories for organizing memory entries
+ */
+type SweMemoryCategory = 'fact' | 'decision' | 'pattern' | 'dependency' | 'architecture' | 'bug' | 'todo' | 'context' | 'preference' | 'custom';
+/**
+ * Source of a memory entry
+ */
+type SweMemorySource = 'user' | 'assistant' | 'file' | 'git' | 'import';
+/**
+ * Importance level for prioritizing memory in context
+ */
+type SweImportance = 'critical' | 'high' | 'medium' | 'low';
+/**
+ * User-defined rules that are always injected into context
+ * These are "never do X", "always do Y" type instructions
+ */
+interface SweRule {
+    id: string;
+    projectId: string;
+    rule: string;
+    description?: string | null;
+    category: SweRuleCategory;
+    priority: number;
+    enabled: boolean;
+    scope?: SweRuleScope;
+    conditions?: SweRuleCondition[];
+    createdAt: number;
+    updatedAt: number;
+    metadata?: Record<string, unknown> | null;
+}
+/**
+ * Rule categories for organization
+ */
+type SweRuleCategory = 'constraint' | 'requirement' | 'style' | 'architecture' | 'security' | 'testing' | 'documentation' | 'custom';
+/**
+ * Scope for when a rule applies
+ */
+interface SweRuleScope {
+    filePatterns?: string[];
+    directories?: string[];
+    languages?: string[];
+    operations?: SweOperation[];
+}
+/**
+ * Operations that can trigger rules
+ */
+type SweOperation = 'file_create' | 'file_edit' | 'file_delete' | 'terminal_command' | 'code_review' | 'refactor' | 'test' | 'deploy' | 'all';
+/**
+ * Conditional rule application
+ */
+interface SweRuleCondition {
+    type: 'file_exists' | 'file_contains' | 'env_set' | 'branch_matches' | 'custom';
+    value: string;
+    negate?: boolean;
+}
+/**
+ * SWE session - extends regular session with project context
+ */
+interface SweSession {
+    id: string;
+    projectId: string;
+    title: string;
+    model?: string | null;
+    provider: string;
+    messageCount: number;
+    tokenCount?: number | null;
+    workingDirectory?: string | null;
+    gitBranch?: string | null;
+    createdAt: number;
+    updatedAt: number;
+    archived?: boolean;
+    metadata?: Record<string, unknown> | null;
+}
+/**
+ * SWE session with full details including messages and context
+ */
+interface SweSessionWithMessages extends SweSession {
+    messages: SweMessage[];
+    project: SweProject;
+    activeRules: SweRule[];
+    relevantMemory: SweMemory[];
+}
+/**
+ * SWE message - extends regular message with tool execution context
+ */
+interface SweMessage {
+    id: string;
+    sessionId: string;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+    model?: string | null;
+    tokenCount?: number | null;
+    createdAt: number;
+    toolCalls?: SweToolCall[];
+    toolResults?: SweToolResult[];
+    contextSnapshot?: SweContextSnapshot;
+    metadata?: Record<string, unknown> | null;
+}
+/**
+ * Tool call made by the assistant
+ */
+interface SweToolCall {
+    id: string;
+    name: SweTool;
+    input: Record<string, unknown>;
+    status: 'pending' | 'running' | 'success' | 'error';
+    startedAt?: number;
+    completedAt?: number;
+}
+/**
+ * Result of a tool execution
+ */
+interface SweToolResult {
+    callId: string;
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    duration: number;
+    affectedFiles?: string[];
+}
+/**
+ * Available SWE tools
+ */
+type SweTool = 'read_file' | 'write_file' | 'edit_file' | 'create_file' | 'delete_file' | 'list_directory' | 'search_files' | 'search_code' | 'run_command' | 'git_status' | 'git_diff' | 'git_commit' | 'git_log' | 'add_memory' | 'get_memory' | 'search_memory' | 'add_rule' | 'web_search' | 'fetch_url';
+/**
+ * Snapshot of context at message time
+ */
+interface SweContextSnapshot {
+    workingDirectory: string;
+    gitBranch?: string;
+    gitStatus?: string;
+    openFiles?: string[];
+    recentChanges?: SweFileChange[];
+    injectedRules: string[];
+    injectedMemory: string[];
+}
+/**
+ * File change record
+ */
+interface SweFileChange {
+    path: string;
+    type: 'create' | 'edit' | 'delete' | 'rename';
+    diff?: string;
+    timestamp: number;
+}
+/**
+ * Project file tree node
+ */
+interface SweFileNode {
+    name: string;
+    path: string;
+    type: 'file' | 'directory';
+    size?: number;
+    modified?: number;
+    children?: SweFileNode[];
+    isExpanded?: boolean;
+    isGitIgnored?: boolean;
+}
+/**
+ * Git status for the project
+ */
+interface SweGitStatus {
+    branch: string;
+    ahead: number;
+    behind: number;
+    staged: SweGitChange[];
+    unstaged: SweGitChange[];
+    untracked: string[];
+    hasConflicts: boolean;
+}
+/**
+ * Git change entry
+ */
+interface SweGitChange {
+    path: string;
+    status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+    oldPath?: string;
+}
+/**
+ * Search result for code/file search
+ */
+interface SweSearchResult {
+    file: string;
+    line: number;
+    column?: number;
+    content: string;
+    context?: string;
+    matchType: 'exact' | 'fuzzy' | 'regex';
+}
+/**
+ * Terminal execution result
+ */
+interface SweTerminalResult {
+    command: string;
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+    duration: number;
+    workingDirectory: string;
+}
+/**
+ * Context to inject into model prompts
+ */
+interface SweContextInjection {
+    systemPrompt: string;
+    rules: SweRule[];
+    memory: SweMemory[];
+    recentFiles: string[];
+    gitContext?: SweGitStatus;
+    customContext?: string;
+}
+/**
+ * Stats for a SWE project
+ */
+interface SweProjectStats {
+    projectId: string;
+    totalSessions: number;
+    totalMessages: number;
+    totalTokens: number;
+    totalMemoryEntries: number;
+    totalRules: number;
+    totalFileOperations: number;
+    totalTerminalCommands: number;
+    lastActivity: number;
+    topMemoryCategories: {
+        category: SweMemoryCategory;
+        count: number;
+    }[];
+    recentFiles: string[];
+}
+/**
+ * Request to create a new SWE project
+ */
+interface CreateSweProjectRequest {
+    path: string;
+    name?: string;
+    description?: string;
+}
+/**
+ * Request to add a memory entry
+ */
+interface CreateSweMemoryRequest {
+    key: string;
+    value: string;
+    category?: SweMemoryCategory;
+    importance?: SweImportance;
+    expiresAt?: number;
+    metadata?: Record<string, unknown>;
+}
+/**
+ * Request to add a rule
+ */
+interface CreateSweRuleRequest {
+    rule: string;
+    description?: string;
+    category?: SweRuleCategory;
+    priority?: number;
+    scope?: SweRuleScope;
+    conditions?: SweRuleCondition[];
+}
+/**
+ * Request to execute a tool
+ */
+interface SweToolExecutionRequest {
+    projectId: string;
+    sessionId?: string;
+    tool: SweTool;
+    input: Record<string, unknown>;
+}
+/**
+ * Batch memory import request
+ */
+interface SweBatchMemoryImport {
+    projectId: string;
+    entries: CreateSweMemoryRequest[];
+    overwriteExisting?: boolean;
+}
+/**
+ * Project template for quick setup
+ */
+interface SweProjectTemplate {
+    id: string;
+    name: string;
+    description: string;
+    language: string;
+    framework?: string;
+    defaultRules: CreateSweRuleRequest[];
+    defaultMemory: CreateSweMemoryRequest[];
+}
+/**
+ * Common project templates
+ */
+declare const SWE_PROJECT_TEMPLATES: SweProjectTemplate[];
 
-export type { ActionBounds, ActionCommand, ActionParameters, ActionSpace, ActionSpaceType, ActionType, AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ArtifactType, AudioContent, AudioData, AudioFormat, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContentPart, ContextSegment, ContextSegmentType, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, GpuInfo, HardwareInfo, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImageContent, ImageData, ImageFormat, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, JointState, ManipulatorType, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, Modality, ModalityCapabilities, ModelCategory, ModelConfig, ModelProvider, MonitorStats, MultimodalMessage, MultimodalModel, NavigationCapability, NodeStatus, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, RemoteEvent, RemoteEventType, RemoteLogLevel, RemoteMonitorConfig, RemoteNode, RemoteTask, RemoteTaskResult, RemoteTaskStatus, ResourceUsage, RobotCapabilities, SearchResult, SensorData, SensorType, SensorValues, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, TaskArtifact, TaskLogEntry, TaskMetrics, TaskPriority, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, VideoContent, VideoSource, WorkflowEdge, WorkflowNode, Workspace, WorkspaceBounds, WorkspaceFilter, WorkspaceStats };
+export { type ActionBounds, type ActionCommand, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type ApiError, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type DayCount, type DetectedProblem, type Document, type DocumentChunk, type DocumentType, type EmbeddingModel, type ExecutionResult, type ExportOptions, type FileChange, type GitCommit, type GitRepository, type GpuInfo, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type JointState, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Message, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type OrchestrationType, type OrchestratorResult, type PaginatedResponse, type PermissionLevel, type Pipeline, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SWE_PROJECT_TEMPLATES, type SearchResult, type SensorData, type SensorType, type SensorValues, type Session, type SessionFilter, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type SimilarityMetric, type Statistics, type StreamChunk, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type ThemeMode, type TokenUsage, type ToolInvocation, type VectorSearchResult, type VectorStoreConfig, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats };

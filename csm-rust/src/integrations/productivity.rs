@@ -2,6 +2,8 @@
 //!
 //! Calendar, Email, Notes, Tasks, Documents
 
+#![allow(dead_code)]
+
 use super::{IntegrationResult, AuthMethod};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -26,8 +26,8 @@ export default function Workspaces() {
             hash: ws.id.substring(0, 12) + '...',
             projectPath: ws.path || ws.name || ws.id,
             sessions: ws.sessionCount || sessionCounts.get(ws.id) || 0,
-            lastActive: formatDate(ws.updatedAt),
-            lastActiveTimestamp: ws.updatedAt,
+            lastActive: ws.updatedAt ? formatDate(ws.updatedAt) : 'N/A',
+            lastActiveTimestamp: ws.updatedAt || 0,
             hasChats: (ws.sessionCount || sessionCounts.get(ws.id) || 0) > 0,
             provider: ws.provider,
         }));

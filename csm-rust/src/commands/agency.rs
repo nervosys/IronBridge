@@ -1,33 +1,51 @@
 //! Agency (Agent Development Kit) command implementations
 
-use anyhow::Result;
 use crate::agency::{AgentRole, OrchestrationType};
+use anyhow::Result;
 use colored::Colorize;
 
 /// List available agents and roles
 pub fn list_agents(verbose: bool) -> Result<()> {
-    println!("{}", "╔═══════════════════════════════════════════════════════════════════╗".cyan());
-    println!("{}", "║              CSM Agent Development Kit (Agency)                      ║".cyan());
-    println!("{}", "╚═══════════════════════════════════════════════════════════════════╝".cyan());
+    println!(
+        "{}",
+        "+===================================================================+".cyan()
+    );
+    println!(
+        "{}",
+        "|              CSM Agent Development Kit (Agency)                   |".cyan()
+    );
+    println!(
+        "{}",
+        "+===================================================================+".cyan()
+    );
     println!();
-    
-    println!("{}", "📋 Available Agent Roles:".bold());
+
+    println!("{}", "[*] Available Agent Roles:".bold());
     println!();
-    
+
     let roles = [
-        ("coordinator", "🎯", "Manages and delegates tasks to other agents"),
-        ("researcher", "🔍", "Gathers information and analyzes data"),
-        ("coder", "💻", "Writes and modifies code"),
-        ("reviewer", "✅", "Reviews code and provides feedback"),
-        ("executor", "⚡", "Executes commands and tools"),
-        ("writer", "✍️", "Creates documentation and content"),
-        ("tester", "🧪", "Writes and runs tests"),
-        ("custom", "🔧", "User-defined agent with custom behavior"),
+        (
+            "coordinator",
+            "[C]",
+            "Manages and delegates tasks to other agents",
+        ),
+        ("researcher", "[R]", "Gathers information and analyzes data"),
+        ("coder", "[D]", "Writes and modifies code"),
+        ("reviewer", "[V]", "Reviews code and provides feedback"),
+        ("executor", "[E]", "Executes commands and tools"),
+        ("writer", "[W]", "Creates documentation and content"),
+        ("tester", "[T]", "Writes and runs tests"),
+        ("custom", "[X]", "User-defined agent with custom behavior"),
     ];
 
     for (role, icon, desc) in roles {
         if verbose {
-            println!("  {} {} {}", icon, role.green().bold(), format!("- {}", desc).dimmed());
+            println!(
+                "  {} {} {}",
+                icon,
+                role.green().bold(),
+                format!("- {}", desc).dimmed()
+            );
         } else {
             println!("  {} {}", icon, role.green());
         }
@@ -35,12 +53,28 @@ pub fn list_agents(verbose: bool) -> Result<()> {
 
     if verbose {
         println!();
-        println!("{}", "📦 Default Agents:".bold());
+        println!("{}", "[*] Default Agents:".bold());
         println!();
-        println!("  {} {} - General-purpose assistant with planning", "🤖".dimmed(), "assistant".yellow());
-        println!("  {} {} - Research specialist with web search", "🔬".dimmed(), "researcher".yellow());
-        println!("  {} {} - Code generation and modification", "👨‍💻".dimmed(), "coder".yellow());
-        println!("  {} {} - Code review and quality assurance", "👀".dimmed(), "reviewer".yellow());
+        println!(
+            "  {} {} - General-purpose assistant with planning",
+            "[A]".dimmed(),
+            "assistant".yellow()
+        );
+        println!(
+            "  {} {} - Research specialist with web search",
+            "[R]".dimmed(),
+            "researcher".yellow()
+        );
+        println!(
+            "  {} {} - Code generation and modification",
+            "[D]".dimmed(),
+            "coder".yellow()
+        );
+        println!(
+            "  {} {} - Code review and quality assurance",
+            "[V]".dimmed(),
+            "reviewer".yellow()
+        );
     }
 
     Ok(())
@@ -50,39 +84,67 @@ pub fn list_agents(verbose: bool) -> Result<()> {
 pub fn show_agent_info(name: &str) -> Result<()> {
     println!("{}", format!("Agent: {}", name).bold());
     println!();
-    
+
     // Default agent configurations
     match name.to_lowercase().as_str() {
         "assistant" => {
             println!("  {} {}", "Role:".dimmed(), "custom".green());
-            println!("  {} {}", "Description:".dimmed(), "General-purpose AI assistant with planning and reflection");
+            println!(
+                "  {} {}",
+                "Description:".dimmed(),
+                "General-purpose AI assistant with planning and reflection"
+            );
             println!("  {} {}", "Model:".dimmed(), "gemini-2.0-flash (default)");
             println!("  {} {}", "Temperature:".dimmed(), "0.7");
-            println!("  {} {}", "Capabilities:".dimmed(), "planning, reflection, code_execution");
+            println!(
+                "  {} {}",
+                "Capabilities:".dimmed(),
+                "planning, reflection, code_execution"
+            );
         }
         "researcher" => {
             println!("  {} {}", "Role:".dimmed(), "researcher".green());
-            println!("  {} {}", "Description:".dimmed(), "Research specialist with web search capabilities");
+            println!(
+                "  {} {}",
+                "Description:".dimmed(),
+                "Research specialist with web search capabilities"
+            );
             println!("  {} {}", "Model:".dimmed(), "gemini-2.0-flash (default)");
             println!("  {} {}", "Temperature:".dimmed(), "0.5");
-            println!("  {} {}", "Tools:".dimmed(), "web_search, file_read, knowledge_base");
+            println!(
+                "  {} {}",
+                "Tools:".dimmed(),
+                "web_search, file_read, knowledge_base"
+            );
         }
         "coder" => {
             println!("  {} {}", "Role:".dimmed(), "coder".green());
-            println!("  {} {}", "Description:".dimmed(), "Code generation and modification specialist");
+            println!(
+                "  {} {}",
+                "Description:".dimmed(),
+                "Code generation and modification specialist"
+            );
             println!("  {} {}", "Model:".dimmed(), "gemini-2.0-flash (default)");
             println!("  {} {}", "Temperature:".dimmed(), "0.3");
-            println!("  {} {}", "Tools:".dimmed(), "file_read, file_write, terminal, code_search");
+            println!(
+                "  {} {}",
+                "Tools:".dimmed(),
+                "file_read, file_write, terminal, code_search"
+            );
         }
         "reviewer" => {
             println!("  {} {}", "Role:".dimmed(), "reviewer".green());
-            println!("  {} {}", "Description:".dimmed(), "Code review and quality assurance");
+            println!(
+                "  {} {}",
+                "Description:".dimmed(),
+                "Code review and quality assurance"
+            );
             println!("  {} {}", "Model:".dimmed(), "gemini-2.0-flash (default)");
             println!("  {} {}", "Temperature:".dimmed(), "0.2");
             println!("  {} {}", "Tools:".dimmed(), "file_read, code_search, lint");
         }
         _ => {
-            println!("  {} Agent '{}' not found in defaults", "⚠️".yellow(), name);
+            println!("  {} Agent '{}' not found in defaults", "[!]".yellow(), name);
             println!();
             println!("  Use 'csm Agency create {}' to create a new agent", name);
         }
@@ -93,17 +155,33 @@ pub fn show_agent_info(name: &str) -> Result<()> {
 
 /// List orchestration modes
 pub fn list_modes() -> Result<()> {
-    println!("{}", "🎭 Orchestration Modes:".bold());
+    println!("{}", "[*] Orchestration Modes:".bold());
     println!();
-    
+
     let modes = [
-        ("single", "👤", "Traditional single-agent response"),
-        ("sequential", "➡️", "Agents execute one after another, passing results forward"),
-        ("parallel", "⚡", "Multiple agents work simultaneously on subtasks"),
-        ("loop", "🔁", "Agent repeats until a condition is met"),
-        ("hierarchical", "🏛️", "Lead agent delegates to specialized sub-agents"),
-        ("swarm", "🐝", "Multiple agents collaborate with a coordinator"),
-        ("debate", "💬", "Agents debate to reach the best solution"),
+        ("single", "[1]", "Traditional single-agent response"),
+        (
+            "sequential",
+            "[>]",
+            "Agents execute one after another, passing results forward",
+        ),
+        (
+            "parallel",
+            "[!]",
+            "Multiple agents work simultaneously on subtasks",
+        ),
+        ("loop", "[O]", "Agent repeats until a condition is met"),
+        (
+            "hierarchical",
+            "[H]",
+            "Lead agent delegates to specialized sub-agents",
+        ),
+        (
+            "swarm",
+            "[S]",
+            "Multiple agents collaborate with a coordinator",
+        ),
+        ("debate", "[D]", "Agents debate to reach the best solution"),
     ];
 
     for (mode, icon, desc) in modes {
@@ -126,8 +204,8 @@ pub fn run_agent(
     verbose: bool,
 ) -> Result<()> {
     let model_name = model.unwrap_or("gemini-2.0-flash");
-    
-    println!("{}", "🚀 Starting agent execution...".bold());
+
+    println!("{}", "[*] Starting agent execution...".bold());
     println!();
     println!("  {} {}", "Agent:".dimmed(), agent_name.green());
     println!("  {} {}", "Model:".dimmed(), model_name.yellow());
@@ -144,25 +222,38 @@ pub fn run_agent(
         "hierarchical" => OrchestrationType::Hierarchical,
         "swarm" => OrchestrationType::Hierarchical, // Swarm uses hierarchical orchestration
         _ => {
-            println!("{} Unknown orchestration mode '{}', using single", "⚠️".yellow(), orchestration);
+            println!(
+                "{} Unknown orchestration mode '{}', using single",
+                "[!]".yellow(),
+                orchestration
+            );
             OrchestrationType::Sequential
         }
     };
 
     if verbose {
-        println!("{}", "📊 Execution Details:".dimmed());
+        println!("{}", "[*] Execution Details:".dimmed());
         println!("  Orchestration Type: {:?}", orch_type);
     }
 
     // For now, show that the agent would be created and run
     // Full implementation requires async runtime and API keys
-    println!("{}", "⏳ Agent execution requires API keys and async runtime.".dimmed());
-    println!("{}", "   Use 'csm api serve' to start the backend API,".dimmed());
-    println!("{}", "   then use csm-web or vscode-extension for full agent execution.".dimmed());
+    println!(
+        "{}",
+        "[...] Agent execution requires API keys and async runtime.".dimmed()
+    );
+    println!(
+        "{}",
+        "   Use 'csm api serve' to start the backend API,".dimmed()
+    );
+    println!(
+        "{}",
+        "   then use csm-web or vscode-extension for full agent execution.".dimmed()
+    );
     println!();
-    
+
     // Show what would happen
-    println!("{}", "📝 Execution Plan:".bold());
+    println!("{}", "[*] Execution Plan:".bold());
     match orchestration.to_lowercase().as_str() {
         "single" => {
             println!("  1. {} agent receives prompt", agent_name);
@@ -234,14 +325,14 @@ pub fn create_agent(
     let instruction = instruction.unwrap_or(default_instruction);
     let model = model.unwrap_or("gemini-2.0-flash");
 
-    println!("{}", "✨ Agent Configuration Created:".bold().green());
+    println!("{}", "[+] Agent Configuration Created:".bold().green());
     println!();
     println!("  {} {}", "Name:".dimmed(), name.cyan().bold());
     println!("  {} {:?}", "Role:".dimmed(), role_enum);
     println!("  {} {}", "Model:".dimmed(), model.yellow());
     println!("  {} {}", "Instruction:".dimmed(), instruction);
     println!();
-    println!("{}", "💡 To use this agent:".dimmed());
+    println!("{}", "[*] To use this agent:".dimmed());
     println!("   csm Agency run --agent {} \"Your prompt here\"", name);
 
     Ok(())
@@ -249,18 +340,18 @@ pub fn create_agent(
 
 /// List available tools
 pub fn list_tools() -> Result<()> {
-    println!("{}", "🔧 Available Tools:".bold());
+    println!("{}", "[*] Available Tools:".bold());
     println!();
-    
+
     let tools = [
-        ("file_read", "📄", "Read file contents"),
-        ("file_write", "✏️", "Write or modify files"),
-        ("terminal", "💻", "Execute shell commands"),
-        ("web_search", "🔍", "Search the web for information"),
-        ("code_search", "🔎", "Search codebase for symbols"),
-        ("knowledge_base", "📚", "Query knowledge base"),
-        ("calculator", "🔢", "Perform calculations"),
-        ("http_request", "🌐", "Make HTTP requests"),
+        ("file_read", "[F]", "Read file contents"),
+        ("file_write", "[W]", "Write or modify files"),
+        ("terminal", "[T]", "Execute shell commands"),
+        ("web_search", "[?]", "Search the web for information"),
+        ("code_search", "[?]", "Search codebase for symbols"),
+        ("knowledge_base", "[K]", "Query knowledge base"),
+        ("calculator", "[#]", "Perform calculations"),
+        ("http_request", "[H]", "Make HTTP requests"),
     ];
 
     for (tool, icon, desc) in tools {
@@ -272,18 +363,34 @@ pub fn list_tools() -> Result<()> {
 
 /// Show swarm templates
 pub fn list_templates() -> Result<()> {
-    println!("{}", "🐝 Swarm Templates:".bold());
+    println!("{}", "[S] Swarm Templates:".bold());
     println!();
-    
+
     let templates = [
-        ("code_review", "Code Review Team", vec!["coder", "reviewer", "tester"]),
-        ("research", "Research Team", vec!["coordinator", "researcher", "writer"]),
-        ("full_stack", "Full Stack Team", vec!["coordinator", "coder", "reviewer", "tester"]),
-        ("content", "Content Team", vec!["researcher", "writer", "reviewer"]),
+        (
+            "code_review",
+            "Code Review Team",
+            vec!["coder", "reviewer", "tester"],
+        ),
+        (
+            "research",
+            "Research Team",
+            vec!["coordinator", "researcher", "writer"],
+        ),
+        (
+            "full_stack",
+            "Full Stack Team",
+            vec!["coordinator", "coder", "reviewer", "tester"],
+        ),
+        (
+            "content",
+            "Content Team",
+            vec!["researcher", "writer", "reviewer"],
+        ),
     ];
 
     for (id, name, agents) in templates {
-        println!("  {} {}", "📦".dimmed(), name.cyan().bold());
+        println!("  {} {}", "[*]".dimmed(), name.cyan().bold());
         println!("     {} {}", "ID:".dimmed(), id.yellow());
         println!("     {} {}", "Agents:".dimmed(), agents.join(", ").green());
         println!();

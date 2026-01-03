@@ -5,15 +5,15 @@ declare function formatDate(date: Date | string | number, options?: Intl.DateTim
 /**
  * Format a date to ISO string (YYYY-MM-DD)
  */
-declare function formatDateISO(date: Date | string | number): string;
+declare function formatDateISO(date: Date | string | number | null | undefined): string;
 /**
  * Format a date to time only (HH:MM)
  */
-declare function formatTime(date: Date | string | number): string;
+declare function formatTime(date: Date | string | number | null | undefined): string;
 /**
  * Format a date to relative time (e.g., "2 hours ago", "yesterday")
  */
-declare function formatRelativeTime(date: Date | string | number): string;
+declare function formatRelativeTime(date: Date | string | number | null | undefined): string;
 /**
  * Check if a date is today
  */

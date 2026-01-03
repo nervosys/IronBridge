@@ -36,6 +36,7 @@ export function SearchScreen({ navigation }: Props) {
         queryKey: ['search', submittedQuery],
         queryFn: () => searchSessions(submittedQuery, 50),
         enabled: submittedQuery.length > 0,
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const handleSearch = () => {

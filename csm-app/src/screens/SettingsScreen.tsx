@@ -91,6 +91,7 @@ export function SettingsScreen() {
     } = useQuery({
         queryKey: ['providers'],
         queryFn: getProviders,
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const handleRefresh = () => {

@@ -2,6 +2,8 @@
 //!
 //! High-level API for running agents with automatic session management.
 
+#![allow(dead_code)]
+
 use crate::agency::agent::Agent;
 use crate::agency::error::{AgencyError, AgencyResult};
 use crate::agency::executor::{ExecutionContext, ExecutionResult, Executor};

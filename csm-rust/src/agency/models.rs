@@ -2,6 +2,8 @@
 //!
 //! Core data structures for the Agent Development Kit.
 
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

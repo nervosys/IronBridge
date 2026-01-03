@@ -4,6 +4,8 @@
 //! Inspired by multi-agent patterns but built from scratch for performance and control.
 //!
 //! ## Key Features
+
+#![allow(dead_code, unused_imports)]
 //!
 //! - **Code-First Development**: Define agents and tools in Rust for type safety and performance
 //! - **Modular Architecture**: Compose agents into hierarchies (sequential, parallel, loop)

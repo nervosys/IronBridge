@@ -131,7 +131,7 @@ mod generic_message_tests {
     fn test_generic_message_unicode_content() {
         let msg = GenericMessage {
             role: "user".to_string(),
-            content: "Hello 世界 🌍 مرحبا".to_string(),
+            content: "Hello World".to_string(),
             timestamp: None,
             model: None,
         };

@@ -2,6 +2,8 @@
 //!
 //! Defines the core Agent structure and provides a fluent builder API.
 
+#![allow(dead_code)]
+
 use crate::agency::models::{ModelConfig, ModelProvider};
 use crate::agency::tools::Tool;
 use chrono::{DateTime, Utc};

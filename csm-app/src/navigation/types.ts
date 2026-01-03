@@ -33,6 +33,17 @@ export type RootStackParamList = {
     SwarmDetail: {
         swarmId: string;
     };
+
+    // More menu screens (feature parity with csm-web)
+    More: undefined;
+    Comparison: undefined;
+    Harvest: undefined;
+    Providers: undefined;
+    Protocols: undefined;
+    Accounts: undefined;
+    Developer: undefined;
+    Research: undefined;
+    SWE: undefined;
 };
 
 export type TabParamList = {
@@ -43,4 +54,5 @@ export type TabParamList = {
     AgentsTab: undefined;
     SearchTab: undefined;
     SettingsTab: undefined;
+    MoreTab: undefined;
 };

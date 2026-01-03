@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     let vscode_running = is_vscode_running();
     println!("   VS Code running: {}", vscode_running);
     if vscode_running {
-        println!("   ⚠ Some operations may not take effect until VS Code restarts");
+        println!("   ! Some operations may not take effect until VS Code restarts");
     }
 
     // Example 2: Get workspace storage path
@@ -72,7 +72,7 @@ fn main() -> anyhow::Result<()> {
 
             println!(
                 "     {} {} ({} bytes)",
-                if is_dir { "📁" } else { "📄" },
+                if is_dir { "[D]" } else { "[F]" },
                 name.to_string_lossy(),
                 size
             );

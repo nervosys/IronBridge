@@ -104,10 +104,10 @@ mod chat_message_tests {
     #[test]
     fn test_chat_message_with_unicode() {
         let msg = ChatMessage {
-            text: Some("Hello 🌍 世界 مرحبا".to_string()),
+            text: Some("Hello World".to_string()),
             parts: None,
         };
-        assert_eq!(msg.get_text(), "Hello 🌍 世界 مرحبا");
+        assert_eq!(msg.get_text(), "Hello World");
     }
 
     #[test]

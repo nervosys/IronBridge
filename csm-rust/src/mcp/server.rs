@@ -1,5 +1,7 @@
 //! MCP Server - Main server implementation using stdio transport
 
+#![allow(dead_code, unused_imports)]
+
 use super::types::*;
 use super::tools;
 use super::resources;

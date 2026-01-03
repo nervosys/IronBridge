@@ -8,6 +8,8 @@
 //! - **Task Tracking**: Monitor task status, progress, and metrics
 //! - **Multi-machine**: Track agents across multiple remote hosts
 //! - **Heartbeat**: Automatic health monitoring with configurable intervals
+
+#![allow(dead_code)]
 //! - **Event Streaming**: Subscribe to specific agent or task events
 
 use chrono::{DateTime, Utc};

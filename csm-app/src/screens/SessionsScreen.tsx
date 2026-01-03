@@ -52,6 +52,7 @@ export function SessionsScreen({ navigation }: Props) {
     } = useQuery({
         queryKey: ['sessions'],
         queryFn: () => getSessions({ limit: 100 }),
+        select: (data) => Array.isArray(data) ? data : [],
     });
 
     const getProviderIcon = (provider: string) =>

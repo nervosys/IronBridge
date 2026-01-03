@@ -8,7 +8,6 @@ import {
     Scale,
     Server,
     Database,
-    Activity,
     Plug,
     Key,
     Moon,
@@ -20,6 +19,14 @@ import {
     BookOpen,
     ChevronDown,
     ChevronRight,
+    Wrench,
+    Bot,
+    Monitor,
+    Globe,
+    Share2,
+    FlaskConical,
+    Network,
+    Shield,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -42,13 +49,20 @@ interface NavItem {
 
 const navItems: NavItem[] = [
     { path: '/chat', icon: MessagesSquare, label: 'Chat' },
-    { path: '/agents', icon: Activity, label: 'Agents' },
     {
-        path: '/swarms',
-        icon: Users,
-        label: 'Swarms',
+        path: '/agents',
+        icon: Bot,
+        label: 'Agents',
         children: [
-            { path: '/swarms/protocols', icon: Plug, label: 'Protocols' },
+            { path: '/agents/swe', icon: Wrench, label: 'SWE' },
+            { path: '/agents/os', icon: Monitor, label: 'OS' },
+            { path: '/agents/network', icon: Network, label: 'Network' },
+            { path: '/agents/cyber', icon: Shield, label: 'Cyber' },
+            { path: '/agents/web', icon: Globe, label: 'Web' },
+            { path: '/agents/social', icon: Share2, label: 'Social' },
+            { path: '/agents/research', icon: FlaskConical, label: 'Research' },
+            { path: '/agents/swarms', icon: Users, label: 'Swarms' },
+            { path: '/agents/protocols', icon: Plug, label: 'Protocols' },
         ]
     },
     { path: '/harvest', icon: Database, label: 'Harvest' },
@@ -64,7 +78,7 @@ const navItems: NavItem[] = [
 
 export default function Layout({ children, theme, setTheme }: LayoutProps) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [expandedItems, setExpandedItems] = useState<string[]>(['/swarms']);
+    const [expandedItems, setExpandedItems] = useState<string[]>(['/agents']);
     const location = useLocation();
 
     const toggleExpanded = (path: string) => {

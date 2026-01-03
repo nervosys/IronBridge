@@ -8,6 +8,8 @@
 //! - **Memory Types**: Short-term, long-term, episodic, and semantic memory
 //! - **Knowledge Base**: Structured document storage with chunking
 //! - **Context Window**: Smart context management for LLM prompts
+
+#![allow(dead_code)]
 //! - **Caching**: Frequently accessed information caching
 
 use chrono::{DateTime, Utc};

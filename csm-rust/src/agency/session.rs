@@ -2,6 +2,8 @@
 //!
 //! Manages conversation sessions with persistent state.
 
+#![allow(dead_code)]
+
 use crate::agency::error::{AgencyError, AgencyResult};
 use crate::agency::models::{AgencyMessage, MessageRole, TokenUsage};
 use chrono::{DateTime, Utc};

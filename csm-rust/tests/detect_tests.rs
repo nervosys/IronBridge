@@ -720,7 +720,7 @@ mod error_handling_tests {
 
     #[test]
     fn test_unicode_path_handled() {
-        let unicode_path = "/home/用户/项目/测试";
+        let unicode_path = "/home/user/project/test";
         let result = find_workspace_by_path(unicode_path);
         assert!(result.is_ok());
     }

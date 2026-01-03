@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
     AreaChart,
     Area,
@@ -13,9 +13,21 @@ import {
     Pie,
     Cell,
 } from 'recharts';
-import { MessageSquare, FolderOpen, Server, Database, TrendingUp, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { MessageSquare, FolderOpen, Server, Database, TrendingUp, Clock, AlertCircle, Loader2, Calendar } from 'lucide-react';
 import { useApi } from '../context/ApiContext';
 import { formatRelativeTime } from '@csm/shared';
+
+// Time period options for session activity chart
+type TimePeriod = 'week' | 'month' | 'year' | 'all';
+
+interface ActivityDataPoint {
+    date: string;
+    fullDate: string;
+    sessions: number;
+    messages: number;
+    prevSessions?: number;
+    prevMessages?: number;
+}
 
 // Provider colors for consistent styling
 const PROVIDER_COLORS: Record<string, string> = {
@@ -29,6 +41,51 @@ const PROVIDER_COLORS: Record<string, string> = {
     'cursor': '#ec4899',
     'default': '#64748b',
 };
+
+// Mapping from provider IDs to proper display names
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+    'copilot': 'GitHub Copilot',
+    'github-copilot': 'GitHub Copilot',
+    'openai': 'OpenAI',
+    'chatgpt': 'ChatGPT',
+    'anthropic': 'Anthropic',
+    'claude': 'Claude',
+    'google': 'Google AI',
+    'gemini': 'Gemini',
+    'azure-openai': 'Azure OpenAI',
+    'ai-foundry': 'Azure AI Foundry',
+    'github-models': 'GitHub Models',
+    'deepseek': 'DeepSeek',
+    'xai': 'xAI',
+    'mistral': 'Mistral AI',
+    'cohere': 'Cohere',
+    'perplexity': 'Perplexity',
+    'groq': 'Groq',
+    'together': 'Together AI',
+    'fireworks': 'Fireworks AI',
+    'replicate': 'Replicate',
+    'openrouter': 'OpenRouter',
+    'aws-bedrock': 'AWS Bedrock',
+    'ai21': 'AI21 Labs',
+    'cursor': 'Cursor',
+    'm365-copilot': 'Microsoft 365 Copilot',
+    'ollama': 'Ollama',
+    'lm-studio': 'LM Studio',
+    'localai': 'LocalAI',
+    'llamafile': 'llamafile',
+    'jan': 'Jan',
+    'gpt4all': 'GPT4All',
+    'text-gen-webui': 'Text Generation WebUI',
+    'vllm': 'vLLM',
+    'mlx': 'MLX',
+    'koboldcpp': 'KoboldCpp',
+    'tabby': 'Tabby',
+};
+
+function getProviderDisplayName(providerId: string): string {
+    const normalized = providerId.toLowerCase().replace(/\s+/g, '-');
+    return PROVIDER_DISPLAY_NAMES[normalized] || providerId;
+}
 
 function getProviderColor(provider: string): string {
     const normalized = provider.toLowerCase().replace(/\s+/g, '-');
@@ -69,25 +126,185 @@ function StatCard({ icon: Icon, label, value, change, changeType }: StatCardProp
 
 export default function Overview() {
     const { statistics, sessions, providers, workspaces, isLoading, error } = useApi();
+    const [timePeriod, setTimePeriod] = useState<TimePeriod>('week');
+    const [showBaseline, setShowBaseline] = useState(true);
 
-    // Derive data from API
-    const sessionActivityData = useMemo(() => {
-        if (statistics?.messagesByDay) {
-            return statistics.messagesByDay.map((day) => ({
-                date: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' }),
-                sessions: day.sessions,
-                messages: day.messages,
-            }));
+    // Helper function to get date range for period
+    const getDateRange = useCallback((period: TimePeriod, offset = 0) => {
+        const now = new Date();
+        const end = new Date(now);
+        const start = new Date(now);
+
+        // Adjust for offset (0 = current period, 1 = previous period)
+        switch (period) {
+            case 'week':
+                end.setDate(end.getDate() - (offset * 7));
+                start.setDate(end.getDate() - 6);
+                break;
+            case 'month':
+                end.setMonth(end.getMonth() - offset);
+                start.setMonth(end.getMonth());
+                start.setDate(1);
+                break;
+            case 'year':
+                end.setFullYear(end.getFullYear() - offset);
+                start.setFullYear(end.getFullYear());
+                start.setMonth(0);
+                start.setDate(1);
+                break;
+            case 'all': {
+                // For 'all', use the earliest session date
+                const earliest = sessions.length > 0
+                    ? Math.min(...sessions.map(s => s.createdAt))
+                    : now.getTime() - 365 * 24 * 60 * 60 * 1000;
+                start.setTime(earliest);
+                break;
+            }
         }
-        // Fallback for when data is loading
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        return days.map((date) => ({ date, sessions: 0, messages: 0 }));
-    }, [statistics]);
+
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+    }, [sessions]);
+
+    // Generate activity data based on selected period with baseline comparison
+    const sessionActivityData = useMemo((): ActivityDataPoint[] => {
+        const { start: currentStart, end: currentEnd } = getDateRange(timePeriod, 0);
+        const { start: prevStart, end: prevEnd } = getDateRange(timePeriod, 1);
+
+        // Aggregate sessions by date bucket
+        const aggregateByBucket = (startDate: Date, endDate: Date) => {
+            const buckets = new Map<string, { sessions: number; messages: number }>();
+
+            // Determine bucket key function based on period
+            let bucketKey: (d: Date) => string;
+
+            switch (timePeriod) {
+                case 'week':
+                    bucketKey = (d) => d.toLocaleDateString('en-US', { weekday: 'short' });
+                    break;
+                case 'month':
+                    bucketKey = (d) => d.getDate().toString();
+                    break;
+                case 'year':
+                    bucketKey = (d) => d.toLocaleDateString('en-US', { month: 'short' });
+                    break;
+                case 'all':
+                    // Use months for 'all'
+                    bucketKey = (d) => d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                    break;
+            }
+
+            // Initialize buckets
+            if (timePeriod === 'week') {
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const startDay = startDate.getDay();
+                for (let i = 0; i < 7; i++) {
+                    const dayIndex = (startDay + i) % 7;
+                    buckets.set(days[dayIndex], { sessions: 0, messages: 0 });
+                }
+            } else if (timePeriod === 'month') {
+                const daysInMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+                for (let i = 1; i <= daysInMonth; i++) {
+                    buckets.set(i.toString(), { sessions: 0, messages: 0 });
+                }
+            } else if (timePeriod === 'year') {
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                months.forEach(m => buckets.set(m, { sessions: 0, messages: 0 }));
+            }
+
+            // Aggregate sessions
+            sessions.forEach(session => {
+                const sessionDate = new Date(session.createdAt);
+                if (sessionDate >= startDate && sessionDate <= endDate) {
+                    const key = bucketKey(sessionDate);
+                    const existing = buckets.get(key) || { sessions: 0, messages: 0 };
+                    buckets.set(key, {
+                        sessions: existing.sessions + 1,
+                        messages: existing.messages + session.messageCount,
+                    });
+                }
+            });
+
+            return buckets;
+        };
+
+        const currentBuckets = aggregateByBucket(currentStart, currentEnd);
+        const prevBuckets = aggregateByBucket(prevStart, prevEnd);
+
+        // Convert to array format
+        const result: ActivityDataPoint[] = [];
+
+        if (timePeriod === 'week') {
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const startDay = currentStart.getDay();
+            for (let i = 0; i < 7; i++) {
+                const dayIndex = (startDay + i) % 7;
+                const key = days[dayIndex];
+                const current = currentBuckets.get(key) || { sessions: 0, messages: 0 };
+                const prev = prevBuckets.get(key) || { sessions: 0, messages: 0 };
+                const date = new Date(currentStart);
+                date.setDate(date.getDate() + i);
+                result.push({
+                    date: key,
+                    fullDate: date.toLocaleDateString(),
+                    sessions: current.sessions,
+                    messages: current.messages,
+                    prevSessions: prev.sessions,
+                    prevMessages: prev.messages,
+                });
+            }
+        } else if (timePeriod === 'month') {
+            const daysInMonth = new Date(currentEnd.getFullYear(), currentEnd.getMonth() + 1, 0).getDate();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const key = i.toString();
+                const current = currentBuckets.get(key) || { sessions: 0, messages: 0 };
+                const prev = prevBuckets.get(key) || { sessions: 0, messages: 0 };
+                result.push({
+                    date: key,
+                    fullDate: new Date(currentEnd.getFullYear(), currentEnd.getMonth(), i).toLocaleDateString(),
+                    sessions: current.sessions,
+                    messages: current.messages,
+                    prevSessions: prev.sessions,
+                    prevMessages: prev.messages,
+                });
+            }
+        } else if (timePeriod === 'year') {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            months.forEach((key, i) => {
+                const current = currentBuckets.get(key) || { sessions: 0, messages: 0 };
+                const prev = prevBuckets.get(key) || { sessions: 0, messages: 0 };
+                result.push({
+                    date: key,
+                    fullDate: new Date(currentEnd.getFullYear(), i, 1).toLocaleDateString(),
+                    sessions: current.sessions,
+                    messages: current.messages,
+                    prevSessions: prev.sessions,
+                    prevMessages: prev.messages,
+                });
+            });
+        } else {
+            // 'all' - group by month/year
+            currentBuckets.forEach((value, key) => {
+                const prev = prevBuckets.get(key) || { sessions: 0, messages: 0 };
+                result.push({
+                    date: key,
+                    fullDate: key,
+                    sessions: value.sessions,
+                    messages: value.messages,
+                    prevSessions: prev.sessions,
+                    prevMessages: prev.messages,
+                });
+            });
+        }
+
+        return result;
+    }, [sessions, timePeriod, getDateRange]);
 
     const providerData = useMemo(() => {
         if (statistics?.sessionsByProvider) {
             return statistics.sessionsByProvider.map((p) => ({
-                name: p.provider,
+                name: getProviderDisplayName(p.provider),
                 sessions: p.count,
                 color: p.color || getProviderColor(p.provider),
             }));
@@ -98,10 +315,10 @@ export default function Overview() {
             const count = providerCounts.get(s.provider) || 0;
             providerCounts.set(s.provider, count + 1);
         });
-        return Array.from(providerCounts.entries()).map(([name, count]) => ({
-            name,
+        return Array.from(providerCounts.entries()).map(([id, count]) => ({
+            name: getProviderDisplayName(id),
             sessions: count,
-            color: getProviderColor(name),
+            color: getProviderColor(id),
         }));
     }, [statistics, sessions]);
 
@@ -112,7 +329,7 @@ export default function Overview() {
             .map((s) => ({
                 id: s.id,
                 title: s.title || 'Untitled Session',
-                provider: s.provider,
+                provider: getProviderDisplayName(s.provider),
                 time: formatRelativeTime(s.updatedAt),
                 messages: s.messageCount,
             }));
@@ -185,26 +402,74 @@ export default function Overview() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Activity Chart */}
                 <div className="lg:col-span-2 bg-[hsl(var(--card))] rounded-xl p-6 border">
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center justify-between mb-4">
                         <div>
                             <h2 className="text-xl font-semibold">Session Activity</h2>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">Sessions and messages over time</p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                {timePeriod === 'week' && 'Last 7 days'}
+                                {timePeriod === 'month' && 'This month'}
+                                {timePeriod === 'year' && 'This year'}
+                                {timePeriod === 'all' && 'All time'}
+                                {showBaseline && timePeriod !== 'all' && ' vs. previous period'}
+                            </p>
                         </div>
+                        <div className="flex items-center gap-2">
+                            <Calendar size={16} className="text-[hsl(var(--muted-foreground))]" />
+                            <select
+                                value={timePeriod}
+                                onChange={(e) => setTimePeriod(e.target.value as TimePeriod)}
+                                className="bg-[hsl(var(--muted))] border border-[hsl(var(--border))] rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                            >
+                                <option value="week">Week</option>
+                                <option value="month">Month</option>
+                                <option value="year">Year</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Legend and baseline toggle */}
+                    <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-4 text-sm">
                             <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-[hsl(var(--primary))]" />
+                                <div className="w-3 h-3 rounded-full bg-[hsl(199,89%,48%)]" />
                                 <span className="text-[hsl(var(--muted-foreground))]">Sessions</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full bg-[#10b981]" />
                                 <span className="text-[hsl(var(--muted-foreground))]">Messages</span>
                             </div>
+                            {showBaseline && timePeriod !== 'all' && (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-[#f97316] opacity-50" />
+                                        <span className="text-[hsl(var(--muted-foreground))]">Prev Sessions</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-[#8b5cf6] opacity-50" />
+                                        <span className="text-[hsl(var(--muted-foreground))]">Prev Messages</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
+                        {timePeriod !== 'all' && (
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showBaseline}
+                                    onChange={(e) => setShowBaseline(e.target.checked)}
+                                    className="rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                />
+                                <span className="text-[hsl(var(--muted-foreground))]">Show baseline</span>
+                            </label>
+                        )}
                     </div>
+
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={sessionActivityData}>
                                 <defs>
+                                    {/* Current period gradients */}
                                     <linearGradient id="colorSessions" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="hsl(199, 89%, 48%)" stopOpacity={0.3} />
                                         <stop offset="95%" stopColor="hsl(199, 89%, 48%)" stopOpacity={0} />
@@ -213,9 +478,23 @@ export default function Overview() {
                                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
                                         <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                     </linearGradient>
+                                    {/* Previous period gradients (50% opacity) */}
+                                    <linearGradient id="colorPrevSessions" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#f97316" stopOpacity={0.15} />
+                                        <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorPrevMessages" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15} />
+                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                                    </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                <XAxis
+                                    dataKey="date"
+                                    stroke="hsl(var(--muted-foreground))"
+                                    fontSize={12}
+                                    interval={timePeriod === 'month' ? 4 : 0}
+                                />
                                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                                 <Tooltip
                                     contentStyle={{
@@ -223,13 +502,53 @@ export default function Overview() {
                                         border: '1px solid hsl(var(--border))',
                                         borderRadius: '8px',
                                     }}
+                                    formatter={(value: number, name: string) => {
+                                        const labels: Record<string, string> = {
+                                            sessions: 'Sessions',
+                                            messages: 'Messages',
+                                            prevSessions: 'Prev Sessions',
+                                            prevMessages: 'Prev Messages',
+                                        };
+                                        return [value.toLocaleString(), labels[name] || name];
+                                    }}
+                                    labelFormatter={(label: string, payload: readonly { payload?: ActivityDataPoint }[]) => {
+                                        const data = payload?.[0]?.payload;
+                                        return data?.fullDate || label;
+                                    }}
                                 />
+                                {/* Previous period areas (rendered first, behind current) */}
+                                {showBaseline && timePeriod !== 'all' && (
+                                    <>
+                                        <Area
+                                            type="monotone"
+                                            dataKey="prevSessions"
+                                            stroke="#f97316"
+                                            strokeOpacity={0.5}
+                                            strokeDasharray="5 5"
+                                            fillOpacity={1}
+                                            fill="url(#colorPrevSessions)"
+                                            name="prevSessions"
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="prevMessages"
+                                            stroke="#8b5cf6"
+                                            strokeOpacity={0.5}
+                                            strokeDasharray="5 5"
+                                            fillOpacity={1}
+                                            fill="url(#colorPrevMessages)"
+                                            name="prevMessages"
+                                        />
+                                    </>
+                                )}
+                                {/* Current period areas */}
                                 <Area
                                     type="monotone"
                                     dataKey="sessions"
                                     stroke="hsl(199, 89%, 48%)"
                                     fillOpacity={1}
                                     fill="url(#colorSessions)"
+                                    name="sessions"
                                 />
                                 <Area
                                     type="monotone"
@@ -237,6 +556,7 @@ export default function Overview() {
                                     stroke="#10b981"
                                     fillOpacity={1}
                                     fill="url(#colorMessages)"
+                                    name="messages"
                                 />
                             </AreaChart>
                         </ResponsiveContainer>

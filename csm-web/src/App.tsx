@@ -4,16 +4,16 @@ import Layout from './components/Layout';
 import Chat from './pages/Chat';
 import Comparison from './pages/Comparison';
 import Overview from './pages/Overview';
-import Swarms from './pages/Swarms';
+import Agents from './pages/Agents';
 import Workspaces from './pages/Workspaces';
 import Sessions from './pages/Sessions';
 import Providers from './pages/Providers';
 import Harvest from './pages/Harvest';
-import Agents from './pages/Agents';
 import Protocols from './pages/Protocols';
 import Accounts from './pages/Accounts';
 import Developer from './pages/Developer';
 import Research from './pages/Research';
+import SWE from './pages/SWE';
 import { ApiProvider } from './context';
 import { config } from './config';
 
@@ -47,14 +47,23 @@ function App() {
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/chat" element={<Chat />} />
-            <Route path="/swarms" element={<Swarms />} />
-            <Route path="/swarms/protocols" element={<Protocols />} />
+            {/* Agents section */}
+            <Route path="/agents" element={<Agents />} />
+            <Route path="/agents/swe" element={<SWE />} />
+            <Route path="/agents/os" element={<Agents />} />
+            <Route path="/agents/network" element={<Agents />} />
+            <Route path="/agents/cyber" element={<Agents />} />
+            <Route path="/agents/web" element={<Agents />} />
+            <Route path="/agents/social" element={<Agents />} />
+            <Route path="/agents/research" element={<Agents />} />
+            <Route path="/agents/swarms" element={<Agents />} />
+            <Route path="/agents/protocols" element={<Protocols />} />
+            {/* Other pages */}
             <Route path="/comparison" element={<Comparison />} />
             <Route path="/workspaces" element={<Workspaces />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/providers" element={<Providers />} />
             <Route path="/harvest" element={<Harvest />} />
-            <Route path="/agents" element={<Agents />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/developer" element={<Developer />} />
             <Route path="/research" element={<Research />} />

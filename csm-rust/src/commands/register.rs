@@ -95,9 +95,9 @@ pub fn register_all(project_path: Option<&str>, merge: bool, force: bool) -> Res
         "[!]".yellow()
     );
     println!("   To see the new sessions, do one of the following:");
-    println!("   • Run: {} (if CSM extension is installed)", "code --command csm.reloadAndShowChats".cyan());
-    println!("   • Or press {} in VS Code and run {}", "Ctrl+Shift+P".cyan(), "Developer: Reload Window".cyan());
-    println!("   • Or restart VS Code");
+    println!("   * Run: {} (if CSM extension is installed)", "code --command csm.reloadAndShowChats".cyan());
+    println!("   * Or press {} in VS Code and run {}", "Ctrl+Shift+P".cyan(), "Developer: Reload Window".cyan());
+    println!("   * Or restart VS Code");
 
     Ok(())
 }
@@ -244,7 +244,7 @@ pub fn register_sessions(
     if force && is_vscode_running() {
         println!(
             "   {} Sessions should appear in VS Code immediately",
-            "→".cyan()
+            "->".cyan()
         );
     }
 
@@ -344,12 +344,12 @@ pub fn list_orphaned(project_path: Option<&str>) -> Result<()> {
 
     println!(
         "\n{} To register all orphaned sessions:",
-        "→".cyan()
+        "->".cyan()
     );
     println!("   csm register all --force");
     println!(
         "\n{} To register specific sessions:",
-        "→".cyan()
+        "->".cyan()
     );
     println!("   csm register session <ID1> <ID2> ... --force");
 

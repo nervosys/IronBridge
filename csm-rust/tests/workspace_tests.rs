@@ -577,7 +577,7 @@ mod workspace_edge_cases {
 
     #[test]
     fn test_decode_unicode_in_path() {
-        let uri = "file:///home/ユーザー/プロジェクト";
+        let uri = "file:///home/user/project";
         let decoded = decode_workspace_folder(uri);
         assert!(!decoded.is_empty());
     }

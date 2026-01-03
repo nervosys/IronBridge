@@ -34,6 +34,10 @@
 //! let result = runtime.run("assistant", "Hello!").await?;
 //! ```
 
+// Library modules export public APIs for external use - suppress dead_code warnings
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 pub mod agency;
 pub mod browser;
 pub mod cli;

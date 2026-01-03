@@ -566,7 +566,9 @@ fn main() -> Result<()> {
                 };
 
                 // Create tokio runtime and run the server
-                let rt = tokio::runtime::Runtime::new()?;
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()?;
                 rt.block_on(api::start_server(config))
             }
         },
@@ -609,12 +611,14 @@ fn print_banner() {
     use colored::Colorize;
 
     let banner = r#"
-     ██████╗██╗  ██╗ █████╗ ███████╗███╗   ███╗
-    ██╔════╝██║  ██║██╔══██╗██╔════╝████╗ ████║
-    ██║     ███████║███████║███████╗██╔████╔██║
-    ██║     ██╔══██║██╔══██║╚════██║██║╚██╔╝██║
-    ╚██████╗██║  ██║██║  ██║███████║██║ ╚═╝ ██║
-     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝
+     .d8888b.  888    888        d8888  .d8888b.  888b     d888
+    d88P  Y88b 888    888       d88888 d88P  Y88b 8888b   d8888
+    888    888 888    888      d88P888 Y88b.      88888b.d88888
+    888        8888888888     d88P 888  "Y888b.   888Y88888P888
+    888        888    888    d88P  888     "Y88b. 888 Y888P 888
+    888    888 888    888   d88P   888       "888 888  Y8P  888
+    Y88b  d88P 888    888  d8888888888 Y88b  d88P 888   "   888
+     "Y8888P"  888    888 d88P     888  "Y8888P"  888       888
     "#;
 
     let subtitle = "CHAt System Manager (Chasm) for Bridging LLM Providers";
@@ -629,15 +633,15 @@ fn print_banner() {
 
     // Random fun messages
     let messages = [
-        "🧠 Managing your AI memories since 2024",
-        "🔮 Where conversations never get lost",
-        "🚀 Because context switching shouldn't mean losing context",
-        "💬 Unifying the chaos of multi-LLM life",
-        "🎯 One tool to find them all",
-        "⚡ Faster than scrolling through old chats",
-        "🌐 From VS Code to the cloud and back",
-        "🔧 Built with Rust, powered by caffeine",
-        "🕳️ Bridging the chasm between your chat sessions",
+        "[*] Managing your AI memories since 2024",
+        "[*] Where conversations never get lost",
+        "[*] Because context switching shouldn't mean losing context",
+        "[*] Unifying the chaos of multi-LLM life",
+        "[*] One tool to find them all",
+        "[*] Faster than scrolling through old chats",
+        "[*] From VS Code to the cloud and back",
+        "[*] Built with Rust, powered by caffeine",
+        "[*] Bridging the chasm between your chat sessions",
     ];
 
     let idx = std::time::SystemTime::now()
