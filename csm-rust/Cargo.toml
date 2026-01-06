@@ -41,7 +41,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tabled = "0.15"
 
 # Colored terminal output
-colored = "2.1"
+colored = "3.0"
 
 # Error handling
 anyhow = "1.0"
