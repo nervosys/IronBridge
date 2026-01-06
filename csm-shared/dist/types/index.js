@@ -53,7 +53,88 @@ var SWE_PROJECT_TEMPLATES = [
     defaultMemory: []
   }
 ];
+var SUBSCRIPTION_TIERS = [
+  {
+    tier: "free",
+    name: "Free",
+    price: 0,
+    features: [
+      "Up to 10 workspaces",
+      "Up to 100 sessions",
+      "Local sync only",
+      "Basic agent support"
+    ],
+    limits: {
+      maxWorkspaces: 10,
+      maxSessions: 100,
+      maxAgents: 3,
+      maxSwarms: 1,
+      syncEnabled: true,
+      realTimeSync: false,
+      prioritySync: false,
+      teamFeatures: false,
+      apiAccess: false,
+      customIntegrations: false
+    }
+  },
+  {
+    tier: "pro",
+    name: "Pro",
+    price: 9.99,
+    yearlyPrice: 99.99,
+    features: [
+      "Up to 100 workspaces",
+      "Unlimited sessions",
+      "Real-time cloud sync",
+      "Unlimited agents",
+      "API access",
+      "Priority support"
+    ],
+    limits: {
+      maxWorkspaces: 100,
+      maxSessions: -1,
+      // Unlimited
+      maxAgents: -1,
+      maxSwarms: 10,
+      syncEnabled: true,
+      realTimeSync: true,
+      prioritySync: false,
+      teamFeatures: false,
+      apiAccess: true,
+      customIntegrations: false
+    }
+  },
+  {
+    tier: "enterprise",
+    name: "Enterprise",
+    price: 29.99,
+    yearlyPrice: 299.99,
+    features: [
+      "Unlimited workspaces",
+      "Unlimited sessions",
+      "Priority real-time sync",
+      "Unlimited agents & swarms",
+      "Team collaboration features",
+      "Custom integrations",
+      "Dedicated support",
+      "SLA guarantee"
+    ],
+    limits: {
+      maxWorkspaces: -1,
+      maxSessions: -1,
+      maxAgents: -1,
+      maxSwarms: -1,
+      syncEnabled: true,
+      realTimeSync: true,
+      prioritySync: true,
+      teamFeatures: true,
+      apiAccess: true,
+      customIntegrations: true
+    }
+  }
+];
 
+exports.SUBSCRIPTION_TIERS = SUBSCRIPTION_TIERS;
 exports.SWE_PROJECT_TEMPLATES = SWE_PROJECT_TEMPLATES;
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

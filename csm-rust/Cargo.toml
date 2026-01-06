@@ -69,13 +69,24 @@ reqwest = { version = "0.11", default-features = false, features = [
 actix-web = { version = "4", default-features = false, features = [
     "rustls-0_23",
 ] }
+actix-http = { version = "3", features = ["ws"] }
 actix-cors = "0.7"
+
+# Async streaming for SSE
+async-stream = "0.3"
+futures-util = { version = "0.3", features = ["sink"] }
 
 # Base64 encoding for API requests
 base64 = "0.21"
 
 # AES decryption for browser cookies
 aes-gcm = "0.10"
+
+# JWT authentication
+jsonwebtoken = "9.3"
+
+# Password hashing
+sha2 = "0.10"
 
 # Windows DPAPI for cookie decryption
 [target.'cfg(windows)'.dependencies]

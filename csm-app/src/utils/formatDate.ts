@@ -18,7 +18,7 @@ export {
 } from '@csm/shared';
 
 /**
- * Normalize a timestamp (Unix seconds or ISO string) to a Date
+ * Normalize a timestamp (Unix milliseconds, seconds, or ISO string) to a Date
  */
 function normalizeTimestamp(timestamp: string | number | undefined): Date | null {
     if (!timestamp) return null;
@@ -26,14 +26,26 @@ function normalizeTimestamp(timestamp: string | number | undefined): Date | null
     let date: Date;
 
     if (typeof timestamp === 'number') {
-        // Unix timestamp in seconds - convert to milliseconds
-        date = new Date(timestamp * 1000);
+        // Determine if timestamp is in seconds or milliseconds
+        // Timestamps > 1e12 are in milliseconds (after year 2001 in ms)
+        // Timestamps < 1e12 are in seconds
+        if (timestamp > 1e12) {
+            // Already in milliseconds
+            date = new Date(timestamp);
+        } else {
+            // Unix timestamp in seconds - convert to milliseconds
+            date = new Date(timestamp * 1000);
+        }
     } else if (typeof timestamp === 'string') {
         // Try parsing as ISO string or number string
         const parsed = parseInt(timestamp, 10);
         if (!isNaN(parsed) && parsed > 1000000000) {
-            // Looks like a Unix timestamp
-            date = new Date(parsed * 1000);
+            // Looks like a Unix timestamp - determine if seconds or milliseconds
+            if (parsed > 1e12) {
+                date = new Date(parsed);
+            } else {
+                date = new Date(parsed * 1000);
+            }
         } else {
             date = new Date(timestamp);
         }

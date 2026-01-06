@@ -49,7 +49,8 @@ function App() {
             <Route path="/chat" element={<Chat />} />
             {/* Agents section */}
             <Route path="/agents" element={<Agents />} />
-            <Route path="/agents/swe" element={<SWE />} />
+            <Route path="/agents/inbox" element={<Agents />} />
+            <Route path="/agents/swe" element={<Agents />} />
             <Route path="/agents/os" element={<Agents />} />
             <Route path="/agents/network" element={<Agents />} />
             <Route path="/agents/cyber" element={<Agents />} />
@@ -58,6 +59,8 @@ function App() {
             <Route path="/agents/research" element={<Agents />} />
             <Route path="/agents/swarms" element={<Agents />} />
             <Route path="/agents/protocols" element={<Protocols />} />
+            {/* SWE Memory standalone page */}
+            <Route path="/swe-memory" element={<SWE />} />
             {/* Other pages */}
             <Route path="/comparison" element={<Comparison />} />
             <Route path="/workspaces" element={<Workspaces />} />

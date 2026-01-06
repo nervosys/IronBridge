@@ -246,9 +246,61 @@ impl ChatDatabase {
 
     /// Initialize the database schema
     fn initialize(&self) -> Result<()> {
-        self.conn
-            .execute_batch(include_str!("sql/schema.sql"))
-            .context("Failed to initialize database schema")?;
+        // Check if this is a harvest database (has sessions but missing 'model' column)
+        // If so, skip full schema initialization to preserve harvest data
+        let is_harvest_db = self
+            .conn
+            .query_row("SELECT 1 FROM sessions LIMIT 1", [], |_| Ok(true))
+            .is_ok();
+
+        let has_model_column = self
+            .conn
+            .query_row("SELECT model FROM sessions LIMIT 1", [], |_| Ok(true))
+            .is_ok();
+
+        // Only apply full schema if not a harvest database, or if it's a fresh database
+        if !is_harvest_db || has_model_column {
+            self.conn
+                .execute_batch(include_str!("sql/schema.sql"))
+                .context("Failed to initialize database schema")?;
+        }
+        // For harvest databases, ensure we have the tables we need for API
+        // (agents, metadata tables might be missing)
+        else {
+            // Create minimal additional tables needed for API functionality
+            self.conn
+                .execute_batch(
+                    r#"
+                -- Metadata table for version tracking
+                CREATE TABLE IF NOT EXISTS metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+                );
+                INSERT OR IGNORE INTO metadata (key, value) VALUES ('schema_version', 'harvest');
+                
+                -- Agents table for agent management
+                CREATE TABLE IF NOT EXISTS agents (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    instruction TEXT NOT NULL,
+                    role TEXT DEFAULT 'assistant',
+                    model TEXT,
+                    provider TEXT,
+                    temperature REAL DEFAULT 0.7,
+                    max_tokens INTEGER,
+                    tools TEXT,
+                    sub_agents TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    metadata TEXT
+                );
+                "#,
+                )
+                .context("Failed to initialize harvest-compatible schema")?;
+        }
         Ok(())
     }
 

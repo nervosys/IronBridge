@@ -23,3 +23,5 @@ export { AccountsScreen } from './AccountsScreen';
 export { DeveloperScreen } from './DeveloperScreen';
 export { ResearchScreen } from './ResearchScreen';
 export { SWEScreen } from './SWEScreen';
+export { LocalLlmSettingsScreen } from './LocalLlmSettingsScreen';
+export { AgentInboxScreen } from './AgentInboxScreen';

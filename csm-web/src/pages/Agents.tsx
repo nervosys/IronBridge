@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
     Bot,
@@ -40,6 +40,11 @@ import {
     Share2,
     FlaskConical,
     Wifi,
+    FolderOpen,
+    Edit2,
+    BookOpen,
+    Folder,
+    Info,
 } from 'lucide-react';
 import {
     XAxis,
@@ -51,9 +56,28 @@ import {
     Area,
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
-import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm } from '../hooks/useApi';
+import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../hooks/useApi';
 import { formatRelativeTime, formatTime, AGENT_ROLES } from '@csm/shared';
+import { AgentInbox } from '../components/AgentInbox';
 import type { Agent, Swarm, SwarmStatus } from '../api/types';
+import type { SweProject, SweMemory, SweRule, SweMemoryCategory, SweRuleCategory } from '@csm/shared';
+
+// SWE Memory API base URL
+const SWE_API_BASE = 'http://localhost:8787/api/v1';
+
+// SWE Memory categories
+const MEMORY_CATEGORIES: { value: SweMemoryCategory; label: string; icon: typeof Brain; color: string }[] = [
+    { value: 'fact', label: 'Fact', icon: Lightbulb, color: 'text-yellow-400' },
+    { value: 'decision', label: 'Decision', icon: Zap, color: 'text-purple-400' },
+    { value: 'pattern', label: 'Pattern', icon: Code, color: 'text-blue-400' },
+    { value: 'dependency', label: 'Dependency', icon: Folder, color: 'text-green-400' },
+    { value: 'architecture', label: 'Architecture', icon: GitBranch, color: 'text-cyan-400' },
+    { value: 'bug', label: 'Bug', icon: AlertCircle, color: 'text-red-400' },
+    { value: 'todo', label: 'Todo', icon: CheckCircle2, color: 'text-orange-400' },
+    { value: 'context', label: 'Context', icon: Info, color: 'text-gray-400' },
+    { value: 'preference', label: 'Preference', icon: Settings, color: 'text-pink-400' },
+    { value: 'custom', label: 'Custom', icon: FileText, color: 'text-slate-400' },
+];
 
 // ==================== TYPES ====================
 
@@ -149,6 +173,54 @@ const communicationProtocols = [
     { id: 'rpc', name: 'RPC', description: 'Direct request-response' },
 ];
 
+// Swarm Templates (matching csm-app)
+const SWARM_TEMPLATES = [
+    {
+        id: 'dev-team',
+        name: 'Development Team',
+        description: 'Full-stack development swarm with coordinator, coder, reviewer, and tester roles',
+        roles: ['coordinator', 'coder', 'reviewer', 'tester'] as const,
+        icon: Code,
+        color: '#10b981',
+    },
+    {
+        id: 'research-team',
+        name: 'Research Team',
+        description: 'Research and analysis swarm with researcher, writer, and reviewer roles',
+        roles: ['coordinator', 'researcher', 'writer', 'reviewer'] as const,
+        icon: Search,
+        color: '#3b82f6',
+    },
+    {
+        id: 'security-team',
+        name: 'Security Team',
+        description: 'Security audit swarm with analyst, scanner, and validator roles',
+        roles: ['coordinator', 'researcher', 'validator', 'specialist'] as const,
+        icon: Shield,
+        color: '#ef4444',
+    },
+    {
+        id: 'content-team',
+        name: 'Content Team',
+        description: 'Content creation swarm with planner, writer, editor, and publisher roles',
+        roles: ['coordinator', 'planner', 'specialist', 'reviewer'] as const,
+        icon: FileText,
+        color: '#f59e0b',
+    },
+];
+
+// Agent Templates (matching csm-app)
+const AGENT_TEMPLATES = [
+    { id: 'coordinator', name: 'Coordinator', role: 'coordinator', description: 'Orchestrates task flow between agents', icon: Brain },
+    { id: 'researcher', name: 'Researcher', role: 'researcher', description: 'Gathers and analyzes information', icon: Search },
+    { id: 'coder', name: 'Coder', role: 'coder', description: 'Writes, reviews, and debugs code', icon: Code },
+    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', description: 'Validates and reviews outputs', icon: FileText },
+    { id: 'planner', name: 'Planner', role: 'planner', description: 'Creates strategies and plans', icon: Lightbulb },
+    { id: 'executor', name: 'Executor', role: 'executor', description: 'Executes operations and tasks', icon: GitBranch },
+    { id: 'validator', name: 'Validator', role: 'validator', description: 'Ensures quality and correctness', icon: Shield },
+    { id: 'specialist', name: 'Specialist', role: 'specialist', description: 'Domain-specific expert', icon: Sparkles },
+];
+
 // ==================== HELPERS ====================
 
 // Use shared agent roles for display
@@ -207,9 +279,10 @@ const getLogTypeColor = (type: string) => {
 };
 
 // Agent type tabs configuration
-type AgentTypeTab = 'all' | 'swe' | 'os' | 'network' | 'cyber' | 'web' | 'social' | 'research' | 'swarms';
+type AgentTypeTab = 'all' | 'swe' | 'os' | 'network' | 'cyber' | 'web' | 'social' | 'research' | 'swarms' | 'inbox';
 
 const agentTypeTabs: { id: AgentTypeTab; label: string; icon: typeof Bot; path: string }[] = [
+    { id: 'inbox', label: 'Inbox', icon: MessageSquare, path: '/agents/inbox' },
     { id: 'all', label: 'All Agents', icon: Bot, path: '/agents' },
     { id: 'swe', label: 'SWE', icon: Wrench, path: '/agents/swe' },
     { id: 'os', label: 'OS', icon: Monitor, path: '/agents/os' },
@@ -241,9 +314,21 @@ export default function Agents() {
     const deleteSwarm = useDeleteSwarm();
     const updateSwarm = useUpdateSwarm();
 
+    // Agent mutation hooks
+    const createAgent = useCreateAgent();
+    const deleteAgent = useDeleteAgent();
+    const updateAgent = useUpdateAgent();
+
+    // Edit agent modal state
+    const [showEditAgentModal, setShowEditAgentModal] = useState(false);
+    const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+    const [editAgentName, setEditAgentName] = useState('');
+    const [editAgentDescription, setEditAgentDescription] = useState('');
+
     // Determine active tab from URL
     const activeTab = useMemo((): AgentTypeTab => {
         const path = location.pathname;
+        if (path === '/agents/inbox') return 'inbox';
         if (path === '/agents/swe') return 'swe';
         if (path === '/agents/os') return 'os';
         if (path === '/agents/network') return 'network';
@@ -265,6 +350,14 @@ export default function Agents() {
     const [showAddAgentModal, setShowAddAgentModal] = useState(false);
     const [newSwarmName, setNewSwarmName] = useState('');
     const [newSwarmDescription, setNewSwarmDescription] = useState('');
+    const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+
+    // Create Agent modal state
+    const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
+    const [newAgentName, setNewAgentName] = useState('');
+    const [newAgentDescription, setNewAgentDescription] = useState('');
+    const [newAgentRole, setNewAgentRole] = useState('custom');
+    const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<string | null>(null);
 
     // ==================== AGENTS DATA ====================
 
@@ -364,14 +457,99 @@ export default function Agents() {
 
     const handleCreateSwarm = async () => {
         if (!newSwarmName.trim()) return;
+
+        // Get template data if selected
+        const template = selectedTemplate ? SWARM_TEMPLATES.find(t => t.id === selectedTemplate) : null;
+
         await createSwarm.mutate({
             name: newSwarmName.trim(),
-            description: newSwarmDescription.trim() || undefined,
+            description: newSwarmDescription.trim() || template?.description || undefined,
             status: 'idle',
         });
         setShowCreateModal(false);
         setNewSwarmName('');
         setNewSwarmDescription('');
+        setSelectedTemplate(null);
+    };
+
+    const handleSelectTemplate = (templateId: string) => {
+        const template = SWARM_TEMPLATES.find(t => t.id === templateId);
+        if (template) {
+            if (selectedTemplate === templateId) {
+                // Deselect
+                setSelectedTemplate(null);
+            } else {
+                setSelectedTemplate(templateId);
+                setNewSwarmName(template.name);
+                setNewSwarmDescription(template.description);
+            }
+        }
+    };
+
+    // Create Agent handlers
+    const handleCreateAgent = async () => {
+        if (!newAgentName.trim()) return;
+
+        const template = selectedAgentTemplate ? AGENT_TEMPLATES.find(t => t.id === selectedAgentTemplate) : null;
+
+        await createAgent.mutate({
+            name: newAgentName.trim(),
+            description: newAgentDescription.trim() || template?.description || undefined,
+            role: template?.role || newAgentRole,
+        });
+
+        setShowCreateAgentModal(false);
+        setNewAgentName('');
+        setNewAgentDescription('');
+        setNewAgentRole('custom');
+        setSelectedAgentTemplate(null);
+        refetchAgents();
+    };
+
+    const handleSelectAgentTemplate = (templateId: string) => {
+        const template = AGENT_TEMPLATES.find(t => t.id === templateId);
+        if (template) {
+            if (selectedAgentTemplate === templateId) {
+                setSelectedAgentTemplate(null);
+            } else {
+                setSelectedAgentTemplate(templateId);
+                setNewAgentName(template.name);
+                setNewAgentDescription(template.description);
+                setNewAgentRole(template.role);
+            }
+        }
+    };
+
+    const handleEditAgent = (agent: Agent) => {
+        setEditingAgent(agent);
+        setEditAgentName(agent.name);
+        setEditAgentDescription(agent.description || '');
+        setShowEditAgentModal(true);
+    };
+
+    const handleUpdateAgent = async () => {
+        if (!editingAgent || !editAgentName.trim()) return;
+
+        await updateAgent.mutate({
+            id: editingAgent.id,
+            data: {
+                name: editAgentName.trim(),
+                description: editAgentDescription.trim() || undefined,
+            },
+        });
+
+        setShowEditAgentModal(false);
+        setEditingAgent(null);
+        setEditAgentName('');
+        setEditAgentDescription('');
+        refetchAgents();
+    };
+
+    const handleDeleteAgent = async (agentId: string) => {
+        if (confirm('Are you sure you want to delete this agent?')) {
+            await deleteAgent.mutate(agentId);
+            refetchAgents();
+        }
     };
 
     const handleRefresh = () => {
@@ -463,7 +641,10 @@ export default function Agents() {
                             New Swarm
                         </button>
                     ) : (
-                        <button className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors">
+                        <button
+                            onClick={() => setShowCreateAgentModal(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                        >
                             <Plus size={18} />
                             New Agent
                         </button>
@@ -502,7 +683,9 @@ export default function Agents() {
             </div>
 
             {/* Tab Content */}
-            {activeTab === 'swarms' ? (
+            {activeTab === 'inbox' ? (
+                <AgentInbox />
+            ) : activeTab === 'swarms' ? (
                 <SwarmsTab
                     swarms={swarms}
                     agents={agents}
@@ -512,6 +695,15 @@ export default function Agents() {
                     handleToggleStatus={handleToggleStatus}
                     handleDeleteSwarm={handleDeleteSwarm}
                     setShowAddAgentModal={setShowAddAgentModal}
+                />
+            ) : activeTab === 'swe' ? (
+                <SWETab
+                    agentsData={filteredAgentsData}
+                    selectedAgent={selectedAgent}
+                    setSelectedAgent={setSelectedAgent}
+                    onEditAgent={(agent) => handleEditAgent(agent as unknown as Agent)}
+                    onDeleteAgent={handleDeleteAgent}
+                    onCreateAgent={() => setShowCreateAgentModal(true)}
                 />
             ) : (
                 <AgentsTab
@@ -526,6 +718,9 @@ export default function Agents() {
                     totalMessages={totalMessages}
                     runningAgents={runningAgents}
                     providersCount={providers.length}
+                    onEditAgent={(agent) => handleEditAgent(agent as unknown as Agent)}
+                    onDeleteAgent={handleDeleteAgent}
+                    onCreateAgent={() => setShowCreateAgentModal(true)}
                 />
             )}
 
@@ -535,7 +730,55 @@ export default function Agents() {
                     <div className="bg-[hsl(var(--card))] rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-4">Create New Swarm</h2>
                         <div className="space-y-4">
+                            {/* Templates Section */}
                             <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-2">Quick Start Templates</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {SWARM_TEMPLATES.map((template) => {
+                                        const Icon = template.icon;
+                                        const isSelected = selectedTemplate === template.id;
+                                        return (
+                                            <button
+                                                key={template.id}
+                                                type="button"
+                                                onClick={() => handleSelectTemplate(template.id)}
+                                                className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-all text-left ${isSelected
+                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5'
+                                                    : 'border-[hsl(var(--border))] hover:border-[hsl(var(--muted-foreground))]'
+                                                    }`}
+                                            >
+                                                <div
+                                                    className="p-2 rounded-lg shrink-0"
+                                                    style={{ backgroundColor: `${template.color}20` }}
+                                                >
+                                                    <Icon size={18} style={{ color: template.color }} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-sm font-medium text-[hsl(var(--foreground))]">{template.name}</div>
+                                                    <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{template.description}</div>
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {template.roles.slice(0, 3).map((role) => (
+                                                            <span
+                                                                key={role}
+                                                                className="px-1.5 py-0.5 rounded text-[10px] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]"
+                                                            >
+                                                                {role}
+                                                            </span>
+                                                        ))}
+                                                        {template.roles.length > 3 && (
+                                                            <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
+                                                                +{template.roles.length - 3}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="border-t border-[hsl(var(--border))] pt-4">
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Name</label>
                                 <input
                                     type="text"
@@ -668,6 +911,157 @@ export default function Agents() {
                     </div>
                 </div>
             )}
+
+            {/* Create Agent Modal */}
+            {showCreateAgentModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-[hsl(var(--card))] rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-4">Create New Agent</h2>
+                        <div className="space-y-4">
+                            {/* Agent Templates */}
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-2">Quick Start Templates</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {AGENT_TEMPLATES.map((template) => {
+                                        const Icon = template.icon;
+                                        const isSelected = selectedAgentTemplate === template.id;
+                                        const roleInfo = agentRoles.find(r => r.id === template.role);
+                                        return (
+                                            <button
+                                                key={template.id}
+                                                type="button"
+                                                onClick={() => handleSelectAgentTemplate(template.id)}
+                                                className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-all text-left ${isSelected
+                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5'
+                                                    : 'border-[hsl(var(--border))] hover:border-[hsl(var(--muted-foreground))]'
+                                                    }`}
+                                            >
+                                                <div
+                                                    className="p-2 rounded-lg shrink-0"
+                                                    style={{ backgroundColor: `${roleInfo?.color || '#6b7280'}20` }}
+                                                >
+                                                    <Icon size={18} style={{ color: roleInfo?.color || '#6b7280' }} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-sm font-medium text-[hsl(var(--foreground))]">{template.name}</div>
+                                                    <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{template.description}</div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="border-t border-[hsl(var(--border))] pt-4">
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Name</label>
+                                <input
+                                    type="text"
+                                    value={newAgentName}
+                                    onChange={(e) => setNewAgentName(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                    placeholder="My Agent"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Description</label>
+                                <textarea
+                                    value={newAgentDescription}
+                                    onChange={(e) => setNewAgentDescription(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] resize-none"
+                                    rows={3}
+                                    placeholder="What will this agent do?"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Role</label>
+                                <select
+                                    value={newAgentRole}
+                                    onChange={(e) => setNewAgentRole(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                >
+                                    {agentRoles.map(role => (
+                                        <option key={role.id} value={role.id}>{role.name} - {role.description}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowCreateAgentModal(false);
+                                    setNewAgentName('');
+                                    setNewAgentDescription('');
+                                    setNewAgentRole('custom');
+                                    setSelectedAgentTemplate(null);
+                                }}
+                                className="px-4 py-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateAgent}
+                                disabled={createAgent.isLoading || !newAgentName.trim()}
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors disabled:opacity-50"
+                            >
+                                {createAgent.isLoading ? 'Creating...' : 'Create Agent'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Agent Modal */}
+            {showEditAgentModal && editingAgent && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-[hsl(var(--card))] rounded-xl p-6 w-full max-w-md">
+                        <h2 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-4">Edit Agent</h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Name</label>
+                                <input
+                                    type="text"
+                                    value={editAgentName}
+                                    onChange={(e) => setEditAgentName(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                    placeholder="Agent name"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Description</label>
+                                <textarea
+                                    value={editAgentDescription}
+                                    onChange={(e) => setEditAgentDescription(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] resize-none"
+                                    rows={3}
+                                    placeholder="What does this agent do?"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowEditAgentModal(false);
+                                    setEditingAgent(null);
+                                    setEditAgentName('');
+                                    setEditAgentDescription('');
+                                }}
+                                className="px-4 py-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdateAgent}
+                                disabled={updateAgent.isLoading || !editAgentName.trim()}
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors disabled:opacity-50"
+                            >
+                                {updateAgent.isLoading ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -686,6 +1080,9 @@ interface AgentsTabProps {
     totalMessages: number;
     runningAgents: number;
     providersCount: number;
+    onEditAgent: (agent: AgentDisplayData) => void;
+    onDeleteAgent: (agentId: string) => void;
+    onCreateAgent: () => void;
 }
 
 function AgentsTab({
@@ -700,6 +1097,9 @@ function AgentsTab({
     totalMessages,
     runningAgents,
     providersCount,
+    onEditAgent,
+    onDeleteAgent,
+    onCreateAgent,
 }: AgentsTabProps) {
     return (
         <>
@@ -757,7 +1157,10 @@ function AgentsTab({
                             <p className="text-[hsl(var(--muted-foreground))] mt-2">
                                 Create your first agent to get started with automated tasks.
                             </p>
-                            <button className="mt-4 flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors mx-auto">
+                            <button
+                                onClick={onCreateAgent}
+                                className="mt-4 flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors mx-auto"
+                            >
                                 <Plus size={18} />
                                 Create Agent
                             </button>
@@ -797,8 +1200,19 @@ function AgentsTab({
                                                 <Play size={18} />
                                             </button>
                                         )}
-                                        <button className="p-2 rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/80 transition-colors">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onEditAgent(agent); }}
+                                            className="p-2 rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/80 transition-colors"
+                                            title="Edit Agent"
+                                        >
                                             <Settings size={18} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }}
+                                            className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                                            title="Delete Agent"
+                                        >
+                                            <Trash2 size={18} />
                                         </button>
                                     </div>
                                 </div>
@@ -910,6 +1324,405 @@ function AgentsTab({
                 </div>
             </div>
         </>
+    );
+}
+
+// ==================== SWE TAB COMPONENT ====================
+
+interface SWETabProps {
+    agentsData: AgentDisplayData[];
+    selectedAgent: string | null;
+    setSelectedAgent: (id: string | null) => void;
+    onEditAgent: (agent: AgentDisplayData) => void;
+    onDeleteAgent: (agentId: string) => void;
+    onCreateAgent: () => void;
+}
+
+function SWETab({
+    agentsData,
+    selectedAgent,
+    setSelectedAgent,
+    onEditAgent,
+    onDeleteAgent,
+    onCreateAgent,
+}: SWETabProps) {
+    // SWE Memory state
+    const [sweProjects, setSweProjects] = useState<SweProject[]>([]);
+    const [selectedProject, setSelectedProject] = useState<SweProject | null>(null);
+    const [memories, setMemories] = useState<SweMemory[]>([]);
+    const [rules, setRules] = useState<SweRule[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [sweSubTab, setSweSubTab] = useState<'agents' | 'memory' | 'rules'>('agents');
+    const [memorySearch, setMemorySearch] = useState('');
+
+    // Fetch SWE projects on mount
+    useEffect(() => {
+        fetchSweProjects();
+    }, []);
+
+    // Fetch memories when project changes
+    useEffect(() => {
+        if (selectedProject) {
+            fetchMemories(selectedProject.id);
+            fetchRules(selectedProject.id);
+        }
+    }, [selectedProject]);
+
+    const fetchSweProjects = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch(`${SWE_API_BASE}/swe/projects`);
+            const result = await response.json();
+            if (result.success && result.data) {
+                setSweProjects(result.data);
+                if (result.data.length > 0) {
+                    setSelectedProject(result.data[0]);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch SWE projects:', error);
+        }
+        setIsLoading(false);
+    };
+
+    const fetchMemories = async (projectId: string) => {
+        try {
+            const response = await fetch(`${SWE_API_BASE}/swe/projects/${projectId}/memory`);
+            const result = await response.json();
+            if (result.success && result.data) {
+                setMemories(result.data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch memories:', error);
+        }
+    };
+
+    const fetchRules = async (projectId: string) => {
+        try {
+            const response = await fetch(`${SWE_API_BASE}/swe/projects/${projectId}/rules`);
+            const result = await response.json();
+            if (result.success && result.data) {
+                setRules(result.data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch rules:', error);
+        }
+    };
+
+    const getCategoryInfo = (category: SweMemoryCategory) => {
+        return MEMORY_CATEGORIES.find(c => c.value === category) || MEMORY_CATEGORIES[9];
+    };
+
+    // Filter SWE-related agents
+    const sweAgents = agentsData.filter(a =>
+        a.role?.toLowerCase().includes('coder') ||
+        a.role?.toLowerCase().includes('developer') ||
+        a.role?.toLowerCase().includes('swe')
+    );
+
+    // Filter memories by search
+    const filteredMemories = memories.filter(m =>
+        memorySearch === '' ||
+        m.key.toLowerCase().includes(memorySearch.toLowerCase()) ||
+        m.value.toLowerCase().includes(memorySearch.toLowerCase())
+    );
+
+    return (
+        <div className="space-y-6">
+            {/* SWE Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
+                        <Bot size={18} />
+                        <span className="text-sm">SWE Agents</span>
+                    </div>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{sweAgents.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">coding specialists</p>
+                </div>
+
+                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
+                        <FolderOpen size={18} />
+                        <span className="text-sm">Projects</span>
+                    </div>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{sweProjects.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">with memory</p>
+                </div>
+
+                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
+                        <Brain size={18} />
+                        <span className="text-sm">Memories</span>
+                    </div>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{memories.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">stored facts</p>
+                </div>
+
+                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
+                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
+                        <BookOpen size={18} />
+                        <span className="text-sm">Rules</span>
+                    </div>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{rules.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">active constraints</p>
+                </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div className="flex gap-2 border-b border-[hsl(var(--border))]">
+                <button
+                    onClick={() => setSweSubTab('agents')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${sweSubTab === 'agents'
+                            ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
+                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                        }`}
+                >
+                    <Bot size={16} className="inline mr-2" />
+                    SWE Agents
+                </button>
+                <button
+                    onClick={() => setSweSubTab('memory')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${sweSubTab === 'memory'
+                            ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
+                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                        }`}
+                >
+                    <Brain size={16} className="inline mr-2" />
+                    Memory
+                </button>
+                <button
+                    onClick={() => setSweSubTab('rules')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${sweSubTab === 'rules'
+                            ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
+                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                        }`}
+                >
+                    <BookOpen size={16} className="inline mr-2" />
+                    Rules
+                </button>
+                <Link
+                    to="/swe-memory"
+                    className="ml-auto px-4 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] flex items-center gap-1"
+                >
+                    <ExternalLink size={14} />
+                    Full SWE Memory
+                </Link>
+            </div>
+
+            {/* Sub-tab content */}
+            {sweSubTab === 'agents' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {sweAgents.length === 0 ? (
+                        <div className="col-span-2 bg-[hsl(var(--card))] rounded-xl p-8 border text-center">
+                            <Code size={48} className="mx-auto text-[hsl(var(--muted-foreground))] mb-4" />
+                            <h3 className="text-lg font-medium text-[hsl(var(--foreground))]">No SWE Agents</h3>
+                            <p className="text-[hsl(var(--muted-foreground))] mt-2">
+                                Create agents with coder or developer roles for software engineering tasks.
+                            </p>
+                            <button
+                                onClick={onCreateAgent}
+                                className="mt-4 flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors mx-auto"
+                            >
+                                <Plus size={18} />
+                                Create SWE Agent
+                            </button>
+                        </div>
+                    ) : (
+                        sweAgents.map(agent => (
+                            <div
+                                key={agent.id}
+                                onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}
+                                className={`bg-[hsl(var(--card))] rounded-xl p-4 border cursor-pointer transition-all hover:border-[hsl(var(--primary))] ${selectedAgent === agent.id ? 'border-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary))]' : ''
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-green-500/10 rounded-lg">
+                                            <Code size={20} className="text-green-500" />
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-[hsl(var(--foreground))]">{agent.name}</span>
+                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{agent.role || 'SWE'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onEditAgent(agent); }}
+                                            className="p-2 rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]/80 transition-colors"
+                                        >
+                                            <Settings size={18} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }}
+                                            className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                                {agent.description && (
+                                    <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{agent.description}</p>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {sweSubTab === 'memory' && (
+                <div className="space-y-4">
+                    {/* Project selector */}
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <FolderOpen size={16} className="text-[hsl(var(--muted-foreground))]" />
+                            <select
+                                value={selectedProject?.id || ''}
+                                onChange={(e) => {
+                                    const project = sweProjects.find(p => p.id === e.target.value);
+                                    setSelectedProject(project || null);
+                                }}
+                                className="px-3 py-1.5 bg-[hsl(var(--muted))] rounded-lg text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                            >
+                                {sweProjects.length === 0 && <option value="">No projects</option>}
+                                {sweProjects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex-1 relative">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                            <input
+                                type="text"
+                                placeholder="Search memories..."
+                                value={memorySearch}
+                                onChange={(e) => setMemorySearch(e.target.value)}
+                                className="w-full pl-9 pr-3 py-1.5 bg-[hsl(var(--muted))] rounded-lg text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Memory list */}
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="animate-spin text-[hsl(var(--muted-foreground))]" />
+                        </div>
+                    ) : filteredMemories.length === 0 ? (
+                        <div className="bg-[hsl(var(--card))] rounded-xl p-8 border text-center">
+                            <Brain size={48} className="mx-auto text-[hsl(var(--muted-foreground))] mb-4" />
+                            <h3 className="text-lg font-medium text-[hsl(var(--foreground))]">No Memories</h3>
+                            <p className="text-[hsl(var(--muted-foreground))] mt-2">
+                                {selectedProject ? 'Add memories to help agents understand your project.' : 'Select a project first.'}
+                            </p>
+                            <Link
+                                to="/swe-memory"
+                                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                            >
+                                <Plus size={18} />
+                                Add Memory
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {filteredMemories.slice(0, 10).map(memory => {
+                                const catInfo = getCategoryInfo(memory.category);
+                                const Icon = catInfo.icon;
+                                return (
+                                    <div key={memory.id} className="bg-[hsl(var(--card))] rounded-lg p-3 border">
+                                        <div className="flex items-start gap-2">
+                                            <Icon size={16} className={catInfo.color} />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-sm text-[hsl(var(--foreground))] truncate">{memory.key}</span>
+                                                    <span className={`text-xs ${catInfo.color}`}>{catInfo.label}</span>
+                                                </div>
+                                                <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 line-clamp-2">{memory.value}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {filteredMemories.length > 10 && (
+                                <Link
+                                    to="/swe-memory"
+                                    className="col-span-2 text-center py-2 text-sm text-[hsl(var(--primary))] hover:underline"
+                                >
+                                    View all {filteredMemories.length} memories →
+                                </Link>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {sweSubTab === 'rules' && (
+                <div className="space-y-4">
+                    {/* Project selector */}
+                    <div className="flex items-center gap-2">
+                        <FolderOpen size={16} className="text-[hsl(var(--muted-foreground))]" />
+                        <select
+                            value={selectedProject?.id || ''}
+                            onChange={(e) => {
+                                const project = sweProjects.find(p => p.id === e.target.value);
+                                setSelectedProject(project || null);
+                            }}
+                            className="px-3 py-1.5 bg-[hsl(var(--muted))] rounded-lg text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                        >
+                            {sweProjects.length === 0 && <option value="">No projects</option>}
+                            {sweProjects.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Rules list */}
+                    {rules.length === 0 ? (
+                        <div className="bg-[hsl(var(--card))] rounded-xl p-8 border text-center">
+                            <BookOpen size={48} className="mx-auto text-[hsl(var(--muted-foreground))] mb-4" />
+                            <h3 className="text-lg font-medium text-[hsl(var(--foreground))]">No Rules</h3>
+                            <p className="text-[hsl(var(--muted-foreground))] mt-2">
+                                {selectedProject ? 'Add rules to guide agent behavior.' : 'Select a project first.'}
+                            </p>
+                            <Link
+                                to="/swe-memory"
+                                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                            >
+                                <Plus size={18} />
+                                Add Rule
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {rules.slice(0, 8).map(rule => (
+                                <div key={rule.id} className="bg-[hsl(var(--card))] rounded-lg p-3 border flex items-start gap-3">
+                                    <div className={`px-2 py-0.5 rounded text-xs font-medium ${rule.category === 'constraint' ? 'bg-red-500/10 text-red-400' :
+                                            rule.category === 'requirement' ? 'bg-green-500/10 text-green-400' :
+                                                rule.category === 'security' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                    'bg-blue-500/10 text-blue-400'
+                                        }`}>
+                                        {rule.category}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-[hsl(var(--foreground))]">{rule.rule}</p>
+                                        {rule.description && (
+                                            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{rule.description}</p>
+                                        )}
+                                    </div>
+                                    <div className={`w-2 h-2 rounded-full ${rule.enabled ? 'bg-green-500' : 'bg-gray-500'}`} />
+                                </div>
+                            ))}
+                            {rules.length > 8 && (
+                                <Link
+                                    to="/swe-memory"
+                                    className="block text-center py-2 text-sm text-[hsl(var(--primary))] hover:underline"
+                                >
+                                    View all {rules.length} rules →
+                                </Link>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 

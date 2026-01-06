@@ -1656,54 +1656,69 @@ pub struct Agent {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub model: String,
-    pub provider: String,
-    pub system_prompt: Option<String>,
+    pub instruction: String,
+    pub role: Option<String>,
+    pub model: Option<String>,
+    pub provider: Option<String>,
     pub temperature: f32,
     pub max_tokens: Option<i32>,
     pub tools: Vec<String>,
+    pub sub_agents: Vec<String>,
+    pub is_active: bool,
     pub created_at: i64,
     pub updated_at: i64,
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateAgentRequest {
     pub name: String,
     pub description: Option<String>,
-    pub model: String,
-    pub provider: String,
-    pub system_prompt: Option<String>,
+    pub instruction: String,
+    pub role: Option<String>,
+    pub model: Option<String>,
+    pub provider: Option<String>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<i32>,
     pub tools: Option<Vec<String>>,
+    pub sub_agents: Option<Vec<String>>,
+    pub metadata: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateAgentRequest {
     pub name: Option<String>,
     pub description: Option<String>,
+    pub instruction: Option<String>,
+    pub role: Option<String>,
     pub model: Option<String>,
     pub provider: Option<String>,
-    pub system_prompt: Option<String>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<i32>,
     pub tools: Option<Vec<String>>,
+    pub sub_agents: Option<Vec<String>>,
+    pub is_active: Option<bool>,
+    pub metadata: Option<String>,
 }
 
 fn init_agents_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS agents (
             id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
+            name TEXT NOT NULL UNIQUE,
             description TEXT,
-            model TEXT NOT NULL,
-            provider TEXT NOT NULL,
-            system_prompt TEXT,
+            instruction TEXT NOT NULL,
+            role TEXT DEFAULT 'assistant',
+            model TEXT,
+            provider TEXT,
             temperature REAL DEFAULT 0.7,
             max_tokens INTEGER,
             tools TEXT DEFAULT '[]',
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
+            sub_agents TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            metadata TEXT
         )",
         [],
     )?;
@@ -1721,27 +1736,35 @@ pub async fn list_agents(state: web::Data<AppState>) -> impl Responder {
 
     let result: Result<Vec<serde_json::Value>, rusqlite::Error> = (|| {
         let mut stmt = db.conn.prepare(
-            "SELECT id, name, description, model, provider, system_prompt, 
-                    temperature, max_tokens, tools, created_at, updated_at 
+            "SELECT id, name, description, instruction, role, model, provider, 
+                    temperature, max_tokens, tools, sub_agents, is_active, 
+                    created_at, updated_at, metadata 
              FROM agents ORDER BY updated_at DESC",
         )?;
 
         let agents: Vec<serde_json::Value> = stmt
             .query_map([], |row| {
-                let tools_str: String = row.get(8)?;
+                let tools_str: String = row.get::<_, Option<String>>(9)?.unwrap_or_default();
                 let tools: Vec<String> = serde_json::from_str(&tools_str).unwrap_or_default();
+                let sub_agents_str: String = row.get::<_, Option<String>>(10)?.unwrap_or_default();
+                let sub_agents: Vec<String> =
+                    serde_json::from_str(&sub_agents_str).unwrap_or_default();
                 Ok(serde_json::json!({
                     "id": row.get::<_, String>(0)?,
                     "name": row.get::<_, String>(1)?,
                     "description": row.get::<_, Option<String>>(2)?,
-                    "model": row.get::<_, String>(3)?,
-                    "provider": row.get::<_, String>(4)?,
-                    "systemPrompt": row.get::<_, Option<String>>(5)?,
-                    "temperature": row.get::<_, f64>(6)?,
-                    "maxTokens": row.get::<_, Option<i32>>(7)?,
+                    "instruction": row.get::<_, String>(3)?,
+                    "role": row.get::<_, Option<String>>(4)?,
+                    "model": row.get::<_, Option<String>>(5)?,
+                    "provider": row.get::<_, Option<String>>(6)?,
+                    "temperature": row.get::<_, f64>(7)?,
+                    "maxTokens": row.get::<_, Option<i32>>(8)?,
                     "tools": tools,
-                    "createdAt": row.get::<_, i64>(9)?,
-                    "updatedAt": row.get::<_, i64>(10)?,
+                    "subAgents": sub_agents,
+                    "isActive": row.get::<_, i32>(11)? == 1,
+                    "createdAt": row.get::<_, i64>(12)?,
+                    "updatedAt": row.get::<_, i64>(13)?,
+                    "metadata": row.get::<_, Option<String>>(14)?,
                 }))
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1767,25 +1790,33 @@ pub async fn get_agent(state: web::Data<AppState>, path: web::Path<String>) -> i
     let result: Result<Option<serde_json::Value>, rusqlite::Error> = db
         .conn
         .query_row(
-            "SELECT id, name, description, model, provider, system_prompt, 
-                temperature, max_tokens, tools, created_at, updated_at 
+            "SELECT id, name, description, instruction, role, model, provider, 
+                temperature, max_tokens, tools, sub_agents, is_active, 
+                created_at, updated_at, metadata 
          FROM agents WHERE id = ?1",
             params![id],
             |row| {
-                let tools_str: String = row.get(8)?;
+                let tools_str: String = row.get::<_, Option<String>>(9)?.unwrap_or_default();
                 let tools: Vec<String> = serde_json::from_str(&tools_str).unwrap_or_default();
+                let sub_agents_str: String = row.get::<_, Option<String>>(10)?.unwrap_or_default();
+                let sub_agents: Vec<String> =
+                    serde_json::from_str(&sub_agents_str).unwrap_or_default();
                 Ok(serde_json::json!({
                     "id": row.get::<_, String>(0)?,
                     "name": row.get::<_, String>(1)?,
                     "description": row.get::<_, Option<String>>(2)?,
-                    "model": row.get::<_, String>(3)?,
-                    "provider": row.get::<_, String>(4)?,
-                    "systemPrompt": row.get::<_, Option<String>>(5)?,
-                    "temperature": row.get::<_, f64>(6)?,
-                    "maxTokens": row.get::<_, Option<i32>>(7)?,
+                    "instruction": row.get::<_, String>(3)?,
+                    "role": row.get::<_, Option<String>>(4)?,
+                    "model": row.get::<_, Option<String>>(5)?,
+                    "provider": row.get::<_, Option<String>>(6)?,
+                    "temperature": row.get::<_, f64>(7)?,
+                    "maxTokens": row.get::<_, Option<i32>>(8)?,
                     "tools": tools,
-                    "createdAt": row.get::<_, i64>(9)?,
-                    "updatedAt": row.get::<_, i64>(10)?,
+                    "subAgents": sub_agents,
+                    "isActive": row.get::<_, i32>(11)? == 1,
+                    "createdAt": row.get::<_, i64>(12)?,
+                    "updatedAt": row.get::<_, i64>(13)?,
+                    "metadata": row.get::<_, Option<String>>(14)?,
                 }))
             },
         )
@@ -1817,25 +1848,32 @@ pub async fn create_agent(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_millis() as i64;
+        .as_secs() as i64;
     let tools_json = serde_json::to_string(&body.tools.clone().unwrap_or_default()).unwrap();
+    let sub_agents_json =
+        serde_json::to_string(&body.sub_agents.clone().unwrap_or_default()).unwrap();
+    let role = body.role.clone().unwrap_or_else(|| "assistant".to_string());
 
     let result = db.conn.execute(
-        "INSERT INTO agents (id, name, description, model, provider, system_prompt, 
-                            temperature, max_tokens, tools, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO agents (id, name, description, instruction, role, model, provider, 
+                            temperature, max_tokens, tools, sub_agents, is_active, 
+                            created_at, updated_at, metadata)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 1, ?12, ?13, ?14)",
         params![
             id,
             body.name,
             body.description,
+            body.instruction,
+            role,
             body.model,
             body.provider,
-            body.system_prompt,
             body.temperature.unwrap_or(0.7),
             body.max_tokens,
             tools_json,
+            sub_agents_json,
             now,
-            now
+            now,
+            body.metadata
         ],
     );
 
@@ -1844,14 +1882,18 @@ pub async fn create_agent(
             "id": id,
             "name": body.name,
             "description": body.description,
+            "instruction": body.instruction,
+            "role": role,
             "model": body.model,
             "provider": body.provider,
-            "systemPrompt": body.system_prompt,
             "temperature": body.temperature.unwrap_or(0.7),
             "maxTokens": body.max_tokens,
             "tools": body.tools.clone().unwrap_or_default(),
+            "subAgents": body.sub_agents.clone().unwrap_or_default(),
+            "isActive": true,
             "createdAt": now,
             "updatedAt": now,
+            "metadata": body.metadata,
         })),
         Err(e) => ApiResponse::<()>::error(&format!("Failed to create agent: {}", e)),
     }
@@ -1873,32 +1915,41 @@ pub async fn update_agent(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_millis() as i64;
+        .as_secs() as i64;
 
-    // This is simplified - in production you'd use a proper parameter binding approach
     let result = db.conn.execute(
         "UPDATE agents SET updated_at = ?1, 
          name = COALESCE(?2, name),
          description = COALESCE(?3, description),
-         model = COALESCE(?4, model),
-         provider = COALESCE(?5, provider),
-         system_prompt = COALESCE(?6, system_prompt),
-         temperature = COALESCE(?7, temperature),
-         max_tokens = COALESCE(?8, max_tokens),
-         tools = COALESCE(?9, tools)
-         WHERE id = ?10",
+         instruction = COALESCE(?4, instruction),
+         role = COALESCE(?5, role),
+         model = COALESCE(?6, model),
+         provider = COALESCE(?7, provider),
+         temperature = COALESCE(?8, temperature),
+         max_tokens = COALESCE(?9, max_tokens),
+         tools = COALESCE(?10, tools),
+         sub_agents = COALESCE(?11, sub_agents),
+         is_active = COALESCE(?12, is_active),
+         metadata = COALESCE(?13, metadata)
+         WHERE id = ?14",
         params![
             now,
             body.name,
             body.description,
+            body.instruction,
+            body.role,
             body.model,
             body.provider,
-            body.system_prompt,
             body.temperature,
             body.max_tokens,
             body.tools
                 .as_ref()
                 .map(|t| serde_json::to_string(t).unwrap()),
+            body.sub_agents
+                .as_ref()
+                .map(|t| serde_json::to_string(t).unwrap()),
+            body.is_active.map(|b| if b { 1 } else { 0 }),
+            body.metadata.clone(),
             id
         ],
     );

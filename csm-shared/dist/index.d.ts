@@ -1,7 +1,12 @@
-import { MultimodalModel, ModelCategory } from './types/index.js';
-export { ActionBounds, ActionCommand, ActionParameters, ActionSpace, ActionSpaceType, ActionType, AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, Agent, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiResponse, AppSettings, ArtifactType, AudioContent, AudioData, AudioFormat, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContentPart, ContextSegment, ContextSegmentType, CreateSweMemoryRequest, CreateSweProjectRequest, CreateSweRuleRequest, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, GpuInfo, HardwareInfo, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImageContent, ImageData, ImageFormat, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, JointState, ManipulatorType, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, Modality, ModalityCapabilities, ModelConfig, ModelProvider, MonitorStats, MultimodalMessage, NavigationCapability, NodeStatus, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, Provider, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, RemoteEvent, RemoteEventType, RemoteLogLevel, RemoteMonitorConfig, RemoteNode, RemoteTask, RemoteTaskResult, RemoteTaskStatus, ResourceUsage, RobotCapabilities, SWE_PROJECT_TEMPLATES, SearchResult, SensorData, SensorType, SensorValues, Session, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, Swarm, SwarmAgent, SwarmStatus, SwarmWorkflow, SweBatchMemoryImport, SweContextInjection, SweContextSnapshot, SweFileChange, SweFileNode, SweGitChange, SweGitStatus, SweImportance, SweMemory, SweMemoryCategory, SweMemorySource, SweMessage, SweOperation, SweProject, SweProjectStats, SweProjectTemplate, SweRule, SweRuleCategory, SweRuleCondition, SweRuleScope, SweSearchResult, SweSession, SweSessionWithMessages, SweTerminalResult, SweTool, SweToolCall, SweToolExecutionRequest, SweToolResult, TaskArtifact, TaskLogEntry, TaskMetrics, TaskPriority, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, VectorSearchResult, VectorStoreConfig, VideoContent, VideoSource, WorkflowEdge, WorkflowNode, Workspace, WorkspaceBounds, WorkspaceFilter, WorkspaceStats } from './types/index.js';
+import { MultimodalModel, ModelCategory, Workspace, Session, Agent, Swarm, Provider, AuthState, RegisterRequest, AuthResponse, LoginRequest, User, Subscription, SubscribeRequest, PasswordResetRequest, PasswordChangeRequest, ApiKey, CreateApiKeyRequest, CreateApiKeyResponse, DeviceSession, SubscriptionTier, SubscriptionLimits } from './types/index.js';
+export { ActionBounds, ActionCommand, ActionParameters, ActionSpace, ActionSpaceType, ActionType, AgencyEvent, AgencyEventType, AgencyToolCall, AgencyToolResult, AgentAutonomy, AgentMessage, AgentRole, AgentRun, AgentStatus, AgentTask, ApiError, ApiKeyScope, ApiResponse, AppSettings, ArtifactType, AudioContent, AudioData, AudioFormat, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse, Checkpoint, ChunkingConfig, ChunkingStrategy, ContentPart, ContextSegment, ContextSegmentType, CreateSweMemoryRequest, CreateSweProjectRequest, CreateSweRuleRequest, DayCount, DetectedProblem, Document, DocumentChunk, DocumentType, EmbeddingModel, ExecutionResult, ExportOptions, FileChange, GitCommit, GitRepository, GpuInfo, HardwareInfo, Hook, HookAction, HookActionResult, HookActionType, HookCondition, HookExecutionResult, HookPreset, HookTrigger, HookTriggerType, ImageContent, ImageData, ImageFormat, ImportResult, ImportSource, Integration, IntegrationAuthType, IntegrationCategory, IntegrationConfig, IntegrationCredentials, IntegrationStatus, JointState, ManipulatorType, McpTool, McpToolCall, McpToolResult, MemoryConfig, MemoryEntry, MemorySource, MemoryStats, MemoryType, Message, Modality, ModalityCapabilities, ModelConfig, ModelProvider, MonitorStats, MultimodalMessage, NavigationCapability, NodeStatus, OrchestrationType, OrchestratorResult, PaginatedResponse, PermissionLevel, Pipeline, ProactiveAction, ProviderCount, ProviderHealth, ProviderSettings, ProviderStatus, ProviderType, RAGConfig, RefreshTokenRequest, RefreshTokenResponse, RemoteEvent, RemoteEventType, RemoteLogLevel, RemoteMonitorConfig, RemoteNode, RemoteTask, RemoteTaskResult, RemoteTaskStatus, ResourceUsage, RobotCapabilities, SUBSCRIPTION_TIERS, SWE_PROJECT_TEMPLATES, SearchResult, SensorData, SensorType, SensorValues, SessionFilter, SessionWithMessages, ShareLink, ShareLinkProvider, SimilarityMetric, Statistics, StreamChunk, SubscriptionPricing, SubscriptionUsage, SwarmAgent, SwarmStatus, SwarmWorkflow, SweBatchMemoryImport, SweContextInjection, SweContextSnapshot, SweFileChange, SweFileNode, SweGitChange, SweGitStatus, SweImportance, SweMemory, SweMemoryCategory, SweMemorySource, SweMessage, SweOperation, SweProject, SweProjectStats, SweProjectTemplate, SweRule, SweRuleCategory, SweRuleCondition, SweRuleScope, SweSearchResult, SweSession, SweSessionWithMessages, SweTerminalResult, SweTool, SweToolCall, SweToolExecutionRequest, SweToolResult, TaskArtifact, TaskLogEntry, TaskMetrics, TaskPriority, TaskStatus, ThemeMode, TokenUsage, ToolInvocation, UserPreferences, VectorSearchResult, VectorStoreConfig, VideoContent, VideoSource, WorkflowEdge, WorkflowNode, WorkspaceBounds, WorkspaceFilter, WorkspaceStats } from './types/index.js';
 export { ApiClientConfig, api, createApiClient } from './api/index.js';
 export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy } from './utils/index.js';
+import { SyncService, SyncState, SyncEntityType, SyncEvent, SyncConflict } from './sync/index.js';
+export { SyncConfig, SyncDelta, SyncOperation, SyncSnapshot, createSyncService, generateClientId, getDefaultSyncService, initDefaultSyncService } from './sync/index.js';
+import * as react from 'react';
+import react__default, { ReactNode } from 'react';
+import * as react_jsx_runtime from 'react/jsx-runtime';
 
 declare const PROVIDERS: {
     readonly copilot: {
@@ -1642,4 +1647,308 @@ declare const HOOK_ACTIONS: {
 };
 type HookActionId = keyof typeof HOOK_ACTIONS;
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ModelCategory, MultimodalModel, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId, VLA_MODELS, VLM_MODELS, getModelsByCategory, getVLAModels, getVLMModels };
+interface SyncContextValue$1 {
+    sync: SyncService | null;
+    state: SyncState;
+    isConnected: boolean;
+    isSyncing: boolean;
+    connect: () => void;
+    disconnect: () => void;
+    requestSync: () => Promise<void>;
+    resolveConflict: (conflictId: string, resolution: 'local' | 'server' | 'merge') => void;
+}
+interface UseSyncOptions {
+    baseUrl?: string;
+    clientId?: string;
+    autoConnect?: boolean;
+    conflictResolution?: 'local' | 'server' | 'manual';
+}
+declare function useSync(options?: UseSyncOptions): SyncContextValue$1;
+declare function useSyncSubscription<T>(sync: SyncService | null, entityType: SyncEntityType | '*', callback: (event: SyncEvent<T>) => void): void;
+interface UseSyncedStateOptions<T> {
+    entityType: SyncEntityType;
+    initialData: T[];
+    idField?: keyof T;
+}
+declare function useSyncedState<T extends {
+    id: string;
+}>(sync: SyncService | null, options: UseSyncedStateOptions<T>): {
+    data: T[];
+    setData: React.Dispatch<React.SetStateAction<T[]>>;
+    create: (item: T) => void;
+    update: (id: string, updates: Partial<T>) => void;
+    remove: (id: string) => void;
+};
+declare function useSyncedWorkspaces(sync: SyncService | null, initialData?: Workspace[]): {
+    data: Workspace[];
+    setData: react.Dispatch<react.SetStateAction<Workspace[]>>;
+    create: (item: Workspace) => void;
+    update: (id: string, updates: Partial<Workspace>) => void;
+    remove: (id: string) => void;
+};
+declare function useSyncedSessions(sync: SyncService | null, initialData?: Session[]): {
+    data: Session[];
+    setData: react.Dispatch<react.SetStateAction<Session[]>>;
+    create: (item: Session) => void;
+    update: (id: string, updates: Partial<Session>) => void;
+    remove: (id: string) => void;
+};
+declare function useSyncedAgents(sync: SyncService | null, initialData?: Agent[]): {
+    data: Agent[];
+    setData: react.Dispatch<react.SetStateAction<Agent[]>>;
+    create: (item: Agent) => void;
+    update: (id: string, updates: Partial<Agent>) => void;
+    remove: (id: string) => void;
+};
+declare function useSyncedSwarms(sync: SyncService | null, initialData?: Swarm[]): {
+    data: Swarm[];
+    setData: react.Dispatch<react.SetStateAction<Swarm[]>>;
+    create: (item: Swarm) => void;
+    update: (id: string, updates: Partial<Swarm>) => void;
+    remove: (id: string) => void;
+};
+declare function useSyncedProviders(sync: SyncService | null, initialData?: Provider[]): {
+    data: Provider[];
+    setData: react.Dispatch<react.SetStateAction<Provider[]>>;
+    create: (item: Provider) => void;
+    update: (id: string, updates: Partial<Provider>) => void;
+    remove: (id: string) => void;
+};
+interface SyncStatus {
+    isOnline: boolean;
+    isSyncing: boolean;
+    lastSyncTime: Date | null;
+    pendingCount: number;
+    conflictCount: number;
+    version: number;
+}
+declare function useSyncStatus(sync: SyncService | null): SyncStatus;
+declare function useSyncConflicts(sync: SyncService | null): {
+    conflicts: SyncConflict[];
+    resolve: (conflictId: string, resolution: "local" | "server" | "merge") => void;
+    resolveAll: (resolution: "local" | "server") => void;
+};
+
+interface SyncContextValue {
+    sync: SyncService;
+    isConnected: boolean;
+    isSyncing: boolean;
+    version: number;
+    pendingCount: number;
+    conflictCount: number;
+}
+interface SyncProviderProps {
+    children: ReactNode;
+    baseUrl?: string;
+    clientId?: string;
+    autoConnect?: boolean;
+    conflictResolution?: 'local' | 'server' | 'manual';
+    onConnect?: () => void;
+    onDisconnect?: () => void;
+    onSyncError?: (error: Error) => void;
+}
+declare function SyncProvider({ children, baseUrl, clientId, autoConnect, conflictResolution, onConnect, onDisconnect, onSyncError, }: SyncProviderProps): react_jsx_runtime.JSX.Element;
+declare function useSyncContext(): SyncContextValue;
+declare function withSync<P extends object>(WrappedComponent: react__default.ComponentType<P & {
+    sync: SyncContextValue;
+}>): react__default.FC<Omit<P, 'sync'>>;
+
+interface AuthServiceConfig {
+    baseUrl: string;
+    onAuthStateChange?: (state: AuthState) => void;
+    onTokenRefresh?: (accessToken: string) => void;
+    storage?: Storage;
+}
+declare class AuthService {
+    private baseUrl;
+    private accessToken;
+    private refreshToken;
+    private tokenExpiry;
+    private user;
+    private refreshPromise;
+    private storage;
+    private onAuthStateChange?;
+    private onTokenRefresh?;
+    constructor(config: AuthServiceConfig);
+    private loadStoredAuth;
+    private storeAuth;
+    private clearStoredAuth;
+    private notifyAuthStateChange;
+    /**
+     * Check if user is authenticated
+     */
+    isAuthenticated(): boolean;
+    /**
+     * Check if token needs refresh (within 5 minutes of expiry)
+     */
+    private needsRefresh;
+    /**
+     * Get current access token, refreshing if needed
+     */
+    getAccessToken(): Promise<string | null>;
+    /**
+     * Refresh the access token
+     */
+    private refreshAccessToken;
+    private request;
+    /**
+     * Register a new user account
+     */
+    register(request: RegisterRequest): Promise<AuthResponse>;
+    /**
+     * Login with email and password
+     */
+    login(request: LoginRequest): Promise<AuthResponse>;
+    /**
+     * Logout and invalidate tokens
+     */
+    logout(): Promise<void>;
+    /**
+     * Get current user info
+     */
+    getCurrentUser(): Promise<User>;
+    /**
+     * Get cached user without API call
+     */
+    getUser(): User | null;
+    /**
+     * Get current subscription details
+     */
+    getSubscription(): Promise<Subscription>;
+    /**
+     * Subscribe to a tier
+     */
+    subscribe(request: SubscribeRequest): Promise<Subscription>;
+    /**
+     * Cancel subscription (downgrade to free)
+     */
+    cancelSubscription(): Promise<Subscription>;
+    /**
+     * Request password reset email
+     */
+    requestPasswordReset(request: PasswordResetRequest): Promise<void>;
+    /**
+     * Change password (requires authentication)
+     */
+    changePassword(request: PasswordChangeRequest): Promise<void>;
+    /**
+     * List API keys
+     */
+    listApiKeys(): Promise<ApiKey[]>;
+    /**
+     * Create a new API key
+     */
+    createApiKey(request: CreateApiKeyRequest): Promise<CreateApiKeyResponse>;
+    /**
+     * Delete an API key
+     */
+    deleteApiKey(keyId: string): Promise<void>;
+    /**
+     * List active device sessions
+     */
+    listDeviceSessions(): Promise<DeviceSession[]>;
+    /**
+     * Revoke a device session
+     */
+    revokeDeviceSession(sessionId: string): Promise<void>;
+    /**
+     * Revoke all other device sessions
+     */
+    revokeAllOtherSessions(): Promise<void>;
+    /**
+     * Get authorization headers for API requests
+     */
+    getAuthHeaders(): Promise<Record<string, string>>;
+}
+declare class AuthError extends Error {
+    statusCode: number;
+    constructor(message: string, statusCode: number);
+    isUnauthorized(): boolean;
+    isForbidden(): boolean;
+}
+/**
+ * Initialize the default auth service instance
+ */
+declare function initAuthService(config: AuthServiceConfig): AuthService;
+/**
+ * Get the default auth service instance
+ */
+declare function getAuthService(): AuthService;
+
+interface AuthContextValue extends AuthState {
+    login: (request: LoginRequest) => Promise<void>;
+    register: (request: RegisterRequest) => Promise<void>;
+    logout: () => Promise<void>;
+    refreshUser: () => Promise<void>;
+    getAccessToken: () => Promise<string | null>;
+    service: AuthService;
+}
+interface AuthProviderProps {
+    children: ReactNode;
+    config: AuthServiceConfig;
+}
+declare function AuthProvider({ children, config }: AuthProviderProps): react__default.ReactElement;
+/**
+ * Hook to access authentication state and methods
+ */
+declare function useAuth(): AuthContextValue;
+/**
+ * Hook to access current user
+ */
+declare function useUser(): User | null;
+interface UseSubscriptionResult {
+    subscription: Subscription | null;
+    tier: SubscriptionTier;
+    limits: SubscriptionLimits | null;
+    isLoading: boolean;
+    error: string | null;
+    subscribe: (request: SubscribeRequest) => Promise<void>;
+    cancelSubscription: () => Promise<void>;
+    refresh: () => Promise<void>;
+    canUseFeature: (feature: keyof SubscriptionLimits) => boolean;
+    isWithinLimit: (resource: 'workspaces' | 'sessions' | 'agents' | 'swarms', count: number) => boolean;
+}
+/**
+ * Hook to manage subscription
+ */
+declare function useSubscription(): UseSubscriptionResult;
+interface UseRequireAuthOptions {
+    redirectTo?: string;
+    requiredTier?: SubscriptionTier;
+}
+/**
+ * Hook that ensures user is authenticated, optionally with a specific tier
+ */
+declare function useRequireAuth(options?: UseRequireAuthOptions): {
+    isAuthorized: boolean;
+    isLoading: boolean;
+    user: User | null;
+};
+
+interface UseApiKeysResult {
+    apiKeys: ApiKey[];
+    isLoading: boolean;
+    error: string | null;
+    createKey: (request: CreateApiKeyRequest) => Promise<CreateApiKeyResponse>;
+    deleteKey: (keyId: string) => Promise<void>;
+    refresh: () => Promise<void>;
+}
+/**
+ * Hook to manage API keys
+ */
+declare function useApiKeys(): UseApiKeysResult;
+
+interface UseDeviceSessionsResult {
+    sessions: DeviceSession[];
+    isLoading: boolean;
+    error: string | null;
+    revokeSession: (sessionId: string) => Promise<void>;
+    revokeAllOther: () => Promise<void>;
+    refresh: () => Promise<void>;
+}
+/**
+ * Hook to manage device sessions
+ */
+declare function useDeviceSessions(): UseDeviceSessionsResult;
+
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, Agent, type AgentRoleId, type AgentStatusType, ApiKey, AuthError, AuthProvider, type AuthProviderProps, AuthResponse, AuthService, type AuthServiceConfig, AuthState, CreateApiKeyRequest, CreateApiKeyResponse, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, DeviceSession, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, LoginRequest, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ModelCategory, MultimodalModel, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, PasswordChangeRequest, PasswordResetRequest, Provider, type ProviderId, type ProviderStatusType, REMOTE_MONITOR_CONFIG, RegisterRequest, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, Session, SubscribeRequest, Subscription, SubscriptionLimits, SubscriptionTier, Swarm, type SwarmStatusType, SyncConflict, type SyncContextValue$1 as SyncContextValue, SyncEntityType, SyncEvent, SyncProvider, SyncService, SyncState, type SyncStatus, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId, type UseSyncOptions, type UseSyncedStateOptions, User, VLA_MODELS, VLM_MODELS, Workspace, getAuthService, getModelsByCategory, getVLAModels, getVLMModels, initAuthService, useApiKeys, useAuth, useDeviceSessions, useRequireAuth, useSubscription, useSync, useSyncConflicts, useSyncContext, useSyncStatus, useSyncSubscription, useSyncedAgents, useSyncedProviders, useSyncedSessions, useSyncedState, useSyncedSwarms, useSyncedWorkspaces, useUser, withSync };

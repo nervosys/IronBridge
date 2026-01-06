@@ -2202,3 +2202,310 @@ export const SWE_PROJECT_TEMPLATES: SweProjectTemplate[] = [
         defaultMemory: [],
     },
 ];
+
+// =============================================================================
+// Authentication & Subscription Types
+// =============================================================================
+
+/**
+ * Subscription tier levels for CSM cloud sync services
+ */
+export type SubscriptionTier = 'free' | 'pro' | 'enterprise';
+
+/**
+ * Subscription pricing information
+ */
+export interface SubscriptionPricing {
+    tier: SubscriptionTier;
+    name: string;
+    price: number; // Monthly price in USD
+    yearlyPrice?: number;
+    features: string[];
+    limits: SubscriptionLimits;
+}
+
+/**
+ * Subscription usage limits
+ */
+export interface SubscriptionLimits {
+    maxWorkspaces: number;
+    maxSessions: number;
+    maxAgents: number;
+    maxSwarms: number;
+    syncEnabled: boolean;
+    realTimeSync: boolean;
+    prioritySync: boolean;
+    teamFeatures: boolean;
+    apiAccess: boolean;
+    customIntegrations: boolean;
+}
+
+/**
+ * User subscription details
+ */
+export interface Subscription {
+    tier: SubscriptionTier;
+    expiresAt: number | null;
+    autoRenew: boolean;
+    limits: SubscriptionLimits;
+    usage?: SubscriptionUsage;
+}
+
+/**
+ * Current subscription usage
+ */
+export interface SubscriptionUsage {
+    workspaces: number;
+    sessions: number;
+    agents: number;
+    swarms: number;
+    syncEvents: number;
+    lastSyncAt: number | null;
+}
+
+/**
+ * User account information
+ */
+export interface User {
+    id: string;
+    email: string;
+    username: string | null;
+    subscription: Subscription;
+    createdAt: number;
+    updatedAt: number;
+    isActive: boolean;
+    emailVerified: boolean;
+    avatarUrl?: string | null;
+    preferences?: UserPreferences;
+}
+
+/**
+ * User preferences
+ */
+export interface UserPreferences {
+    theme: 'light' | 'dark' | 'system';
+    defaultProvider: string | null;
+    syncOnStartup: boolean;
+    autoBackup: boolean;
+    notificationsEnabled: boolean;
+}
+
+/**
+ * Login request payload
+ */
+export interface LoginRequest {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+}
+
+/**
+ * Registration request payload
+ */
+export interface RegisterRequest {
+    email: string;
+    password: string;
+    username?: string;
+    acceptTerms: boolean;
+}
+
+/**
+ * Authentication response with tokens
+ */
+export interface AuthResponse {
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number; // Unix timestamp when access token expires
+}
+
+/**
+ * Token refresh request
+ */
+export interface RefreshTokenRequest {
+    refreshToken: string;
+}
+
+/**
+ * Token refresh response
+ */
+export interface RefreshTokenResponse {
+    accessToken: string;
+    expiresAt: number;
+}
+
+/**
+ * Password reset request
+ */
+export interface PasswordResetRequest {
+    email: string;
+}
+
+/**
+ * Password change request
+ */
+export interface PasswordChangeRequest {
+    currentPassword: string;
+    newPassword: string;
+}
+
+/**
+ * Subscription upgrade/change request
+ */
+export interface SubscribeRequest {
+    tier: SubscriptionTier;
+    paymentMethodId?: string;
+    billingCycle: 'monthly' | 'yearly';
+}
+
+/**
+ * API key for programmatic access
+ */
+export interface ApiKey {
+    id: string;
+    name: string;
+    prefix: string; // First 8 chars of key for identification
+    createdAt: number;
+    lastUsedAt: number | null;
+    expiresAt: number | null;
+    scopes: ApiKeyScope[];
+}
+
+/**
+ * API key scopes/permissions
+ */
+export type ApiKeyScope =
+    | 'read:sessions'
+    | 'write:sessions'
+    | 'read:workspaces'
+    | 'write:workspaces'
+    | 'read:agents'
+    | 'write:agents'
+    | 'sync:read'
+    | 'sync:write';
+
+/**
+ * Create API key request
+ */
+export interface CreateApiKeyRequest {
+    name: string;
+    scopes: ApiKeyScope[];
+    expiresInDays?: number;
+}
+
+/**
+ * Create API key response (includes full key, only shown once)
+ */
+export interface CreateApiKeyResponse {
+    apiKey: ApiKey;
+    key: string; // Full API key, only returned on creation
+}
+
+/**
+ * Authentication state for client applications
+ */
+export interface AuthState {
+    isAuthenticated: boolean;
+    isLoading: boolean;
+    user: User | null;
+    error: string | null;
+}
+
+/**
+ * Device/session information for active sessions management
+ */
+export interface DeviceSession {
+    id: string;
+    deviceName: string;
+    deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+    platform: string;
+    browser?: string;
+    ipAddress?: string;
+    location?: string;
+    lastActiveAt: number;
+    createdAt: number;
+    isCurrent: boolean;
+}
+
+/**
+ * Subscription pricing tiers (constant)
+ */
+export const SUBSCRIPTION_TIERS: SubscriptionPricing[] = [
+    {
+        tier: 'free',
+        name: 'Free',
+        price: 0,
+        features: [
+            'Up to 10 workspaces',
+            'Up to 100 sessions',
+            'Local sync only',
+            'Basic agent support',
+        ],
+        limits: {
+            maxWorkspaces: 10,
+            maxSessions: 100,
+            maxAgents: 3,
+            maxSwarms: 1,
+            syncEnabled: true,
+            realTimeSync: false,
+            prioritySync: false,
+            teamFeatures: false,
+            apiAccess: false,
+            customIntegrations: false,
+        },
+    },
+    {
+        tier: 'pro',
+        name: 'Pro',
+        price: 9.99,
+        yearlyPrice: 99.99,
+        features: [
+            'Up to 100 workspaces',
+            'Unlimited sessions',
+            'Real-time cloud sync',
+            'Unlimited agents',
+            'API access',
+            'Priority support',
+        ],
+        limits: {
+            maxWorkspaces: 100,
+            maxSessions: -1, // Unlimited
+            maxAgents: -1,
+            maxSwarms: 10,
+            syncEnabled: true,
+            realTimeSync: true,
+            prioritySync: false,
+            teamFeatures: false,
+            apiAccess: true,
+            customIntegrations: false,
+        },
+    },
+    {
+        tier: 'enterprise',
+        name: 'Enterprise',
+        price: 29.99,
+        yearlyPrice: 299.99,
+        features: [
+            'Unlimited workspaces',
+            'Unlimited sessions',
+            'Priority real-time sync',
+            'Unlimited agents & swarms',
+            'Team collaboration features',
+            'Custom integrations',
+            'Dedicated support',
+            'SLA guarantee',
+        ],
+        limits: {
+            maxWorkspaces: -1,
+            maxSessions: -1,
+            maxAgents: -1,
+            maxSwarms: -1,
+            syncEnabled: true,
+            realTimeSync: true,
+            prioritySync: true,
+            teamFeatures: true,
+            apiAccess: true,
+            customIntegrations: true,
+        },
+    },
+];

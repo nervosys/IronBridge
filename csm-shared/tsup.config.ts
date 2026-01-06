@@ -6,6 +6,7 @@ export default defineConfig({
         'types/index': 'src/types/index.ts',
         'api/index': 'src/api/index.ts',
         'utils/index': 'src/utils/index.ts',
+        'sync/index': 'src/sync/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: true,
@@ -13,4 +14,5 @@ export default defineConfig({
     sourcemap: true,
     clean: true,
     treeshake: true,
+    external: ['react', 'react-native'],
 });

@@ -1,5 +1,12 @@
 'use strict';
 
+var React = require('react');
+var jsxRuntime = require('react/jsx-runtime');
+
+function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
+
+var React__default = /*#__PURE__*/_interopDefault(React);
+
 // src/types/index.ts
 var SWE_PROJECT_TEMPLATES = [
   {
@@ -51,6 +58,86 @@ var SWE_PROJECT_TEMPLATES = [
       { rule: "All functions must have docstrings", category: "documentation", priority: 3 }
     ],
     defaultMemory: []
+  }
+];
+var SUBSCRIPTION_TIERS = [
+  {
+    tier: "free",
+    name: "Free",
+    price: 0,
+    features: [
+      "Up to 10 workspaces",
+      "Up to 100 sessions",
+      "Local sync only",
+      "Basic agent support"
+    ],
+    limits: {
+      maxWorkspaces: 10,
+      maxSessions: 100,
+      maxAgents: 3,
+      maxSwarms: 1,
+      syncEnabled: true,
+      realTimeSync: false,
+      prioritySync: false,
+      teamFeatures: false,
+      apiAccess: false,
+      customIntegrations: false
+    }
+  },
+  {
+    tier: "pro",
+    name: "Pro",
+    price: 9.99,
+    yearlyPrice: 99.99,
+    features: [
+      "Up to 100 workspaces",
+      "Unlimited sessions",
+      "Real-time cloud sync",
+      "Unlimited agents",
+      "API access",
+      "Priority support"
+    ],
+    limits: {
+      maxWorkspaces: 100,
+      maxSessions: -1,
+      // Unlimited
+      maxAgents: -1,
+      maxSwarms: 10,
+      syncEnabled: true,
+      realTimeSync: true,
+      prioritySync: false,
+      teamFeatures: false,
+      apiAccess: true,
+      customIntegrations: false
+    }
+  },
+  {
+    tier: "enterprise",
+    name: "Enterprise",
+    price: 29.99,
+    yearlyPrice: 299.99,
+    features: [
+      "Unlimited workspaces",
+      "Unlimited sessions",
+      "Priority real-time sync",
+      "Unlimited agents & swarms",
+      "Team collaboration features",
+      "Custom integrations",
+      "Dedicated support",
+      "SLA guarantee"
+    ],
+    limits: {
+      maxWorkspaces: -1,
+      maxSessions: -1,
+      maxAgents: -1,
+      maxSwarms: -1,
+      syncEnabled: true,
+      realTimeSync: true,
+      prioritySync: true,
+      teamFeatures: true,
+      apiAccess: true,
+      customIntegrations: true
+    }
   }
 ];
 
@@ -2330,10 +2417,1473 @@ var HOOK_ACTIONS = {
   translate: { id: "translate", name: "Translate", category: "ai" }
 };
 
+// src/sync/index.ts
+var SyncService = class {
+  constructor(config) {
+    this.eventSource = null;
+    this.eventHandlers = /* @__PURE__ */ new Map();
+    this.reconnectAttempts = 0;
+    this.reconnectTimer = null;
+    this.isSyncInProgress = false;
+    this.config = {
+      reconnectInterval: 5e3,
+      maxRetries: 10,
+      batchSize: 50,
+      conflictResolution: "server",
+      enableOfflineSupport: true,
+      onConnect: () => {
+      },
+      onDisconnect: () => {
+      },
+      onSyncStart: () => {
+      },
+      onSyncComplete: () => {
+      },
+      onSyncError: () => {
+      },
+      onConflict: () => {
+      },
+      ...config
+    };
+    this.state = {
+      lastSyncTime: 0,
+      version: 0,
+      pendingChanges: [],
+      conflicts: [],
+      isOnline: false,
+      isSyncing: false
+    };
+    if (this.config.enableOfflineSupport) {
+      this.loadCachedState();
+    }
+  }
+  // =========================================================================
+  // Connection Management (SSE)
+  // =========================================================================
+  connect() {
+    if (this.eventSource?.readyState === EventSource.OPEN) {
+      return;
+    }
+    const sseUrl = `${this.config.baseUrl}/sync/subscribe`;
+    try {
+      this.eventSource = new EventSource(sseUrl);
+      this.eventSource.onopen = () => {
+        this.state.isOnline = true;
+        this.reconnectAttempts = 0;
+        this.config.onConnect();
+        this.syncPendingChanges();
+      };
+      this.eventSource.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          this.handleMessage(message);
+        } catch (err) {
+          console.error("Failed to parse SSE message:", err);
+        }
+      };
+      this.eventSource.onerror = () => {
+        this.state.isOnline = false;
+        this.config.onDisconnect();
+        this.eventSource?.close();
+        this.eventSource = null;
+        this.scheduleReconnect();
+      };
+    } catch (err) {
+      console.error("Failed to connect:", err);
+      this.scheduleReconnect();
+    }
+  }
+  disconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    this.state.isOnline = false;
+  }
+  scheduleReconnect() {
+    if (this.reconnectAttempts >= this.config.maxRetries) {
+      console.error("Max reconnect attempts reached");
+      return;
+    }
+    this.reconnectAttempts++;
+    const delay2 = this.config.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1);
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+    }, Math.min(delay2, 3e4));
+  }
+  // =========================================================================
+  // REST API Methods
+  // =========================================================================
+  async apiRequest(endpoint, method = "GET", body) {
+    const response = await fetch(`${this.config.baseUrl}${endpoint}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: body ? JSON.stringify(body) : void 0
+    });
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || "API request failed");
+    }
+    return result.data;
+  }
+  // =========================================================================
+  // Message Handling (SSE)
+  // =========================================================================
+  handleMessage(message) {
+    switch (message.type) {
+      case "welcome":
+        if (message.version > this.state.version) {
+          this.requestSync();
+        }
+        break;
+      case "sync_event":
+        if (message.event) {
+          this.handleSyncEvent(message.event);
+        }
+        break;
+      case "ack":
+        if (message.version) {
+          this.state.version = message.version;
+          this.saveCachedState();
+        }
+        break;
+    }
+  }
+  handleSyncEvent(event) {
+    if (event.clientId === this.config.clientId) {
+      return;
+    }
+    if (event.version > this.state.version) {
+      this.state.version = event.version;
+    }
+    this.emit(event.type, event);
+    this.emit("*", event);
+  }
+  handleSnapshot(snapshot) {
+    this.state.version = snapshot.version;
+    this.state.lastSyncTime = snapshot.timestamp;
+    snapshot.workspaces.forEach((ws) => {
+      this.emit("workspace", {
+        id: `snapshot-ws-${ws.id}`,
+        type: "workspace",
+        operation: "sync",
+        entityId: ws.id,
+        data: ws,
+        timestamp: snapshot.timestamp,
+        clientId: "server",
+        version: snapshot.version
+      });
+    });
+    snapshot.sessions.forEach((session) => {
+      this.emit("session", {
+        id: `snapshot-session-${session.id}`,
+        type: "session",
+        operation: "sync",
+        entityId: session.id,
+        data: session,
+        timestamp: snapshot.timestamp,
+        clientId: "server",
+        version: snapshot.version
+      });
+    });
+    snapshot.agents.forEach((agent) => {
+      this.emit("agent", {
+        id: `snapshot-agent-${agent.id}`,
+        type: "agent",
+        operation: "sync",
+        entityId: agent.id,
+        data: agent,
+        timestamp: snapshot.timestamp,
+        clientId: "server",
+        version: snapshot.version
+      });
+    });
+    this.saveCachedState();
+    this.config.onSyncComplete({
+      created: [],
+      updated: [],
+      deleted: [],
+      timestamp: snapshot.timestamp,
+      fromVersion: 0,
+      toVersion: snapshot.version
+    });
+  }
+  handleDelta(delta) {
+    this.state.version = delta.toVersion;
+    this.state.lastSyncTime = delta.timestamp;
+    [...delta.created, ...delta.updated, ...delta.deleted].forEach((event) => {
+      this.emit(event.type, event);
+    });
+    this.saveCachedState();
+    this.config.onSyncComplete(delta);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _handleConflict(conflict) {
+    if (this.config.conflictResolution !== "manual") {
+      conflict.resolution = this.config.conflictResolution;
+      conflict.resolved = true;
+    } else {
+      this.state.conflicts.push(conflict);
+      this.config.onConflict(conflict);
+    }
+  }
+  // =========================================================================
+  // Event Subscription
+  // =========================================================================
+  subscribe(entityType, handler) {
+    if (!this.eventHandlers.has(entityType)) {
+      this.eventHandlers.set(entityType, /* @__PURE__ */ new Set());
+    }
+    this.eventHandlers.get(entityType).add(handler);
+    return () => {
+      this.eventHandlers.get(entityType)?.delete(handler);
+    };
+  }
+  emit(entityType, event) {
+    this.eventHandlers.get(entityType)?.forEach((handler) => {
+      try {
+        handler(event);
+      } catch (err) {
+        console.error("Error in sync event handler:", err);
+      }
+    });
+  }
+  // =========================================================================
+  // Data Operations (via REST API)
+  // =========================================================================
+  async push(entityType, operation, entityId, data) {
+    const event = {
+      id: `${this.config.clientId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: entityType,
+      operation,
+      entityId,
+      data,
+      timestamp: Date.now(),
+      clientId: this.config.clientId,
+      version: this.state.version + 1
+    };
+    if (this.state.isOnline) {
+      try {
+        const result = await this.apiRequest(
+          "/sync/event",
+          "POST",
+          event
+        );
+        this.state.version = result.version;
+        this.saveCachedState();
+      } catch (err) {
+        console.error("Failed to push sync event:", err);
+        if (this.config.enableOfflineSupport) {
+          this.state.pendingChanges.push(event);
+          this.saveCachedState();
+        }
+        throw err;
+      }
+    } else if (this.config.enableOfflineSupport) {
+      this.state.pendingChanges.push(event);
+      this.saveCachedState();
+    }
+  }
+  async syncPendingChanges() {
+    if (this.isSyncInProgress || this.state.pendingChanges.length === 0) {
+      return;
+    }
+    this.isSyncInProgress = true;
+    this.state.isSyncing = true;
+    this.config.onSyncStart();
+    try {
+      while (this.state.pendingChanges.length > 0) {
+        const batch = this.state.pendingChanges.splice(0, this.config.batchSize);
+        const result = await this.apiRequest(
+          "/sync/batch",
+          "POST",
+          { events: batch }
+        );
+        this.state.version = result.version;
+      }
+      this.saveCachedState();
+    } catch (err) {
+      console.error("Failed to sync pending changes:", err);
+      this.config.onSyncError(err);
+    } finally {
+      this.isSyncInProgress = false;
+      this.state.isSyncing = false;
+    }
+  }
+  async requestSync() {
+    try {
+      const delta = await this.apiRequest(
+        `/sync/delta?from=${this.state.version}`
+      );
+      this.handleDelta(delta);
+    } catch (err) {
+      console.error("Failed to request sync delta:", err);
+      this.config.onSyncError(err);
+    }
+  }
+  async requestSnapshot() {
+    try {
+      const snapshot = await this.apiRequest("/sync/snapshot");
+      this.handleSnapshot(snapshot);
+      return snapshot;
+    } catch (err) {
+      console.error("Failed to request snapshot:", err);
+      this.config.onSyncError(err);
+      throw err;
+    }
+  }
+  // =========================================================================
+  // Conflict Resolution
+  // =========================================================================
+  resolveConflict(conflictId, resolution) {
+    const conflict = this.state.conflicts.find((c) => c.id === conflictId);
+    if (!conflict) {
+      return;
+    }
+    conflict.resolution = resolution;
+    conflict.resolved = true;
+    this.state.conflicts = this.state.conflicts.filter((c) => c.id !== conflictId);
+  }
+  // =========================================================================
+  // State Management
+  // =========================================================================
+  getState() {
+    return { ...this.state };
+  }
+  isConnected() {
+    return this.state.isOnline;
+  }
+  getVersion() {
+    return this.state.version;
+  }
+  getPendingChanges() {
+    return [...this.state.pendingChanges];
+  }
+  getConflicts() {
+    return [...this.state.conflicts];
+  }
+  // =========================================================================
+  // Cache Management
+  // =========================================================================
+  loadCachedState() {
+    try {
+      const cached = localStorage?.getItem(`csm-sync-state-${this.config.clientId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        this.state.version = parsed.version || 0;
+        this.state.lastSyncTime = parsed.lastSyncTime || 0;
+        this.state.pendingChanges = parsed.pendingChanges || [];
+      }
+    } catch (err) {
+      console.debug("Could not load cached sync state:", err);
+    }
+  }
+  saveCachedState() {
+    try {
+      localStorage?.setItem(
+        `csm-sync-state-${this.config.clientId}`,
+        JSON.stringify({
+          version: this.state.version,
+          lastSyncTime: this.state.lastSyncTime,
+          pendingChanges: this.state.pendingChanges
+        })
+      );
+    } catch (err) {
+      console.debug("Could not save cached sync state:", err);
+    }
+  }
+  clearCache() {
+    try {
+      localStorage?.removeItem(`csm-sync-state-${this.config.clientId}`);
+    } catch (err) {
+      console.debug("Could not clear cached sync state:", err);
+    }
+    this.state = {
+      lastSyncTime: 0,
+      version: 0,
+      pendingChanges: [],
+      conflicts: [],
+      isOnline: this.state.isOnline,
+      isSyncing: false
+    };
+  }
+};
+var defaultSyncService = null;
+function createSyncService(config) {
+  return new SyncService(config);
+}
+function getDefaultSyncService() {
+  return defaultSyncService;
+}
+function initDefaultSyncService(config) {
+  if (!defaultSyncService) {
+    defaultSyncService = new SyncService(config);
+  }
+  return defaultSyncService;
+}
+function generateClientId() {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substr(2, 9);
+  const platform = typeof window !== "undefined" ? "web" : "native";
+  return `${platform}-${timestamp}-${random}`;
+}
+function useSync(options = {}) {
+  const {
+    baseUrl = "http://localhost:8787",
+    clientId = generateClientId(),
+    autoConnect = true,
+    conflictResolution = "server"
+  } = options;
+  const [state, setState] = React.useState({
+    lastSyncTime: 0,
+    version: 0,
+    pendingChanges: [],
+    conflicts: [],
+    isOnline: false,
+    isSyncing: false
+  });
+  const syncRef = React.useRef(null);
+  React.useEffect(() => {
+    const config = {
+      baseUrl,
+      clientId,
+      conflictResolution,
+      onConnect: () => {
+        setState((prev) => ({ ...prev, isOnline: true }));
+      },
+      onDisconnect: () => {
+        setState((prev) => ({ ...prev, isOnline: false }));
+      },
+      onSyncStart: () => {
+        setState((prev) => ({ ...prev, isSyncing: true }));
+      },
+      onSyncComplete: () => {
+        setState((prev) => ({ ...prev, isSyncing: false }));
+      },
+      onSyncError: (error) => {
+        console.error("Sync error:", error);
+        setState((prev) => ({ ...prev, isSyncing: false }));
+      },
+      onConflict: (conflict) => {
+        setState((prev) => ({
+          ...prev,
+          conflicts: [...prev.conflicts, conflict]
+        }));
+      }
+    };
+    syncRef.current = createSyncService(config);
+    if (autoConnect) {
+      syncRef.current.connect();
+    }
+    return () => {
+      syncRef.current?.disconnect();
+    };
+  }, [baseUrl, clientId, autoConnect, conflictResolution]);
+  const connect = React.useCallback(() => {
+    syncRef.current?.connect();
+  }, []);
+  const disconnect = React.useCallback(() => {
+    syncRef.current?.disconnect();
+  }, []);
+  const requestSync = React.useCallback(async () => {
+    await syncRef.current?.requestSync();
+  }, []);
+  const resolveConflict = React.useCallback(
+    (conflictId, resolution) => {
+      syncRef.current?.resolveConflict(conflictId, resolution);
+      setState((prev) => ({
+        ...prev,
+        conflicts: prev.conflicts.filter((c) => c.id !== conflictId)
+      }));
+    },
+    []
+  );
+  return {
+    sync: syncRef.current,
+    state,
+    isConnected: state.isOnline,
+    isSyncing: state.isSyncing,
+    connect,
+    disconnect,
+    requestSync,
+    resolveConflict
+  };
+}
+function useSyncSubscription(sync, entityType, callback) {
+  React.useEffect(() => {
+    if (!sync) return;
+    const unsubscribe = sync.subscribe(entityType, callback);
+    return unsubscribe;
+  }, [sync, entityType, callback]);
+}
+function useSyncedState(sync, options) {
+  const { entityType, initialData, idField = "id" } = options;
+  const [data, setData] = React.useState(initialData);
+  const handleEvent = React.useCallback(
+    (event) => {
+      setData((prev) => {
+        const id = event.entityId;
+        switch (event.operation) {
+          case "create":
+            if (event.data && !prev.find((item) => String(item[idField]) === id)) {
+              return [...prev, event.data];
+            }
+            return prev;
+          case "update":
+            return prev.map(
+              (item) => String(item[idField]) === id ? { ...item, ...event.data } : item
+            );
+          case "delete":
+            return prev.filter((item) => String(item[idField]) !== id);
+          case "sync":
+            if (event.data) {
+              const existing = prev.find((item) => String(item[idField]) === id);
+              if (existing) {
+                return prev.map(
+                  (item) => String(item[idField]) === id ? { ...item, ...event.data } : item
+                );
+              }
+              return [...prev, event.data];
+            }
+            return prev;
+          default:
+            return prev;
+        }
+      });
+    },
+    [idField]
+  );
+  useSyncSubscription(sync, entityType, handleEvent);
+  const create = React.useCallback(
+    (item) => {
+      const id = String(item[idField]);
+      setData((prev) => [...prev, item]);
+      sync?.push(entityType, "create", id, item);
+    },
+    [sync, entityType, idField]
+  );
+  const update = React.useCallback(
+    (id, updates) => {
+      setData(
+        (prev) => prev.map((item) => String(item[idField]) === id ? { ...item, ...updates } : item)
+      );
+      sync?.push(entityType, "update", id, updates);
+    },
+    [sync, entityType, idField]
+  );
+  const remove = React.useCallback(
+    (id) => {
+      setData((prev) => prev.filter((item) => String(item[idField]) !== id));
+      sync?.push(entityType, "delete", id);
+    },
+    [sync, entityType, idField]
+  );
+  return { data, setData, create, update, remove };
+}
+function useSyncedWorkspaces(sync, initialData = []) {
+  return useSyncedState(sync, {
+    entityType: "workspace",
+    initialData
+  });
+}
+function useSyncedSessions(sync, initialData = []) {
+  return useSyncedState(sync, {
+    entityType: "session",
+    initialData
+  });
+}
+function useSyncedAgents(sync, initialData = []) {
+  return useSyncedState(sync, {
+    entityType: "agent",
+    initialData
+  });
+}
+function useSyncedSwarms(sync, initialData = []) {
+  return useSyncedState(sync, {
+    entityType: "swarm",
+    initialData
+  });
+}
+function useSyncedProviders(sync, initialData = []) {
+  return useSyncedState(sync, {
+    entityType: "provider",
+    initialData
+  });
+}
+function useSyncStatus(sync) {
+  const [status, setStatus] = React.useState({
+    isOnline: false,
+    isSyncing: false,
+    lastSyncTime: null,
+    pendingCount: 0,
+    conflictCount: 0,
+    version: 0
+  });
+  React.useEffect(() => {
+    if (!sync) return;
+    const updateStatus = () => {
+      const state = sync.getState();
+      setStatus({
+        isOnline: state.isOnline,
+        isSyncing: state.isSyncing,
+        lastSyncTime: state.lastSyncTime ? new Date(state.lastSyncTime) : null,
+        pendingCount: state.pendingChanges.length,
+        conflictCount: state.conflicts.length,
+        version: state.version
+      });
+    };
+    const unsubscribe = sync.subscribe("*", updateStatus);
+    updateStatus();
+    const interval = setInterval(updateStatus, 1e3);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [sync]);
+  return status;
+}
+function useSyncConflicts(sync) {
+  const [conflicts, setConflicts] = React.useState([]);
+  React.useEffect(() => {
+    if (!sync) return;
+    const updateConflicts = () => {
+      setConflicts(sync.getConflicts());
+    };
+    const unsubscribe = sync.subscribe("*", updateConflicts);
+    updateConflicts();
+    return unsubscribe;
+  }, [sync]);
+  const resolve = React.useCallback(
+    (conflictId, resolution) => {
+      sync?.resolveConflict(conflictId, resolution);
+      setConflicts((prev) => prev.filter((c) => c.id !== conflictId));
+    },
+    [sync]
+  );
+  const resolveAll = React.useCallback(
+    (resolution) => {
+      conflicts.forEach((conflict) => {
+        sync?.resolveConflict(conflict.id, resolution);
+      });
+      setConflicts([]);
+    },
+    [sync, conflicts]
+  );
+  return { conflicts, resolve, resolveAll };
+}
+var SyncContext = React.createContext(null);
+function SyncProvider({
+  children,
+  baseUrl = "http://localhost:8787",
+  clientId,
+  autoConnect = true,
+  conflictResolution = "server",
+  onConnect,
+  onDisconnect,
+  onSyncError
+}) {
+  const [state, setState] = React__default.default.useState({
+    isConnected: false,
+    isSyncing: false,
+    version: 0,
+    pendingCount: 0,
+    conflictCount: 0
+  });
+  const stableClientId = React.useMemo(
+    () => clientId || generateClientId(),
+    [clientId]
+  );
+  const sync = React.useMemo(() => {
+    const config = {
+      baseUrl,
+      clientId: stableClientId,
+      conflictResolution,
+      onConnect: () => {
+        setState((prev) => ({ ...prev, isConnected: true }));
+        onConnect?.();
+      },
+      onDisconnect: () => {
+        setState((prev) => ({ ...prev, isConnected: false }));
+        onDisconnect?.();
+      },
+      onSyncStart: () => {
+        setState((prev) => ({ ...prev, isSyncing: true }));
+      },
+      onSyncComplete: () => {
+        setState((prev) => ({ ...prev, isSyncing: false }));
+      },
+      onSyncError: (error) => {
+        setState((prev) => ({ ...prev, isSyncing: false }));
+        onSyncError?.(error);
+      },
+      onConflict: () => {
+        setState((prev) => ({
+          ...prev,
+          conflictCount: prev.conflictCount + 1
+        }));
+      }
+    };
+    return createSyncService(config);
+  }, [baseUrl, stableClientId, conflictResolution, onConnect, onDisconnect, onSyncError]);
+  React.useEffect(() => {
+    if (autoConnect) {
+      sync.connect();
+    }
+    return () => {
+      sync.disconnect();
+    };
+  }, [sync, autoConnect]);
+  React.useEffect(() => {
+    const updateState = () => {
+      const syncState = sync.getState();
+      setState((prev) => ({
+        ...prev,
+        version: syncState.version,
+        pendingCount: syncState.pendingChanges.length,
+        conflictCount: syncState.conflicts.length
+      }));
+    };
+    const interval = setInterval(updateState, 1e3);
+    return () => clearInterval(interval);
+  }, [sync]);
+  const value = React.useMemo(
+    () => ({
+      sync,
+      ...state
+    }),
+    [sync, state]
+  );
+  return /* @__PURE__ */ jsxRuntime.jsx(SyncContext.Provider, { value, children });
+}
+function useSyncContext() {
+  const context = React.useContext(SyncContext);
+  if (!context) {
+    throw new Error("useSyncContext must be used within a SyncProvider");
+  }
+  return context;
+}
+function withSync(WrappedComponent) {
+  return function WithSyncComponent(props) {
+    const sync = useSyncContext();
+    return /* @__PURE__ */ jsxRuntime.jsx(WrappedComponent, { ...props, sync });
+  };
+}
+
+// src/auth/index.ts
+var STORAGE_KEYS = {
+  ACCESS_TOKEN: "csm_access_token",
+  REFRESH_TOKEN: "csm_refresh_token",
+  TOKEN_EXPIRY: "csm_token_expiry",
+  USER: "csm_user"
+};
+var AuthService = class {
+  constructor(config) {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.tokenExpiry = null;
+    this.user = null;
+    this.refreshPromise = null;
+    this.baseUrl = config.baseUrl.replace(/\/$/, "");
+    this.onAuthStateChange = config.onAuthStateChange;
+    this.onTokenRefresh = config.onTokenRefresh;
+    const noopStorage = {
+      length: 0,
+      clear: () => {
+      },
+      getItem: () => null,
+      key: () => null,
+      removeItem: () => {
+      },
+      setItem: () => {
+      }
+    };
+    this.storage = config.storage ?? (typeof localStorage !== "undefined" ? localStorage : noopStorage);
+    this.loadStoredAuth();
+  }
+  // =========================================================================
+  // Token Management
+  // =========================================================================
+  loadStoredAuth() {
+    try {
+      this.accessToken = this.storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+      this.refreshToken = this.storage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      const expiry = this.storage.getItem(STORAGE_KEYS.TOKEN_EXPIRY);
+      this.tokenExpiry = expiry ? parseInt(expiry, 10) : null;
+      const userJson = this.storage.getItem(STORAGE_KEYS.USER);
+      this.user = userJson ? JSON.parse(userJson) : null;
+    } catch (error) {
+      console.error("Failed to load stored auth:", error);
+      this.clearStoredAuth();
+    }
+  }
+  storeAuth(response) {
+    this.accessToken = response.accessToken;
+    this.refreshToken = response.refreshToken;
+    this.tokenExpiry = response.expiresAt;
+    this.user = response.user;
+    this.storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, response.accessToken);
+    this.storage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken);
+    this.storage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, response.expiresAt.toString());
+    this.storage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
+    this.notifyAuthStateChange();
+  }
+  clearStoredAuth() {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.tokenExpiry = null;
+    this.user = null;
+    this.storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+    this.storage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+    this.storage.removeItem(STORAGE_KEYS.TOKEN_EXPIRY);
+    this.storage.removeItem(STORAGE_KEYS.USER);
+    this.notifyAuthStateChange();
+  }
+  notifyAuthStateChange() {
+    this.onAuthStateChange?.({
+      isAuthenticated: this.isAuthenticated(),
+      isLoading: false,
+      user: this.user,
+      error: null
+    });
+  }
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated() {
+    return this.accessToken !== null && this.user !== null;
+  }
+  /**
+   * Check if token needs refresh (within 5 minutes of expiry)
+   */
+  needsRefresh() {
+    if (!this.tokenExpiry) return false;
+    const now = Math.floor(Date.now() / 1e3);
+    return this.tokenExpiry - now < 300;
+  }
+  /**
+   * Get current access token, refreshing if needed
+   */
+  async getAccessToken() {
+    if (!this.accessToken) return null;
+    if (this.needsRefresh() && this.refreshToken) {
+      try {
+        return await this.refreshAccessToken();
+      } catch {
+        this.clearStoredAuth();
+        return null;
+      }
+    }
+    return this.accessToken;
+  }
+  /**
+   * Refresh the access token
+   */
+  async refreshAccessToken() {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+    this.refreshPromise = (async () => {
+      if (!this.refreshToken) {
+        throw new Error("No refresh token available");
+      }
+      const response = await this.request("/auth/refresh", {
+        method: "POST",
+        body: JSON.stringify({ refreshToken: this.refreshToken }),
+        skipAuth: true
+      });
+      this.accessToken = response.accessToken;
+      this.tokenExpiry = response.expiresAt;
+      this.storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, response.accessToken);
+      this.storage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, response.expiresAt.toString());
+      this.onTokenRefresh?.(response.accessToken);
+      return response.accessToken;
+    })();
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+  // =========================================================================
+  // HTTP Request Helper
+  // =========================================================================
+  async request(path, options = {}) {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (!options.skipAuth && this.accessToken) {
+      headers["Authorization"] = `Bearer ${this.accessToken}`;
+    }
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: "Request failed" }));
+      throw new AuthError(error.message || "Request failed", response.status);
+    }
+    return response.json();
+  }
+  // =========================================================================
+  // Authentication Methods
+  // =========================================================================
+  /**
+   * Register a new user account
+   */
+  async register(request) {
+    const response = await this.request("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(request),
+      skipAuth: true
+    });
+    this.storeAuth(response);
+    return response;
+  }
+  /**
+   * Login with email and password
+   */
+  async login(request) {
+    const response = await this.request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(request),
+      skipAuth: true
+    });
+    this.storeAuth(response);
+    return response;
+  }
+  /**
+   * Logout and invalidate tokens
+   */
+  async logout() {
+    try {
+      if (this.accessToken) {
+        await this.request("/auth/logout", {
+          method: "POST"
+        });
+      }
+    } catch {
+    } finally {
+      this.clearStoredAuth();
+    }
+  }
+  /**
+   * Get current user info
+   */
+  async getCurrentUser() {
+    const token = await this.getAccessToken();
+    if (!token) {
+      throw new AuthError("Not authenticated", 401);
+    }
+    const user = await this.request("/auth/me");
+    this.user = user;
+    this.storage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    this.notifyAuthStateChange();
+    return user;
+  }
+  /**
+   * Get cached user without API call
+   */
+  getUser() {
+    return this.user;
+  }
+  // =========================================================================
+  // Subscription Methods
+  // =========================================================================
+  /**
+   * Get current subscription details
+   */
+  async getSubscription() {
+    return this.request("/auth/subscription");
+  }
+  /**
+   * Subscribe to a tier
+   */
+  async subscribe(request) {
+    const subscription = await this.request("/auth/subscribe", {
+      method: "POST",
+      body: JSON.stringify(request)
+    });
+    if (this.user) {
+      this.user.subscription = subscription;
+      this.storage.setItem(STORAGE_KEYS.USER, JSON.stringify(this.user));
+      this.notifyAuthStateChange();
+    }
+    return subscription;
+  }
+  /**
+   * Cancel subscription (downgrade to free)
+   */
+  async cancelSubscription() {
+    return this.request("/auth/subscription/cancel", {
+      method: "POST"
+    });
+  }
+  // =========================================================================
+  // Password Management
+  // =========================================================================
+  /**
+   * Request password reset email
+   */
+  async requestPasswordReset(request) {
+    await this.request("/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify(request),
+      skipAuth: true
+    });
+  }
+  /**
+   * Change password (requires authentication)
+   */
+  async changePassword(request) {
+    await this.request("/auth/password/change", {
+      method: "POST",
+      body: JSON.stringify(request)
+    });
+  }
+  // =========================================================================
+  // API Key Management
+  // =========================================================================
+  /**
+   * List API keys
+   */
+  async listApiKeys() {
+    return this.request("/auth/api-keys");
+  }
+  /**
+   * Create a new API key
+   */
+  async createApiKey(request) {
+    return this.request("/auth/api-keys", {
+      method: "POST",
+      body: JSON.stringify(request)
+    });
+  }
+  /**
+   * Delete an API key
+   */
+  async deleteApiKey(keyId) {
+    await this.request(`/auth/api-keys/${keyId}`, {
+      method: "DELETE"
+    });
+  }
+  // =========================================================================
+  // Device/Session Management
+  // =========================================================================
+  /**
+   * List active device sessions
+   */
+  async listDeviceSessions() {
+    return this.request("/auth/sessions");
+  }
+  /**
+   * Revoke a device session
+   */
+  async revokeDeviceSession(sessionId) {
+    await this.request(`/auth/sessions/${sessionId}`, {
+      method: "DELETE"
+    });
+  }
+  /**
+   * Revoke all other device sessions
+   */
+  async revokeAllOtherSessions() {
+    await this.request("/auth/sessions/revoke-others", {
+      method: "POST"
+    });
+  }
+  // =========================================================================
+  // Authorization Header Helper
+  // =========================================================================
+  /**
+   * Get authorization headers for API requests
+   */
+  async getAuthHeaders() {
+    const token = await this.getAccessToken();
+    if (!token) {
+      return {};
+    }
+    return {
+      "Authorization": `Bearer ${token}`
+    };
+  }
+};
+var AuthError = class extends Error {
+  constructor(message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+    this.name = "AuthError";
+  }
+  isUnauthorized() {
+    return this.statusCode === 401;
+  }
+  isForbidden() {
+    return this.statusCode === 403;
+  }
+};
+var defaultInstance = null;
+function initAuthService(config) {
+  defaultInstance = new AuthService(config);
+  return defaultInstance;
+}
+function getAuthService() {
+  if (!defaultInstance) {
+    throw new Error("AuthService not initialized. Call initAuthService() first.");
+  }
+  return defaultInstance;
+}
+var AuthContext = React.createContext(null);
+function AuthProvider({ children, config }) {
+  const [state, setState] = React.useState({
+    isAuthenticated: false,
+    isLoading: true,
+    user: null,
+    error: null
+  });
+  const service = React.useMemo(() => {
+    return new AuthService({
+      ...config,
+      onAuthStateChange: (newState) => {
+        setState(newState);
+      }
+    });
+  }, [config]);
+  React.useEffect(() => {
+    const init = async () => {
+      try {
+        const token = await service.getAccessToken();
+        if (token) {
+          await service.getCurrentUser();
+        }
+      } catch (error) {
+        console.error("Auth initialization failed:", error);
+      } finally {
+        setState((s) => ({ ...s, isLoading: false }));
+      }
+    };
+    init();
+  }, [service]);
+  const login = React.useCallback(
+    async (request) => {
+      setState((s) => ({ ...s, isLoading: true, error: null }));
+      try {
+        await service.login(request);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Login failed";
+        setState((s) => ({ ...s, isLoading: false, error: message }));
+        throw error;
+      }
+    },
+    [service]
+  );
+  const register = React.useCallback(
+    async (request) => {
+      setState((s) => ({ ...s, isLoading: true, error: null }));
+      try {
+        await service.register(request);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Registration failed";
+        setState((s) => ({ ...s, isLoading: false, error: message }));
+        throw error;
+      }
+    },
+    [service]
+  );
+  const logout = React.useCallback(async () => {
+    setState((s) => ({ ...s, isLoading: true }));
+    try {
+      await service.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setState({
+        isAuthenticated: false,
+        isLoading: false,
+        user: null,
+        error: null
+      });
+    }
+  }, [service]);
+  const refreshUser = React.useCallback(async () => {
+    try {
+      await service.getCurrentUser();
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+    }
+  }, [service]);
+  const getAccessToken = React.useCallback(() => {
+    return service.getAccessToken();
+  }, [service]);
+  const value = {
+    ...state,
+    login,
+    register,
+    logout,
+    refreshUser,
+    getAccessToken,
+    service
+  };
+  return React__default.default.createElement(AuthContext.Provider, { value }, children);
+}
+function useAuth() {
+  const context = React.useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
+function useUser() {
+  const { user } = useAuth();
+  return user;
+}
+function useSubscription() {
+  const { user, service } = useAuth();
+  const [subscription, setSubscription] = React.useState(
+    user?.subscription ?? null
+  );
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  React.useEffect(() => {
+    setSubscription(user?.subscription ?? null);
+  }, [user?.subscription]);
+  const refresh = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const sub = await service.getSubscription();
+      setSubscription(sub);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load subscription";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [service]);
+  const subscribe = React.useCallback(
+    async (request) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const sub = await service.subscribe(request);
+        setSubscription(sub);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to subscribe";
+        setError(message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [service]
+  );
+  const cancelSubscription = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const sub = await service.cancelSubscription();
+      setSubscription(sub);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to cancel subscription";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [service]);
+  const canUseFeature = React.useCallback(
+    (feature) => {
+      if (!subscription) return false;
+      const value = subscription.limits[feature];
+      return typeof value === "boolean" ? value : true;
+    },
+    [subscription]
+  );
+  const isWithinLimit = React.useCallback(
+    (resource, count) => {
+      if (!subscription) return false;
+      const limitKey = `max${resource.charAt(0).toUpperCase() + resource.slice(1)}`;
+      const limit = subscription.limits[limitKey];
+      if (typeof limit !== "number") return false;
+      return limit === -1 || count < limit;
+    },
+    [subscription]
+  );
+  return {
+    subscription,
+    tier: subscription?.tier ?? "free",
+    limits: subscription?.limits ?? null,
+    isLoading,
+    error,
+    subscribe,
+    cancelSubscription,
+    refresh,
+    canUseFeature,
+    isWithinLimit
+  };
+}
+function useRequireAuth(options = {}) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const { subscription } = useSubscription();
+  const tierPriority = {
+    free: 0,
+    pro: 1,
+    enterprise: 2
+  };
+  const isAuthorized = React.useMemo(() => {
+    if (!isAuthenticated) return false;
+    if (!options.requiredTier) return true;
+    if (!subscription) return false;
+    return tierPriority[subscription.tier] >= tierPriority[options.requiredTier];
+  }, [isAuthenticated, subscription, options.requiredTier]);
+  return {
+    isAuthorized,
+    isLoading,
+    user
+  };
+}
+function useApiKeys() {
+  const { service } = useAuth();
+  const [apiKeys, setApiKeys] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const refresh = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const keys = await service.listApiKeys();
+      setApiKeys(keys);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load API keys";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [service]);
+  const createKey = React.useCallback(
+    async (request) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await service.createApiKey(request);
+        setApiKeys((prev) => [...prev, response.apiKey]);
+        return response;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to create API key";
+        setError(message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [service]
+  );
+  const deleteKey = React.useCallback(
+    async (keyId) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await service.deleteApiKey(keyId);
+        setApiKeys((prev) => prev.filter((k) => k.id !== keyId));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to delete API key";
+        setError(message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [service]
+  );
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
+  return {
+    apiKeys,
+    isLoading,
+    error,
+    createKey,
+    deleteKey,
+    refresh
+  };
+}
+function useDeviceSessions() {
+  const { service } = useAuth();
+  const [sessions, setSessions] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const refresh = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const deviceSessions = await service.listDeviceSessions();
+      setSessions(deviceSessions);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load sessions";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [service]);
+  const revokeSession = React.useCallback(
+    async (sessionId) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await service.revokeDeviceSession(sessionId);
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to revoke session";
+        setError(message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [service]
+  );
+  const revokeAllOther = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await service.revokeAllOtherSessions();
+      setSessions((prev) => prev.filter((s) => s.isCurrent));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to revoke sessions";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [service]);
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
+  return {
+    sessions,
+    isLoading,
+    error,
+    revokeSession,
+    revokeAllOther,
+    refresh
+  };
+}
+
 exports.AGENT_ROLES = AGENT_ROLES;
 exports.AGENT_STATUSES = AGENT_STATUSES;
 exports.API_CONFIG = API_CONFIG;
 exports.API_ENDPOINTS = API_ENDPOINTS;
+exports.AuthError = AuthError;
+exports.AuthProvider = AuthProvider;
+exports.AuthService = AuthService;
 exports.DEFAULT_AGENTS = DEFAULT_AGENTS;
 exports.DEFAULT_AGENT_CONFIG = DEFAULT_AGENT_CONFIG;
 exports.EXPORT_FORMATS = EXPORT_FORMATS;
@@ -2351,9 +3901,12 @@ exports.PROVIDERS = PROVIDERS;
 exports.PROVIDER_STATUSES = PROVIDER_STATUSES;
 exports.REMOTE_MONITOR_CONFIG = REMOTE_MONITOR_CONFIG;
 exports.SESSION_FORMAT = SESSION_FORMAT;
+exports.SUBSCRIPTION_TIERS = SUBSCRIPTION_TIERS;
 exports.SWARM_STATUSES = SWARM_STATUSES;
 exports.SWARM_TEMPLATES = SWARM_TEMPLATES;
 exports.SWE_PROJECT_TEMPLATES = SWE_PROJECT_TEMPLATES;
+exports.SyncProvider = SyncProvider;
+exports.SyncService = SyncService;
 exports.TASK_STATUSES = TASK_STATUSES;
 exports.TOOL_CATEGORIES = TOOL_CATEGORIES;
 exports.VLA_MODELS = VLA_MODELS;
@@ -2363,6 +3916,7 @@ exports.capitalize = capitalize;
 exports.chunk = chunk;
 exports.countTotalTokens = countTotalTokens;
 exports.createApiClient = createApiClient;
+exports.createSyncService = createSyncService;
 exports.debounce = debounce;
 exports.deepClone = deepClone;
 exports.deepMerge = deepMerge;
@@ -2378,9 +3932,12 @@ exports.formatNumber = formatNumber;
 exports.formatRelativeTime = formatRelativeTime;
 exports.formatTime = formatTime;
 exports.formatTokens = formatTokens;
+exports.generateClientId = generateClientId;
 exports.generateShortId = generateShortId;
 exports.generateTimestampId = generateTimestampId;
 exports.generateUUID = generateUUID;
+exports.getAuthService = getAuthService;
+exports.getDefaultSyncService = getDefaultSyncService;
 exports.getDirectory = getDirectory;
 exports.getExtension = getExtension;
 exports.getFileName = getFileName;
@@ -2389,6 +3946,8 @@ exports.getVLAModels = getVLAModels;
 exports.getVLMModels = getVLMModels;
 exports.groupBy = groupBy;
 exports.hexToRgb = hexToRgb;
+exports.initAuthService = initAuthService;
+exports.initDefaultSyncService = initDefaultSyncService;
 exports.isColorDark = isColorDark;
 exports.isToday = isToday;
 exports.isValidJson = isValidJson;
@@ -2408,5 +3967,23 @@ exports.throttle = throttle;
 exports.toTitleCase = toTitleCase;
 exports.truncate = truncate;
 exports.uniqueBy = uniqueBy;
+exports.useApiKeys = useApiKeys;
+exports.useAuth = useAuth;
+exports.useDeviceSessions = useDeviceSessions;
+exports.useRequireAuth = useRequireAuth;
+exports.useSubscription = useSubscription;
+exports.useSync = useSync;
+exports.useSyncConflicts = useSyncConflicts;
+exports.useSyncContext = useSyncContext;
+exports.useSyncStatus = useSyncStatus;
+exports.useSyncSubscription = useSyncSubscription;
+exports.useSyncedAgents = useSyncedAgents;
+exports.useSyncedProviders = useSyncedProviders;
+exports.useSyncedSessions = useSyncedSessions;
+exports.useSyncedState = useSyncedState;
+exports.useSyncedSwarms = useSyncedSwarms;
+exports.useSyncedWorkspaces = useSyncedWorkspaces;
+exports.useUser = useUser;
+exports.withSync = withSync;
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

@@ -26,6 +26,8 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
     const { workspaceId } = route.params;
     const { colors } = useTheme();
 
+    console.log('[WorkspaceSessions] workspaceId:', workspaceId);
+
     const {
         data: sessions,
         isLoading,
@@ -34,7 +36,12 @@ export function WorkspaceSessionsScreen({ route, navigation }: Props) {
         isRefetching,
     } = useQuery({
         queryKey: ['sessions', workspaceId],
-        queryFn: () => getSessions({ workspace_id: workspaceId }),
+        queryFn: async () => {
+            console.log('[WorkspaceSessions] Fetching sessions for workspace:', workspaceId);
+            const result = await getSessions({ workspace_id: workspaceId });
+            console.log('[WorkspaceSessions] Got sessions:', result?.length ?? 0, result);
+            return result;
+        },
         select: (data) => Array.isArray(data) ? data : [],
     });
 

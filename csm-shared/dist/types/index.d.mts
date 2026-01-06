@@ -1785,5 +1785,200 @@ interface SweProjectTemplate {
  * Common project templates
  */
 declare const SWE_PROJECT_TEMPLATES: SweProjectTemplate[];
+/**
+ * Subscription tier levels for CSM cloud sync services
+ */
+type SubscriptionTier = 'free' | 'pro' | 'enterprise';
+/**
+ * Subscription pricing information
+ */
+interface SubscriptionPricing {
+    tier: SubscriptionTier;
+    name: string;
+    price: number;
+    yearlyPrice?: number;
+    features: string[];
+    limits: SubscriptionLimits;
+}
+/**
+ * Subscription usage limits
+ */
+interface SubscriptionLimits {
+    maxWorkspaces: number;
+    maxSessions: number;
+    maxAgents: number;
+    maxSwarms: number;
+    syncEnabled: boolean;
+    realTimeSync: boolean;
+    prioritySync: boolean;
+    teamFeatures: boolean;
+    apiAccess: boolean;
+    customIntegrations: boolean;
+}
+/**
+ * User subscription details
+ */
+interface Subscription {
+    tier: SubscriptionTier;
+    expiresAt: number | null;
+    autoRenew: boolean;
+    limits: SubscriptionLimits;
+    usage?: SubscriptionUsage;
+}
+/**
+ * Current subscription usage
+ */
+interface SubscriptionUsage {
+    workspaces: number;
+    sessions: number;
+    agents: number;
+    swarms: number;
+    syncEvents: number;
+    lastSyncAt: number | null;
+}
+/**
+ * User account information
+ */
+interface User {
+    id: string;
+    email: string;
+    username: string | null;
+    subscription: Subscription;
+    createdAt: number;
+    updatedAt: number;
+    isActive: boolean;
+    emailVerified: boolean;
+    avatarUrl?: string | null;
+    preferences?: UserPreferences;
+}
+/**
+ * User preferences
+ */
+interface UserPreferences {
+    theme: 'light' | 'dark' | 'system';
+    defaultProvider: string | null;
+    syncOnStartup: boolean;
+    autoBackup: boolean;
+    notificationsEnabled: boolean;
+}
+/**
+ * Login request payload
+ */
+interface LoginRequest {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+}
+/**
+ * Registration request payload
+ */
+interface RegisterRequest {
+    email: string;
+    password: string;
+    username?: string;
+    acceptTerms: boolean;
+}
+/**
+ * Authentication response with tokens
+ */
+interface AuthResponse {
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+}
+/**
+ * Token refresh request
+ */
+interface RefreshTokenRequest {
+    refreshToken: string;
+}
+/**
+ * Token refresh response
+ */
+interface RefreshTokenResponse {
+    accessToken: string;
+    expiresAt: number;
+}
+/**
+ * Password reset request
+ */
+interface PasswordResetRequest {
+    email: string;
+}
+/**
+ * Password change request
+ */
+interface PasswordChangeRequest {
+    currentPassword: string;
+    newPassword: string;
+}
+/**
+ * Subscription upgrade/change request
+ */
+interface SubscribeRequest {
+    tier: SubscriptionTier;
+    paymentMethodId?: string;
+    billingCycle: 'monthly' | 'yearly';
+}
+/**
+ * API key for programmatic access
+ */
+interface ApiKey {
+    id: string;
+    name: string;
+    prefix: string;
+    createdAt: number;
+    lastUsedAt: number | null;
+    expiresAt: number | null;
+    scopes: ApiKeyScope[];
+}
+/**
+ * API key scopes/permissions
+ */
+type ApiKeyScope = 'read:sessions' | 'write:sessions' | 'read:workspaces' | 'write:workspaces' | 'read:agents' | 'write:agents' | 'sync:read' | 'sync:write';
+/**
+ * Create API key request
+ */
+interface CreateApiKeyRequest {
+    name: string;
+    scopes: ApiKeyScope[];
+    expiresInDays?: number;
+}
+/**
+ * Create API key response (includes full key, only shown once)
+ */
+interface CreateApiKeyResponse {
+    apiKey: ApiKey;
+    key: string;
+}
+/**
+ * Authentication state for client applications
+ */
+interface AuthState {
+    isAuthenticated: boolean;
+    isLoading: boolean;
+    user: User | null;
+    error: string | null;
+}
+/**
+ * Device/session information for active sessions management
+ */
+interface DeviceSession {
+    id: string;
+    deviceName: string;
+    deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+    platform: string;
+    browser?: string;
+    ipAddress?: string;
+    location?: string;
+    lastActiveAt: number;
+    createdAt: number;
+    isCurrent: boolean;
+}
+/**
+ * Subscription pricing tiers (constant)
+ */
+declare const SUBSCRIPTION_TIERS: SubscriptionPricing[];
 
-export { type ActionBounds, type ActionCommand, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type ApiError, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type DayCount, type DetectedProblem, type Document, type DocumentChunk, type DocumentType, type EmbeddingModel, type ExecutionResult, type ExportOptions, type FileChange, type GitCommit, type GitRepository, type GpuInfo, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type JointState, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Message, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type OrchestrationType, type OrchestratorResult, type PaginatedResponse, type PermissionLevel, type Pipeline, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SWE_PROJECT_TEMPLATES, type SearchResult, type SensorData, type SensorType, type SensorValues, type Session, type SessionFilter, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type SimilarityMetric, type Statistics, type StreamChunk, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type ThemeMode, type TokenUsage, type ToolInvocation, type VectorSearchResult, type VectorStoreConfig, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats };
+export { type ActionBounds, type ActionCommand, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type DayCount, type DetectedProblem, type DeviceSession, type Document, type DocumentChunk, type DocumentType, type EmbeddingModel, type ExecutionResult, type ExportOptions, type FileChange, type GitCommit, type GitRepository, type GpuInfo, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type JointState, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Message, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type OrchestrationType, type OrchestratorResult, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionLevel, type Pipeline, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SUBSCRIPTION_TIERS, SWE_PROJECT_TEMPLATES, type SearchResult, type SensorData, type SensorType, type SensorValues, type Session, type SessionFilter, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type SimilarityMetric, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type ThemeMode, type TokenUsage, type ToolInvocation, type User, type UserPreferences, type VectorSearchResult, type VectorStoreConfig, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats };

@@ -95,7 +95,7 @@ export function getApiUrl(path: string = ''): string {
 /**
  * Get the WebSocket URL
  */
-export function getWsUrl(path: string = '/api/v1/ws'): string {
+export function getWsUrl(path: string = '/api/ws'): string {
     const base = config.wsBaseUrl.replace(/\/$/, '');
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     return `${base}${cleanPath}`;

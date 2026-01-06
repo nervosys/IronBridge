@@ -27,6 +27,8 @@ import {
     DeveloperScreen,
     ResearchScreen,
     SWEScreen,
+    LocalLlmSettingsScreen,
+    AgentInboxScreen,
 } from '../screens';
 import { OAuthLoginScreen } from '../screens/OAuthLoginScreen';
 import { RootStackParamList, TabParamList } from './types';
@@ -210,6 +212,26 @@ function AgentsStack() {
                     title: 'Swarm',
                 })}
             />
+            <Stack.Screen
+                name="Protocols"
+                component={ProtocolsScreen}
+                options={{ title: 'Protocols' }}
+            />
+            <Stack.Screen
+                name="Developer"
+                component={DeveloperScreen}
+                options={{ title: 'Developer' }}
+            />
+            <Stack.Screen
+                name="SWE"
+                component={SWEScreen}
+                options={{ title: 'SWE Memory' }}
+            />
+            <Stack.Screen
+                name="AgentInbox"
+                component={AgentInboxScreen}
+                options={{ title: 'Agent Inbox' }}
+            />
         </Stack.Navigator>
     );
 }
@@ -261,6 +283,11 @@ function MoreStack() {
                 name="SWE"
                 component={SWEScreen}
                 options={{ title: 'SWE Memory' }}
+            />
+            <Stack.Screen
+                name="LocalLlmSettings"
+                component={LocalLlmSettingsScreen}
+                options={{ title: 'Local LLM' }}
             />
         </Stack.Navigator>
     );

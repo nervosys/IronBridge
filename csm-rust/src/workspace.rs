@@ -183,7 +183,8 @@ pub fn get_workspace_by_path(project_path: &str) -> Result<Option<Workspace>> {
     }))
 }
 
-/// Find workspace by path, returning workspace ID, directory, and data
+/// Find workspace by path, returning workspace ID, directory, and data.
+/// When multiple workspaces match the same path, returns the most recently modified one.
 pub fn find_workspace_by_path(
     project_path: &str,
 ) -> Result<Option<(String, PathBuf, Option<String>)>> {
@@ -194,6 +195,7 @@ pub fn find_workspace_by_path(
     }
 
     let target_path = normalize_path(project_path);
+    let mut matches: Vec<(String, PathBuf, Option<String>, std::time::SystemTime)> = Vec::new();
 
     for entry in std::fs::read_dir(&storage_path)? {
         let entry = entry?;
@@ -213,18 +215,50 @@ pub fn find_workspace_by_path(
                 if let Some(folder) = &ws_json.folder {
                     let folder_path = decode_workspace_folder(folder);
                     if normalize_path(&folder_path) == target_path {
-                        return Ok(Some((
+                        // Get the most recent modification time from chatSessions or workspace dir
+                        let chat_sessions_dir = workspace_dir.join("chatSessions");
+                        let last_modified = if chat_sessions_dir.exists() {
+                            std::fs::read_dir(&chat_sessions_dir)
+                                .ok()
+                                .and_then(|entries| {
+                                    entries
+                                        .filter_map(|e| e.ok())
+                                        .filter_map(|e| e.metadata().ok())
+                                        .filter_map(|m| m.modified().ok())
+                                        .max()
+                                })
+                                .unwrap_or_else(|| {
+                                    chat_sessions_dir
+                                        .metadata()
+                                        .and_then(|m| m.modified())
+                                        .unwrap_or(std::time::UNIX_EPOCH)
+                                })
+                        } else {
+                            workspace_dir
+                                .metadata()
+                                .and_then(|m| m.modified())
+                                .unwrap_or(std::time::UNIX_EPOCH)
+                        };
+
+                        matches.push((
                             entry.file_name().to_string_lossy().to_string(),
                             workspace_dir,
                             Some(folder_path),
-                        )));
+                            last_modified,
+                        ));
                     }
                 }
             }
         }
     }
 
-    Ok(None)
+    // Sort by last modified (newest first) and return the most recent
+    matches.sort_by(|a, b| b.3.cmp(&a.3));
+
+    Ok(matches
+        .into_iter()
+        .next()
+        .map(|(id, path, folder, _)| (id, path, folder)))
 }
 
 /// Find all workspaces for a project (by name matching)

@@ -44,6 +44,8 @@ export type RootStackParamList = {
     Developer: undefined;
     Research: undefined;
     SWE: undefined;
+    LocalLlmSettings: undefined;
+    AgentInbox: undefined;
 };
 
 export type TabParamList = {

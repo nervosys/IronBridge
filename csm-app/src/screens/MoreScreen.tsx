@@ -49,28 +49,12 @@ const menuItems: MenuItem[] = [
         route: 'Providers',
     },
     {
-        id: 'protocols',
-        title: 'Protocols',
-        subtitle: 'MCP, A2A, NANDA protocol support',
-        icon: 'git-network-outline',
-        iconColor: '#f59e0b',
-        route: 'Protocols',
-    },
-    {
         id: 'accounts',
         title: 'Accounts',
         subtitle: 'OAuth & API key management',
         icon: 'people-outline',
         iconColor: '#ec4899',
         route: 'Accounts',
-    },
-    {
-        id: 'developer',
-        title: 'Developer',
-        subtitle: 'ML projects, fine-tuning & playground',
-        icon: 'code-slash-outline',
-        iconColor: '#06b6d4',
-        route: 'Developer',
     },
     {
         id: 'research',
@@ -81,12 +65,12 @@ const menuItems: MenuItem[] = [
         route: 'Research',
     },
     {
-        id: 'swe',
-        title: 'SWE Memory',
-        subtitle: 'Code patterns, solutions & project context',
-        icon: 'hardware-chip-outline',
-        iconColor: '#f97316',
-        route: 'SWE',
+        id: 'local-llm',
+        title: 'Local LLM',
+        subtitle: 'LAN servers & on-device inference',
+        icon: 'cube-outline',
+        iconColor: '#22c55e',
+        route: 'LocalLlmSettings',
     },
 ];
 
@@ -143,14 +127,14 @@ export function MoreScreen() {
                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Accounts</Text>
                     </View>
                     <View style={styles.statItem}>
-                        <Ionicons name="git-network-outline" size={20} color="#8b5cf6" />
-                        <Text style={[styles.statValue, { color: colors.text }]}>7</Text>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Protocols</Text>
+                        <Ionicons name="library-outline" size={20} color="#84cc16" />
+                        <Text style={[styles.statValue, { color: colors.text }]}>12</Text>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Papers</Text>
                     </View>
                     <View style={styles.statItem}>
-                        <Ionicons name="code-slash-outline" size={20} color="#10b981" />
-                        <Text style={[styles.statValue, { color: colors.text }]}>24</Text>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Memories</Text>
+                        <Ionicons name="cube-outline" size={20} color="#22c55e" />
+                        <Text style={[styles.statValue, { color: colors.text }]}>2</Text>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Local LLMs</Text>
                     </View>
                 </View>
             </View>
