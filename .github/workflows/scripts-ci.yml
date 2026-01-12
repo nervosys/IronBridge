@@ -131,7 +131,7 @@ jobs:
           }
 
       - name: Upload generated files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: generated-json-${{ matrix.os }}
           path: chasm-rust/examples/temp/*.json
@@ -241,7 +241,7 @@ jobs:
           fi
 
       - name: Upload generated files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: generated-json-bash-${{ matrix.os }}
           path: chasm-rust/examples/temp/*.json
@@ -302,7 +302,7 @@ jobs:
           echo "✓ cloud_providers.sh completed successfully"
 
       - name: Upload generated files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: generated-json-bash-windows
           path: chasm-rust/examples/temp/*.json
