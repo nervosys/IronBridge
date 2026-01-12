@@ -14,7 +14,7 @@ A VS Code extension that provides a graphical interface for managing VS Code cha
 ## Requirements
 
 - VS Code 1.85.0 or later
-- [csm CLI](https://github.com/nervosys/chat-session-manager) must be installed and accessible in your PATH
+- [chasm CLI](https://github.com/nervosys/chasm) must be installed and accessible in your PATH
 
 ## Installation
 
@@ -125,5 +125,5 @@ MIT
 
 ## Links
 
-- [CSM CLI Repository](https://github.com/nervosys/chat-session-manager)
-- [Report Issues](https://github.com/nervosys/chat-session-manager/issues)
+- [Chasm CLI Repository](https://github.com/nervosys/chasm)
+- [Report Issues](https://github.com/nervosys/chasm/issues)

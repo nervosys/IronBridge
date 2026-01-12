@@ -54,15 +54,16 @@ Find pre-built llamafiles at:
 llamafile-convert model.gguf -o my-model.llamafile
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure Llamafile provider
-csm provider config llamafile --endpoint http://localhost:8080/v1
+chasm provider config llamafile --endpoint http://localhost:8080/v1
 
 # Test connection
-csm provider test llamafile
+chasm provider test llamafile
 
 # Import demo sessions
-csm provider import llamafile --source examples/llamafile/sessions
+chasm provider import llamafile --source examples/llamafile/sessions
 ```
+

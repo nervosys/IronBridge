@@ -45,15 +45,16 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure vLLM provider
-csm provider config vllm --endpoint http://localhost:8000/v1
+chasm provider config vllm --endpoint http://localhost:8000/v1
 
 # Test connection
-csm provider test vllm
+chasm provider test vllm
 
 # Import demo sessions
-csm provider import vllm --source examples/vllm/sessions
+chasm provider import vllm --source examples/vllm/sessions
 ```
+

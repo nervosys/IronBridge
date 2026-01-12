@@ -51,15 +51,16 @@ Download models through the UI:
 3. Click **Download**
 4. Select loader and load model
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure Text Gen WebUI provider
-csm provider config text-gen-webui --endpoint http://localhost:5000/v1
+chasm provider config text-gen-webui --endpoint http://localhost:5000/v1
 
 # Test connection
-csm provider test text-gen-webui
+chasm provider test text-gen-webui
 
 # Import demo sessions
-csm provider import text-gen-webui --source examples/text-gen-webui/sessions
+chasm provider import text-gen-webui --source examples/text-gen-webui/sessions
 ```
+

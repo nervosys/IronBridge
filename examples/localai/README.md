@@ -52,15 +52,16 @@ curl http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure LocalAI provider
-csm provider config localai --endpoint http://localhost:8080/v1
+chasm provider config localai --endpoint http://localhost:8080/v1
 
 # Test connection
-csm provider test localai
+chasm provider test localai
 
 # Import demo sessions
-csm provider import localai --source examples/localai/sessions
+chasm provider import localai --source examples/localai/sessions
 ```
+

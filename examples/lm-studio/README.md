@@ -49,15 +49,16 @@ response = client.chat.completions.create(
 )
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure LM Studio provider
-csm provider config lm-studio --endpoint http://localhost:1234/v1
+chasm provider config lm-studio --endpoint http://localhost:1234/v1
 
 # Test connection
-csm provider test lm-studio
+chasm provider test lm-studio
 
 # Import demo sessions
-csm provider import lm-studio --source examples/lm-studio/sessions
+chasm provider import lm-studio --source examples/lm-studio/sessions
 ```
+

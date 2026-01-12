@@ -549,7 +549,7 @@ csm harvest git restore <commit-hash>
 ## Project Structure
 
 ```tree
-copilot_chat_relink/
+ChatSessionManager/
 ├── .github/
 │   ├── workflows/     # CI/CD pipelines
 │   │   ├── rust-ci.yml       # Build, test, lint
@@ -557,19 +557,21 @@ copilot_chat_relink/
 │   │   ├── examples-ci.yml   # Example validation
 │   │   └── release.yml       # Automated releases
 │   └── dependabot.yml # Dependency updates
-├── csm-rust/          # Rust implementation (main)
+├── csm-rust/          # Rust CLI implementation (chasm)
 │   ├── src/           # Source code
-│   ├── examples/      # Library and script examples
-│   │   ├── *.rs       # Rust example files
-│   │   └── scripts/   # Cross-platform shell scripts
+│   ├── examples/      # Rust library examples
 │   ├── tests/         # Integration tests
 │   └── README.md      # Rust-specific docs
+├── csm-web/           # React web interface
+│   └── README.md      # Web UI docs
+├── csm-app/           # React Native mobile app
+│   └── README.md      # Mobile app docs
 ├── vscode-extension/  # VS Code GUI extension
 │   ├── src/           # TypeScript source
 │   ├── out/           # Compiled JavaScript
 │   └── README.md      # Extension docs
-├── demo_project/      # Demo workspace for testing
-├── scripts/           # Demo and example scripts
+├── examples/          # Provider-specific session examples
+├── docs/              # Additional documentation
 └── archive/           # Legacy Python implementation
 ```
 
