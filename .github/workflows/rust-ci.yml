@@ -4,12 +4,12 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'csm-rust/**'
+      - 'chasm-rust/**'
       - '.github/workflows/rust-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'csm-rust/**'
+      - 'chasm-rust/**'
       - '.github/workflows/rust-ci.yml'
   workflow_dispatch:
 
@@ -54,30 +54,30 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            csm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('csm-rust/Cargo.lock') }}
+            chasm-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Build
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo build --release --all-features
 
       - name: Run unit tests
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo test --release --all-features -- --nocapture
 
       - name: Run CLI integration tests
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo test --test cli_integration_tests --release -- --nocapture
 
       - name: Run browser tests
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo test --test browser_tests --release -- --nocapture
         continue-on-error: true  # May have different browser availability
 
       - name: Run harvest tests
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo test --test harvest_tests --release -- --nocapture
 
       - name: Upload binary artifact
@@ -85,8 +85,8 @@ jobs:
         with:
           name: csm-${{ matrix.os }}
           path: |
-            csm-rust/target/release/csm
-            csm-rust/target/release/csm.exe
+            chasm-rust/target/release/csm
+            chasm-rust/target/release/csm.exe
           if-no-files-found: ignore
 
   # ==========================================================================
@@ -105,11 +105,11 @@ jobs:
           components: rustfmt, clippy
 
       - name: Check formatting
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo clippy --all-features -- -D warnings
         continue-on-error: true  # Don't fail on clippy warnings for now
 
@@ -135,38 +135,38 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            csm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('csm-rust/Cargo.lock') }}
+            chasm-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
 
       - name: Build all examples
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo build --examples
 
       - name: Run local_providers example
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo run --example local_providers
         continue-on-error: true  # May fail if no VS Code data
 
       - name: Run cloud_providers example
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo run --example cloud_providers
 
       - name: Run basic_usage example
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo run --example basic_usage
         continue-on-error: true
 
       - name: Run session_operations example
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo run --example session_operations
         continue-on-error: true
 
       - name: Run history_management example
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo run --example history_management
         continue-on-error: true
 
       - name: Run storage_operations example
-        working-directory: csm-rust
+        working-directory: chasm-rust
         run: cargo run --example storage_operations
         continue-on-error: true
