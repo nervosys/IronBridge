@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please report it by emailing **<security@nervosys.com>**.
+If you discover a security vulnerability, please report it by emailing **<security@nervosys.ai>**.
 
 Please include:
 
