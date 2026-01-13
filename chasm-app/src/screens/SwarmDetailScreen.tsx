@@ -326,16 +326,16 @@ export function SwarmDetailScreen({ route, navigation }: Props) {
                     </Text>
                 )}
                 <View style={styles.agentCapabilities}>
-                    {item.capabilities.slice(0, 3).map((cap, index) => (
+                    {(item.capabilities || []).slice(0, 3).map((cap, index) => (
                         <View key={index} style={[styles.capabilityChip, { backgroundColor: colors.background }]}>
                             <Text style={[styles.capabilityText, { color: colors.textTertiary }]}>
                                 {cap.replace('_', ' ')}
                             </Text>
                         </View>
                     ))}
-                    {item.capabilities.length > 3 && (
+                    {(item.capabilities || []).length > 3 && (
                         <Text style={[styles.moreCapabilities, { color: colors.textTertiary }]}>
-                            +{item.capabilities.length - 3}
+                            +{(item.capabilities || []).length - 3}
                         </Text>
                     )}
                 </View>

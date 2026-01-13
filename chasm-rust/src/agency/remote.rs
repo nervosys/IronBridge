@@ -75,7 +75,6 @@ pub enum NodeStatus {
     Unknown,
 }
 
-
 /// Hardware information for a node
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HardwareInfo {
@@ -186,7 +185,6 @@ pub enum TaskPriority {
     High = 2,
     Critical = 3,
 }
-
 
 /// Task result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -303,29 +301,64 @@ pub enum RemoteEvent {
     /// Node went offline
     NodeOffline(NodeId),
     /// Node status changed
-    NodeStatusChanged { node_id: NodeId, old_status: NodeStatus, new_status: NodeStatus },
+    NodeStatusChanged {
+        node_id: NodeId,
+        old_status: NodeStatus,
+        new_status: NodeStatus,
+    },
     /// Node heartbeat received
-    NodeHeartbeat { node_id: NodeId, timestamp: DateTime<Utc> },
-    
+    NodeHeartbeat {
+        node_id: NodeId,
+        timestamp: DateTime<Utc>,
+    },
+
     /// Task was created/queued (boxed to reduce enum size)
     TaskCreated(Box<RemoteTask>),
     /// Task started running
-    TaskStarted { task_id: RemoteTaskId, node_id: NodeId },
+    TaskStarted {
+        task_id: RemoteTaskId,
+        node_id: NodeId,
+    },
     /// Task progress updated
-    TaskProgress { task_id: RemoteTaskId, progress: f32, message: Option<String> },
+    TaskProgress {
+        task_id: RemoteTaskId,
+        progress: f32,
+        message: Option<String>,
+    },
     /// Task step completed
-    TaskStepCompleted { task_id: RemoteTaskId, step: u32, total: u32, description: Option<String> },
+    TaskStepCompleted {
+        task_id: RemoteTaskId,
+        step: u32,
+        total: u32,
+        description: Option<String>,
+    },
     /// Task completed successfully
-    TaskCompleted { task_id: RemoteTaskId, result: TaskResult },
+    TaskCompleted {
+        task_id: RemoteTaskId,
+        result: TaskResult,
+    },
     /// Task failed
-    TaskFailed { task_id: RemoteTaskId, error: String },
+    TaskFailed {
+        task_id: RemoteTaskId,
+        error: String,
+    },
     /// Task was cancelled
-    TaskCancelled { task_id: RemoteTaskId, reason: Option<String> },
+    TaskCancelled {
+        task_id: RemoteTaskId,
+        reason: Option<String>,
+    },
     /// Task log entry added
-    TaskLog { task_id: RemoteTaskId, entry: TaskLogEntry },
-    
+    TaskLog {
+        task_id: RemoteTaskId,
+        entry: TaskLogEntry,
+    },
+
     /// Agent registered on node
-    AgentRegistered { node_id: NodeId, agent_id: String, agent_name: String },
+    AgentRegistered {
+        node_id: NodeId,
+        agent_id: String,
+        agent_name: String,
+    },
     /// Agent unregistered from node
     AgentUnregistered { node_id: NodeId, agent_id: String },
 }
@@ -388,7 +421,7 @@ impl RemoteMonitor {
     /// Create a new remote monitor
     pub fn new(config: RemoteMonitorConfig) -> Self {
         let (event_tx, _) = broadcast::channel(1000);
-        
+
         Self {
             config,
             nodes: Arc::new(RwLock::new(HashMap::new())),
@@ -407,7 +440,7 @@ impl RemoteMonitor {
         let node_id = node.id.clone();
         let mut nodes = self.nodes.write().await;
         nodes.insert(node_id.clone(), node);
-        
+
         let _ = self.event_tx.send(RemoteEvent::NodeOnline(node_id));
         Ok(())
     }
@@ -416,18 +449,20 @@ impl RemoteMonitor {
     pub async fn unregister_node(&self, node_id: &str) -> Result<bool, RemoteMonitorError> {
         let mut nodes = self.nodes.write().await;
         let removed = nodes.remove(node_id).is_some();
-        
+
         if removed {
-            let _ = self.event_tx.send(RemoteEvent::NodeOffline(node_id.to_string()));
+            let _ = self
+                .event_tx
+                .send(RemoteEvent::NodeOffline(node_id.to_string()));
         }
-        
+
         Ok(removed)
     }
 
     /// Update node heartbeat
     pub async fn heartbeat(&self, node_id: &str) -> Result<(), RemoteMonitorError> {
         let mut nodes = self.nodes.write().await;
-        
+
         if let Some(node) = nodes.get_mut(node_id) {
             node.last_heartbeat = Utc::now();
             if node.status == NodeStatus::Offline || node.status == NodeStatus::Unknown {
@@ -464,7 +499,8 @@ impl RemoteMonitor {
     /// List nodes by status
     pub async fn list_nodes_by_status(&self, status: NodeStatus) -> Vec<RemoteNode> {
         let nodes = self.nodes.read().await;
-        nodes.values()
+        nodes
+            .values()
             .filter(|n| n.status == status)
             .cloned()
             .collect()
@@ -479,11 +515,11 @@ impl RemoteMonitor {
                 return Err(RemoteMonitorError::NodeNotFound(task.node_id.clone()));
             }
         }
-        
+
         let task_id = task.id.clone();
         let mut tasks = self.tasks.write().await;
         tasks.insert(task_id.clone(), task.clone());
-        
+
         let _ = self.event_tx.send(RemoteEvent::TaskCreated(Box::new(task)));
         Ok(task_id)
     }
@@ -495,11 +531,11 @@ impl RemoteMonitor {
         status: RemoteTaskStatus,
     ) -> Result<(), RemoteMonitorError> {
         let mut tasks = self.tasks.write().await;
-        
+
         if let Some(task) = tasks.get_mut(task_id) {
             let old_status = task.status;
             task.status = status;
-            
+
             match status {
                 RemoteTaskStatus::Running if old_status != RemoteTaskStatus::Running => {
                     let _ = self.event_tx.send(RemoteEvent::TaskStarted {
@@ -511,12 +547,14 @@ impl RemoteMonitor {
                     task.completed_at = Some(Utc::now());
                     task.progress = 1.0;
                 }
-                RemoteTaskStatus::Failed | RemoteTaskStatus::Cancelled | RemoteTaskStatus::TimedOut => {
+                RemoteTaskStatus::Failed
+                | RemoteTaskStatus::Cancelled
+                | RemoteTaskStatus::TimedOut => {
                     task.completed_at = Some(Utc::now());
                 }
                 _ => {}
             }
-            
+
             Ok(())
         } else {
             Err(RemoteMonitorError::TaskNotFound(task_id.to_string()))
@@ -531,17 +569,17 @@ impl RemoteMonitor {
         message: Option<String>,
     ) -> Result<(), RemoteMonitorError> {
         let mut tasks = self.tasks.write().await;
-        
+
         if let Some(task) = tasks.get_mut(task_id) {
             task.progress = progress.clamp(0.0, 1.0);
             task.progress_message = message.clone();
-            
+
             let _ = self.event_tx.send(RemoteEvent::TaskProgress {
                 task_id: task_id.to_string(),
                 progress: task.progress,
                 message,
             });
-            
+
             Ok(())
         } else {
             Err(RemoteMonitorError::TaskNotFound(task_id.to_string()))
@@ -557,19 +595,19 @@ impl RemoteMonitor {
         description: Option<String>,
     ) -> Result<(), RemoteMonitorError> {
         let mut tasks = self.tasks.write().await;
-        
+
         if let Some(task) = tasks.get_mut(task_id) {
             task.current_step = Some(step);
             task.total_steps = Some(total);
             task.progress = step as f32 / total as f32;
-            
+
             let _ = self.event_tx.send(RemoteEvent::TaskStepCompleted {
                 task_id: task_id.to_string(),
                 step,
                 total,
                 description,
             });
-            
+
             Ok(())
         } else {
             Err(RemoteMonitorError::TaskNotFound(task_id.to_string()))
@@ -584,7 +622,7 @@ impl RemoteMonitor {
     ) -> Result<(), RemoteMonitorError> {
         let node_id = {
             let mut tasks = self.tasks.write().await;
-            
+
             if let Some(task) = tasks.get_mut(task_id) {
                 task.status = RemoteTaskStatus::Completed;
                 task.completed_at = Some(Utc::now());
@@ -595,30 +633,26 @@ impl RemoteMonitor {
                 return Err(RemoteMonitorError::TaskNotFound(task_id.to_string()));
             }
         };
-        
+
         // Update node task count
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.get_mut(&node_id) {
             node.running_tasks = node.running_tasks.saturating_sub(1);
         }
-        
+
         let _ = self.event_tx.send(RemoteEvent::TaskCompleted {
             task_id: task_id.to_string(),
             result,
         });
-        
+
         Ok(())
     }
 
     /// Fail a task
-    pub async fn fail_task(
-        &self,
-        task_id: &str,
-        error: String,
-    ) -> Result<(), RemoteMonitorError> {
+    pub async fn fail_task(&self, task_id: &str, error: String) -> Result<(), RemoteMonitorError> {
         let node_id = {
             let mut tasks = self.tasks.write().await;
-            
+
             if let Some(task) = tasks.get_mut(task_id) {
                 task.status = RemoteTaskStatus::Failed;
                 task.completed_at = Some(Utc::now());
@@ -628,18 +662,18 @@ impl RemoteMonitor {
                 return Err(RemoteMonitorError::TaskNotFound(task_id.to_string()));
             }
         };
-        
+
         // Update node task count
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.get_mut(&node_id) {
             node.running_tasks = node.running_tasks.saturating_sub(1);
         }
-        
+
         let _ = self.event_tx.send(RemoteEvent::TaskFailed {
             task_id: task_id.to_string(),
             error,
         });
-        
+
         Ok(())
     }
 
@@ -651,7 +685,7 @@ impl RemoteMonitor {
     ) -> Result<(), RemoteMonitorError> {
         let node_id = {
             let mut tasks = self.tasks.write().await;
-            
+
             if let Some(task) = tasks.get_mut(task_id) {
                 task.status = RemoteTaskStatus::Cancelled;
                 task.completed_at = Some(Utc::now());
@@ -660,18 +694,18 @@ impl RemoteMonitor {
                 return Err(RemoteMonitorError::TaskNotFound(task_id.to_string()));
             }
         };
-        
+
         // Update node task count
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.get_mut(&node_id) {
             node.running_tasks = node.running_tasks.saturating_sub(1);
         }
-        
+
         let _ = self.event_tx.send(RemoteEvent::TaskCancelled {
             task_id: task_id.to_string(),
             reason,
         });
-        
+
         Ok(())
     }
 
@@ -682,21 +716,21 @@ impl RemoteMonitor {
         entry: TaskLogEntry,
     ) -> Result<(), RemoteMonitorError> {
         let mut tasks = self.tasks.write().await;
-        
+
         if let Some(task) = tasks.get_mut(task_id) {
             task.logs.push(entry.clone());
-            
+
             // Trim logs if over limit
             if task.logs.len() > self.config.max_log_entries {
                 let drain_count = task.logs.len() - self.config.max_log_entries;
                 task.logs.drain(0..drain_count);
             }
-            
+
             let _ = self.event_tx.send(RemoteEvent::TaskLog {
                 task_id: task_id.to_string(),
                 entry,
             });
-            
+
             Ok(())
         } else {
             Err(RemoteMonitorError::TaskNotFound(task_id.to_string()))
@@ -718,7 +752,8 @@ impl RemoteMonitor {
     /// List tasks by node
     pub async fn list_tasks_by_node(&self, node_id: &str) -> Vec<RemoteTask> {
         let tasks = self.tasks.read().await;
-        tasks.values()
+        tasks
+            .values()
             .filter(|t| t.node_id == node_id)
             .cloned()
             .collect()
@@ -727,7 +762,8 @@ impl RemoteMonitor {
     /// List tasks by status
     pub async fn list_tasks_by_status(&self, status: RemoteTaskStatus) -> Vec<RemoteTask> {
         let tasks = self.tasks.read().await;
-        tasks.values()
+        tasks
+            .values()
             .filter(|t| t.status == status)
             .cloned()
             .collect()
@@ -736,7 +772,8 @@ impl RemoteMonitor {
     /// List tasks by agent
     pub async fn list_tasks_by_agent(&self, agent_id: &str) -> Vec<RemoteTask> {
         let tasks = self.tasks.read().await;
-        tasks.values()
+        tasks
+            .values()
             .filter(|t| t.agent_id == agent_id)
             .cloned()
             .collect()
@@ -746,15 +783,30 @@ impl RemoteMonitor {
     pub async fn get_stats(&self) -> MonitorStats {
         let nodes = self.nodes.read().await;
         let tasks = self.tasks.read().await;
-        
-        let online_nodes = nodes.values().filter(|n| n.status == NodeStatus::Online).count();
+
+        let online_nodes = nodes
+            .values()
+            .filter(|n| n.status == NodeStatus::Online)
+            .count();
         let total_agents: u32 = nodes.values().map(|n| n.active_agents).sum();
-        
-        let running_tasks = tasks.values().filter(|t| t.status == RemoteTaskStatus::Running).count();
-        let queued_tasks = tasks.values().filter(|t| t.status == RemoteTaskStatus::Queued).count();
-        let completed_tasks = tasks.values().filter(|t| t.status == RemoteTaskStatus::Completed).count();
-        let failed_tasks = tasks.values().filter(|t| t.status == RemoteTaskStatus::Failed).count();
-        
+
+        let running_tasks = tasks
+            .values()
+            .filter(|t| t.status == RemoteTaskStatus::Running)
+            .count();
+        let queued_tasks = tasks
+            .values()
+            .filter(|t| t.status == RemoteTaskStatus::Queued)
+            .count();
+        let completed_tasks = tasks
+            .values()
+            .filter(|t| t.status == RemoteTaskStatus::Completed)
+            .count();
+        let failed_tasks = tasks
+            .values()
+            .filter(|t| t.status == RemoteTaskStatus::Failed)
+            .count();
+
         MonitorStats {
             total_nodes: nodes.len(),
             online_nodes,
@@ -771,7 +823,7 @@ impl RemoteMonitor {
     pub async fn check_node_timeouts(&self) {
         let timeout = chrono::Duration::seconds(self.config.node_timeout_secs as i64);
         let now = Utc::now();
-        
+
         let mut nodes = self.nodes.write().await;
         for node in nodes.values_mut() {
             if node.status == NodeStatus::Online && now - node.last_heartbeat > timeout {
@@ -841,23 +893,28 @@ impl RemoteAgentClient {
 
     /// Send heartbeat
     pub async fn heartbeat(&self) -> Result<(), RemoteMonitorError> {
-        let url = format!("{}/api/v1/nodes/{}/heartbeat", self.server_url, self.node_id);
-        
+        let url = format!(
+            "{}/api/v1/nodes/{}/heartbeat",
+            self.server_url, self.node_id
+        );
+
         let mut request = self.client.post(&url);
         if let Some(ref token) = self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
-        
-        let response = request.send().await
+
+        let response = request
+            .send()
+            .await
             .map_err(|e| RemoteMonitorError::Network(e.to_string()))?;
-        
+
         if !response.status().is_success() {
             return Err(RemoteMonitorError::ApiError(
                 response.status().as_u16(),
                 response.text().await.unwrap_or_default(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -869,27 +926,29 @@ impl RemoteAgentClient {
         message: Option<&str>,
     ) -> Result<(), RemoteMonitorError> {
         let url = format!("{}/api/v1/tasks/{}/progress", self.server_url, task_id);
-        
+
         let body = serde_json::json!({
             "progress": progress,
             "message": message,
         });
-        
+
         let mut request = self.client.post(&url).json(&body);
         if let Some(ref token) = self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
-        
-        let response = request.send().await
+
+        let response = request
+            .send()
+            .await
             .map_err(|e| RemoteMonitorError::Network(e.to_string()))?;
-        
+
         if !response.status().is_success() {
             return Err(RemoteMonitorError::ApiError(
                 response.status().as_u16(),
                 response.text().await.unwrap_or_default(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -902,28 +961,30 @@ impl RemoteAgentClient {
         description: Option<&str>,
     ) -> Result<(), RemoteMonitorError> {
         let url = format!("{}/api/v1/tasks/{}/step", self.server_url, task_id);
-        
+
         let body = serde_json::json!({
             "step": step,
             "total": total,
             "description": description,
         });
-        
+
         let mut request = self.client.post(&url).json(&body);
         if let Some(ref token) = self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
-        
-        let response = request.send().await
+
+        let response = request
+            .send()
+            .await
             .map_err(|e| RemoteMonitorError::Network(e.to_string()))?;
-        
+
         if !response.status().is_success() {
             return Err(RemoteMonitorError::ApiError(
                 response.status().as_u16(),
                 response.text().await.unwrap_or_default(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -934,22 +995,24 @@ impl RemoteAgentClient {
         result: TaskResult,
     ) -> Result<(), RemoteMonitorError> {
         let url = format!("{}/api/v1/tasks/{}/complete", self.server_url, task_id);
-        
+
         let mut request = self.client.post(&url).json(&result);
         if let Some(ref token) = self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
-        
-        let response = request.send().await
+
+        let response = request
+            .send()
+            .await
             .map_err(|e| RemoteMonitorError::Network(e.to_string()))?;
-        
+
         if !response.status().is_success() {
             return Err(RemoteMonitorError::ApiError(
                 response.status().as_u16(),
                 response.text().await.unwrap_or_default(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -960,26 +1023,28 @@ impl RemoteAgentClient {
         error: &str,
     ) -> Result<(), RemoteMonitorError> {
         let url = format!("{}/api/v1/tasks/{}/fail", self.server_url, task_id);
-        
+
         let body = serde_json::json!({
             "error": error,
         });
-        
+
         let mut request = self.client.post(&url).json(&body);
         if let Some(ref token) = self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
-        
-        let response = request.send().await
+
+        let response = request
+            .send()
+            .await
             .map_err(|e| RemoteMonitorError::Network(e.to_string()))?;
-        
+
         if !response.status().is_success() {
             return Err(RemoteMonitorError::ApiError(
                 response.status().as_u16(),
                 response.text().await.unwrap_or_default(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -991,28 +1056,30 @@ impl RemoteAgentClient {
         message: &str,
     ) -> Result<(), RemoteMonitorError> {
         let url = format!("{}/api/v1/tasks/{}/log", self.server_url, task_id);
-        
+
         let body = serde_json::json!({
             "level": level,
             "message": message,
             "timestamp": Utc::now(),
         });
-        
+
         let mut request = self.client.post(&url).json(&body);
         if let Some(ref token) = self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
-        
-        let response = request.send().await
+
+        let response = request
+            .send()
+            .await
             .map_err(|e| RemoteMonitorError::Network(e.to_string()))?;
-        
+
         if !response.status().is_success() {
             return Err(RemoteMonitorError::ApiError(
                 response.status().as_u16(),
                 response.text().await.unwrap_or_default(),
             ));
         }
-        
+
         Ok(())
     }
 }
@@ -1028,7 +1095,11 @@ pub struct RemoteTaskBuilder {
 
 impl RemoteTaskBuilder {
     /// Create a new task builder
-    pub fn new(id: impl Into<String>, node_id: impl Into<String>, agent_id: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        node_id: impl Into<String>,
+        agent_id: impl Into<String>,
+    ) -> Self {
         Self {
             task: RemoteTask {
                 id: id.into(),
@@ -1177,7 +1248,7 @@ mod tests {
     async fn test_remote_monitor_creation() {
         let config = RemoteMonitorConfig::default();
         let monitor = RemoteMonitor::new(config);
-        
+
         let stats = monitor.get_stats().await;
         assert_eq!(stats.total_nodes, 0);
         assert_eq!(stats.total_tasks, 0);
@@ -1186,7 +1257,7 @@ mod tests {
     #[tokio::test]
     async fn test_node_registration() {
         let monitor = RemoteMonitor::new(RemoteMonitorConfig::default());
-        
+
         let node = RemoteNode {
             id: "test-node".to_string(),
             name: "Test Node".to_string(),
@@ -1200,9 +1271,9 @@ mod tests {
             registered_at: Utc::now(),
             metadata: HashMap::new(),
         };
-        
+
         monitor.register_node(node).await.unwrap();
-        
+
         let retrieved = monitor.get_node("test-node").await;
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().name, "Test Node");
@@ -1211,7 +1282,7 @@ mod tests {
     #[tokio::test]
     async fn test_task_creation() {
         let monitor = RemoteMonitor::new(RemoteMonitorConfig::default());
-        
+
         // First register a node
         let node = RemoteNode {
             id: "test-node".to_string(),
@@ -1227,7 +1298,7 @@ mod tests {
             metadata: HashMap::new(),
         };
         monitor.register_node(node).await.unwrap();
-        
+
         // Create a task
         let task = RemoteTaskBuilder::new("task-1", "test-node", "agent-1")
             .agent_name("Test Agent")
@@ -1235,10 +1306,10 @@ mod tests {
             .description("A test task")
             .priority(TaskPriority::High)
             .build();
-        
+
         let task_id = monitor.create_task(task).await.unwrap();
         assert_eq!(task_id, "task-1");
-        
+
         let retrieved = monitor.get_task("task-1").await;
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().title, "Test Task");
@@ -1247,7 +1318,7 @@ mod tests {
     #[tokio::test]
     async fn test_task_progress() {
         let monitor = RemoteMonitor::new(RemoteMonitorConfig::default());
-        
+
         // Register node
         let node = RemoteNode {
             id: "node-1".to_string(),
@@ -1263,16 +1334,19 @@ mod tests {
             metadata: HashMap::new(),
         };
         monitor.register_node(node).await.unwrap();
-        
+
         // Create task
         let task = RemoteTaskBuilder::new("task-1", "node-1", "agent-1")
             .title("Progress Test")
             .build();
         monitor.create_task(task).await.unwrap();
-        
+
         // Update progress
-        monitor.update_task_progress("task-1", 0.5, Some("Halfway done".to_string())).await.unwrap();
-        
+        monitor
+            .update_task_progress("task-1", 0.5, Some("Halfway done".to_string()))
+            .await
+            .unwrap();
+
         let task = monitor.get_task("task-1").await.unwrap();
         assert!((task.progress - 0.5).abs() < 0.01);
         assert_eq!(task.progress_message, Some("Halfway done".to_string()));
@@ -1287,7 +1361,7 @@ mod tests {
             .priority(TaskPriority::Critical)
             .total_steps(5)
             .build();
-        
+
         assert_eq!(task.id, "task-123");
         assert_eq!(task.node_id, "node-1");
         assert_eq!(task.agent_id, "agent-1");

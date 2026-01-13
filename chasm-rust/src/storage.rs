@@ -203,6 +203,7 @@ pub fn add_session_to_index(
 }
 
 /// Remove a session from the VS Code index
+#[allow(dead_code)]
 pub fn remove_session_from_index(db_path: &Path, session_id: &str) -> Result<bool> {
     let mut index = read_chat_session_index(db_path)?;
     let removed = index.entries.remove(session_id).is_some();

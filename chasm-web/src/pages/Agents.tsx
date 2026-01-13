@@ -41,7 +41,6 @@ import {
     FlaskConical,
     Wifi,
     FolderOpen,
-    Edit2,
     BookOpen,
     Folder,
     Info,
@@ -60,7 +59,7 @@ import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm, useCreateAgent, useDele
 import { formatRelativeTime, formatTime, AGENT_ROLES } from '@csm/shared';
 import { AgentInbox } from '../components/AgentInbox';
 import type { Agent, Swarm, SwarmStatus } from '../api/types';
-import type { SweProject, SweMemory, SweRule, SweMemoryCategory, SweRuleCategory } from '@csm/shared';
+import type { SweProject, SweMemory, SweRule, SweMemoryCategory } from '@csm/shared';
 
 // SWE Memory API base URL
 const SWE_API_BASE = 'http://localhost:8787/api/v1';
@@ -356,7 +355,7 @@ export default function Agents() {
     const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
     const [newAgentName, setNewAgentName] = useState('');
     const [newAgentDescription, setNewAgentDescription] = useState('');
-    const [newAgentRole, setNewAgentRole] = useState('custom');
+    const [newAgentRole, setNewAgentRole] = useState<import('@csm/shared').AgentRole>('custom');
     const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<string | null>(null);
 
     // ==================== AGENTS DATA ====================
@@ -495,7 +494,7 @@ export default function Agents() {
         await createAgent.mutate({
             name: newAgentName.trim(),
             description: newAgentDescription.trim() || template?.description || undefined,
-            role: template?.role || newAgentRole,
+            role: (template?.role || newAgentRole) as import('@csm/shared').AgentRole,
         });
 
         setShowCreateAgentModal(false);
@@ -515,7 +514,7 @@ export default function Agents() {
                 setSelectedAgentTemplate(templateId);
                 setNewAgentName(template.name);
                 setNewAgentDescription(template.description);
-                setNewAgentRole(template.role);
+                setNewAgentRole(template.role as import('@csm/shared').AgentRole);
             }
         }
     };
@@ -978,7 +977,7 @@ export default function Agents() {
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Role</label>
                                 <select
                                     value={newAgentRole}
-                                    onChange={(e) => setNewAgentRole(e.target.value)}
+                                    onChange={(e) => setNewAgentRole(e.target.value as import('@csm/shared').AgentRole)}
                                     className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
                                 >
                                     {agentRoles.map(role => (
@@ -1473,8 +1472,8 @@ function SWETab({
                 <button
                     onClick={() => setSweSubTab('agents')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${sweSubTab === 'agents'
-                            ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
-                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
                         }`}
                 >
                     <Bot size={16} className="inline mr-2" />
@@ -1483,8 +1482,8 @@ function SWETab({
                 <button
                     onClick={() => setSweSubTab('memory')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${sweSubTab === 'memory'
-                            ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
-                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
                         }`}
                 >
                     <Brain size={16} className="inline mr-2" />
@@ -1493,8 +1492,8 @@ function SWETab({
                 <button
                     onClick={() => setSweSubTab('rules')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${sweSubTab === 'rules'
-                            ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
-                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
                         }`}
                 >
                     <BookOpen size={16} className="inline mr-2" />
@@ -1695,9 +1694,9 @@ function SWETab({
                             {rules.slice(0, 8).map(rule => (
                                 <div key={rule.id} className="bg-[hsl(var(--card))] rounded-lg p-3 border flex items-start gap-3">
                                     <div className={`px-2 py-0.5 rounded text-xs font-medium ${rule.category === 'constraint' ? 'bg-red-500/10 text-red-400' :
-                                            rule.category === 'requirement' ? 'bg-green-500/10 text-green-400' :
-                                                rule.category === 'security' ? 'bg-yellow-500/10 text-yellow-400' :
-                                                    'bg-blue-500/10 text-blue-400'
+                                        rule.category === 'requirement' ? 'bg-green-500/10 text-green-400' :
+                                            rule.category === 'security' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                'bg-blue-500/10 text-blue-400'
                                         }`}>
                                         {rule.category}
                                     </div>

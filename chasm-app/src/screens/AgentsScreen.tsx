@@ -295,7 +295,7 @@ export function AgentsScreen({ navigation }: Props) {
     const stats = useMemo(() => {
         const totalTokens = runs.reduce((acc, run) => acc + (run.tokensUsed || 0), 0);
         const totalMessages = runs.reduce((acc, run) => acc + run.messages.length, 0);
-        const runningAgents = agents.filter(a => a.status === 'running').length;
+        const runningAgents = agents.filter(a => a.status === 'executing' || a.status === 'thinking').length;
         const uniqueProviders = new Set(agents.map(a => a.providerId).filter(Boolean));
 
         return {
@@ -348,7 +348,7 @@ export function AgentsScreen({ navigation }: Props) {
                         const agent = addAgent(
                             `${agentTemplate.name} ${index + 1}`,
                             role,
-                            agentTemplate.description
+                            agentTemplate.description || ''
                         );
                     }
                 });
@@ -401,7 +401,7 @@ export function AgentsScreen({ navigation }: Props) {
         updateAgent({
             ...editingAgent,
             name: editAgentName.trim(),
-            description: editAgentDescription.trim() || undefined,
+            description: editAgentDescription.trim() || null,
         });
 
         setShowEditAgentModal(false);
@@ -649,7 +649,7 @@ export function AgentsScreen({ navigation }: Props) {
                                         setSelectedTemplate(selectedTemplate === index ? null : index);
                                         if (selectedTemplate !== index) {
                                             setNewName(template.name);
-                                            setNewDescription(template.description);
+                                            setNewDescription(template.description || '');
                                         }
                                     }}
                                 >
@@ -773,7 +773,7 @@ export function AgentsScreen({ navigation }: Props) {
                                         setSelectedTemplate(selectedTemplate === index ? null : index);
                                         if (selectedTemplate !== index) {
                                             setNewName(template.name);
-                                            setNewDescription(template.description);
+                                            setNewDescription(template.description || '');
                                         }
                                     }}
                                 >
@@ -878,7 +878,7 @@ export function AgentsScreen({ navigation }: Props) {
                         </View>
                     </View>
                     <View style={styles.agentCardActions}>
-                        {agent.status === 'running' && (
+                        {(agent.status === 'executing' || agent.status === 'thinking') && (
                             <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#FF950020' }]}>
                                 <Ionicons name="pause-circle-outline" size={18} color="#FF9500" />
                             </TouchableOpacity>
@@ -889,7 +889,7 @@ export function AgentsScreen({ navigation }: Props) {
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
-                            style={[styles.actionButton, { backgroundColor: colors.cardHover || colors.border }]}
+                            style={[styles.actionButton, { backgroundColor: colors.surface || colors.border }]}
                             onPress={() => handleEditAgent(agent)}
                         >
                             <Ionicons name="settings-outline" size={18} color={colors.text} />
@@ -1707,6 +1707,10 @@ const styles = StyleSheet.create({
     modalContent: {
         flex: 1,
         padding: 16,
+    },
+    modalBody: {
+        flex: 1,
+        paddingHorizontal: 16,
     },
     inputGroup: {
         marginBottom: 16,

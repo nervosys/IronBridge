@@ -224,7 +224,7 @@ export function formatSwarmAsMarkdown(swarm: AgentSwarm, options?: ExportOptions
             md += `\n${agent.description}\n`;
         }
         md += '\n**Capabilities:**\n';
-        agent.capabilities.forEach(cap => {
+        (agent.capabilities || []).forEach(cap => {
             md += `- ${cap.replace('_', ' ')}\n`;
         });
         md += '\n';

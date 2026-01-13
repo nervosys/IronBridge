@@ -49,15 +49,17 @@ export interface Agent {
     id: string;
     name: string;
     role: AgentRole;
-    description: string;
+    description?: string | null;
     model?: string;
     providerId?: string;
     providerType?: ChatProviderType;
     systemPrompt?: string;
     status: AgentStatus;
-    capabilities: string[];
+    tools?: string[];
+    capabilities?: string[];
     currentTaskId?: string;
-    messageCount: number;
+    messageCount?: number;
+    tokensUsed?: number;
     // Authentication
     auth?: AgentAuthConfig;
     createdAt: number;

@@ -645,6 +645,7 @@ export interface Agent {
     status: AgentStatus;
     currentTaskId?: string;
     messageCount?: number;
+    tokensUsed?: number;
     createdAt: number;
     updatedAt: number;
     metadata?: Record<string, unknown> | null;

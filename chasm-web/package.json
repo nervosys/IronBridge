@@ -1,5 +1,5 @@
 {
-  "name": "csm-web",
+  "name": "chasm-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@csm/shared": "file:../csm-shared",
+    "@csm/shared": "file:../chasm-shared",
     "@tailwindcss/vite": "^4.1.18",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.560.0",
