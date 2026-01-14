@@ -39,7 +39,7 @@ A fast, cross-platform CLI tool for managing chat sessions across workspaces and
 
 | Provider     | Share Links | Browser Auth | Endpoint                        |
 | ------------ | :---------: | :----------: | ------------------------------- |
-| ChatGPT      |      ✅      |      ✅       | `https://chat.openai.com`       |
+| ChatGPT      |      ✅      |      ✅       | `https://chatgpt.com`           |
 | Claude       |      ✅      |      ✅       | `https://claude.ai`             |
 | Gemini       |      ✅      |      ✅       | `https://gemini.google.com`     |
 | Perplexity   |      ✅      |      ✅       | `https://www.perplexity.ai`     |
@@ -48,9 +48,8 @@ A fast, cross-platform CLI tool for managing chat sessions across workspaces and
 | HuggingChat  |      ❌      |      ✅       | `https://huggingface.co/chat`   |
 | Mistral      |      ❌      |      ✅       | `https://chat.mistral.ai`       |
 | Groq         |      ❌      |      ✅       | `https://groq.com`              |
-| Cohere Coral |      ❌      |      ✅       | `https://coral.cohere.com`      |
-| Phind        |      ❌      |      ✅       | `https://www.phind.com`         |
-| You.com      |      ❌      |      ✅       | `https://you.com/chat`          |
+| Cohere Coral |      ❌      |      ✅       | `https://dashboard.cohere.com`  |
+| You.com      |      ❌      |      ✅       | `https://you.com`               |
 | Pi           |      ❌      |      ✅       | `https://pi.ai`                 |
 | Character.AI |      ❌      |      ✅       | `https://character.ai`          |
 
@@ -622,7 +621,7 @@ CSM supports importing and managing chat sessions from multiple LLM providers:
 
 | Provider     | Import Method        | Endpoint                        |
 | ------------ | -------------------- | ------------------------------- |
-| ChatGPT      | Share Links, Browser | `https://chat.openai.com`       |
+| ChatGPT      | Share Links, Browser | `https://chatgpt.com`           |
 | Claude       | Share Links, Browser | `https://claude.ai`             |
 | Gemini       | Share Links, Browser | `https://gemini.google.com`     |
 | Perplexity   | Share Links, Browser | `https://www.perplexity.ai`     |

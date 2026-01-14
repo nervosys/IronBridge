@@ -8,18 +8,18 @@ const config = getDefaultConfig(projectRoot);
 
 // Watch the shared package for changes
 config.watchFolders = [
-    path.resolve(workspaceRoot, 'csm-shared'),
+    path.resolve(workspaceRoot, 'chasm-shared'),
 ];
 
 // Resolve @csm/shared to the local package
 config.resolver.nodeModulesPaths = [
     path.resolve(projectRoot, 'node_modules'),
-    path.resolve(workspaceRoot, 'csm-shared', 'node_modules'),
+    path.resolve(workspaceRoot, 'chasm-shared', 'node_modules'),
 ];
 
 // Add extra node_modules to look for
 config.resolver.extraNodeModules = {
-    '@csm/shared': path.resolve(workspaceRoot, 'csm-shared'),
+    '@csm/shared': path.resolve(workspaceRoot, 'chasm-shared'),
 };
 
 // Disable hierarchical lookup to avoid issues
