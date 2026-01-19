@@ -56,15 +56,16 @@ response = client.chat.completions.create(
 )
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure Jan provider
-csm provider config jan --endpoint http://localhost:1337/v1
+chasm provider config jan --endpoint http://localhost:1337/v1
 
 # Test connection
-csm provider test jan
+chasm provider test jan
 
 # Import demo sessions
-csm provider import jan --source examples/jan/sessions
+chasm provider import jan --source examples/jan/sessions
 ```
+

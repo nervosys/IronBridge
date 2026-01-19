@@ -45,20 +45,21 @@ curl https://<endpoint>.openai.azure.com/openai/deployments/<model>/chat/complet
   }'
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure Azure AI Foundry provider (local)
-csm provider config foundry --endpoint http://localhost:5272
+chasm provider config foundry --endpoint http://localhost:5272
 
 # Configure with API key (cloud)
-csm provider config foundry \
+chasm provider config foundry \
   --endpoint https://your-endpoint.openai.azure.com \
   --api-key YOUR_API_KEY
 
 # Test connection
-csm provider test foundry
+chasm provider test foundry
 
 # Import demo sessions
-csm provider import foundry --source examples/azure-foundry/sessions
+chasm provider import foundry --source examples/azure-foundry/sessions
 ```
+

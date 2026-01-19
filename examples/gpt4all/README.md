@@ -64,15 +64,16 @@ curl http://localhost:4891/v1/chat/completions \
 | nous-hermes-llama2  | 3.8 GB | Instructions   |
 | wizardlm-13b        | 7.3 GB | Complex tasks  |
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure GPT4All provider
-csm provider config gpt4all --endpoint http://localhost:4891/v1
+chasm provider config gpt4all --endpoint http://localhost:4891/v1
 
 # Test connection
-csm provider test gpt4all
+chasm provider test gpt4all
 
 # Import demo sessions
-csm provider import gpt4all --source examples/gpt4all/sessions
+chasm provider import gpt4all --source examples/gpt4all/sessions
 ```
+

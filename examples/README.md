@@ -7,21 +7,19 @@ Each subdirectory contains sample data in the format used by that provider.
 
 ```
 examples/
-├── copilot/           # GitHub Copilot (VS Code Chat)
-├── cursor/            # Cursor IDE
-├── ollama/            # Ollama local LLM
-├── vllm/              # vLLM server
 ├── azure-foundry/     # Azure AI Foundry
+├── copilot/           # GitHub Copilot (VS Code Chat)
+├── copilot_chat/      # Additional Copilot sessions
+├── cursor/            # Cursor IDE
+├── gpt4all/           # GPT4All
+├── jan/               # Jan.ai
+├── llamafile/         # Llamafile
 ├── lm-studio/         # LM Studio
 ├── localai/           # LocalAI
+├── ollama/            # Ollama local LLM
+├── sample-data/       # Sample session data
 ├── text-gen-webui/    # Text Generation WebUI
-├── jan/               # Jan.ai
-├── gpt4all/           # GPT4All
-├── llamafile/         # Llamafile
-├── openai/            # OpenAI API
-├── anthropic/         # Anthropic Claude
-├── chatgpt-export/    # ChatGPT export files
-└── custom/            # Custom provider template
+└── vllm/              # vLLM server
 ```
 
 ## Provider Types
@@ -60,28 +58,28 @@ These providers require API keys:
 
 ```bash
 # Import Copilot demo sessions
-csm provider import copilot --source examples/copilot
-
-# Import from ChatGPT export
-csm provider import chatgpt --source examples/chatgpt-export/conversations.json
+chasm provider import copilot --source examples/copilot/chatSessions
 
 # Import from Ollama history
-csm provider import ollama --source examples/ollama
+chasm provider import ollama --source examples/ollama/sessions
+
+# Import from other providers
+chasm provider import cursor --source examples/cursor/sessions
 ```
 
 ### Test Provider Connections
 
 ```bash
 # Test local provider
-csm provider test ollama
+chasm provider test ollama
 
 # Test with custom endpoint
-csm provider test lm-studio --endpoint http://localhost:1234/v1
+chasm provider test lm-studio --endpoint http://localhost:1234/v1
 ```
 
 ## Session Format
 
-Each provider may use a different session format. CSM normalizes these to a common format:
+Each provider may use a different session format. Chasm normalizes these to a common format:
 
 ```json
 {
@@ -104,3 +102,4 @@ Each provider may use a different session format. CSM normalizes these to a comm
   "model": "llama3.2"
 }
 ```
+

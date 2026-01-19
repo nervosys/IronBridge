@@ -54,15 +54,16 @@ ollama pull llama3.2
 ollama serve
 ```
 
-## Usage with CSM
+## Usage with chasm
 
 ```bash
 # Configure Ollama provider
-csm provider config ollama --endpoint http://localhost:11434
+chasm provider config ollama --endpoint http://localhost:11434
 
 # Test connection
-csm provider test ollama
+chasm provider test ollama
 
 # Import demo sessions
-csm provider import ollama --source examples/ollama/sessions
+chasm provider import ollama --source examples/ollama/sessions
 ```
+

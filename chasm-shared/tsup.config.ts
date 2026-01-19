@@ -1,0 +1,18 @@
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+    entry: {
+        index: 'src/index.ts',
+        'types/index': 'src/types/index.ts',
+        'api/index': 'src/api/index.ts',
+        'utils/index': 'src/utils/index.ts',
+        'sync/index': 'src/sync/index.ts',
+    },
+    format: ['cjs', 'esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    clean: true,
+    treeshake: true,
+    external: ['react', 'react-native'],
+});

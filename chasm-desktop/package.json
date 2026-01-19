@@ -1,0 +1,14 @@
+{
+  "name": "chasm-desktop",
+  "version": "1.0.0",
+  "description": "Chasm Desktop - Chat Session Manager",
+  "private": true,
+  "scripts": {
+    "dev": "cargo tauri dev",
+    "build": "cargo tauri build",
+    "tauri": "cargo tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
