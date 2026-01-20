@@ -226,33 +226,378 @@ chasm mcp serve
 
 ## 🤖 Agency (Agent Development Kit)
 
-Chasm includes an integrated agent development kit for building AI agents:
+**Agency** is Chasm's Rust-native framework for building, orchestrating, and deploying AI agents. It provides a complete toolkit for creating autonomous agents that can reason, use tools, and collaborate in multi-agent workflows.
+
+### Key Capabilities
+
+| Feature                         | Description                                             |
+| ------------------------------- | ------------------------------------------------------- |
+| 🏗️ **Code-First Agents**         | Define agents in Rust with type safety and performance  |
+| 🔧 **Tool Ecosystem**            | Built-in tools + custom function registration           |
+| 🎭 **Multi-Agent Orchestration** | Sequential, parallel, hierarchical, and swarm patterns  |
+| 🧠 **Memory & RAG**              | Vector store, knowledge base, context window management |
+| 📡 **Streaming**                 | Real-time response streaming via SSE                    |
+| 🏠 **Proactive Agents**          | Autonomous household and business agents                |
+| 🌐 **Distributed Execution**     | Remote task monitoring across machines                  |
+| 🎨 **Multimodal**                | VLM/VLA support for vision and robotics                 |
+
+### CLI Commands
 
 ```bash
-# List available agents
+# List available agents and roles
 chasm agency list
+chasm agency list --verbose
+
+# Get detailed agent information
+chasm agency info researcher
 
 # Run an agent with a prompt
 chasm agency run --agent researcher "What are the latest trends in AI?"
+chasm agency run --agent coder --model gpt-4o "Write a REST API in Rust"
+
+# Multi-agent orchestration
+chasm agency run --orchestration sequential "Build and test a web scraper"
+chasm agency run --orchestration parallel "Research AI, blockchain, and quantum computing"
+chasm agency run --orchestration swarm "Design a microservices architecture"
 
 # Create a custom agent
-chasm agency create my-agent --role coder --instruction "You are a helpful coding assistant"
+chasm agency create my-agent --role coder --instruction "You are a Rust expert"
 
 # List available tools and templates
 chasm agency tools
 chasm agency templates
+chasm agency modes
 ```
 
 ### Agent Roles
 
-- `coordinator` - Orchestrates other agents
-- `researcher` - Information gathering and analysis
-- `coder` - Code generation and modification
-- `reviewer` - Code review and quality assurance
-- `executor` - Task execution
-- `writer` - Documentation and content
-- `tester` - Testing and validation
-- `custom` - User-defined role
+| Role          | Icon | Description                                 |
+| ------------- | ---- | ------------------------------------------- |
+| `coordinator` | [C]  | Manages and delegates tasks to other agents |
+| `researcher`  | [R]  | Gathers information and analyzes data       |
+| `coder`       | [D]  | Writes and modifies code                    |
+| `reviewer`    | [V]  | Reviews code and provides feedback          |
+| `executor`    | [E]  | Executes commands and tools                 |
+| `writer`      | [W]  | Creates documentation and content           |
+| `tester`      | [T]  | Writes and runs tests                       |
+| `analyst`     | [A]  | Data analysis and insights                  |
+| `household`   | [H]  | Home automation and management              |
+| `business`    | [B]  | Business process automation                 |
+| `custom`      | [X]  | User-defined agent with custom behavior     |
+
+### Orchestration Modes
+
+| Mode           | Pattern | Description                                       |
+| -------------- | ------- | ------------------------------------------------- |
+| `single`       | `[1]`   | Traditional single-agent response                 |
+| `sequential`   | `[>]`   | Agents execute one after another, passing results |
+| `parallel`     | `[‖]`   | Multiple agents work simultaneously on subtasks   |
+| `loop`         | `[O]`   | Agent repeats until a condition is met            |
+| `hierarchical` | `[H]`   | Lead agent delegates to specialized sub-agents    |
+| `swarm`        | `[S]`   | Multiple agents collaborate with a coordinator    |
+
+---
+
+## 📚 Agency Use Cases
+
+### 1. Research Assistant
+
+Build an agent that searches the web, analyzes sources, and synthesizes findings:
+
+```rust
+use chasm::agency::{AgentBuilder, Runtime, Tool};
+
+let researcher = AgentBuilder::new("researcher")
+    .model("gemini-2.0-flash")
+    .instruction("You are a research assistant. Search for information, 
+                  analyze multiple sources, and provide comprehensive summaries 
+                  with citations.")
+    .tool(Tool::web_search())
+    .tool(Tool::file_write())
+    .temperature(0.5)
+    .build();
+
+let runtime = Runtime::new();
+let result = runtime.run(&researcher, "What are the latest breakthroughs in fusion energy?").await?;
+```
+
+**CLI equivalent:**
+```bash
+chasm agency run --agent researcher "What are the latest breakthroughs in fusion energy?"
+```
+
+### 2. Code Review Pipeline
+
+Chain multiple agents for thorough code review:
+
+```rust
+use chasm::agency::{Pipeline, AgentBuilder, OrchestrationType};
+
+// Security reviewer
+let security = AgentBuilder::new("security-reviewer")
+    .role(AgentRole::Reviewer)
+    .instruction("Review code for security vulnerabilities: injection, XSS, 
+                  authentication issues, secrets exposure.")
+    .build();
+
+// Performance reviewer
+let performance = AgentBuilder::new("perf-reviewer")
+    .role(AgentRole::Reviewer)
+    .instruction("Analyze code for performance issues: N+1 queries, 
+                  memory leaks, inefficient algorithms.")
+    .build();
+
+// Style reviewer
+let style = AgentBuilder::new("style-reviewer")
+    .role(AgentRole::Reviewer)
+    .instruction("Check code style, naming conventions, and documentation.")
+    .build();
+
+// Sequential pipeline: security → performance → style
+let pipeline = Pipeline::sequential(vec![security, performance, style]);
+let result = runtime.run_pipeline(&pipeline, code_to_review).await?;
+```
+
+**CLI equivalent:**
+```bash
+chasm agency run --orchestration sequential "Review this code: [paste code]"
+```
+
+### 3. Full-Stack Development Swarm
+
+A coordinator delegates to specialized agents:
+
+```rust
+use chasm::agency::{Swarm, AgentBuilder, AgentRole};
+
+// Coordinator
+let coordinator = AgentBuilder::new("lead-dev")
+    .role(AgentRole::Coordinator)
+    .instruction("You are a tech lead. Break down tasks and delegate to:
+                  - frontend-dev: React/TypeScript UI work
+                  - backend-dev: Rust API development
+                  - devops: Docker, CI/CD, deployment")
+    .build();
+
+// Specialist agents
+let frontend = AgentBuilder::new("frontend-dev")
+    .role(AgentRole::Coder)
+    .instruction("Expert in React, TypeScript, TailwindCSS")
+    .tool(Tool::file_read())
+    .tool(Tool::file_write())
+    .build();
+
+let backend = AgentBuilder::new("backend-dev")
+    .role(AgentRole::Coder)
+    .instruction("Expert in Rust, Actix-web, SQLite")
+    .tool(Tool::file_read())
+    .tool(Tool::file_write())
+    .tool(Tool::terminal())
+    .build();
+
+let devops = AgentBuilder::new("devops")
+    .role(AgentRole::Executor)
+    .instruction("Expert in Docker, GitHub Actions, cloud deployment")
+    .tool(Tool::terminal())
+    .build();
+
+let swarm = Swarm::new(coordinator, vec![frontend, backend, devops]);
+let result = runtime.run_swarm(&swarm, "Build a user authentication system").await?;
+```
+
+**CLI equivalent:**
+```bash
+chasm agency run --orchestration swarm "Build a user authentication system"
+```
+
+### 4. Automated Testing Agent
+
+An agent that writes and runs tests:
+
+```rust
+use chasm::agency::{AgentBuilder, AgentRole, Tool};
+
+let tester = AgentBuilder::new("test-writer")
+    .role(AgentRole::Tester)
+    .instruction("You write comprehensive tests. For each function:
+                  1. Identify edge cases and boundary conditions
+                  2. Write unit tests with clear assertions
+                  3. Add integration tests where appropriate
+                  4. Run tests and fix failures")
+    .tool(Tool::file_read())
+    .tool(Tool::file_write())
+    .tool(Tool::terminal())  // For running tests
+    .max_tool_calls(20)
+    .build();
+
+let result = runtime.run(&tester, "Write tests for src/auth/login.rs").await?;
+```
+
+### 5. Proactive Household Agent
+
+An autonomous agent that monitors and manages home tasks:
+
+```rust
+use chasm::agency::{ProactiveMonitor, household_agent_config, PermissionLevel};
+
+let config = household_agent_config()
+    .permission_level(PermissionLevel::MediumRisk)  // Can take moderate actions
+    .scan_interval(Duration::from_secs(3600))       // Check hourly
+    .notifications_enabled(true)
+    .integrations(vec!["google_calendar", "todoist", "smart_home"]);
+
+let monitor = ProactiveMonitor::new(config);
+
+// Monitor detects problems and takes action based on permission level:
+// - NotifyOnly: Just alerts (bills due, maintenance needed)
+// - LowRisk: Safe actions (add reminders, reorder supplies)
+// - MediumRisk: Moderate actions (adjust thermostat, schedule services)
+// - HighAutonomy: Full automation (pay bills, control devices)
+
+monitor.start().await?;
+```
+
+### 6. RAG-Enhanced Agent
+
+Agent with access to a knowledge base:
+
+```rust
+use chasm::agency::{AgentBuilder, KnowledgeBase, VectorStore, EmbeddingModel};
+
+// Create knowledge base from documents
+let mut kb = KnowledgeBase::new();
+kb.add_documents_from_directory("./docs").await?;
+
+// Vector store for semantic search
+let store = VectorStore::new(VectorStoreConfig {
+    embedding_model: EmbeddingModel::TextEmbedding3Small,
+    similarity_metric: SimilarityMetric::Cosine,
+    ..Default::default()
+});
+
+let expert = AgentBuilder::new("domain-expert")
+    .instruction("Answer questions using the provided knowledge base. 
+                  Always cite sources.")
+    .knowledge_base(kb)
+    .vector_store(store)
+    .build();
+
+let result = runtime.run(&expert, "What is our refund policy?").await?;
+```
+
+### 7. Multimodal Vision Agent (VLM)
+
+Agent that can understand images:
+
+```rust
+use chasm::agency::{AgentBuilder, MultimodalMessage, ImageContent, ModelCategory};
+
+let vision_agent = AgentBuilder::new("vision-analyst")
+    .model("gemini-2.0-flash")  // VLM model
+    .instruction("Analyze images and provide detailed descriptions.")
+    .modality(ModelCategory::VLM)
+    .build();
+
+// Send image with text
+let message = MultimodalMessage::new()
+    .text("What's in this image?")
+    .image(ImageContent::from_file("screenshot.png")?);
+
+let result = runtime.run(&vision_agent, message).await?;
+```
+
+### 8. Distributed Task Monitoring
+
+Track agent tasks across multiple machines:
+
+```rust
+use chasm::agency::{RemoteMonitor, RemoteTask, TaskPriority};
+
+let monitor = RemoteMonitor::new(RemoteMonitorConfig {
+    heartbeat_interval: Duration::from_secs(30),
+    ..Default::default()
+});
+
+// Register remote nodes
+monitor.register_node("gpu-server-1", "192.168.1.100:8080").await?;
+monitor.register_node("gpu-server-2", "192.168.1.101:8080").await?;
+
+// Submit task to best available node
+let task = RemoteTask::builder()
+    .title("Train classification model")
+    .agent("ml-trainer")
+    .priority(TaskPriority::High)
+    .build();
+
+let task_id = monitor.submit_task(task).await?;
+
+// Stream progress updates
+let mut events = monitor.subscribe_task(task_id);
+while let Some(event) = events.recv().await {
+    println!("Progress: {}% - {}", event.progress * 100.0, event.message);
+}
+```
+
+---
+
+## 🔌 Agency REST API
+
+The API server provides full CRUD operations for agents:
+
+```bash
+chasm api serve --port 3000
+```
+
+### Endpoints
+
+| Method | Endpoint                     | Description           |
+| ------ | ---------------------------- | --------------------- |
+| GET    | `/api/v1/agents`             | List all agents       |
+| POST   | `/api/v1/agents`             | Create an agent       |
+| GET    | `/api/v1/agents/{id}`        | Get agent details     |
+| PUT    | `/api/v1/agents/{id}`        | Update an agent       |
+| DELETE | `/api/v1/agents/{id}`        | Delete an agent       |
+| POST   | `/api/v1/agents/{id}/clone`  | Clone an agent        |
+| GET    | `/api/v1/swarms`             | List all swarms       |
+| POST   | `/api/v1/swarms`             | Create a swarm        |
+| POST   | `/api/v1/swarms/{id}/start`  | Start swarm execution |
+| POST   | `/api/v1/swarms/{id}/pause`  | Pause swarm           |
+| POST   | `/api/v1/swarms/{id}/resume` | Resume swarm          |
+| POST   | `/api/v1/swarms/{id}/stop`   | Stop swarm            |
+
+### Example: Create an Agent via API
+
+```bash
+curl -X POST http://localhost:3000/api/v1/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "code-assistant",
+    "instruction": "You are a helpful coding assistant specializing in Rust.",
+    "role": "coder",
+    "model": "gemini-2.0-flash",
+    "temperature": 0.3,
+    "tools": ["file_read", "file_write", "terminal"]
+  }'
+```
+
+### Example: Run a Swarm
+
+```bash
+# Create a swarm
+curl -X POST http://localhost:3000/api/v1/swarms \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "dev-team",
+    "coordinator": "tech-lead",
+    "workers": ["frontend-dev", "backend-dev", "tester"],
+    "description": "Full-stack development team"
+  }'
+
+# Start the swarm with a task
+curl -X POST http://localhost:3000/api/v1/swarms/{id}/start \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Build a todo app with user authentication"}'
+```
 
 ## 🗃️ Supported Providers
 

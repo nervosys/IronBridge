@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, startTransition } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
     Bot,
@@ -1357,20 +1357,7 @@ function SWETab({
     const [sweSubTab, setSweSubTab] = useState<'agents' | 'memory' | 'rules'>('agents');
     const [memorySearch, setMemorySearch] = useState('');
 
-    // Fetch SWE projects on mount
-    useEffect(() => {
-        fetchSweProjects();
-    }, []);
-
-    // Fetch memories when project changes
-    useEffect(() => {
-        if (selectedProject) {
-            fetchMemories(selectedProject.id);
-            fetchRules(selectedProject.id);
-        }
-    }, [selectedProject]);
-
-    const fetchSweProjects = async () => {
+    const fetchSweProjects = useCallback(async () => {
         setIsLoading(true);
         try {
             const response = await fetch(`${SWE_API_BASE}/swe/projects`);
@@ -1385,9 +1372,9 @@ function SWETab({
             console.error('Failed to fetch SWE projects:', error);
         }
         setIsLoading(false);
-    };
+    }, []);
 
-    const fetchMemories = async (projectId: string) => {
+    const fetchMemories = useCallback(async (projectId: string) => {
         try {
             const response = await fetch(`${SWE_API_BASE}/swe/projects/${projectId}/memory`);
             const result = await response.json();
@@ -1397,9 +1384,9 @@ function SWETab({
         } catch (error) {
             console.error('Failed to fetch memories:', error);
         }
-    };
+    }, []);
 
-    const fetchRules = async (projectId: string) => {
+    const fetchRules = useCallback(async (projectId: string) => {
         try {
             const response = await fetch(`${SWE_API_BASE}/swe/projects/${projectId}/rules`);
             const result = await response.json();
@@ -1409,7 +1396,24 @@ function SWETab({
         } catch (error) {
             console.error('Failed to fetch rules:', error);
         }
-    };
+    }, []);
+
+    // Fetch SWE projects on mount
+    useEffect(() => {
+        startTransition(() => {
+            fetchSweProjects();
+        });
+    }, [fetchSweProjects]);
+
+    // Fetch memories when project changes
+    useEffect(() => {
+        if (selectedProject) {
+            startTransition(() => {
+                fetchMemories(selectedProject.id);
+                fetchRules(selectedProject.id);
+            });
+        }
+    }, [selectedProject, fetchMemories, fetchRules]);
 
     const getCategoryInfo = (category: SweMemoryCategory) => {
         return MEMORY_CATEGORIES.find(c => c.value === category) || MEMORY_CATEGORIES[9];

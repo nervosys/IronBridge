@@ -63,7 +63,7 @@ npm run android  # Android Emulator
 
 ## Project Structure
 
-```
+```bash
 csm-app/
 ├── App.tsx                 # Main entry point
 ├── src/
@@ -73,7 +73,7 @@ csm-app/
 │   │   └── index.ts
 │   ├── navigation/
 │   │   ├── AppNavigator.tsx # Tab + Stack navigation
-│   │   ├── types.ts        # Navigation param types
+│   │   ├── types.ts         # Navigation param types
 │   │   └── index.ts
 │   └── screens/
 │       ├── WorkspacesScreen.tsx
@@ -83,7 +83,7 @@ csm-app/
 │       ├── SearchScreen.tsx
 │       ├── SettingsScreen.tsx
 │       └── index.ts
-├── app.json                # Expo configuration
+├── app.json                 # Expo configuration
 ├── package.json
 └── tsconfig.json
 ```

@@ -120,6 +120,7 @@ export default function Accounts() {
     // Calculate stats from real data
     const connectedCloudCount = useMemo(() =>
         cloudProviders.filter(p => getProviderStatus(p.id) === 'connected').length,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [cloudProviders, providerHealth]
     );
 

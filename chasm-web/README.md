@@ -65,15 +65,15 @@ CSM Web connects to the CSM Rust backend API server for all data operations:
 
 ```
 ┌─────────────────┐    REST API     ┌─────────────────┐
-│   CSM Web GUI   │◄──────────────►│  CSM Backend    │
-│   (React)       │   WebSocket    │  (Actix-web)    │
-└─────────────────┘                └─────────────────┘
+│   CSM Web GUI   │◄──────────────► │  CSM Backend    │
+│   (React)       │    WebSocket    │  (Actix-web)    │
+└─────────────────┘                 └─────────────────┘
          │                                  │
          │                                  │
          ▼                                  ▼
-    src/api/          SQLite Database
-    src/hooks/        VS Code Storage
-    src/context/      Provider APIs
+     src/api/                        SQLite Database
+     src/hooks/                      VS Code Storage
+     src/context/                    Provider APIs
 ```
 
 ### API Client

@@ -48,7 +48,7 @@ npm run build
 
 ## Architecture
 
-```
+```bash
 chasm-desktop/
 ├── src/
 │   ├── main.rs         # Tauri app entry, tray, window management

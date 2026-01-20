@@ -819,7 +819,7 @@ export const system = {
 export type WebSocketHandler = (event: import('./types').WebSocketEvent) => void;
 
 let ws: WebSocket | null = null;
-let wsHandlers: Set<WebSocketHandler> = new Set();
+const wsHandlers: Set<WebSocketHandler> = new Set();
 let wsReconnectTimer: number | null = null;
 
 /**

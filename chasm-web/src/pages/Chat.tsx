@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, startTransition } from 'react';
 import {
     Send,
     Bot,
@@ -163,8 +163,10 @@ export default function Chat() {
     useEffect(() => {
         if (!selectedProviderId && providers.length > 0) {
             const defaultProvider = activeProviders[0] ?? providers[0];
-            setSelectedProviderId(defaultProvider?.id ?? null);
-            setSelectedModel(defaultProvider?.models?.[0] ?? null);
+            startTransition(() => {
+                setSelectedProviderId(defaultProvider?.id ?? null);
+                setSelectedModel(defaultProvider?.models?.[0] ?? null);
+            });
         }
     }, [providers, activeProviders, selectedProviderId]);
 
@@ -190,6 +192,15 @@ export default function Chat() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showSettings]);
 
+    // New chat function - defined before useEffect that uses it
+    /* eslint-disable react-hooks/preserve-manual-memoization */
+    const newChat = useCallback(() => {
+        setActiveSessionId(null);
+        setInput('');
+        chatStream.reset();
+    }, [chatStream]);
+    /* eslint-enable react-hooks/preserve-manual-memoization */
+
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -213,7 +224,7 @@ export default function Chat() {
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [newChat]);
 
     // Handle sending a message
     const handleSend = async () => {
@@ -340,12 +351,6 @@ export default function Chat() {
         navigator.clipboard.writeText(text);
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
-    };
-
-    const newChat = () => {
-        setActiveSessionId(null);
-        setInput('');
-        chatStream.reset();
     };
 
     const deleteSession = async (id: string) => {

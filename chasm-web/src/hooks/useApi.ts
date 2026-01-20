@@ -122,7 +122,8 @@ function useQuery<T>(
     // Initial fetch and dependency changes
     useEffect(() => {
         fetchData();
-    }, [...deps, enabled]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [...deps, enabled, fetchData]);
 
     // Refetch interval
     useEffect(() => {
@@ -198,8 +199,9 @@ function useMutation<TData, TVariables>(
  * Fetch all workspaces
  */
 export function useWorkspaces(filter?: WorkspaceFilter, options?: UseQueryOptions): UseQueryResult<PaginatedResponse<Workspace>> {
-    const queryFn = useCallback(() => workspaces.list(filter), [JSON.stringify(filter)]);
-    return useQuery(queryFn, [JSON.stringify(filter)], options);
+    const filterKey = JSON.stringify(filter);
+    const queryFn = useCallback(() => workspaces.list(filter), [filter]);
+    return useQuery(queryFn, [filterKey], options);
 }
 
 /**
@@ -232,8 +234,9 @@ export function useRefreshWorkspace() {
  * Fetch sessions with filtering
  */
 export function useSessions(filter?: SessionFilter, options?: UseQueryOptions): UseQueryResult<PaginatedResponse<Session>> {
-    const queryFn = useCallback(() => sessions.list(filter), [JSON.stringify(filter)]);
-    return useQuery(queryFn, [JSON.stringify(filter)], options);
+    const filterKey = JSON.stringify(filter);
+    const queryFn = useCallback(() => sessions.list(filter), [filter]);
+    return useQuery(queryFn, [filterKey], options);
 }
 
 /**
@@ -556,8 +559,9 @@ export function useStopSwarm() {
  * Full-text search
  */
 export function useSearch(query: string, types?: string[], options?: UseQueryOptions): UseQueryResult<SearchResult[]> {
-    const queryFn = useCallback(() => search.query(query, types), [query, JSON.stringify(types)]);
-    return useQuery(queryFn, [query, JSON.stringify(types)], {
+    const typesKey = JSON.stringify(types);
+    const queryFn = useCallback(() => search.query(query, types), [query, types]);
+    return useQuery(queryFn, [query, typesKey], {
         ...options,
         enabled: query.length > 0 && options?.enabled !== false,
     });
@@ -804,7 +808,9 @@ export function useWebSocket(onEvent?: (event: WebSocketEvent) => void) {
     const [lastEvent, setLastEvent] = useState<WebSocketEvent | null>(null);
     const handlerRef = useRef(onEvent);
 
-    handlerRef.current = onEvent;
+    useEffect(() => {
+        handlerRef.current = onEvent;
+    });
 
     useEffect(() => {
         const handler = (event: WebSocketEvent) => {

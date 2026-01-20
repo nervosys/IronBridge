@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, startTransition } from 'react';
 import {
     FolderOpen,
     Plus,
@@ -160,57 +160,63 @@ export default function SWE() {
     const [activeTab, setActiveTab] = useState<'memory' | 'rules' | 'context'>('memory');
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    // Fetch projects on mount
-    useEffect(() => {
-        fetchProjects();
-    }, []);
-
-    // Fetch memories and rules when project changes
-    useEffect(() => {
-        if (selectedProject) {
-            fetchMemories(selectedProject.id);
-            fetchRules(selectedProject.id);
-            fetchContext(selectedProject.id);
-        } else {
-            setMemories([]);
-            setRules([]);
-            setContextInjection(null);
-        }
-    }, [selectedProject]);
-
-    const fetchProjects = async () => {
+    const fetchProjects = useCallback(async () => {
         setIsLoadingProjects(true);
         const data = await fetchApi<SweProject[]>('/swe/projects');
         if (data) {
             setProjects(data);
             // Auto-select first project
-            if (data.length > 0 && !selectedProject) {
-                setSelectedProject(data[0]);
+            if (data.length > 0) {
+                setSelectedProject(prev => prev ?? data[0]);
             }
         }
         setIsLoadingProjects(false);
-    };
+    }, []);
 
-    const fetchMemories = async (projectId: string) => {
+    const fetchMemories = useCallback(async (projectId: string) => {
         const data = await fetchApi<SweMemory[]>(`/swe/projects/${projectId}/memory`);
         if (data) {
             setMemories(data);
         }
-    };
+    }, []);
 
-    const fetchRules = async (projectId: string) => {
+    const fetchRules = useCallback(async (projectId: string) => {
         const data = await fetchApi<SweRule[]>(`/swe/projects/${projectId}/rules`);
         if (data) {
             setRules(data);
         }
-    };
+    }, []);
 
-    const fetchContext = async (projectId: string) => {
+    const fetchContext = useCallback(async (projectId: string) => {
         const data = await fetchApi<SweContextInjection>(`/swe/projects/${projectId}/context`);
         if (data) {
             setContextInjection(data);
         }
-    };
+    }, []);
+
+    // Fetch projects on mount
+    useEffect(() => {
+        startTransition(() => {
+            fetchProjects();
+        });
+    }, [fetchProjects]);
+
+    // Fetch memories and rules when project changes
+    useEffect(() => {
+        if (selectedProject) {
+            startTransition(() => {
+                fetchMemories(selectedProject.id);
+                fetchRules(selectedProject.id);
+                fetchContext(selectedProject.id);
+            });
+        } else {
+            startTransition(() => {
+                setMemories([]);
+                setRules([]);
+                setContextInjection(null);
+            });
+        }
+    }, [selectedProject, fetchMemories, fetchRules, fetchContext]);
 
     const createProject = async () => {
         if (!newProjectPath) return;

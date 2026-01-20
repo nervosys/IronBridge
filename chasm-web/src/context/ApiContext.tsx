@@ -179,7 +179,6 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
 
     const {
         data: providerHealthData,
-        isLoading: _healthLoading,
         refetch: refetchHealth,
     } = useProviderHealth({ refetchInterval: 30000 });
 
@@ -190,9 +189,9 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
         refetch: refetchStatistics,
     } = useStatistics({ refetchInterval: 60000 });
 
-    const { data: settingsData, isLoading: _settingsLoading } = useSettings();
+    const { data: settingsData } = useSettings();
 
-    const { data: systemStatusData, isLoading: _systemLoading } = useSystemHealth({
+    const { data: systemStatusData } = useSystemHealth({
         refetchInterval: 10000,
     });
 
@@ -297,7 +296,6 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
             agentsData,
             swarmsData,
             accountsData,
-            swarmsData,
             statisticsData,
             settingsData,
             systemStatusData,
@@ -306,6 +304,7 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
             refetchProviders,
             refetchAgents,
             refetchSwarms,
+            refetchAccounts,
             refetchStatistics,
             refetchAll,
             selectedWorkspaceId,
@@ -318,8 +317,9 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
 }
 
 // =============================================================================
-// Hooks
+// Hooks - co-located with context for convenience
 // =============================================================================
+/* eslint-disable react-refresh/only-export-components */
 
 /**
  * Use the API context

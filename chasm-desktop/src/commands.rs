@@ -36,7 +36,7 @@ pub fn get_platform() -> String {
 
 /// Open developer tools (debug only)
 #[tauri::command]
-pub fn open_devtools<R: Runtime>(app: AppHandle<R>) {
+pub fn open_devtools<R: Runtime>(#[allow(unused_variables)] app: AppHandle<R>) {
     #[cfg(debug_assertions)]
     if let Some(window) = app.get_webview_window("main") {
         window.open_devtools();
@@ -55,7 +55,7 @@ pub fn minimize_to_tray<R: Runtime>(app: AppHandle<R>) {
 #[tauri::command]
 pub async fn check_api_health(api_url: String) -> ApiHealth {
     let health_url = format!("{}/health", api_url);
-    
+
     match reqwest::get(&health_url).await {
         Ok(response) => {
             if response.status().is_success() {
