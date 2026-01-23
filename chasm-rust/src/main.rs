@@ -18,6 +18,7 @@ mod mcp;
 mod models;
 mod providers;
 mod storage;
+mod telemetry;
 mod tui;
 mod workspace;
 
@@ -27,6 +28,7 @@ use cli::{
     AgencyCommands, ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands,
     FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands,
     MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
+    TelemetryCommands,
 };
 
 /// Get the current directory name as a default pattern
@@ -632,6 +634,74 @@ fn main() -> Result<()> {
             } => commands::create_agent(&name, &role, instruction.as_deref(), model.as_deref()),
             AgencyCommands::Tools => commands::list_tools(),
             AgencyCommands::Templates => commands::list_templates(),
+        },
+
+        // ====================================================================
+        // Telemetry (User Data Collection)
+        // ====================================================================
+        Commands::Telemetry { command } => match command {
+            Some(TelemetryCommands::Info) | None => commands::telemetry_info(),
+            Some(TelemetryCommands::OptIn) => commands::telemetry_opt_in(),
+            Some(TelemetryCommands::OptOut) => commands::telemetry_opt_out(),
+            Some(TelemetryCommands::Reset) => commands::telemetry_reset(),
+            Some(TelemetryCommands::Record {
+                category,
+                event,
+                data,
+                kv,
+                tags,
+                context,
+                verbose,
+            }) => commands::telemetry_record(
+                &category,
+                &event,
+                data.as_deref(),
+                &kv,
+                tags,
+                context.as_deref(),
+                verbose,
+            ),
+            Some(TelemetryCommands::Show {
+                category,
+                event,
+                tag,
+                limit,
+                format,
+                after,
+                before,
+            }) => commands::telemetry_show(
+                category.as_deref(),
+                event.as_deref(),
+                tag.as_deref(),
+                limit,
+                &format,
+                after.as_deref(),
+                before.as_deref(),
+            ),
+            Some(TelemetryCommands::Export {
+                output,
+                format,
+                category,
+                with_metadata,
+            }) => commands::telemetry_export(&output, &format, category.as_deref(), with_metadata),
+            Some(TelemetryCommands::Clear { force, older_than }) => {
+                commands::telemetry_clear(force, older_than)
+            }
+            Some(TelemetryCommands::Config {
+                endpoint,
+                api_key,
+                enable_remote,
+                disable_remote,
+            }) => commands::telemetry_config(
+                endpoint.as_deref(),
+                api_key.as_deref(),
+                enable_remote,
+                disable_remote,
+            ),
+            Some(TelemetryCommands::Sync { limit, clear_after }) => {
+                commands::telemetry_sync(limit, clear_after)
+            }
+            Some(TelemetryCommands::Test) => commands::telemetry_test(),
         },
 
         // ====================================================================

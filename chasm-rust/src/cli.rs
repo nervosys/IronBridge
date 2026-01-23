@@ -176,6 +176,15 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Telemetry Commands
+    // ============================================================================
+    /// Manage anonymous usage data collection (opt-in by default)
+    Telemetry {
+        #[command(subcommand)]
+        command: Option<TelemetryCommands>,
+    },
+
+    // ============================================================================
     // Easter Egg
     // ============================================================================
     /// Show banner
@@ -1369,4 +1378,160 @@ pub enum AgencyCommands {
 
     /// Show swarm templates
     Templates,
+}
+
+// ============================================================================
+// Telemetry Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum TelemetryCommands {
+    /// Show telemetry status and what data is collected
+    #[command(visible_alias = "status")]
+    Info,
+
+    /// Enable anonymous usage data collection (this is the default)
+    #[command(visible_alias = "enable")]
+    OptIn,
+
+    /// Disable anonymous usage data collection
+    #[command(visible_alias = "disable")]
+    OptOut,
+
+    /// Reset telemetry ID (generates new anonymous identifier)
+    Reset,
+
+    /// Record structured data for later AI analysis
+    #[command(visible_alias = "log")]
+    Record {
+        /// Event category (e.g., 'workflow', 'error', 'performance', 'usage')
+        #[arg(short, long, default_value = "custom")]
+        category: String,
+
+        /// Event name or type
+        #[arg(short, long)]
+        event: String,
+
+        /// JSON data payload (or use --kv for key=value pairs)
+        #[arg(short, long)]
+        data: Option<String>,
+
+        /// Key-value pairs (can be repeated: -k foo=bar -k baz=123)
+        #[arg(short = 'k', long = "kv", value_parser = parse_key_value)]
+        kv: Vec<(String, String)>,
+
+        /// Add tags for filtering (can be repeated: -t important -t session-123)
+        #[arg(short, long)]
+        tags: Vec<String>,
+
+        /// Optional session or context ID to associate with
+        #[arg(long)]
+        context: Option<String>,
+
+        /// Print recorded event details
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show recorded telemetry data
+    #[command(visible_alias = "logs")]
+    Show {
+        /// Filter by category
+        #[arg(short, long)]
+        category: Option<String>,
+
+        /// Filter by event name
+        #[arg(short, long)]
+        event: Option<String>,
+
+        /// Filter by tag
+        #[arg(short, long)]
+        tag: Option<String>,
+
+        /// Maximum number of records to show
+        #[arg(short = 'n', long, default_value = "20")]
+        limit: usize,
+
+        /// Output format: table, json, jsonl
+        #[arg(short, long, default_value = "table")]
+        format: String,
+
+        /// Show records after this date (YYYY-MM-DD)
+        #[arg(long)]
+        after: Option<String>,
+
+        /// Show records before this date (YYYY-MM-DD)
+        #[arg(long)]
+        before: Option<String>,
+    },
+
+    /// Export recorded data for AI analysis
+    Export {
+        /// Output file path
+        output: String,
+
+        /// Export format: json, jsonl, csv
+        #[arg(short, long, default_value = "jsonl")]
+        format: String,
+
+        /// Filter by category
+        #[arg(short, long)]
+        category: Option<String>,
+
+        /// Include installation metadata in export
+        #[arg(long)]
+        with_metadata: bool,
+    },
+
+    /// Clear recorded telemetry data
+    Clear {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+
+        /// Only clear records older than N days
+        #[arg(long)]
+        older_than: Option<u32>,
+    },
+
+    /// Configure remote telemetry endpoint
+    Config {
+        /// Set the remote endpoint URL
+        #[arg(long)]
+        endpoint: Option<String>,
+
+        /// Set the API key for authentication
+        #[arg(long)]
+        api_key: Option<String>,
+
+        /// Enable remote telemetry sending
+        #[arg(long)]
+        enable_remote: bool,
+
+        /// Disable remote telemetry sending
+        #[arg(long)]
+        disable_remote: bool,
+    },
+
+    /// Sync telemetry records to remote server
+    Sync {
+        /// Maximum number of records to sync
+        #[arg(short = 'n', long)]
+        limit: Option<usize>,
+
+        /// Clear local records after successful sync
+        #[arg(long)]
+        clear_after: bool,
+    },
+
+    /// Test connection to remote telemetry server
+    Test,
+}
+
+/// Parse key=value pairs for telemetry record command
+fn parse_key_value(s: &str) -> std::result::Result<(String, String), String> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid key=value pair: no '=' found in '{s}'"))?;
+    Ok((s[..pos].to_string(), s[pos + 1..].to_string()))
 }

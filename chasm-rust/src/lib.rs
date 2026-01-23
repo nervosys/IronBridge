@@ -53,6 +53,7 @@ pub mod mcp;
 pub mod models;
 pub mod providers;
 pub mod storage;
+pub mod telemetry;
 pub mod tui;
 pub mod workspace;
 

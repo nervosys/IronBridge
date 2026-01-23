@@ -11,6 +11,7 @@ mod history;
 mod migration;
 mod providers;
 mod register;
+mod telemetry;
 mod workspace_cmds;
 
 pub use agency::*;
@@ -22,4 +23,5 @@ pub use history::*;
 pub use migration::*;
 pub use providers::*;
 pub use register::*;
+pub use telemetry::*;
 pub use workspace_cmds::*;
