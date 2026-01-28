@@ -810,6 +810,189 @@ export function activate(context: vscode.ExtensionContext) {
             } else {
                 vscode.window.showErrorMessage(`Failed to get version: ${result.error}`);
             }
+        }),
+
+        // One-click harvest from workspace
+        vscode.commands.registerCommand('csm.harvest', async () => {
+            const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Harvesting chat sessions...',
+                cancellable: false
+            }, async () => {
+                return await executor.harvestSessions(path);
+            });
+
+            if (result.success) {
+                const reload = await vscode.window.showInformationMessage(
+                    'Sessions harvested! Reload VS Code to see updates.',
+                    'Reload Window', 'Later'
+                );
+                if (reload === 'Reload Window') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+                workspaceProvider.refresh();
+                sessionProvider.refresh();
+            } else {
+                vscode.window.showErrorMessage(`Harvest failed: ${result.error}`);
+            }
+        }),
+
+        // Harvest scan - show available providers
+        vscode.commands.registerCommand('csm.harvestScan', async () => {
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Scanning for chat providers...',
+                cancellable: false
+            }, async () => {
+                return await executor.harvestScan();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('=== Harvest Scan Results ===');
+                outputChannel.appendLine(result.output);
+            } else {
+                vscode.window.showErrorMessage(`Scan failed: ${result.error}`);
+            }
+        }),
+
+        // Quick session search
+        vscode.commands.registerCommand('csm.searchSessions', async () => {
+            const query = await vscode.window.showInputBox({
+                prompt: 'Search sessions',
+                placeHolder: 'Enter search query (title, content, or ID)',
+                title: 'Quick Session Search'
+            });
+
+            if (!query) {
+                return;
+            }
+
+            const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Searching for "${query}"...`,
+                cancellable: false
+            }, async () => {
+                return await executor.searchSessions(query, path);
+            });
+
+            if (result.success) {
+                // Parse results and show in quick pick
+                const sessions = executor.parseSessionList(result.output);
+
+                if (sessions.length === 0) {
+                    vscode.window.showInformationMessage(`No sessions found matching "${query}"`);
+                    return;
+                }
+
+                const items = sessions.map(s => ({
+                    label: s.sessionFile,
+                    description: `${s.messages} messages`,
+                    detail: `Last modified: ${s.lastModified} | ${s.projectPath}`,
+                    session: s
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    title: `Search Results: ${sessions.length} found`,
+                    placeHolder: 'Select a session to open'
+                });
+
+                if (selected) {
+                    await openChatSession(selected.session.sessionFile, outputChannel);
+                }
+            } else {
+                vscode.window.showErrorMessage(`Search failed: ${result.error}`);
+            }
+        }),
+
+        // Recover orphaned sessions
+        vscode.commands.registerCommand('csm.recoverOrphaned', async () => {
+            const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!path) {
+                vscode.window.showWarningMessage('No workspace folder open');
+                return;
+            }
+
+            // First detect
+            const detectResult = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Detecting orphaned sessions...',
+                cancellable: false
+            }, async () => {
+                return await executor.detectOrphaned(path, false);
+            });
+
+            if (!detectResult.success) {
+                vscode.window.showErrorMessage(`Detection failed: ${detectResult.error}`);
+                return;
+            }
+
+            // Show results and ask to recover
+            if (detectResult.output.includes('No orphaned sessions found')) {
+                vscode.window.showInformationMessage('No orphaned sessions found for this workspace');
+                return;
+            }
+
+            outputChannel.show();
+            outputChannel.appendLine('=== Orphaned Sessions Detected ===');
+            outputChannel.appendLine(detectResult.output);
+
+            const recover = await vscode.window.showWarningMessage(
+                'Orphaned sessions detected! Do you want to recover them?',
+                'Recover', 'Cancel'
+            );
+
+            if (recover === 'Recover') {
+                const recoverResult = await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Recovering orphaned sessions...',
+                    cancellable: false
+                }, async () => {
+                    return await executor.detectOrphaned(path, true);
+                });
+
+                if (recoverResult.success) {
+                    // Now register them
+                    const registerResult = await executor.registerSessions(path, true);
+                    if (registerResult.success) {
+                        const reload = await vscode.window.showInformationMessage(
+                            'Sessions recovered and registered! Reload VS Code to see them.',
+                            'Reload Window'
+                        );
+                        if (reload === 'Reload Window') {
+                            await vscode.commands.executeCommand('csm.reloadAndShowChats');
+                        }
+                    }
+                    sessionProvider.refresh();
+                } else {
+                    vscode.window.showErrorMessage(`Recovery failed: ${recoverResult.error}`);
+                }
+            }
+        }),
+
+        // Inline session preview
+        vscode.commands.registerCommand('csm.previewSession', async (item?: import('./sessionProvider').SessionItem) => {
+            let sessionId: string | undefined;
+
+            if (item?.sessionInfo) {
+                sessionId = item.sessionInfo.sessionFile;
+            } else {
+                sessionId = await vscode.window.showInputBox({
+                    prompt: 'Enter session ID',
+                    placeHolder: 'UUID or filename'
+                });
+            }
+
+            if (!sessionId) {
+                return;
+            }
+
+            // Show preview in output panel
+            await openChatSession(sessionId, outputChannel);
         })
     );
 

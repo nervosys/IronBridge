@@ -162,6 +162,31 @@
                 "command": "csm.viewSessionDetails",
                 "title": "View Session Details",
                 "icon": "$(info)"
+            },
+            {
+                "command": "csm.harvest",
+                "title": "CSM: Harvest Sessions",
+                "icon": "$(cloud-download)"
+            },
+            {
+                "command": "csm.harvestScan",
+                "title": "CSM: Scan for Providers",
+                "icon": "$(search)"
+            },
+            {
+                "command": "csm.searchSessions",
+                "title": "CSM: Quick Session Search",
+                "icon": "$(search)"
+            },
+            {
+                "command": "csm.recoverOrphaned",
+                "title": "CSM: Recover Orphaned Sessions",
+                "icon": "$(debug-restart)"
+            },
+            {
+                "command": "csm.previewSession",
+                "title": "CSM: Preview Session",
+                "icon": "$(open-preview)"
             }
         ],
         "viewsContainers": {

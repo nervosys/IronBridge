@@ -13,6 +13,7 @@ export interface EnvConfig {
     enableWebSocket: boolean;
     enableOfflineMode: boolean;
     enableDevTools: boolean;
+    enableDemoMode: boolean;  // Use mock data instead of API
 
     // UI
     defaultTheme: 'light' | 'neutral' | 'dark';
@@ -62,6 +63,7 @@ export const config: EnvConfig = {
     enableWebSocket: getEnvBool('VITE_ENABLE_WEBSOCKET', true),
     enableOfflineMode: getEnvBool('VITE_ENABLE_OFFLINE_MODE', false),
     enableDevTools: getEnvBool('VITE_ENABLE_DEV_TOOLS', import.meta.env.DEV),
+    enableDemoMode: getEnvBool('VITE_ENABLE_DEMO_MODE', false),
 
     // UI defaults
     defaultTheme: getEnv('VITE_DEFAULT_THEME', 'dark') as 'light' | 'neutral' | 'dark',

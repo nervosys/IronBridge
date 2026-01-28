@@ -2,6 +2,8 @@
 
 **Universal Chat Session Manager** — Harvest, merge, and recover AI chat history across workspaces and providers.
 
+--
+
 ## Features
 
 - 🔍 **Workspace Discovery** — Find all VS Code workspaces with chat sessions

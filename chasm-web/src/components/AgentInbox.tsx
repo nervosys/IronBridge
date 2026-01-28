@@ -440,12 +440,12 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
     ];
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900">
+        <div className="flex flex-col h-full bg-[hsl(var(--background))]">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(var(--border))]">
                 <div className="flex items-center gap-2">
                     <Inbox className="w-5 h-5 text-violet-500" />
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Agent Inbox</h2>
+                    <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Agent Inbox</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     {unreadNotifications > 0 && (
@@ -458,29 +458,29 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
                     )}
                     <button
                         onClick={handleRefresh}
-                        className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${isRefreshing ? 'animate-spin' : ''}`}
+                        className={`p-2 rounded-lg hover:bg-[hsl(var(--muted))] ${isRefreshing ? 'animate-spin' : ''}`}
                     >
-                        <RefreshCw className="w-4 h-4 text-gray-500" />
+                        <RefreshCw className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
                     </button>
                 </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200 dark:border-gray-700">
+            <div className="flex border-b border-[hsl(var(--border))]">
                 {tabs.map(tab => (
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
                         className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === tab.key
                             ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-600 dark:border-violet-400'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                            : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
                             }`}
                     >
                         {tab.label}
                         {tab.count > 0 && (
                             <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full ${activeTab === tab.key
                                 ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300'
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
                                 }`}>
                                 {tab.count > 99 ? '99+' : tab.count}
                             </span>
@@ -492,7 +492,7 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
                 {activeTab === 'all' && (
-                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <div className="divide-y divide-[hsl(var(--border))]">
                         {notifications.filter(n => !n.dismissed).length === 0 ? (
                             <EmptyState
                                 icon={Bell}
@@ -516,7 +516,7 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
                 )}
 
                 {activeTab === 'messages' && (
-                    <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <div className="divide-y divide-[hsl(var(--border))]">
                         {messages.filter(m => !m.archived).length === 0 ? (
                             <EmptyState
                                 icon={MessageSquare}
@@ -604,9 +604,9 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
 function EmptyState({ icon: Icon, title, description }: { icon: typeof Bell; title: string; description: string }) {
     return (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Icon className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
-            <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400">{title}</h3>
-            <p className="text-sm text-gray-400 dark:text-gray-500">{description}</p>
+            <Icon className="w-12 h-12 text-[hsl(var(--muted-foreground))]/30 mb-4" />
+            <h3 className="text-lg font-medium text-[hsl(var(--muted-foreground))]">{title}</h3>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]/70">{description}</p>
         </div>
     );
 }
@@ -627,34 +627,34 @@ function NotificationItem({
 
     return (
         <div
-            className={`flex gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors ${!notification.read ? 'bg-violet-50/50 dark:bg-violet-900/10' : ''
+            className={`flex gap-3 px-4 py-3 hover:bg-[hsl(var(--muted))]/50 cursor-pointer transition-colors ${!notification.read ? 'bg-violet-500/5' : ''
                 }`}
             onClick={() => {
                 onRead(notification.id);
                 if (notification.runId && onViewRun) onViewRun(notification.runId);
             }}
         >
-            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${notification.read ? 'bg-gray-100 dark:bg-gray-800' : 'bg-violet-100 dark:bg-violet-900/50'
+            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${notification.read ? 'bg-[hsl(var(--muted))]' : 'bg-violet-500/10'
                 }`}>
                 <Icon className={`w-5 h-5 ${config.color}`} />
             </div>
             <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                    <h4 className={`text-sm font-medium truncate ${notification.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-white'
+                    <h4 className={`text-sm font-medium truncate ${notification.read ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--foreground))]'
                         }`}>
                         {notification.title}
                     </h4>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    <span className="text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap">
                         {formatRelativeTime(notification.createdAt)}
                     </span>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">
+                <p className="text-sm text-[hsl(var(--muted-foreground))] line-clamp-2 mt-0.5">
                     {notification.body}
                 </p>
                 {notification.agentName && (
                     <div className="flex items-center gap-1 mt-1">
-                        <Bot className="w-3 h-3 text-gray-400" />
-                        <span className="text-xs text-gray-400">{notification.agentName}</span>
+                        <Bot className="w-3 h-3 text-[hsl(var(--muted-foreground))]" />
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{notification.agentName}</span>
                     </div>
                 )}
             </div>
@@ -663,9 +663,9 @@ function NotificationItem({
                     e.stopPropagation();
                     onDismiss(notification.id);
                 }}
-                className="flex-shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                className="flex-shrink-0 p-1 rounded hover:bg-[hsl(var(--muted))]"
             >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
             </button>
         </div>
     );
@@ -682,7 +682,7 @@ function MessageItem({
 }) {
     return (
         <div
-            className={`flex gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors ${!message.read ? 'bg-violet-50/50 dark:bg-violet-900/10' : ''
+            className={`flex gap-3 px-4 py-3 hover:bg-[hsl(var(--muted))]/50 cursor-pointer transition-colors ${!message.read ? 'bg-violet-500/5' : ''
                 }`}
             onClick={onSelect}
         >
@@ -692,44 +692,44 @@ function MessageItem({
                         e.stopPropagation();
                         onToggleStar(message.id);
                     }}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                    className="p-1 rounded hover:bg-[hsl(var(--muted))]"
                 >
                     {message.starred ? (
                         <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                     ) : (
-                        <StarOff className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                        <StarOff className="w-4 h-4 text-[hsl(var(--muted-foreground))]/50" />
                     )}
                 </button>
             </div>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-sm font-medium ${message.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'
+                    <span className={`text-sm font-medium ${message.read ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--foreground))]'
                         }`}>
                         {message.fromAgentName || 'System'}
                     </span>
                     {message.requiresResponse && !message.userResponse && (
-                        <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                        <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-red-500/10 text-red-500">
                             Response Required
                         </span>
                     )}
                     {message.userResponse && (
-                        <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
+                        <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-green-500/10 text-green-500">
                             Responded
                         </span>
                     )}
-                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
+                    <span className="text-xs text-[hsl(var(--muted-foreground))] ml-auto">
                         {formatRelativeTime(message.createdAt)}
                     </span>
                 </div>
-                <h4 className={`text-sm truncate ${message.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white font-medium'
+                <h4 className={`text-sm truncate ${message.read ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--foreground))] font-medium'
                     }`}>
                     {message.subject}
                 </h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
+                <p className="text-sm text-[hsl(var(--muted-foreground))] line-clamp-1 mt-0.5">
                     {message.body}
                 </p>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-400 self-center" />
+            <ChevronRight className="w-4 h-4 text-[hsl(var(--muted-foreground))] self-center" />
         </div>
     );
 }
@@ -757,41 +757,41 @@ function PermissionCard({
     }, [permission.expiresAt]);
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(var(--border))]">
                 <div className="flex items-center gap-2">
                     <div className={`px-2 py-1 rounded-md text-xs font-semibold ${riskConfig.bgColor} ${riskConfig.color}`}>
                         {permission.riskLevel.toUpperCase()}
                     </div>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                    <span className="text-sm text-[hsl(var(--muted-foreground))]">
                         Expires in {expiresMinutes}:{expiresSeconds.toString().padStart(2, '0')}
                     </span>
                 </div>
-                <Clock className="w-4 h-4 text-gray-400" />
+                <Clock className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
             </div>
 
             {/* Content */}
             <div className="p-4">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+                <h3 className="text-base font-semibold text-[hsl(var(--foreground))] mb-1">
                     {permission.title}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                <p className="text-sm text-[hsl(var(--muted-foreground))] mb-3">
                     {permission.description}
                 </p>
 
                 {/* Agent info */}
                 <div className="flex items-center gap-2 mb-3">
-                    <Bot className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                    <Bot className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
+                    <span className="text-sm text-[hsl(var(--muted-foreground))]">
                         {permission.agentName}
                     </span>
                 </div>
 
                 {/* Reason */}
-                <div className="flex gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg mb-4">
-                    <Info className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex gap-2 p-3 bg-[hsl(var(--muted))] rounded-lg mb-4">
+                    <Info className="w-4 h-4 text-[hsl(var(--muted-foreground))] flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
                         {permission.reason}
                     </p>
                 </div>
@@ -828,10 +828,10 @@ function WorkflowCard({
     const statusConfig = STATUS_CONFIG[workflow.status];
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(var(--border))]">
+                <h3 className="text-base font-semibold text-[hsl(var(--foreground))] truncate">
                     {workflow.name}
                 </h3>
                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
@@ -847,7 +847,7 @@ function WorkflowCard({
             {/* Progress */}
             <div className="px-4 py-3">
                 <div className="flex items-center gap-3 mb-2">
-                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
                         <div
                             className={`h-full rounded-full transition-all duration-500 ${workflow.status === 'running' ? 'bg-blue-500' :
                                 workflow.status === 'completed' ? 'bg-green-500' :
@@ -856,12 +856,12 @@ function WorkflowCard({
                             style={{ width: `${workflow.progress}%` }}
                         />
                     </div>
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-12 text-right">
+                    <span className="text-sm font-medium text-[hsl(var(--muted-foreground))] w-12 text-right">
                         {workflow.progress}%
                     </span>
                 </div>
                 {workflow.currentStep && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                    <p className="text-sm text-[hsl(var(--muted-foreground))] truncate">
                         {workflow.currentStep}
                     </p>
                 )}
@@ -874,18 +874,18 @@ function WorkflowCard({
                         {workflow.activeAgents.slice(0, 4).map(agent => (
                             <div
                                 key={agent.id}
-                                className="flex items-center gap-1.5 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full"
+                                className="flex items-center gap-1.5 px-2 py-1 bg-[hsl(var(--muted))] rounded-full"
                             >
                                 <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-green-500 animate-pulse' :
                                     agent.status === 'monitoring' ? 'bg-blue-500' : 'bg-gray-400'
                                     }`} />
-                                <span className="text-xs text-gray-600 dark:text-gray-400">
+                                <span className="text-xs text-[hsl(var(--muted-foreground))]">
                                     {agent.name}
                                 </span>
                             </div>
                         ))}
                         {workflow.activeAgents.length > 4 && (
-                            <span className="text-xs text-gray-400 self-center">
+                            <span className="text-xs text-[hsl(var(--muted-foreground))] self-center">
                                 +{workflow.activeAgents.length - 4} more
                             </span>
                         )}
@@ -894,17 +894,17 @@ function WorkflowCard({
             )}
 
             {/* Metrics */}
-            <div className="flex items-center gap-4 px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4 px-4 py-3 bg-[hsl(var(--muted))] border-t border-[hsl(var(--border))]">
+                <div className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))]">
                     <Clock className="w-4 h-4" />
                     {formatDuration(workflow.elapsedTime)}
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))]">
                     <Zap className="w-4 h-4" />
                     {workflow.tokensUsed.toLocaleString()} tokens
                 </div>
                 {workflow.estimatedCost !== undefined && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="text-sm text-[hsl(var(--muted-foreground))]">
                         ${workflow.estimatedCost.toFixed(4)}
                     </div>
                 )}
@@ -912,9 +912,9 @@ function WorkflowCard({
                     {onViewRun && (
                         <button
                             onClick={() => onViewRun(workflow.runId)}
-                            className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
                         >
-                            <ExternalLink className="w-4 h-4 text-gray-400" />
+                            <ExternalLink className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
                         </button>
                     )}
                 </div>
@@ -936,26 +936,26 @@ function MessageDetailModal({
 }) {
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="bg-[hsl(var(--card))] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Message</h3>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))]">
+                    <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">Message</h3>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => onToggleStar(message.id)}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="p-2 rounded-lg hover:bg-[hsl(var(--muted))]"
                         >
                             {message.starred ? (
                                 <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
                             ) : (
-                                <Star className="w-5 h-5 text-gray-400" />
+                                <Star className="w-5 h-5 text-[hsl(var(--muted-foreground))]" />
                             )}
                         </button>
                         <button
                             onClick={onClose}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="p-2 rounded-lg hover:bg-[hsl(var(--muted))]"
                         >
-                            <X className="w-5 h-5 text-gray-500" />
+                            <X className="w-5 h-5 text-[hsl(var(--muted-foreground))]" />
                         </button>
                     </div>
                 </div>
@@ -963,33 +963,33 @@ function MessageDetailModal({
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6">
                     <div className="mb-4">
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                        <div className="text-sm text-[hsl(var(--muted-foreground))] mb-1">
                             From: {message.fromAgentName || 'System'}
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                        <div className="text-sm text-[hsl(var(--muted-foreground))]">
                             {new Date(message.createdAt).toLocaleString()}
                         </div>
                     </div>
-                    <h4 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    <h4 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-4">
                         {message.subject}
                     </h4>
-                    <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    <div className="text-[hsl(var(--foreground))] whitespace-pre-wrap">
                         {message.body}
                     </div>
 
                     {/* Attachments */}
                     {message.attachments && message.attachments.length > 0 && (
                         <div className="mt-6">
-                            <h5 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                            <h5 className="text-sm font-medium text-[hsl(var(--muted-foreground))] mb-2">
                                 Attachments
                             </h5>
                             <div className="space-y-2">
                                 {message.attachments.map(att => (
                                     <div
                                         key={att.id}
-                                        className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg"
+                                        className="flex items-center gap-3 p-3 bg-[hsl(var(--muted))] rounded-lg"
                                     >
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                                        <span className="text-sm text-[hsl(var(--foreground))]">
                                             {att.name}
                                         </span>
                                     </div>
@@ -1000,8 +1000,8 @@ function MessageDetailModal({
 
                     {/* Response section */}
                     {message.requiresResponse && !message.userResponse && (
-                        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                            <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                        <div className="mt-6 pt-6 border-t border-[hsl(var(--border))]">
+                            <h5 className="text-sm font-medium text-[hsl(var(--foreground))] mb-3">
                                 Response Required
                             </h5>
                             {message.responseOptions ? (

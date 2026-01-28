@@ -53,6 +53,7 @@ tabled = "0.15"
 
 # Colored terminal output
 colored = "2.1"
+log = "0.4"
 
 # Error handling
 anyhow = "1.0"
@@ -81,6 +82,7 @@ actix-web = { version = "4", default-features = false, features = [
     "rustls-0_23",
 ] }
 actix-http = { version = "3", features = ["ws"] }
+actix-ws = "0.3"
 actix-cors = "0.7"
 
 # Async streaming for SSE
@@ -98,6 +100,10 @@ jsonwebtoken = "9.3"
 
 # Password hashing
 sha2 = "0.10"
+hmac = "0.12"
+pbkdf2 = "0.12"
+digest = "0.10"
+rand = "0.8"
 regex = "1.12.2"
 
 # Windows DPAPI for cookie decryption

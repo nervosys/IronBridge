@@ -1,3 +1,28 @@
+import { SessionWithMessages } from '../types/index.js';
+
+type ExportFormat = 'json' | 'markdown' | 'pdf' | 'html';
+interface SessionExportOptions {
+    format: ExportFormat;
+    includeMetadata?: boolean;
+    includeTimestamps?: boolean;
+    includeToolInvocations?: boolean;
+    includeFileChanges?: boolean;
+    title?: string;
+    author?: string;
+}
+interface ExportResult {
+    content: string;
+    mimeType: string;
+    filename: string;
+    blob?: Blob;
+}
+declare function exportToJson(session: SessionWithMessages, options?: Partial<SessionExportOptions>): ExportResult;
+declare function exportToMarkdown(session: SessionWithMessages, options?: Partial<SessionExportOptions>): ExportResult;
+declare function exportToHtml(session: SessionWithMessages, options?: Partial<SessionExportOptions>): ExportResult;
+declare function exportToPdf(session: SessionWithMessages, options?: Partial<SessionExportOptions>): ExportResult;
+declare function exportSession(session: SessionWithMessages, options: SessionExportOptions): ExportResult;
+declare function downloadExport(result: ExportResult): void;
+
 /**
  * Format a date to a localized string
  */
@@ -193,4 +218,4 @@ declare function rgbToHex(r: number, g: number, b: number): string;
  */
 declare function isColorDark(hex: string): boolean;
 
-export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
+export { type ExportFormat, type ExportResult, type SessionExportOptions, capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, downloadExport, estimateTokenCount, exportSession, exportToHtml, exportToJson, exportToMarkdown, exportToPdf, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };

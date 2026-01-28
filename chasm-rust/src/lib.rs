@@ -45,8 +45,10 @@
 pub mod agency;
 pub mod browser;
 pub mod cli;
+pub mod cloud_sync;
 pub mod commands;
 pub mod database;
+pub mod encryption;
 pub mod error;
 pub mod integrations;
 pub mod mcp;

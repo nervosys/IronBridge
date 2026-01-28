@@ -1,3 +1,256 @@
+// src/utils/export.ts
+function exportToJson(session, options = {}) {
+  const { includeMetadata = true } = options;
+  const exportData = {
+    exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    format: "csm-session-v1",
+    session: {
+      id: session.id,
+      title: session.title,
+      provider: session.provider,
+      model: session.model,
+      messageCount: session.messageCount,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      ...includeMetadata && session.metadata ? { metadata: session.metadata } : {}
+    },
+    messages: session.messages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      model: msg.model,
+      createdAt: msg.createdAt,
+      ...options.includeToolInvocations && msg.toolInvocations?.length ? { toolInvocations: msg.toolInvocations } : {},
+      ...includeMetadata && msg.metadata ? { metadata: msg.metadata } : {}
+    }))
+  };
+  const content = JSON.stringify(exportData, null, 2);
+  const filename = sanitizeFilename(`${session.title || "session"}-${session.id.slice(0, 8)}.json`);
+  return {
+    content,
+    mimeType: "application/json",
+    filename,
+    blob: new Blob([content], { type: "application/json" })
+  };
+}
+function exportToMarkdown(session, options = {}) {
+  const { includeTimestamps = true, includeToolInvocations = false, title, author } = options;
+  const lines = [];
+  lines.push(`# ${title || session.title || "Chat Session"}`);
+  lines.push("");
+  lines.push("---");
+  lines.push(`provider: ${session.provider}`);
+  if (session.model) lines.push(`model: ${session.model}`);
+  lines.push(`messages: ${session.messageCount}`);
+  lines.push(`created: ${formatDate(session.createdAt)}`);
+  lines.push(`updated: ${formatDate(session.updatedAt)}`);
+  if (author) lines.push(`author: ${author}`);
+  lines.push(`exported: ${formatDate(/* @__PURE__ */ new Date())}`);
+  lines.push("---");
+  lines.push("");
+  for (const message of session.messages) {
+    const roleIcon = message.role === "user" ? "\u{1F464}" : message.role === "assistant" ? "\u{1F916}" : "\u2699\uFE0F";
+    const roleLabel = message.role.charAt(0).toUpperCase() + message.role.slice(1);
+    if (includeTimestamps) {
+      lines.push(`## ${roleIcon} ${roleLabel} (${formatTime(message.createdAt)})`);
+    } else {
+      lines.push(`## ${roleIcon} ${roleLabel}`);
+    }
+    lines.push("");
+    lines.push(message.content);
+    lines.push("");
+    if (includeToolInvocations && message.toolInvocations?.length) {
+      lines.push("<details>");
+      lines.push("<summary>Tool Invocations</summary>");
+      lines.push("");
+      for (const tool of message.toolInvocations) {
+        lines.push(`- **${tool.toolName}** (${tool.status || "complete"})`);
+        if (tool.invocationMessage) {
+          const msg = typeof tool.invocationMessage === "string" ? tool.invocationMessage : tool.invocationMessage.value || JSON.stringify(tool.invocationMessage);
+          lines.push(`  - ${msg.slice(0, 200)}${msg.length > 200 ? "..." : ""}`);
+        }
+      }
+      lines.push("");
+      lines.push("</details>");
+      lines.push("");
+    }
+  }
+  lines.push("---");
+  lines.push(`*Exported from Chasm on ${formatDate(/* @__PURE__ */ new Date())}*`);
+  const content = lines.join("\n");
+  const filename = sanitizeFilename(`${session.title || "session"}-${session.id.slice(0, 8)}.md`);
+  return {
+    content,
+    mimeType: "text/markdown",
+    filename,
+    blob: new Blob([content], { type: "text/markdown" })
+  };
+}
+function exportToHtml(session, options = {}) {
+  const { includeTimestamps = true, title } = options;
+  const escapedTitle = escapeHtml(title || session.title || "Chat Session");
+  const messageHtml = session.messages.map((msg) => {
+    const roleClass = msg.role === "user" ? "user" : msg.role === "assistant" ? "assistant" : "system";
+    const roleLabel = msg.role.charAt(0).toUpperCase() + msg.role.slice(1);
+    const timestamp = includeTimestamps ? `<span class="timestamp">${formatTime(msg.createdAt)}</span>` : "";
+    return `
+            <div class="message ${roleClass}">
+                <div class="message-header">
+                    <span class="role">${roleLabel}</span>
+                    ${timestamp}
+                </div>
+                <div class="message-content">${formatMessageContent(msg.content)}</div>
+            </div>
+        `;
+  }).join("\n");
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapedTitle}</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --card: #16213e;
+            --text: #eee;
+            --muted: #888;
+            --user-bg: #0f3460;
+            --assistant-bg: #1a1a2e;
+            --system-bg: #2d2d44;
+            --border: #333;
+            --accent: #e94560;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 { margin-bottom: 0.5rem; }
+        .meta { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+        .message {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+        }
+        .message.user { background: var(--user-bg); }
+        .message.assistant { background: var(--assistant-bg); }
+        .message.system { background: var(--system-bg); }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .role { font-weight: 600; color: var(--accent); }
+        .timestamp { color: var(--muted); }
+        .message-content { white-space: pre-wrap; word-wrap: break-word; }
+        pre {
+            background: #0d0d0d;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+        code { font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.9rem; }
+        .footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.875rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>${escapedTitle}</h1>
+    <div class="meta">
+        <div>Provider: ${escapeHtml(session.provider)} ${session.model ? `\u2022 Model: ${escapeHtml(session.model)}` : ""}</div>
+        <div>Messages: ${session.messageCount} \u2022 Created: ${formatDate(session.createdAt)}</div>
+    </div>
+    <div class="messages">
+        ${messageHtml}
+    </div>
+    <div class="footer">
+        Exported from Chasm on ${formatDate(/* @__PURE__ */ new Date())}
+    </div>
+</body>
+</html>`;
+  const filename = sanitizeFilename(`${session.title || "session"}-${session.id.slice(0, 8)}.html`);
+  return {
+    content: html,
+    mimeType: "text/html",
+    filename,
+    blob: new Blob([html], { type: "text/html" })
+  };
+}
+function exportToPdf(session, options = {}) {
+  const htmlResult = exportToHtml(session, options);
+  const printStyles = `
+        <style media="print">
+            body { background: white; color: black; padding: 1rem; }
+            .message { background: #f5f5f5; border: 1px solid #ddd; }
+            .message.user { background: #e3f2fd; }
+            .message.assistant { background: #f5f5f5; }
+            pre { background: #f0f0f0; }
+            .role { color: #d32f2f; }
+        </style>
+    `;
+  const content = htmlResult.content.replace("</head>", `${printStyles}</head>`);
+  const filename = sanitizeFilename(`${session.title || "session"}-${session.id.slice(0, 8)}.pdf.html`);
+  return {
+    content,
+    mimeType: "text/html",
+    filename,
+    blob: new Blob([content], { type: "text/html" })
+  };
+}
+function exportSession(session, options) {
+  switch (options.format) {
+    case "json":
+      return exportToJson(session, options);
+    case "markdown":
+      return exportToMarkdown(session, options);
+    case "html":
+      return exportToHtml(session, options);
+    case "pdf":
+      return exportToPdf(session, options);
+    default:
+      throw new Error(`Unsupported export format: ${options.format}`);
+  }
+}
+function downloadExport(result) {
+  const blob = result.blob || new Blob([result.content], { type: result.mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = result.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function sanitizeFilename(filename) {
+  return filename.replace(/[<>:"/\\|?*]/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 200);
+}
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+function formatMessageContent(content) {
+  return escapeHtml(content).replace(/```(\w*)\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>").replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
 // src/utils/index.ts
 function formatDate(date, options) {
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
@@ -326,6 +579,6 @@ function isColorDark(hex) {
   return luminance < 0.5;
 }
 
-export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, estimateTokenCount, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
+export { capitalize, chunk, countTotalTokens, debounce, deepClone, deepMerge, delay, downloadExport, estimateTokenCount, exportSession, exportToHtml, exportToJson, exportToMarkdown, exportToPdf, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, groupBy, hexToRgb, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, normalizePath, omit, pick, retry, rgbToHex, safeJsonParse, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

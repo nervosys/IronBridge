@@ -164,6 +164,46 @@ export class CsmExecutor {
         return this.execute(['move', `"${sourceHash}"`, `"${targetPath}"`]);
     }
 
+    async harvestSessions(projectPath?: string): Promise<CsmResult> {
+        const args = ['harvest', 'run'];
+        if (projectPath) {
+            args.push('--path', `"${projectPath}"`);
+        }
+        return this.execute(args);
+    }
+
+    async harvestScan(): Promise<CsmResult> {
+        return this.execute(['harvest', 'scan']);
+    }
+
+    async harvestStatus(): Promise<CsmResult> {
+        return this.execute(['harvest', 'status']);
+    }
+
+    async detectOrphaned(projectPath: string, recover: boolean = false): Promise<CsmResult> {
+        const args = ['detect', 'orphaned', `"${projectPath}"`];
+        if (recover) {
+            args.push('--recover');
+        }
+        return this.execute(args);
+    }
+
+    async registerSessions(projectPath: string, force: boolean = false): Promise<CsmResult> {
+        const args = ['register', 'all', '--path', `"${projectPath}"`];
+        if (force) {
+            args.push('--force');
+        }
+        return this.execute(args);
+    }
+
+    async searchSessions(query: string, projectPath?: string): Promise<CsmResult> {
+        const args = ['find', 'session', `"${query}"`];
+        if (projectPath) {
+            args.push('--path', `"${projectPath}"`);
+        }
+        return this.execute(args);
+    }
+
     async getVersion(): Promise<CsmResult> {
         return this.execute(['--version']);
     }

@@ -10,10 +10,12 @@ mod handlers_simple;
 mod handlers_swe;
 mod state;
 mod sync;
+mod websocket;
 
 pub use auth::configure_auth_routes;
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
+pub use websocket::{configure_websocket_routes, WebSocketState};
 
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
@@ -196,6 +198,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
 
     let state = web::Data::new(AppState::new(db, db_path));
     let sync_state = web::Data::new(create_sync_state());
+    let ws_state = web::Data::new(WebSocketState::new());
     let cors_origins = config.cors_origins.clone();
 
     println!("[*] CSM API Server starting...");
@@ -218,6 +221,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     println!("   POST /sync/event        - Push a sync event");
     println!("   GET /sync/snapshot      - Get full data snapshot");
     println!("   GET /sync/subscribe     - SSE stream for real-time updates");
+    println!("   GET /ws                 - WebSocket for bidirectional updates");
     println!();
     println!("Press Ctrl+C to stop the server...");
     println!();
@@ -241,11 +245,13 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
         App::new()
             .app_data(state.clone())
             .app_data(sync_state.clone())
+            .app_data(ws_state.clone())
             .wrap(cors)
             .wrap(middleware::Logger::default())
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)
+            .configure(|cfg| configure_websocket_routes(cfg, ws_state.clone()))
     });
 
     eprintln!("[DEBUG] Binding to {}:{}...", config.host, config.port);

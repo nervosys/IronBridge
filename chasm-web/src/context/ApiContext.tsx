@@ -1,6 +1,7 @@
 // API Context Provider - Global state management for API data
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { configure, connectWebSocket } from '../api/client';
+import { config } from '../config/env';
 import type {
     Workspace,
     Session,
@@ -25,6 +26,17 @@ import {
     useSwarms,
     useAccounts,
 } from '../hooks/useApi';
+import {
+    mockWorkspaces,
+    mockSessions,
+    mockProviders,
+    mockProviderHealth,
+    mockStatistics,
+    mockAgents,
+    mockSwarms,
+    mockAccounts,
+    mockSystemStatus,
+} from '../data/mockData';
 
 // =============================================================================
 // Context Types
@@ -255,22 +267,33 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
         }
     }, [lastEvent, refetchSessions, refetchStatistics, refetchHealth]);
 
-    // Memoized context value
+    // Memoized context value - use mock data as fallback when API fails or is unavailable
+    // Check for connection errors early (network errors happen fast)
+    const hasConnectionError = error !== null && (
+        error.message?.includes('fetch') ||
+        error.message?.includes('network') ||
+        error.message?.includes('ECONNREFUSED') ||
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('Network Error')
+    );
+    // Demo mode immediately uses mock data without waiting for API
+    const useMockData = config.enableDemoMode || hasConnectionError || (error !== null) || (!isLoading && !workspacesData?.items?.length);
+
     const value = useMemo<ApiContextValue>(
         () => ({
-            isConnected: wsConnected,
-            isLoading,
-            error,
-            workspaces: workspacesData?.items ?? [],
-            sessions: sessionsData?.items ?? [],
-            providers: providersData ?? [],
-            providerHealth: providerHealthData ?? [],
-            agents: agentsData ?? [],
-            swarms: swarmsData ?? [],
-            accounts: accountsData ?? [],
-            statistics: statisticsData ?? null,
+            isConnected: useMockData ? true : wsConnected, // Show connected in demo mode
+            isLoading: useMockData ? false : isLoading, // Don't show loading if using mock data
+            error: useMockData ? null : error, // Hide error when using mock data
+            workspaces: (workspacesData?.items?.length && !config.enableDemoMode) ? workspacesData.items : (useMockData ? mockWorkspaces : []),
+            sessions: (sessionsData?.items?.length && !config.enableDemoMode) ? sessionsData.items : (useMockData ? mockSessions : []),
+            providers: (providersData?.length && !config.enableDemoMode) ? providersData : (useMockData ? mockProviders : []),
+            providerHealth: (providerHealthData?.length && !config.enableDemoMode) ? providerHealthData : (useMockData ? mockProviderHealth : []),
+            agents: (agentsData?.length && !config.enableDemoMode) ? agentsData : (useMockData ? mockAgents : []),
+            swarms: (swarmsData?.length && !config.enableDemoMode) ? swarmsData : (useMockData ? mockSwarms : []),
+            accounts: (accountsData?.length && !config.enableDemoMode) ? accountsData : (useMockData ? mockAccounts : []),
+            statistics: (!config.enableDemoMode && statisticsData) ? statisticsData : (useMockData ? mockStatistics : null),
             settings: settingsData ?? null,
-            systemStatus: systemStatusData ?? null,
+            systemStatus: (!config.enableDemoMode && systemStatusData) ? systemStatusData : (useMockData ? mockSystemStatus : null),
             refetchWorkspaces,
             refetchSessions,
             refetchProviders,
@@ -289,6 +312,7 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
             wsConnected,
             isLoading,
             error,
+            useMockData,
             workspacesData,
             sessionsData,
             providersData,
