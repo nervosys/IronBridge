@@ -1,6 +1,6 @@
 # Chasm Roadmap
 
-> **Last Updated:** January 27, 2026
+> **Last Updated:** January 28, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
 
@@ -84,11 +84,11 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ### Q1-Q2 2026
 
-#### Enhancements
-- [ ] Session annotation and notes
-- [ ] Custom session templates
-- [ ] Keyboard shortcuts for power users
-- [ ] Batch operations (delete, archive, export)
+#### Enhancements ✅
+- [x] Session annotation and notes
+- [x] Custom session templates
+- [x] Keyboard shortcuts for power users
+- [x] Batch operations (delete, archive, export)
 
 ---
 

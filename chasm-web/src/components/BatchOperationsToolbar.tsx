@@ -438,8 +438,8 @@ export const BatchOperationsToolbar: React.FC<BatchOperationsToolbarProps> = ({
     }, [executeBatchOperation, selectedTags]);
 
     const handleExport = useCallback((format: ExportFormat, options: ExportOptions) => {
-        executeBatchOperation('export', { 
-            exportFormat: format, 
+        executeBatchOperation('export', {
+            exportFormat: format,
             exportOptions: {
                 includeMetadata: options.includeMetadata,
                 includeTimestamps: options.includeTimestamps,

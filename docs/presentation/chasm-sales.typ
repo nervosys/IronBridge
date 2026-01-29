@@ -604,8 +604,8 @@ $ chasm agency run --orchestration swarm \\
           "Multi-agent workflow builder",
           "Session timeline visualization",
           "Full-text search with filters",
-          "Provider management dashboard",
-          "OAuth 2.0 / SAML authentication",
+          "Session annotations, tags & bookmarks",
+          "40+ keyboard shortcuts",
         ) [
           #text(size: 7pt, fill: text-dark)[• #feat] #v(3pt)
         ]
@@ -1027,6 +1027,75 @@ let result = runtime
   ]
 ]
 
+// --- Q1-Q2 2026 ENHANCEMENTS ---
+
+#section-slide(title: "New Features")
+
+#slide(title: "Q1-Q2 2026 Enhancements", subtitle: "Session Management Power Tools")[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 1.2cm,
+    [
+      #accent-card(title: "Session Annotations")[
+        #v(4pt)
+        #for feat in (
+          "Color-coded tags for categorization",
+          "Rich text notes per session",
+          "Message highlighting with colors",
+          "Bookmarks for quick navigation",
+          "18 predefined tag/highlight colors",
+        ) [
+          #text(size: 7pt, fill: text-dark)[• #feat] #v(3pt)
+        ]
+      ]
+
+      #v(8pt)
+
+      #accent-card(title: "Session Templates")[
+        #v(4pt)
+        #for feat in (
+          "8 built-in templates (code-review, debug, etc.)",
+          "Custom system prompts",
+          "Pre-configured model parameters",
+          "Initial message scaffolding",
+          "Suggested query shortcuts",
+        ) [
+          #text(size: 7pt, fill: text-dark)[• #feat] #v(3pt)
+        ]
+      ]
+    ],
+    [
+      #accent-card(title: "Keyboard Shortcuts")[
+        #v(4pt)
+        #for feat in (
+          "40+ configurable shortcuts",
+          "Categories: navigation, editing, search, UI",
+          "Global and context-aware bindings",
+          "Conflict detection & resolution",
+          "Import/export shortcut profiles",
+        ) [
+          #text(size: 7pt, fill: text-dark)[• #feat] #v(3pt)
+        ]
+      ]
+
+      #v(8pt)
+
+      #accent-card(title: "Batch Operations")[
+        #v(4pt)
+        #for feat in (
+          "Multi-select with shift/ctrl",
+          "Bulk delete, archive, export",
+          "Batch tagging across sessions",
+          "Progress tracking & cancellation",
+          "Undo support for bulk actions",
+        ) [
+          #text(size: 7pt, fill: text-dark)[• #feat] #v(3pt)
+        ]
+      ]
+    ],
+  )
+]
+
 // --- SUMMARY ---
 
 #slide(title: "Why Chasm", subtitle: "Key Differentiators")[
@@ -1038,7 +1107,7 @@ let result = runtime
         ("◆", "Local-First", "Data never leaves your infrastructure"),
         ("◆", "Rust Performance", "Sub-ms queries on millions of messages"),
         ("◆", "Universal", "Every provider, every platform, one tool"),
-        ("◆", "Agency Built-In", "Multi-agent orchestration out of the box"),
+        ("◆", "Power User Tools", "Annotations, templates, 40+ shortcuts"),
         ("◆", "Zero Dependencies", "Single binary, instant deployment"),
         ("◆", "Compliance Ready", "DFARS, CMMC, FedRAMP, NIST 800-171"),
       ) [
