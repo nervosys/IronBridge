@@ -1,0 +1,292 @@
+/**
+ * Batch Operations Toolbar Styles
+ */
+
+.batch-operations-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: var(--bg-secondary, #1e1e1e);
+    border-bottom: 1px solid var(--border-color, #333);
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.selection-toggle {
+    font-size: 16px;
+}
+
+.selection-toggle.active {
+    color: var(--accent-color, #0078d4);
+}
+
+.selection-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.selected-count {
+    font-weight: 500;
+}
+
+.batch-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-danger {
+    padding: 4px 10px;
+    background: var(--danger-color, #d32f2f);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.btn-danger:hover {
+    background: var(--danger-hover, #b71c1c);
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Session Checkbox */
+.session-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent-color, #0078d4);
+}
+
+/* Popover Overlay */
+.popover-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* Batch Tag Selector */
+.batch-tag-selector {
+    width: 400px;
+    max-height: 500px;
+    background: var(--bg-secondary, #1e1e1e);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+}
+
+.tag-selector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color, #333);
+}
+
+.tag-selector-header h4 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.batch-tag-selector .tag-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tag-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.tag-checkbox-label:hover {
+    background: var(--bg-hover, #2a2a2a);
+}
+
+.tag-selector-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px;
+    border-top: 1px solid var(--border-color, #333);
+}
+
+/* Export Options Panel */
+.export-options-panel {
+    width: 400px;
+    background: var(--bg-secondary, #1e1e1e);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.export-options-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color, #333);
+}
+
+.export-options-header h4 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.export-options-form {
+    padding: 16px;
+}
+
+.format-options {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.export-options-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px;
+    border-top: 1px solid var(--border-color, #333);
+}
+
+/* Confirmation Dialog */
+.confirmation-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+}
+
+.confirmation-dialog {
+    width: 400px;
+    padding: 24px;
+    background: var(--bg-secondary, #1e1e1e);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.confirmation-dialog h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+}
+
+.confirmation-dialog p {
+    margin: 0 0 20px 0;
+    font-size: 14px;
+    color: var(--text-secondary, #aaa);
+    line-height: 1.5;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+/* Progress Modal */
+.progress-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1002;
+}
+
+.progress-modal {
+    width: 400px;
+    padding: 24px;
+    background: var(--bg-secondary, #1e1e1e);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+.progress-modal h4 {
+    margin: 0 0 20px 0;
+    font-size: 16px;
+}
+
+.progress-bar-container {
+    height: 8px;
+    background: var(--bg-tertiary, #252525);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: var(--accent-color, #0078d4);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.progress-stats {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-muted, #888);
+    margin-bottom: 16px;
+}
+
+.failed-count {
+    color: var(--danger-color, #d32f2f);
+}
+
+.current-item {
+    font-size: 12px;
+    color: var(--text-muted, #888);
+    margin-bottom: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

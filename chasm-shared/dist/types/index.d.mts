@@ -1,4 +1,364 @@
 /**
+ * A tag that can be applied to sessions
+ */
+interface SessionTag {
+    id: string;
+    name: string;
+    color: string;
+    description?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+/**
+ * A note attached to a session or message
+ */
+interface SessionNote {
+    id: string;
+    sessionId: string;
+    messageId?: string;
+    content: string;
+    createdAt: string;
+    updatedAt: string;
+    author?: string;
+    pinned?: boolean;
+}
+/**
+ * A highlight within a message
+ */
+interface MessageHighlight {
+    id: string;
+    sessionId: string;
+    messageId: string;
+    startOffset: number;
+    endOffset: number;
+    color: string;
+    note?: string;
+    createdAt: string;
+}
+/**
+ * Bookmark for quick access to a session or message
+ */
+interface SessionBookmark {
+    id: string;
+    sessionId: string;
+    messageId?: string;
+    title: string;
+    description?: string;
+    createdAt: string;
+    sortOrder: number;
+}
+/**
+ * Session annotations container
+ */
+interface SessionAnnotations {
+    sessionId: string;
+    tags: string[];
+    notes: SessionNote[];
+    highlights: MessageHighlight[];
+    bookmarks: SessionBookmark[];
+    rating?: number;
+    status?: 'active' | 'archived' | 'favorite' | 'flagged';
+    customFields?: Record<string, string | number | boolean>;
+}
+/**
+ * Annotation summary for list views
+ */
+interface AnnotationSummary {
+    tagCount: number;
+    noteCount: number;
+    highlightCount: number;
+    bookmarkCount: number;
+    rating?: number;
+    status?: string;
+}
+declare const TAG_COLORS: readonly [{
+    readonly name: "Red";
+    readonly value: "#ef4444";
+}, {
+    readonly name: "Orange";
+    readonly value: "#f97316";
+}, {
+    readonly name: "Amber";
+    readonly value: "#f59e0b";
+}, {
+    readonly name: "Yellow";
+    readonly value: "#eab308";
+}, {
+    readonly name: "Lime";
+    readonly value: "#84cc16";
+}, {
+    readonly name: "Green";
+    readonly value: "#22c55e";
+}, {
+    readonly name: "Emerald";
+    readonly value: "#10b981";
+}, {
+    readonly name: "Teal";
+    readonly value: "#14b8a6";
+}, {
+    readonly name: "Cyan";
+    readonly value: "#06b6d4";
+}, {
+    readonly name: "Sky";
+    readonly value: "#0ea5e9";
+}, {
+    readonly name: "Blue";
+    readonly value: "#3b82f6";
+}, {
+    readonly name: "Indigo";
+    readonly value: "#6366f1";
+}, {
+    readonly name: "Violet";
+    readonly value: "#8b5cf6";
+}, {
+    readonly name: "Purple";
+    readonly value: "#a855f7";
+}, {
+    readonly name: "Fuchsia";
+    readonly value: "#d946ef";
+}, {
+    readonly name: "Pink";
+    readonly value: "#ec4899";
+}, {
+    readonly name: "Rose";
+    readonly value: "#f43f5e";
+}, {
+    readonly name: "Gray";
+    readonly value: "#6b7280";
+}];
+declare const HIGHLIGHT_COLORS: readonly [{
+    readonly name: "Yellow";
+    readonly value: "#fef08a";
+}, {
+    readonly name: "Green";
+    readonly value: "#bbf7d0";
+}, {
+    readonly name: "Blue";
+    readonly value: "#bfdbfe";
+}, {
+    readonly name: "Pink";
+    readonly value: "#fbcfe8";
+}, {
+    readonly name: "Purple";
+    readonly value: "#ddd6fe";
+}, {
+    readonly name: "Orange";
+    readonly value: "#fed7aa";
+}];
+declare const DEFAULT_TAGS: Omit<SessionTag, 'id' | 'createdAt' | 'updatedAt'>[];
+
+/**
+ * A reusable session template
+ */
+interface SessionTemplate {
+    id: string;
+    name: string;
+    description?: string;
+    category: TemplateCategory;
+    systemPrompt?: string;
+    initialMessages?: TemplateMessage[];
+    suggestedQueries?: string[];
+    preferredProvider?: string;
+    preferredModel?: string;
+    parameters?: ModelParameters;
+    tags?: string[];
+    icon?: string;
+    color?: string;
+    isBuiltIn?: boolean;
+    isPublic?: boolean;
+    usageCount: number;
+    lastUsedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+    createdBy?: string;
+}
+/**
+ * Template message structure
+ */
+interface TemplateMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    placeholder?: boolean;
+}
+/**
+ * Model parameters for templates
+ */
+interface ModelParameters {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    frequencyPenalty?: number;
+    presencePenalty?: number;
+    stopSequences?: string[];
+}
+/**
+ * Template categories
+ */
+type TemplateCategory = 'coding' | 'writing' | 'analysis' | 'research' | 'debugging' | 'documentation' | 'learning' | 'creative' | 'business' | 'custom';
+declare const TEMPLATE_CATEGORIES: {
+    id: TemplateCategory;
+    name: string;
+    icon: string;
+    description: string;
+}[];
+declare const BUILTIN_TEMPLATES: Omit<SessionTemplate, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>[];
+
+/**
+ * A keyboard shortcut definition
+ */
+interface KeyboardShortcut {
+    id: string;
+    action: ShortcutAction;
+    keys: string[];
+    description: string;
+    category: ShortcutCategory;
+    isCustom?: boolean;
+    isEnabled: boolean;
+}
+/**
+ * Shortcut action identifiers
+ */
+type ShortcutAction = 'nav.home' | 'nav.sessions' | 'nav.workspaces' | 'nav.agents' | 'nav.settings' | 'nav.search' | 'nav.back' | 'nav.forward' | 'session.new' | 'session.close' | 'session.save' | 'session.export' | 'session.archive' | 'session.delete' | 'session.duplicate' | 'session.share' | 'session.nextMessage' | 'session.prevMessage' | 'editor.focus' | 'editor.submit' | 'editor.newLine' | 'editor.clear' | 'editor.undo' | 'editor.redo' | 'editor.copy' | 'editor.paste' | 'select.all' | 'select.none' | 'select.invert' | 'batch.delete' | 'batch.archive' | 'batch.export' | 'batch.tag' | 'view.toggleSidebar' | 'view.toggleTheme' | 'view.zoomIn' | 'view.zoomOut' | 'view.resetZoom' | 'view.fullscreen' | 'misc.help' | 'misc.shortcuts' | 'misc.commandPalette' | 'misc.quickSwitch';
+/**
+ * Shortcut categories for organization
+ */
+type ShortcutCategory = 'navigation' | 'session' | 'editor' | 'selection' | 'batch' | 'view' | 'misc';
+declare const SHORTCUT_CATEGORIES: {
+    id: ShortcutCategory;
+    name: string;
+    description: string;
+}[];
+declare const DEFAULT_SHORTCUTS: Omit<KeyboardShortcut, 'id'>[];
+/**
+ * Format keys for display
+ */
+declare function formatShortcut(keys: string[]): string;
+/**
+ * Parse keyboard event to keys array
+ */
+declare function parseKeyboardEvent(event: KeyboardEvent): string[];
+/**
+ * Check if keyboard event matches shortcut
+ */
+declare function matchesShortcut(event: KeyboardEvent, shortcut: KeyboardShortcut): boolean;
+
+/**
+ * Batch operation types
+ */
+type BatchOperationType = 'delete' | 'archive' | 'unarchive' | 'export' | 'tag' | 'untag' | 'move' | 'merge' | 'duplicate';
+/**
+ * Batch operation request
+ */
+interface BatchOperationRequest {
+    operation: BatchOperationType;
+    sessionIds: string[];
+    options?: BatchOperationOptions;
+}
+/**
+ * Operation-specific options
+ */
+interface BatchOperationOptions {
+    exportFormat?: 'json' | 'markdown' | 'html' | 'pdf';
+    exportOptions?: {
+        includeMetadata?: boolean;
+        includeTimestamps?: boolean;
+        bundleAsZip?: boolean;
+    };
+    tagIds?: string[];
+    targetWorkspaceId?: string;
+    mergeStrategy?: 'sequential' | 'interleaved' | 'by-timestamp';
+    confirmDangerous?: boolean;
+    skipConfirmation?: boolean;
+}
+/**
+ * Batch operation result
+ */
+interface BatchOperationResult {
+    operation: BatchOperationType;
+    success: boolean;
+    totalCount: number;
+    successCount: number;
+    failedCount: number;
+    skippedCount: number;
+    errors: BatchOperationError[];
+    results?: BatchItemResult[];
+    exportUrl?: string;
+    exportBlob?: Blob;
+}
+/**
+ * Individual item result
+ */
+interface BatchItemResult {
+    sessionId: string;
+    success: boolean;
+    error?: string;
+    newId?: string;
+}
+/**
+ * Batch operation error
+ */
+interface BatchOperationError {
+    sessionId: string;
+    code: string;
+    message: string;
+}
+/**
+ * Batch operation progress
+ */
+interface BatchOperationProgress {
+    operation: BatchOperationType;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+    totalCount: number;
+    processedCount: number;
+    currentSessionId?: string;
+    startedAt: number;
+    estimatedCompletionAt?: number;
+}
+/**
+ * Selection state for batch operations
+ */
+interface SelectionState {
+    selectedIds: Set<string>;
+    lastSelectedId?: string;
+    selectionMode: 'single' | 'multiple' | 'range';
+    isAllSelected: boolean;
+}
+/**
+ * Selection action types
+ */
+type SelectionAction = {
+    type: 'select';
+    id: string;
+} | {
+    type: 'deselect';
+    id: string;
+} | {
+    type: 'toggle';
+    id: string;
+} | {
+    type: 'selectRange';
+    fromId: string;
+    toId: string;
+    allIds: string[];
+} | {
+    type: 'selectAll';
+    ids: string[];
+} | {
+    type: 'deselectAll';
+} | {
+    type: 'invertSelection';
+    allIds: string[];
+};
+/**
+ * Selection reducer
+ */
+declare function selectionReducer(state: SelectionState, action: SelectionAction): SelectionState;
+/**
+ * Initial selection state
+ */
+declare const initialSelectionState: SelectionState;
+
+/**
  * Workspace representing a VS Code workspace or project directory
  */
 interface Workspace {
@@ -1982,4 +2342,4 @@ interface DeviceSession {
  */
 declare const SUBSCRIPTION_TIERS: SubscriptionPricing[];
 
-export { type ActionBounds, type ActionCommand, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type DayCount, type DetectedProblem, type DeviceSession, type Document, type DocumentChunk, type DocumentType, type EmbeddingModel, type ExecutionResult, type ExportOptions, type FileChange, type GitCommit, type GitRepository, type GpuInfo, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type JointState, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Message, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type OrchestrationType, type OrchestratorResult, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionLevel, type Pipeline, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SUBSCRIPTION_TIERS, SWE_PROJECT_TEMPLATES, type SearchResult, type SensorData, type SensorType, type SensorValues, type Session, type SessionFilter, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type SimilarityMetric, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type ThemeMode, type TokenUsage, type ToolInvocation, type User, type UserPreferences, type VectorSearchResult, type VectorStoreConfig, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats };
+export { type ActionBounds, type ActionCommand, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type AnnotationSummary, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, BUILTIN_TEMPLATES, type BatchItemResult, type BatchOperationError, type BatchOperationOptions, type BatchOperationProgress, type BatchOperationRequest, type BatchOperationResult, type BatchOperationType, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, DEFAULT_SHORTCUTS, DEFAULT_TAGS, type DayCount, type DetectedProblem, type DeviceSession, type Document, type DocumentChunk, type DocumentType, type EmbeddingModel, type ExecutionResult, type ExportOptions, type FileChange, type GitCommit, type GitRepository, type GpuInfo, HIGHLIGHT_COLORS, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type JointState, type KeyboardShortcut, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Message, type MessageHighlight, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelParameters, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type OrchestrationType, type OrchestratorResult, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionLevel, type Pipeline, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SWE_PROJECT_TEMPLATES, type SearchResult, type SelectionAction, type SelectionState, type SensorData, type SensorType, type SensorValues, type Session, type SessionAnnotations, type SessionBookmark, type SessionFilter, type SessionNote, type SessionTag, type SessionTemplate, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type ShortcutAction, type ShortcutCategory, type SimilarityMetric, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, TAG_COLORS, TEMPLATE_CATEGORIES, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type TemplateCategory, type TemplateMessage, type ThemeMode, type TokenUsage, type ToolInvocation, type User, type UserPreferences, type VectorSearchResult, type VectorStoreConfig, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats, formatShortcut, initialSelectionState, matchesShortcut, parseKeyboardEvent, selectionReducer };

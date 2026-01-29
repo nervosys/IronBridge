@@ -2510,3 +2510,12 @@ export const SUBSCRIPTION_TIERS: SubscriptionPricing[] = [
         },
     },
 ];
+
+// =============================================================================
+// Re-export additional types from separate modules
+// =============================================================================
+
+export * from './annotations';
+export * from './templates';
+export * from './shortcuts';
+export * from './batch';
