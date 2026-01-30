@@ -359,6 +359,1141 @@ declare function selectionReducer(state: SelectionState, action: SelectionAction
 declare const initialSelectionState: SelectionState;
 
 /**
+ * Collaboration Types
+ *
+ * Types for multi-user collaboration, team workspaces, and session sharing.
+ * Supports real-time presence, permissions, and collaborative features.
+ */
+/**
+ * User profile for collaboration features
+ */
+interface CollaborationUser {
+    id: string;
+    email: string;
+    displayName: string;
+    avatarUrl?: string;
+    status: UserStatus;
+    lastSeenAt: number;
+    preferences: UserPreferences$1;
+    createdAt: number;
+    updatedAt: number;
+}
+type UserStatus = 'online' | 'away' | 'busy' | 'offline';
+interface UserPreferences$1 {
+    showPresence: boolean;
+    allowInvitations: boolean;
+    notificationSettings: NotificationPreferences;
+    defaultPermission: PermissionLevel;
+}
+interface NotificationPreferences {
+    emailNotifications: boolean;
+    pushNotifications: boolean;
+    sessionShared: boolean;
+    teamInvitation: boolean;
+    mentionNotification: boolean;
+    commentNotification: boolean;
+}
+/**
+ * Team workspace for shared sessions
+ */
+interface TeamWorkspace {
+    id: string;
+    name: string;
+    description?: string;
+    slug: string;
+    avatarUrl?: string;
+    ownerId: string;
+    visibility: WorkspaceVisibility;
+    settings: TeamWorkspaceSettings;
+    memberCount: number;
+    sessionCount: number;
+    createdAt: number;
+    updatedAt: number;
+}
+type WorkspaceVisibility = 'private' | 'internal' | 'public';
+interface TeamWorkspaceSettings {
+    allowGuestAccess: boolean;
+    requireApprovalToJoin: boolean;
+    defaultSessionPermission: PermissionLevel;
+    retentionDays?: number;
+    allowExternalSharing: boolean;
+    ssoRequired: boolean;
+    auditLogging: boolean;
+}
+/**
+ * Team membership
+ */
+interface TeamMember {
+    id: string;
+    userId: string;
+    teamId: string;
+    role: TeamRole;
+    permissions: TeamPermissions;
+    user?: CollaborationUser;
+    joinedAt: number;
+    invitedBy?: string;
+    lastActiveAt: number;
+}
+type TeamRole = 'owner' | 'admin' | 'member' | 'viewer' | 'guest';
+interface TeamPermissions {
+    canInvite: boolean;
+    canRemoveMembers: boolean;
+    canEditSettings: boolean;
+    canDeleteWorkspace: boolean;
+    canCreateSessions: boolean;
+    canDeleteSessions: boolean;
+    canShareExternally: boolean;
+    canViewAuditLog: boolean;
+}
+/**
+ * Team invitation
+ */
+interface TeamInvitation {
+    id: string;
+    teamId: string;
+    email: string;
+    role: TeamRole;
+    invitedBy: string;
+    status: InvitationStatus;
+    expiresAt: number;
+    createdAt: number;
+    acceptedAt?: number;
+}
+type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked';
+/**
+ * Session share configuration
+ */
+interface SessionShare {
+    id: string;
+    sessionId: string;
+    sharedBy: string;
+    shareType: ShareType;
+    permission: PermissionLevel;
+    expiresAt?: number;
+    accessCount: number;
+    maxAccesses?: number;
+    password?: string;
+    allowDownload: boolean;
+    allowCopy: boolean;
+    createdAt: number;
+    updatedAt: number;
+}
+type ShareType = 'link' | 'email' | 'team' | 'user';
+type PermissionLevel = 'view' | 'comment' | 'edit' | 'admin';
+/**
+ * Session access record
+ */
+interface SessionAccess {
+    id: string;
+    sessionId: string;
+    userId?: string;
+    guestEmail?: string;
+    shareId?: string;
+    permission: PermissionLevel;
+    grantedBy: string;
+    grantedAt: number;
+    expiresAt?: number;
+    lastAccessedAt?: number;
+    revokedAt?: number;
+}
+/**
+ * Permission check result
+ */
+interface PermissionCheck {
+    allowed: boolean;
+    permission: PermissionLevel;
+    reason?: string;
+    source: 'owner' | 'share' | 'team' | 'direct';
+}
+/**
+ * User presence in a session
+ */
+interface SessionPresence {
+    sessionId: string;
+    userId: string;
+    user: CollaborationUser;
+    cursor?: CursorPosition;
+    selection?: SelectionRange;
+    viewingMessageId?: string;
+    isTyping: boolean;
+    lastActivity: number;
+    connectedAt: number;
+}
+interface CursorPosition {
+    messageId: string;
+    offset: number;
+    line?: number;
+    column?: number;
+}
+interface SelectionRange {
+    messageId: string;
+    startOffset: number;
+    endOffset: number;
+    text?: string;
+}
+/**
+ * Presence broadcast event
+ */
+interface PresenceEvent {
+    type: PresenceEventType;
+    sessionId: string;
+    userId: string;
+    timestamp: number;
+    data?: Record<string, unknown>;
+}
+type PresenceEventType = 'user_joined' | 'user_left' | 'cursor_moved' | 'selection_changed' | 'typing_started' | 'typing_stopped' | 'viewing_message';
+/**
+ * Comment on a message or session
+ */
+interface SessionComment {
+    id: string;
+    sessionId: string;
+    messageId?: string;
+    parentId?: string;
+    userId: string;
+    user?: CollaborationUser;
+    content: string;
+    mentions: string[];
+    reactions: CommentReaction[];
+    resolved: boolean;
+    resolvedBy?: string;
+    resolvedAt?: number;
+    editedAt?: number;
+    createdAt: number;
+    updatedAt: number;
+}
+interface CommentReaction {
+    emoji: string;
+    userIds: string[];
+    count: number;
+}
+/**
+ * Mention in a comment
+ */
+interface Mention {
+    userId: string;
+    displayName: string;
+    startIndex: number;
+    endIndex: number;
+}
+/**
+ * Collaboration activity event
+ */
+interface CollaborationActivity {
+    id: string;
+    type: ActivityType;
+    teamId?: string;
+    sessionId?: string;
+    userId: string;
+    user?: CollaborationUser;
+    targetUserId?: string;
+    details: Record<string, unknown>;
+    ipAddress?: string;
+    userAgent?: string;
+    timestamp: number;
+}
+type ActivityType = 'team_created' | 'team_updated' | 'team_deleted' | 'member_invited' | 'member_joined' | 'member_removed' | 'member_role_changed' | 'session_shared' | 'session_unshared' | 'session_accessed' | 'session_permission_changed' | 'comment_added' | 'comment_edited' | 'comment_deleted' | 'comment_resolved' | 'mention_created';
+/**
+ * Collaborative editing operation (for OT/CRDT)
+ */
+interface EditOperation {
+    id: string;
+    sessionId: string;
+    messageId: string;
+    userId: string;
+    type: EditOperationType;
+    position: number;
+    content?: string;
+    length?: number;
+    timestamp: number;
+    parentVersion: string;
+    resultVersion: string;
+}
+type EditOperationType = 'insert' | 'delete' | 'retain';
+/**
+ * Version vector for conflict resolution
+ */
+interface VersionVector {
+    [userId: string]: number;
+}
+/**
+ * Sync state for a collaborative session
+ */
+interface CollaborationSyncState {
+    sessionId: string;
+    localVersion: string;
+    serverVersion: string;
+    pendingOperations: EditOperation[];
+    conflictingOperations: EditOperation[];
+    lastSyncAt: number;
+    syncStatus: 'synced' | 'syncing' | 'pending' | 'conflict';
+}
+/**
+ * Create team request
+ */
+interface CreateTeamRequest {
+    name: string;
+    description?: string;
+    visibility: WorkspaceVisibility;
+    settings?: Partial<TeamWorkspaceSettings>;
+}
+/**
+ * Invite member request
+ */
+interface InviteMemberRequest {
+    email: string;
+    role: TeamRole;
+    message?: string;
+}
+/**
+ * Share session request
+ */
+interface ShareSessionRequest {
+    sessionId: string;
+    shareType: ShareType;
+    permission: PermissionLevel;
+    recipients?: string[];
+    expiresIn?: number;
+    maxAccesses?: number;
+    password?: string;
+    allowDownload?: boolean;
+    allowCopy?: boolean;
+    message?: string;
+}
+/**
+ * Update permission request
+ */
+interface UpdatePermissionRequest {
+    accessId: string;
+    permission: PermissionLevel;
+    expiresAt?: number;
+}
+/**
+ * Collaboration WebSocket message
+ */
+interface CollaborationMessage {
+    type: CollaborationMessageType;
+    sessionId?: string;
+    teamId?: string;
+    payload: unknown;
+    timestamp: number;
+}
+type CollaborationMessageType = 'presence_update' | 'presence_sync' | 'edit_operation' | 'edit_ack' | 'edit_conflict' | 'comment_added' | 'comment_updated' | 'comment_deleted' | 'notification' | 'mention' | 'sync_request' | 'sync_response' | 'version_update';
+/**
+ * Default team permissions by role
+ */
+declare const DEFAULT_TEAM_PERMISSIONS: Record<TeamRole, TeamPermissions>;
+/**
+ * Permission level hierarchy
+ */
+declare const PERMISSION_HIERARCHY: PermissionLevel[];
+/**
+ * Check if a permission level includes another
+ */
+declare function hasPermission(userPermission: PermissionLevel, requiredPermission: PermissionLevel): boolean;
+/**
+ * Presence colors for user avatars
+ */
+declare const PRESENCE_COLORS: readonly [{
+    readonly name: "Red";
+    readonly value: "#ef4444";
+}, {
+    readonly name: "Orange";
+    readonly value: "#f97316";
+}, {
+    readonly name: "Amber";
+    readonly value: "#f59e0b";
+}, {
+    readonly name: "Yellow";
+    readonly value: "#eab308";
+}, {
+    readonly name: "Lime";
+    readonly value: "#84cc16";
+}, {
+    readonly name: "Green";
+    readonly value: "#22c55e";
+}, {
+    readonly name: "Emerald";
+    readonly value: "#10b981";
+}, {
+    readonly name: "Teal";
+    readonly value: "#14b8a6";
+}, {
+    readonly name: "Cyan";
+    readonly value: "#06b6d4";
+}, {
+    readonly name: "Sky";
+    readonly value: "#0ea5e9";
+}, {
+    readonly name: "Blue";
+    readonly value: "#3b82f6";
+}, {
+    readonly name: "Indigo";
+    readonly value: "#6366f1";
+}, {
+    readonly name: "Violet";
+    readonly value: "#8b5cf6";
+}, {
+    readonly name: "Purple";
+    readonly value: "#a855f7";
+}, {
+    readonly name: "Fuchsia";
+    readonly value: "#d946ef";
+}, {
+    readonly name: "Pink";
+    readonly value: "#ec4899";
+}];
+/**
+ * Get a consistent color for a user based on their ID
+ */
+declare function getUserColor(userId: string): string;
+/**
+ * Generate initials from display name
+ */
+declare function getInitials(displayName: string): string;
+
+/**
+ * Summarization Types
+ *
+ * Types for AI-powered session summarization and intelligent insights.
+ * Supports local LLMs, cloud APIs, and configurable summarization strategies.
+ */
+/**
+ * Summarization configuration
+ */
+interface SummarizationConfig {
+    id: string;
+    name: string;
+    provider: SummarizationProvider;
+    model: string;
+    strategy: SummarizationStrategy;
+    options: SummarizationOptions;
+    isDefault: boolean;
+    createdAt: number;
+    updatedAt: number;
+}
+type SummarizationProvider = 'local' | 'openai' | 'anthropic' | 'azure' | 'foundry' | 'google' | 'custom';
+type SummarizationStrategy = 'extractive' | 'abstractive' | 'hierarchical' | 'incremental' | 'comparative';
+interface SummarizationOptions {
+    maxTokens: number;
+    temperature: number;
+    topP?: number;
+    includeCodeBlocks: boolean;
+    includeToolCalls: boolean;
+    includeFileChanges: boolean;
+    languagePreference?: string;
+    customPrompt?: string;
+    chunkSize?: number;
+    overlapSize?: number;
+}
+/**
+ * Generated session summary
+ */
+interface SessionSummary {
+    id: string;
+    sessionId: string;
+    configId: string;
+    version: number;
+    type: SummaryType;
+    title: string;
+    synopsis: string;
+    sections: SummarySection[];
+    keyPoints: KeyPoint[];
+    codeHighlights: CodeHighlight[];
+    fileChanges: FileChangeSummary[];
+    decisions: Decision[];
+    actionItems: ActionItem[];
+    tags: string[];
+    sentiment?: SentimentAnalysis;
+    metrics: SummaryMetrics;
+    generatedAt: number;
+    expiresAt?: number;
+}
+type SummaryType = 'brief' | 'standard' | 'detailed' | 'technical' | 'executive';
+/**
+ * Section of a detailed summary
+ */
+interface SummarySection {
+    id: string;
+    title: string;
+    content: string;
+    messageRange: {
+        startId: string;
+        endId: string;
+        count: number;
+    };
+    importance: ImportanceLevel;
+    topics: string[];
+}
+type ImportanceLevel = 'low' | 'medium' | 'high' | 'critical';
+/**
+ * Key point extracted from session
+ */
+interface KeyPoint {
+    id: string;
+    content: string;
+    messageId: string;
+    category: KeyPointCategory;
+    confidence: number;
+}
+type KeyPointCategory = 'requirement' | 'decision' | 'problem' | 'solution' | 'insight' | 'question' | 'action';
+/**
+ * Code highlight from session
+ */
+interface CodeHighlight {
+    id: string;
+    messageId: string;
+    language: string;
+    code: string;
+    description: string;
+    purpose: CodePurpose;
+    filePath?: string;
+    lineRange?: {
+        start: number;
+        end: number;
+    };
+}
+type CodePurpose = 'implementation' | 'fix' | 'refactor' | 'example' | 'test' | 'configuration';
+/**
+ * File change summary
+ */
+interface FileChangeSummary {
+    filePath: string;
+    changeType: 'created' | 'modified' | 'deleted' | 'renamed';
+    description: string;
+    linesAdded: number;
+    linesRemoved: number;
+    messageIds: string[];
+}
+/**
+ * Decision made during session
+ */
+interface Decision {
+    id: string;
+    content: string;
+    rationale?: string;
+    messageId: string;
+    alternatives?: string[];
+    impact: ImportanceLevel;
+}
+/**
+ * Action item extracted from session
+ */
+interface ActionItem {
+    id: string;
+    content: string;
+    messageId: string;
+    status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+    priority: ImportanceLevel;
+    assignee?: string;
+    dueDate?: number;
+}
+/**
+ * Sentiment analysis of session
+ */
+interface SentimentAnalysis {
+    overall: SentimentScore;
+    progression: SentimentScore[];
+    frustrationPoints: string[];
+    successPoints: string[];
+}
+interface SentimentScore {
+    positive: number;
+    negative: number;
+    neutral: number;
+    label: 'positive' | 'negative' | 'neutral' | 'mixed';
+}
+/**
+ * Summary generation metrics
+ */
+interface SummaryMetrics {
+    inputTokens: number;
+    outputTokens: number;
+    processingTimeMs: number;
+    messagesCovered: number;
+    compressionRatio: number;
+}
+/**
+ * Incremental summary state
+ */
+interface IncrementalSummaryState {
+    sessionId: string;
+    currentSummary: SessionSummary;
+    lastProcessedMessageId: string;
+    lastProcessedMessageIndex: number;
+    pendingMessages: number;
+    updateScheduledAt?: number;
+    history: SummaryVersion[];
+}
+interface SummaryVersion {
+    version: number;
+    summaryId: string;
+    messageCount: number;
+    createdAt: number;
+}
+/**
+ * Summary update trigger
+ */
+interface SummaryUpdateTrigger {
+    type: 'message_count' | 'time_elapsed' | 'topic_change' | 'manual';
+    threshold?: number;
+    enabled: boolean;
+}
+/**
+ * Comparison between sessions
+ */
+interface SessionComparison {
+    id: string;
+    sessionIds: string[];
+    commonTopics: string[];
+    uniqueTopics: Record<string, string[]>;
+    similarityScore: number;
+    keyDifferences: ComparisonDifference[];
+    insights: string[];
+    generatedAt: number;
+}
+interface ComparisonDifference {
+    category: string;
+    sessionA: string;
+    sessionB: string;
+    description: string;
+}
+/**
+ * Extracted topic
+ */
+interface ExtractedTopic {
+    id: string;
+    name: string;
+    description?: string;
+    frequency: number;
+    firstMentionId: string;
+    lastMentionId: string;
+    relatedTopics: string[];
+    confidence: number;
+}
+/**
+ * Extracted entity
+ */
+interface ExtractedEntity {
+    id: string;
+    name: string;
+    type: EntityType;
+    mentions: EntityMention[];
+    metadata?: Record<string, unknown>;
+}
+type EntityType = 'file' | 'function' | 'class' | 'variable' | 'package' | 'url' | 'person' | 'organization' | 'technology';
+interface EntityMention {
+    messageId: string;
+    startIndex: number;
+    endIndex: number;
+    context: string;
+}
+/**
+ * Custom summary template
+ */
+interface SummaryTemplate {
+    id: string;
+    name: string;
+    description?: string;
+    type: SummaryType;
+    systemPrompt: string;
+    userPromptTemplate: string;
+    outputSchema?: Record<string, unknown>;
+    variables: TemplateVariable[];
+    isBuiltIn: boolean;
+    createdAt: number;
+    updatedAt: number;
+}
+interface TemplateVariable {
+    name: string;
+    description: string;
+    type: 'string' | 'number' | 'boolean' | 'array';
+    required: boolean;
+    defaultValue?: unknown;
+}
+/**
+ * Generate summary request
+ */
+interface GenerateSummaryRequest {
+    sessionId: string;
+    type?: SummaryType;
+    configId?: string;
+    templateId?: string;
+    options?: Partial<SummarizationOptions>;
+    messageRange?: {
+        startId?: string;
+        endId?: string;
+    };
+    forceRegenerate?: boolean;
+}
+/**
+ * Generate summary response
+ */
+interface GenerateSummaryResponse {
+    summary: SessionSummary;
+    cached: boolean;
+    processingTime: number;
+    warnings?: string[];
+}
+/**
+ * Compare sessions request
+ */
+interface CompareSessionsRequest {
+    sessionIds: string[];
+    focusAreas?: string[];
+}
+/**
+ * Batch summarization request
+ */
+interface BatchSummarizeRequest {
+    sessionIds: string[];
+    type: SummaryType;
+    configId?: string;
+    concurrency?: number;
+}
+interface BatchSummarizeProgress {
+    total: number;
+    completed: number;
+    failed: number;
+    currentSessionId?: string;
+}
+/**
+ * Local LLM provider config
+ */
+interface LocalLLMConfig {
+    type: 'ollama' | 'lmstudio' | 'llamacpp' | 'custom';
+    endpoint: string;
+    model: string;
+    contextLength: number;
+}
+/**
+ * Cloud provider config
+ */
+interface CloudProviderConfig {
+    provider: SummarizationProvider;
+    apiKey?: string;
+    endpoint?: string;
+    model: string;
+    organization?: string;
+    project?: string;
+}
+/**
+ * Default summarization options
+ */
+declare const DEFAULT_SUMMARIZATION_OPTIONS: SummarizationOptions;
+/**
+ * Summary type configurations
+ */
+declare const SUMMARY_TYPE_CONFIG: Record<SummaryType, {
+    maxTokens: number;
+    temperature: number;
+    description: string;
+}>;
+/**
+ * Built-in summary templates
+ */
+declare const BUILT_IN_TEMPLATES: Pick<SummaryTemplate, 'id' | 'name' | 'type'>[];
+/**
+ * Estimate tokens for a message
+ */
+declare function estimateTokens(text: string): number;
+/**
+ * Calculate compression ratio
+ */
+declare function calculateCompressionRatio(inputTokens: number, outputTokens: number): number;
+
+/**
+ * Semantic Search Types
+ *
+ * Types for embedding-based semantic search, vector storage,
+ * and intelligent session/message retrieval.
+ */
+/**
+ * Embedding provider configuration
+ */
+interface EmbeddingConfig {
+    id: string;
+    name: string;
+    provider: EmbeddingProvider;
+    model: string;
+    dimensions: number;
+    maxTokens: number;
+    batchSize: number;
+    endpoint?: string;
+    isDefault: boolean;
+    createdAt: number;
+    updatedAt: number;
+}
+type EmbeddingProvider = 'local' | 'openai' | 'azure' | 'foundry' | 'cohere' | 'voyage' | 'ollama' | 'huggingface' | 'custom';
+/**
+ * Embedding model info
+ */
+interface EmbeddingModelInfo {
+    provider: EmbeddingProvider;
+    model: string;
+    dimensions: number;
+    maxTokens: number;
+    description: string;
+    costPer1kTokens?: number;
+}
+type VectorStoreType = 'memory' | 'sqlite-vec' | 'chromadb' | 'qdrant' | 'pinecone' | 'weaviate' | 'milvus' | 'pgvector';
+interface IndexSettings {
+    indexType: IndexType;
+    metric: DistanceMetric;
+    efConstruction?: number;
+    efSearch?: number;
+    m?: number;
+    nlist?: number;
+    nprobe?: number;
+}
+type IndexType = 'flat' | 'hnsw' | 'ivf' | 'pq' | 'hybrid';
+type DistanceMetric = 'cosine' | 'euclidean' | 'dot' | 'manhattan';
+/**
+ * Document embedding
+ */
+interface Embedding {
+    id: string;
+    vector: number[];
+    documentType: EmbeddableType;
+    documentId: string;
+    content: string;
+    contentHash: string;
+    metadata: EmbeddingMetadata;
+    configId: string;
+    createdAt: number;
+    updatedAt: number;
+}
+type EmbeddableType = 'session' | 'message' | 'summary' | 'code_block' | 'file_change' | 'comment' | 'annotation';
+interface EmbeddingMetadata {
+    sessionId: string;
+    workspaceId?: string;
+    messageId?: string;
+    role?: string;
+    model?: string;
+    language?: string;
+    filePath?: string;
+    timestamp: number;
+    tokenCount: number;
+    chunkIndex?: number;
+    totalChunks?: number;
+    tags?: string[];
+}
+/**
+ * Chunked content for embedding
+ */
+interface EmbeddingChunk {
+    id: string;
+    parentId: string;
+    content: string;
+    startIndex: number;
+    endIndex: number;
+    chunkIndex: number;
+    totalChunks: number;
+    overlap: number;
+}
+/**
+ * Semantic search query
+ */
+interface SemanticSearchQuery {
+    text: string;
+    embedding?: number[];
+    filters?: SearchFilters;
+    options?: SearchOptions;
+}
+interface SearchFilters {
+    documentTypes?: EmbeddableType[];
+    sessionIds?: string[];
+    workspaceIds?: string[];
+    providers?: string[];
+    dateRange?: {
+        start?: number;
+        end?: number;
+    };
+    tags?: string[];
+    models?: string[];
+    languages?: string[];
+    hasCode?: boolean;
+    hasFileChanges?: boolean;
+    minScore?: number;
+}
+interface SearchOptions {
+    limit?: number;
+    offset?: number;
+    includeMetadata?: boolean;
+    includeContent?: boolean;
+    includeHighlights?: boolean;
+    rerank?: boolean;
+    rerankModel?: string;
+    hybridWeight?: number;
+    groupBy?: GroupByOption;
+    deduplicate?: boolean;
+}
+type GroupByOption = 'session' | 'workspace' | 'date' | 'none';
+/**
+ * Semantic search result
+ */
+interface SemanticSearchResult {
+    id: string;
+    documentType: EmbeddableType;
+    documentId: string;
+    score: number;
+    rerankScore?: number;
+    content: string;
+    highlights?: SearchHighlight[];
+    metadata: EmbeddingMetadata;
+    session?: SearchResultSession;
+}
+interface SearchHighlight {
+    field: string;
+    snippet: string;
+    matchPositions: Array<{
+        start: number;
+        end: number;
+    }>;
+}
+interface SearchResultSession {
+    id: string;
+    title: string;
+    provider: string;
+    workspaceId: string;
+    workspaceName?: string;
+    messageCount: number;
+    createdAt: number;
+}
+/**
+ * Grouped search results
+ */
+interface GroupedSearchResults {
+    groups: SearchResultGroup[];
+    totalResults: number;
+    totalGroups: number;
+    queryEmbedding?: number[];
+}
+interface SearchResultGroup {
+    key: string;
+    label: string;
+    results: SemanticSearchResult[];
+    topScore: number;
+    totalInGroup: number;
+}
+/**
+ * Hybrid search combines semantic and keyword search
+ */
+interface HybridSearchQuery {
+    text: string;
+    semanticWeight: number;
+    keywordBoosts?: KeywordBoost[];
+    filters?: SearchFilters;
+    options?: SearchOptions;
+}
+interface KeywordBoost {
+    keyword: string;
+    boost: number;
+    field?: string;
+}
+/**
+ * Hybrid search result with both scores
+ */
+interface HybridSearchResult extends SemanticSearchResult {
+    keywordScore: number;
+    semanticScore: number;
+    combinedScore: number;
+    matchedKeywords?: string[];
+}
+/**
+ * Find similar documents request
+ */
+interface FindSimilarRequest {
+    documentType: EmbeddableType;
+    documentId: string;
+    embedding?: number[];
+    limit?: number;
+    minScore?: number;
+    excludeSameSession?: boolean;
+    filters?: SearchFilters;
+}
+/**
+ * Similar document result
+ */
+interface SimilarDocument {
+    documentType: EmbeddableType;
+    documentId: string;
+    similarity: number;
+    content: string;
+    metadata: EmbeddingMetadata;
+}
+/**
+ * Index status and statistics
+ */
+interface VectorIndexStatus {
+    storeId: string;
+    storeName: string;
+    storeType: VectorStoreType;
+    documentCount: number;
+    embeddingCount: number;
+    dimensionality: number;
+    indexSize: number;
+    lastIndexedAt?: number;
+    isIndexing: boolean;
+    pendingDocuments: number;
+    health: IndexHealth;
+}
+type IndexHealth = 'healthy' | 'degraded' | 'unhealthy' | 'rebuilding';
+/**
+ * Index build progress
+ */
+interface IndexBuildProgress {
+    storeId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    totalDocuments: number;
+    processedDocuments: number;
+    failedDocuments: number;
+    startedAt: number;
+    estimatedCompletionAt?: number;
+    currentDocument?: string;
+    errors?: string[];
+}
+/**
+ * Index rebuild request
+ */
+interface RebuildIndexRequest {
+    storeId: string;
+    filters?: {
+        documentTypes?: EmbeddableType[];
+        sessionIds?: string[];
+        dateRange?: {
+            start?: number;
+            end?: number;
+        };
+    };
+    force?: boolean;
+}
+/**
+ * Batch embed request
+ */
+interface BatchEmbedRequest {
+    documents: EmbedDocument[];
+    configId?: string;
+    storeId?: string;
+    upsert?: boolean;
+}
+interface EmbedDocument {
+    id: string;
+    content: string;
+    documentType: EmbeddableType;
+    metadata: Partial<EmbeddingMetadata>;
+}
+/**
+ * Batch embed response
+ */
+interface BatchEmbedResponse {
+    embedded: number;
+    failed: number;
+    errors?: Array<{
+        id: string;
+        error: string;
+    }>;
+    processingTime: number;
+}
+/**
+ * Search analytics
+ */
+interface SearchAnalytics {
+    queryId: string;
+    query: string;
+    timestamp: number;
+    resultCount: number;
+    topScore: number;
+    processingTimeMs: number;
+    filters: SearchFilters;
+    clickedResults?: string[];
+}
+/**
+ * Popular search queries
+ */
+interface PopularQuery {
+    query: string;
+    count: number;
+    avgResultCount: number;
+    avgTopScore: number;
+    lastSearchedAt: number;
+}
+/**
+ * Search request
+ */
+interface SearchRequest {
+    query: string;
+    type?: 'semantic' | 'keyword' | 'hybrid';
+    filters?: SearchFilters;
+    options?: SearchOptions;
+}
+/**
+ * Search response
+ */
+interface SearchResponse {
+    results: SemanticSearchResult[];
+    total: number;
+    hasMore: boolean;
+    queryId: string;
+    processingTime: number;
+    queryEmbedding?: number[];
+}
+/**
+ * Suggest completions request
+ */
+interface SuggestRequest {
+    prefix: string;
+    limit?: number;
+    filters?: SearchFilters;
+}
+/**
+ * Suggestion result
+ */
+interface Suggestion {
+    text: string;
+    score: number;
+    type: 'recent' | 'popular' | 'semantic';
+    metadata?: Record<string, unknown>;
+}
+/**
+ * Popular embedding models
+ */
+declare const EMBEDDING_MODELS: EmbeddingModelInfo[];
+/**
+ * Default search options
+ */
+declare const DEFAULT_SEARCH_OPTIONS: Required<SearchOptions>;
+/**
+ * Default index settings
+ */
+declare const DEFAULT_INDEX_SETTINGS: IndexSettings;
+/**
+ * Chunking defaults
+ */
+declare const CHUNKING_DEFAULTS: {
+    chunkSize: number;
+    chunkOverlap: number;
+    minChunkSize: number;
+    separators: string[];
+};
+/**
+ * Calculate cosine similarity
+ */
+declare function cosineSimilarity(a: number[], b: number[]): number;
+/**
+ * Normalize a vector to unit length
+ */
+declare function normalizeVector(vector: number[]): number[];
+/**
+ * Chunk text for embedding
+ */
+declare function chunkText(text: string, options?: {
+    chunkSize?: number;
+    overlap?: number;
+    separators?: string[];
+}): string[];
+
+/**
  * Workspace representing a VS Code workspace or project directory
  */
 interface Workspace {
@@ -866,7 +2001,7 @@ type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 /**
  * Permission level for proactive agents
  */
-type PermissionLevel = 'notify_only' | 'low_risk' | 'medium_risk' | 'high_autonomy';
+type AgentPermissionLevel = 'notify_only' | 'low_risk' | 'medium_risk' | 'high_autonomy';
 /**
  * Proactive action that requires permission
  */
@@ -2342,4 +3477,4 @@ interface DeviceSession {
  */
 declare const SUBSCRIPTION_TIERS: SubscriptionPricing[];
 
-export { type ActionBounds, type ActionCommand, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type AnnotationSummary, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, BUILTIN_TEMPLATES, type BatchItemResult, type BatchOperationError, type BatchOperationOptions, type BatchOperationProgress, type BatchOperationRequest, type BatchOperationResult, type BatchOperationType, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, DEFAULT_SHORTCUTS, DEFAULT_TAGS, type DayCount, type DetectedProblem, type DeviceSession, type Document, type DocumentChunk, type DocumentType, type EmbeddingModel, type ExecutionResult, type ExportOptions, type FileChange, type GitCommit, type GitRepository, type GpuInfo, HIGHLIGHT_COLORS, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type JointState, type KeyboardShortcut, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Message, type MessageHighlight, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelParameters, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type OrchestrationType, type OrchestratorResult, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionLevel, type Pipeline, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SWE_PROJECT_TEMPLATES, type SearchResult, type SelectionAction, type SelectionState, type SensorData, type SensorType, type SensorValues, type Session, type SessionAnnotations, type SessionBookmark, type SessionFilter, type SessionNote, type SessionTag, type SessionTemplate, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type ShortcutAction, type ShortcutCategory, type SimilarityMetric, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, TAG_COLORS, TEMPLATE_CATEGORIES, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type TemplateCategory, type TemplateMessage, type ThemeMode, type TokenUsage, type ToolInvocation, type User, type UserPreferences, type VectorSearchResult, type VectorStoreConfig, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats, formatShortcut, initialSelectionState, matchesShortcut, parseKeyboardEvent, selectionReducer };
+export { type ActionBounds, type ActionCommand, type ActionItem, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type ActivityType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentPermissionLevel, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type AnnotationSummary, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, type BatchEmbedRequest, type BatchEmbedResponse, type BatchItemResult, type BatchOperationError, type BatchOperationOptions, type BatchOperationProgress, type BatchOperationRequest, type BatchOperationResult, type BatchOperationType, type BatchSummarizeProgress, type BatchSummarizeRequest, CHUNKING_DEFAULTS, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type CloudProviderConfig, type CodeHighlight, type CodePurpose, type CollaborationActivity, type CollaborationMessage, type CollaborationMessageType, type CollaborationSyncState, type CollaborationUser, type CommentReaction, type CompareSessionsRequest, type ComparisonDifference, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type CreateTeamRequest, type CursorPosition, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, type DayCount, type Decision, type DetectedProblem, type DeviceSession, type DistanceMetric, type Document, type DocumentChunk, type DocumentType, EMBEDDING_MODELS, type EditOperation, type EditOperationType, type EmbedDocument, type EmbeddableType, type Embedding, type EmbeddingChunk, type EmbeddingConfig, type EmbeddingMetadata, type EmbeddingModel, type EmbeddingModelInfo, type EmbeddingProvider, type EntityMention, type EntityType, type ExecutionResult, type ExportOptions, type ExtractedEntity, type ExtractedTopic, type FileChange, type FileChangeSummary, type FindSimilarRequest, type GenerateSummaryRequest, type GenerateSummaryResponse, type GitCommit, type GitRepository, type GpuInfo, type GroupByOption, type GroupedSearchResults, HIGHLIGHT_COLORS, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type HybridSearchQuery, type HybridSearchResult, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type ImportanceLevel, type IncrementalSummaryState, type IndexBuildProgress, type IndexHealth, type IndexSettings, type IndexType, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type InvitationStatus, type InviteMemberRequest, type JointState, type KeyPoint, type KeyPointCategory, type KeyboardShortcut, type KeywordBoost, type LocalLLMConfig, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Mention, type Message, type MessageHighlight, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelParameters, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type NotificationPreferences, type OrchestrationType, type OrchestratorResult, PERMISSION_HIERARCHY, PRESENCE_COLORS, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionCheck, type PermissionLevel, type Pipeline, type PopularQuery, type PresenceEvent, type PresenceEventType, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RebuildIndexRequest, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWE_PROJECT_TEMPLATES, type SearchAnalytics, type SearchFilters, type SearchHighlight, type SearchOptions, type SearchRequest, type SearchResponse, type SearchResult, type SearchResultGroup, type SearchResultSession, type SelectionAction, type SelectionRange, type SelectionState, type SemanticSearchQuery, type SemanticSearchResult, type SensorData, type SensorType, type SensorValues, type SentimentAnalysis, type SentimentScore, type Session, type SessionAccess, type SessionAnnotations, type SessionBookmark, type SessionComment, type SessionComparison, type SessionFilter, type SessionNote, type SessionPresence, type SessionShare, type SessionSummary, type SessionTag, type SessionTemplate, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type ShareSessionRequest, type ShareType, type ShortcutAction, type ShortcutCategory, type SimilarDocument, type SimilarityMetric, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type SuggestRequest, type Suggestion, type SummarizationConfig, type SummarizationOptions, type SummarizationProvider, type SummarizationStrategy, type SummaryMetrics, type SummarySection, type SummaryTemplate, type SummaryType, type SummaryUpdateTrigger, type SummaryVersion, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, TAG_COLORS, TEMPLATE_CATEGORIES, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type TeamInvitation, type TeamMember, type TeamPermissions, type TeamRole, type TeamWorkspace, type TeamWorkspaceSettings, type TemplateCategory, type TemplateMessage, type TemplateVariable, type ThemeMode, type TokenUsage, type ToolInvocation, type UpdatePermissionRequest, type User, type UserPreferences, type UserStatus, type VectorIndexStatus, type VectorSearchResult, type VectorStoreConfig, type VectorStoreType, type VersionVector, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats, type WorkspaceVisibility, calculateCompressionRatio, chunkText, cosineSimilarity, estimateTokens, formatShortcut, getInitials, getUserColor, hasPermission, initialSelectionState, matchesShortcut, normalizeVector, parseKeyboardEvent, selectionReducer };

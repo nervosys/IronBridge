@@ -561,7 +561,7 @@ export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed'
 /**
  * Permission level for proactive agents
  */
-export type PermissionLevel = 'notify_only' | 'low_risk' | 'medium_risk' | 'high_autonomy';
+export type AgentPermissionLevel = 'notify_only' | 'low_risk' | 'medium_risk' | 'high_autonomy';
 
 /**
  * Proactive action that requires permission
@@ -2515,7 +2515,13 @@ export const SUBSCRIPTION_TIERS: SubscriptionPricing[] = [
 // Re-export additional types from separate modules
 // =============================================================================
 
+// Q1-Q2 2026 Enhancements
 export * from './annotations';
 export * from './templates';
 export * from './shortcuts';
 export * from './batch';
+
+// Q2 2026 Features
+export * from './collaboration';
+export * from './summarization';
+export * from './search';

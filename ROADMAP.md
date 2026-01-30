@@ -1,6 +1,6 @@
 # Chasm Roadmap
 
-> **Last Updated:** January 28, 2026
+> **Last Updated:** January 29, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
 
@@ -90,6 +90,13 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Keyboard shortcuts for power users
 - [x] Batch operations (delete, archive, export)
 
+#### Q2 2026 Features ✅
+- [x] Multi-user collaboration
+- [x] Team workspaces
+- [x] Session sharing with permissions
+- [x] AI-powered session summarization
+- [x] Semantic search across sessions
+
 ---
 
 ## Planned 📋
@@ -97,11 +104,6 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ### Q2 2026
 
 #### Features
-- [ ] Multi-user collaboration
-- [ ] Team workspaces
-- [ ] Session sharing with permissions
-- [ ] AI-powered session summarization
-- [ ] Semantic search across sessions
 - [ ] Custom tagging and organization
 
 #### Integrations
@@ -156,6 +158,20 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ---
 
 ## Recent Changes
+
+### January 2026 (Q2 2026 Features Sprint)
+
+#### Shared Types (chasm-shared)
+- Created collaboration types: users, teams, presence, cursors, permissions
+- Created summarization types: AI providers, templates, session summaries
+- Created semantic search types: embeddings, vector stores, hybrid search
+
+#### Web Application (chasm-web)
+- Added PresenceIndicator component for real-time user presence
+- Added TeamWorkspacePanel for team management with invitations and roles
+- Added ShareSessionModal for session sharing with granular permissions
+- Added SessionSummaryPanel for AI-generated summary display
+- Added SemanticSearchPanel for advanced natural language search
 
 ### January 2026 (Q1 Completion Sprint)
 

@@ -361,6 +361,300 @@ var initialSelectionState = {
   isAllSelected: false
 };
 
+// src/types/collaboration.ts
+var DEFAULT_TEAM_PERMISSIONS = {
+  owner: {
+    canInvite: true,
+    canRemoveMembers: true,
+    canEditSettings: true,
+    canDeleteWorkspace: true,
+    canCreateSessions: true,
+    canDeleteSessions: true,
+    canShareExternally: true,
+    canViewAuditLog: true
+  },
+  admin: {
+    canInvite: true,
+    canRemoveMembers: true,
+    canEditSettings: true,
+    canDeleteWorkspace: false,
+    canCreateSessions: true,
+    canDeleteSessions: true,
+    canShareExternally: true,
+    canViewAuditLog: true
+  },
+  member: {
+    canInvite: false,
+    canRemoveMembers: false,
+    canEditSettings: false,
+    canDeleteWorkspace: false,
+    canCreateSessions: true,
+    canDeleteSessions: false,
+    canShareExternally: false,
+    canViewAuditLog: false
+  },
+  viewer: {
+    canInvite: false,
+    canRemoveMembers: false,
+    canEditSettings: false,
+    canDeleteWorkspace: false,
+    canCreateSessions: false,
+    canDeleteSessions: false,
+    canShareExternally: false,
+    canViewAuditLog: false
+  },
+  guest: {
+    canInvite: false,
+    canRemoveMembers: false,
+    canEditSettings: false,
+    canDeleteWorkspace: false,
+    canCreateSessions: false,
+    canDeleteSessions: false,
+    canShareExternally: false,
+    canViewAuditLog: false
+  }
+};
+var PERMISSION_HIERARCHY = ["view", "comment", "edit", "admin"];
+function hasPermission(userPermission, requiredPermission) {
+  const userIndex = PERMISSION_HIERARCHY.indexOf(userPermission);
+  const requiredIndex = PERMISSION_HIERARCHY.indexOf(requiredPermission);
+  return userIndex >= requiredIndex;
+}
+var PRESENCE_COLORS = [
+  { name: "Red", value: "#ef4444" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Amber", value: "#f59e0b" },
+  { name: "Yellow", value: "#eab308" },
+  { name: "Lime", value: "#84cc16" },
+  { name: "Green", value: "#22c55e" },
+  { name: "Emerald", value: "#10b981" },
+  { name: "Teal", value: "#14b8a6" },
+  { name: "Cyan", value: "#06b6d4" },
+  { name: "Sky", value: "#0ea5e9" },
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Indigo", value: "#6366f1" },
+  { name: "Violet", value: "#8b5cf6" },
+  { name: "Purple", value: "#a855f7" },
+  { name: "Fuchsia", value: "#d946ef" },
+  { name: "Pink", value: "#ec4899" }
+];
+function getUserColor(userId) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash << 5) - hash + userId.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % PRESENCE_COLORS.length;
+  return PRESENCE_COLORS[index].value;
+}
+function getInitials(displayName) {
+  const parts = displayName.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// src/types/summarization.ts
+var DEFAULT_SUMMARIZATION_OPTIONS = {
+  maxTokens: 1024,
+  temperature: 0.3,
+  topP: 0.9,
+  includeCodeBlocks: true,
+  includeToolCalls: true,
+  includeFileChanges: true,
+  chunkSize: 4e3,
+  overlapSize: 200
+};
+var SUMMARY_TYPE_CONFIG = {
+  brief: {
+    maxTokens: 128,
+    temperature: 0.2,
+    description: "A concise 1-2 sentence overview"
+  },
+  standard: {
+    maxTokens: 512,
+    temperature: 0.3,
+    description: "A paragraph-length summary with key points"
+  },
+  detailed: {
+    maxTokens: 2048,
+    temperature: 0.4,
+    description: "Multi-section summary with code highlights"
+  },
+  technical: {
+    maxTokens: 2048,
+    temperature: 0.2,
+    description: "Technical deep-dive with code and architecture"
+  },
+  executive: {
+    maxTokens: 1024,
+    temperature: 0.3,
+    description: "High-level business-focused summary"
+  }
+};
+var BUILT_IN_TEMPLATES = [
+  { id: "changelog", name: "Changelog Entry", type: "technical" },
+  { id: "standup", name: "Standup Update", type: "brief" },
+  { id: "code-review", name: "Code Review Summary", type: "technical" },
+  { id: "meeting-notes", name: "Meeting Notes", type: "detailed" },
+  { id: "project-status", name: "Project Status Report", type: "executive" }
+];
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+function calculateCompressionRatio(inputTokens, outputTokens) {
+  if (inputTokens === 0) return 0;
+  return Number(((inputTokens - outputTokens) / inputTokens).toFixed(3));
+}
+
+// src/types/search.ts
+var EMBEDDING_MODELS = [
+  // OpenAI
+  {
+    provider: "openai",
+    model: "text-embedding-3-small",
+    dimensions: 1536,
+    maxTokens: 8191,
+    description: "Fast, efficient embeddings",
+    costPer1kTokens: 2e-5
+  },
+  {
+    provider: "openai",
+    model: "text-embedding-3-large",
+    dimensions: 3072,
+    maxTokens: 8191,
+    description: "Highest quality embeddings",
+    costPer1kTokens: 13e-5
+  },
+  // Azure
+  {
+    provider: "azure",
+    model: "text-embedding-ada-002",
+    dimensions: 1536,
+    maxTokens: 8191,
+    description: "Azure OpenAI embeddings"
+  },
+  // Cohere
+  {
+    provider: "cohere",
+    model: "embed-english-v3.0",
+    dimensions: 1024,
+    maxTokens: 512,
+    description: "High-quality English embeddings"
+  },
+  {
+    provider: "cohere",
+    model: "embed-multilingual-v3.0",
+    dimensions: 1024,
+    maxTokens: 512,
+    description: "Multilingual embeddings"
+  },
+  // Local
+  {
+    provider: "local",
+    model: "all-MiniLM-L6-v2",
+    dimensions: 384,
+    maxTokens: 256,
+    description: "Fast local model for testing"
+  },
+  {
+    provider: "local",
+    model: "all-mpnet-base-v2",
+    dimensions: 768,
+    maxTokens: 384,
+    description: "High-quality local model"
+  },
+  // Ollama
+  {
+    provider: "ollama",
+    model: "nomic-embed-text",
+    dimensions: 768,
+    maxTokens: 8192,
+    description: "Local embeddings via Ollama"
+  },
+  {
+    provider: "ollama",
+    model: "mxbai-embed-large",
+    dimensions: 1024,
+    maxTokens: 512,
+    description: "High-quality Ollama embeddings"
+  }
+];
+var DEFAULT_SEARCH_OPTIONS = {
+  limit: 20,
+  offset: 0,
+  includeMetadata: true,
+  includeContent: true,
+  includeHighlights: true,
+  rerank: false,
+  rerankModel: "cohere-rerank-v3",
+  hybridWeight: 0.7,
+  groupBy: "none",
+  deduplicate: true
+};
+var DEFAULT_INDEX_SETTINGS = {
+  indexType: "hnsw",
+  metric: "cosine",
+  efConstruction: 200,
+  efSearch: 50,
+  m: 16
+};
+var CHUNKING_DEFAULTS = {
+  chunkSize: 512,
+  chunkOverlap: 50,
+  minChunkSize: 100,
+  separators: ["\n\n", "\n", ". ", " "]
+};
+function cosineSimilarity(a, b) {
+  if (a.length !== b.length) {
+    throw new Error("Vectors must have same dimensions");
+  }
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) return 0;
+  return dotProduct / denominator;
+}
+function normalizeVector(vector) {
+  const norm = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0));
+  if (norm === 0) return vector;
+  return vector.map((v) => v / norm);
+}
+function chunkText(text, options = {}) {
+  const {
+    chunkSize = CHUNKING_DEFAULTS.chunkSize,
+    overlap = CHUNKING_DEFAULTS.chunkOverlap,
+    separators = CHUNKING_DEFAULTS.separators
+  } = options;
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= chunkSize) {
+      chunks.push(remaining.trim());
+      break;
+    }
+    let splitIndex = chunkSize;
+    for (const sep of separators) {
+      const lastSep = remaining.lastIndexOf(sep, chunkSize);
+      if (lastSep > chunkSize * 0.5) {
+        splitIndex = lastSep + sep.length;
+        break;
+      }
+    }
+    chunks.push(remaining.substring(0, splitIndex).trim());
+    const nextStart = Math.max(0, splitIndex - overlap);
+    remaining = remaining.substring(nextStart);
+  }
+  return chunks.filter((c) => c.length >= CHUNKING_DEFAULTS.minChunkSize);
+}
+
 // src/types/index.ts
 var SWE_PROJECT_TEMPLATES = [
   {
@@ -3029,10 +3323,17 @@ exports.AGENT_STATUSES = AGENT_STATUSES;
 exports.API_CONFIG = API_CONFIG;
 exports.API_ENDPOINTS = API_ENDPOINTS;
 exports.BUILTIN_TEMPLATES = BUILTIN_TEMPLATES;
+exports.BUILT_IN_TEMPLATES = BUILT_IN_TEMPLATES;
+exports.CHUNKING_DEFAULTS = CHUNKING_DEFAULTS;
 exports.DEFAULT_AGENTS = DEFAULT_AGENTS;
 exports.DEFAULT_AGENT_CONFIG = DEFAULT_AGENT_CONFIG;
+exports.DEFAULT_INDEX_SETTINGS = DEFAULT_INDEX_SETTINGS;
+exports.DEFAULT_SEARCH_OPTIONS = DEFAULT_SEARCH_OPTIONS;
 exports.DEFAULT_SHORTCUTS = DEFAULT_SHORTCUTS;
+exports.DEFAULT_SUMMARIZATION_OPTIONS = DEFAULT_SUMMARIZATION_OPTIONS;
 exports.DEFAULT_TAGS = DEFAULT_TAGS;
+exports.DEFAULT_TEAM_PERMISSIONS = DEFAULT_TEAM_PERMISSIONS;
+exports.EMBEDDING_MODELS = EMBEDDING_MODELS;
 exports.EXPORT_FORMATS = EXPORT_FORMATS;
 exports.HIGHLIGHT_COLORS = HIGHLIGHT_COLORS;
 exports.HOOK_ACTIONS = HOOK_ACTIONS;
@@ -3044,6 +3345,8 @@ exports.MEMORY_CONFIG = MEMORY_CONFIG;
 exports.MODEL_CATEGORIES = MODEL_CATEGORIES;
 exports.MULTIMODAL_MODELS = MULTIMODAL_MODELS;
 exports.ORCHESTRATION_MODES = ORCHESTRATION_MODES;
+exports.PERMISSION_HIERARCHY = PERMISSION_HIERARCHY;
+exports.PRESENCE_COLORS = PRESENCE_COLORS;
 exports.PROACTIVE_AGENT_CONFIG = PROACTIVE_AGENT_CONFIG;
 exports.PROVIDERS = PROVIDERS;
 exports.PROVIDER_STATUSES = PROVIDER_STATUSES;
@@ -3051,6 +3354,7 @@ exports.REMOTE_MONITOR_CONFIG = REMOTE_MONITOR_CONFIG;
 exports.SESSION_FORMAT = SESSION_FORMAT;
 exports.SHORTCUT_CATEGORIES = SHORTCUT_CATEGORIES;
 exports.SUBSCRIPTION_TIERS = SUBSCRIPTION_TIERS;
+exports.SUMMARY_TYPE_CONFIG = SUMMARY_TYPE_CONFIG;
 exports.SWARM_STATUSES = SWARM_STATUSES;
 exports.SWARM_TEMPLATES = SWARM_TEMPLATES;
 exports.SWE_PROJECT_TEMPLATES = SWE_PROJECT_TEMPLATES;
@@ -3061,8 +3365,11 @@ exports.TOOL_CATEGORIES = TOOL_CATEGORIES;
 exports.VLA_MODELS = VLA_MODELS;
 exports.VLM_MODELS = VLM_MODELS;
 exports.api = api;
+exports.calculateCompressionRatio = calculateCompressionRatio;
 exports.capitalize = capitalize;
 exports.chunk = chunk;
+exports.chunkText = chunkText;
+exports.cosineSimilarity = cosineSimilarity;
 exports.countTotalTokens = countTotalTokens;
 exports.createApiClient = createApiClient;
 exports.debounce = debounce;
@@ -3071,6 +3378,7 @@ exports.deepMerge = deepMerge;
 exports.delay = delay;
 exports.downloadExport = downloadExport;
 exports.estimateTokenCount = estimateTokenCount;
+exports.estimateTokens = estimateTokens;
 exports.exportSession = exportSession;
 exports.exportToHtml = exportToHtml;
 exports.exportToJson = exportToJson;
@@ -3093,10 +3401,13 @@ exports.generateUUID = generateUUID;
 exports.getDirectory = getDirectory;
 exports.getExtension = getExtension;
 exports.getFileName = getFileName;
+exports.getInitials = getInitials;
 exports.getModelsByCategory = getModelsByCategory;
+exports.getUserColor = getUserColor;
 exports.getVLAModels = getVLAModels;
 exports.getVLMModels = getVLMModels;
 exports.groupBy = groupBy;
+exports.hasPermission = hasPermission;
 exports.hexToRgb = hexToRgb;
 exports.initialSelectionState = initialSelectionState;
 exports.isColorDark = isColorDark;
@@ -3107,6 +3418,7 @@ exports.isValidUrl = isValidUrl;
 exports.isWithinDays = isWithinDays;
 exports.matchesShortcut = matchesShortcut;
 exports.normalizePath = normalizePath;
+exports.normalizeVector = normalizeVector;
 exports.omit = omit;
 exports.parseKeyboardEvent = parseKeyboardEvent;
 exports.pick = pick;
