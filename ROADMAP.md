@@ -96,15 +96,13 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Session sharing with permissions
 - [x] AI-powered session summarization
 - [x] Semantic search across sessions
+- [x] Custom tagging and organization
 
 ---
 
 ## Planned 📋
 
 ### Q2 2026
-
-#### Features
-- [ ] Custom tagging and organization
 
 #### Integrations
 - [ ] GitHub Copilot Chat deep integration

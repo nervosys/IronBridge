@@ -1494,6 +1494,420 @@ declare function chunkText(text: string, options?: {
 }): string[];
 
 /**
+ * Custom Tagging and Organization Types
+ *
+ * Types for session tagging, categorization, collections, and smart organization.
+ */
+/**
+ * Tag color options for visual organization
+ */
+type TagColor = 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink' | 'gray';
+/**
+ * Tag visibility scope
+ */
+type TagScope = 'personal' | 'team' | 'organization' | 'public';
+/**
+ * A tag that can be applied to sessions
+ */
+interface Tag {
+    /** Unique tag identifier */
+    id: string;
+    /** Tag name (display text) */
+    name: string;
+    /** Optional tag description */
+    description?: string;
+    /** Tag color for visual identification */
+    color: TagColor;
+    /** Tag icon (emoji or icon name) */
+    icon?: string;
+    /** Visibility scope */
+    scope: TagScope;
+    /** Owner user ID (for personal tags) */
+    ownerId?: string;
+    /** Team ID (for team tags) */
+    teamId?: string;
+    /** Parent tag ID for hierarchical tags */
+    parentId?: string;
+    /** Number of sessions with this tag */
+    usageCount: number;
+    /** When the tag was created */
+    createdAt: string;
+    /** When the tag was last used */
+    lastUsedAt?: string;
+    /** Whether this is a system-generated tag */
+    isSystem: boolean;
+    /** Keyboard shortcut for quick tagging */
+    shortcut?: string;
+}
+/**
+ * Tag with hierarchy information
+ */
+interface TagWithHierarchy extends Tag {
+    /** Child tags */
+    children: TagWithHierarchy[];
+    /** Full path from root (e.g., "work/projects/frontend") */
+    path: string;
+    /** Depth in hierarchy (0 = root) */
+    depth: number;
+}
+/**
+ * Tag assignment to a session
+ */
+interface TagAssignment {
+    /** Assignment ID */
+    id: string;
+    /** Tag ID */
+    tagId: string;
+    /** Session ID */
+    sessionId: string;
+    /** User who applied the tag */
+    assignedBy: string;
+    /** When the tag was applied */
+    assignedAt: string;
+    /** Optional note about why this tag was applied */
+    note?: string;
+}
+/**
+ * Bulk tag operation
+ */
+interface BulkTagOperation {
+    /** Operation type */
+    operation: 'add' | 'remove' | 'replace';
+    /** Tag IDs to apply */
+    tagIds: string[];
+    /** Session IDs to modify */
+    sessionIds: string[];
+    /** Replace all existing tags (only for 'replace' operation) */
+    replaceAll?: boolean;
+}
+/**
+ * Collection type for organizing sessions
+ */
+type CollectionType = 'manual' | 'smart' | 'favorite' | 'archive' | 'recent' | 'shared';
+/**
+ * A collection of sessions
+ */
+interface Collection {
+    /** Unique collection identifier */
+    id: string;
+    /** Collection name */
+    name: string;
+    /** Collection description */
+    description?: string;
+    /** Collection type */
+    type: CollectionType;
+    /** Collection icon */
+    icon?: string;
+    /** Collection color */
+    color?: TagColor;
+    /** Owner user ID */
+    ownerId: string;
+    /** Team ID if team collection */
+    teamId?: string;
+    /** Parent collection ID for nested collections */
+    parentId?: string;
+    /** Smart filter rules (for smart collections) */
+    smartRules?: SmartCollectionRules;
+    /** Sort order for sessions in collection */
+    sortOrder: CollectionSortOrder;
+    /** Number of sessions in collection */
+    sessionCount: number;
+    /** When the collection was created */
+    createdAt: string;
+    /** When the collection was last modified */
+    updatedAt: string;
+    /** Display order in sidebar */
+    displayOrder: number;
+    /** Whether collection is pinned */
+    isPinned: boolean;
+    /** Whether collection is expanded in sidebar */
+    isExpanded: boolean;
+}
+/**
+ * Sort order options for collections
+ */
+interface CollectionSortOrder {
+    /** Field to sort by */
+    field: 'createdAt' | 'updatedAt' | 'title' | 'messageCount' | 'addedAt' | 'custom';
+    /** Sort direction */
+    direction: 'asc' | 'desc';
+}
+/**
+ * Session membership in a collection
+ */
+interface CollectionMembership {
+    /** Membership ID */
+    id: string;
+    /** Collection ID */
+    collectionId: string;
+    /** Session ID */
+    sessionId: string;
+    /** When the session was added */
+    addedAt: string;
+    /** Who added the session */
+    addedBy: string;
+    /** Custom sort position (for manual ordering) */
+    sortPosition?: number;
+    /** Optional note */
+    note?: string;
+}
+/**
+ * Operator for filter conditions
+ */
+type FilterOperator = 'equals' | 'notEquals' | 'contains' | 'notContains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan' | 'greaterOrEqual' | 'lessOrEqual' | 'between' | 'in' | 'notIn' | 'isEmpty' | 'isNotEmpty' | 'matches';
+/**
+ * Field types that can be filtered
+ */
+type FilterableField = 'title' | 'provider' | 'workspace' | 'createdAt' | 'updatedAt' | 'messageCount' | 'tags' | 'hasAttachments' | 'hasCode' | 'language' | 'sentiment' | 'duration' | 'tokenCount' | 'isStarred' | 'isArchived' | 'sharedWith' | 'createdBy';
+/**
+ * A single filter condition
+ */
+interface FilterCondition {
+    /** Field to filter on */
+    field: FilterableField;
+    /** Filter operator */
+    operator: FilterOperator;
+    /** Value to compare against */
+    value: string | number | boolean | string[] | [number, number];
+}
+/**
+ * Group of conditions with logical operator
+ */
+interface FilterGroup {
+    /** Logical operator between conditions */
+    logic: 'and' | 'or';
+    /** Conditions in this group */
+    conditions: (FilterCondition | FilterGroup)[];
+}
+/**
+ * Rules for smart collections
+ */
+interface SmartCollectionRules {
+    /** Root filter group */
+    filters: FilterGroup;
+    /** Maximum number of sessions to include */
+    limit?: number;
+    /** How often to refresh (in minutes, 0 = real-time) */
+    refreshInterval: number;
+    /** Last time the collection was refreshed */
+    lastRefreshed?: string;
+}
+/**
+ * A folder for organizing collections and sessions
+ */
+interface Folder {
+    /** Unique folder identifier */
+    id: string;
+    /** Folder name */
+    name: string;
+    /** Folder icon */
+    icon?: string;
+    /** Folder color */
+    color?: TagColor;
+    /** Parent folder ID */
+    parentId?: string;
+    /** Owner user ID */
+    ownerId: string;
+    /** Team ID if shared folder */
+    teamId?: string;
+    /** Display order */
+    displayOrder: number;
+    /** Whether folder is expanded */
+    isExpanded: boolean;
+    /** When created */
+    createdAt: string;
+    /** When last modified */
+    updatedAt: string;
+}
+/**
+ * Folder with children for tree display
+ */
+interface FolderTree extends Folder {
+    /** Child folders */
+    children: FolderTree[];
+    /** Collections in this folder */
+    collections: Collection[];
+    /** Direct session count (not in collections) */
+    sessionCount: number;
+    /** Full path */
+    path: string;
+    /** Depth in tree */
+    depth: number;
+}
+/**
+ * Auto-tagging rule
+ */
+interface AutoTagRule {
+    /** Rule ID */
+    id: string;
+    /** Rule name */
+    name: string;
+    /** Rule description */
+    description?: string;
+    /** Whether rule is active */
+    isActive: boolean;
+    /** Conditions that trigger the rule */
+    conditions: FilterGroup;
+    /** Tags to apply when conditions match */
+    tagIds: string[];
+    /** Collection to add to (optional) */
+    collectionId?: string;
+    /** Priority (higher = runs first) */
+    priority: number;
+    /** Owner user ID */
+    ownerId: string;
+    /** When created */
+    createdAt: string;
+    /** How many times the rule has been applied */
+    applyCount: number;
+}
+/**
+ * Tag suggestion from AI
+ */
+interface TagSuggestion {
+    /** Suggested tag */
+    tag: Tag | {
+        name: string;
+        color: TagColor;
+    };
+    /** Confidence score (0-1) */
+    confidence: number;
+    /** Reason for suggestion */
+    reason: string;
+    /** Whether this is an existing tag or new suggestion */
+    isExisting: boolean;
+}
+/**
+ * Session analysis for tag suggestions
+ */
+interface SessionTagAnalysis {
+    /** Session ID */
+    sessionId: string;
+    /** Suggested tags */
+    suggestions: TagSuggestion[];
+    /** Detected topics */
+    topics: string[];
+    /** Detected technologies/languages */
+    technologies: string[];
+    /** Detected intent (debug, learn, build, etc.) */
+    intent?: string;
+    /** Analysis timestamp */
+    analyzedAt: string;
+}
+/**
+ * View mode for session lists
+ */
+type ViewMode = 'list' | 'grid' | 'timeline' | 'kanban' | 'calendar';
+/**
+ * Grouping options for session lists
+ */
+type GroupBy = 'none' | 'date' | 'week' | 'month' | 'provider' | 'workspace' | 'tag' | 'collection' | 'status';
+/**
+ * User's organization preferences
+ */
+interface OrganizationPreferences {
+    /** User ID */
+    userId: string;
+    /** Default view mode */
+    defaultViewMode: ViewMode;
+    /** Default grouping */
+    defaultGroupBy: GroupBy;
+    /** Default sort order */
+    defaultSortOrder: CollectionSortOrder;
+    /** Show archived sessions */
+    showArchived: boolean;
+    /** Show shared sessions */
+    showShared: boolean;
+    /** Sidebar width */
+    sidebarWidth: number;
+    /** Pinned tags for quick access */
+    pinnedTagIds: string[];
+    /** Pinned collections for quick access */
+    pinnedCollectionIds: string[];
+    /** Recently used tags (for suggestions) */
+    recentTagIds: string[];
+    /** Auto-tagging enabled */
+    autoTaggingEnabled: boolean;
+    /** Tag suggestions enabled */
+    tagSuggestionsEnabled: boolean;
+    /** Compact mode */
+    compactMode: boolean;
+}
+/**
+ * Tag-related event types
+ */
+type TagEventType = 'tag:created' | 'tag:updated' | 'tag:deleted' | 'tag:assigned' | 'tag:unassigned' | 'tag:merged';
+/**
+ * Collection-related event types
+ */
+type CollectionEventType = 'collection:created' | 'collection:updated' | 'collection:deleted' | 'collection:session_added' | 'collection:session_removed' | 'collection:reordered';
+/**
+ * Organization event
+ */
+interface OrganizationEvent {
+    /** Event type */
+    type: TagEventType | CollectionEventType;
+    /** Event timestamp */
+    timestamp: string;
+    /** User who triggered the event */
+    userId: string;
+    /** Event payload */
+    payload: Record<string, unknown>;
+}
+/**
+ * Available tag colors with their hex values
+ */
+declare const TAG_COLOR_STYLES: Record<TagColor, {
+    bg: string;
+    text: string;
+    border: string;
+}>;
+/**
+ * Dark mode tag colors
+ */
+declare const TAG_COLOR_STYLES_DARK: Record<TagColor, {
+    bg: string;
+    text: string;
+    border: string;
+}>;
+/**
+ * Default system tags
+ */
+declare const SYSTEM_TAGS: Partial<Tag>[];
+/**
+ * Default smart collections
+ */
+declare const DEFAULT_SMART_COLLECTIONS: Partial<Collection>[];
+/**
+ * Get tag color styles based on theme
+ */
+declare function getTagColorStyles(color: TagColor, isDarkMode: boolean): {
+    bg: string;
+    text: string;
+    border: string;
+};
+/**
+ * Build a tag path from hierarchy
+ */
+declare function buildTagPath(tag: Tag, allTags: Tag[]): string;
+/**
+ * Build a folder tree from flat folder list
+ */
+declare function buildFolderTree(folders: Folder[], collections: Collection[], parentId?: string, depth?: number): FolderTree[];
+/**
+ * Evaluate a filter condition against a session
+ */
+declare function evaluateCondition(condition: FilterCondition, sessionValue: unknown): boolean;
+/**
+ * Generate a unique tag ID
+ */
+declare function generateTagId(): string;
+/**
+ * Generate a unique collection ID
+ */
+declare function generateCollectionId(): string;
+
+/**
  * Workspace representing a VS Code workspace or project directory
  */
 interface Workspace {
@@ -3477,4 +3891,4 @@ interface DeviceSession {
  */
 declare const SUBSCRIPTION_TIERS: SubscriptionPricing[];
 
-export { type ActionBounds, type ActionCommand, type ActionItem, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type ActivityType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentPermissionLevel, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type AnnotationSummary, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, type BatchEmbedRequest, type BatchEmbedResponse, type BatchItemResult, type BatchOperationError, type BatchOperationOptions, type BatchOperationProgress, type BatchOperationRequest, type BatchOperationResult, type BatchOperationType, type BatchSummarizeProgress, type BatchSummarizeRequest, CHUNKING_DEFAULTS, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type CloudProviderConfig, type CodeHighlight, type CodePurpose, type CollaborationActivity, type CollaborationMessage, type CollaborationMessageType, type CollaborationSyncState, type CollaborationUser, type CommentReaction, type CompareSessionsRequest, type ComparisonDifference, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type CreateTeamRequest, type CursorPosition, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, type DayCount, type Decision, type DetectedProblem, type DeviceSession, type DistanceMetric, type Document, type DocumentChunk, type DocumentType, EMBEDDING_MODELS, type EditOperation, type EditOperationType, type EmbedDocument, type EmbeddableType, type Embedding, type EmbeddingChunk, type EmbeddingConfig, type EmbeddingMetadata, type EmbeddingModel, type EmbeddingModelInfo, type EmbeddingProvider, type EntityMention, type EntityType, type ExecutionResult, type ExportOptions, type ExtractedEntity, type ExtractedTopic, type FileChange, type FileChangeSummary, type FindSimilarRequest, type GenerateSummaryRequest, type GenerateSummaryResponse, type GitCommit, type GitRepository, type GpuInfo, type GroupByOption, type GroupedSearchResults, HIGHLIGHT_COLORS, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type HybridSearchQuery, type HybridSearchResult, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type ImportanceLevel, type IncrementalSummaryState, type IndexBuildProgress, type IndexHealth, type IndexSettings, type IndexType, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type InvitationStatus, type InviteMemberRequest, type JointState, type KeyPoint, type KeyPointCategory, type KeyboardShortcut, type KeywordBoost, type LocalLLMConfig, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Mention, type Message, type MessageHighlight, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelParameters, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type NotificationPreferences, type OrchestrationType, type OrchestratorResult, PERMISSION_HIERARCHY, PRESENCE_COLORS, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionCheck, type PermissionLevel, type Pipeline, type PopularQuery, type PresenceEvent, type PresenceEventType, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RebuildIndexRequest, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWE_PROJECT_TEMPLATES, type SearchAnalytics, type SearchFilters, type SearchHighlight, type SearchOptions, type SearchRequest, type SearchResponse, type SearchResult, type SearchResultGroup, type SearchResultSession, type SelectionAction, type SelectionRange, type SelectionState, type SemanticSearchQuery, type SemanticSearchResult, type SensorData, type SensorType, type SensorValues, type SentimentAnalysis, type SentimentScore, type Session, type SessionAccess, type SessionAnnotations, type SessionBookmark, type SessionComment, type SessionComparison, type SessionFilter, type SessionNote, type SessionPresence, type SessionShare, type SessionSummary, type SessionTag, type SessionTemplate, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type ShareSessionRequest, type ShareType, type ShortcutAction, type ShortcutCategory, type SimilarDocument, type SimilarityMetric, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type SuggestRequest, type Suggestion, type SummarizationConfig, type SummarizationOptions, type SummarizationProvider, type SummarizationStrategy, type SummaryMetrics, type SummarySection, type SummaryTemplate, type SummaryType, type SummaryUpdateTrigger, type SummaryVersion, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, TAG_COLORS, TEMPLATE_CATEGORIES, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type TeamInvitation, type TeamMember, type TeamPermissions, type TeamRole, type TeamWorkspace, type TeamWorkspaceSettings, type TemplateCategory, type TemplateMessage, type TemplateVariable, type ThemeMode, type TokenUsage, type ToolInvocation, type UpdatePermissionRequest, type User, type UserPreferences, type UserStatus, type VectorIndexStatus, type VectorSearchResult, type VectorStoreConfig, type VectorStoreType, type VersionVector, type VideoContent, type VideoSource, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats, type WorkspaceVisibility, calculateCompressionRatio, chunkText, cosineSimilarity, estimateTokens, formatShortcut, getInitials, getUserColor, hasPermission, initialSelectionState, matchesShortcut, normalizeVector, parseKeyboardEvent, selectionReducer };
+export { type ActionBounds, type ActionCommand, type ActionItem, type ActionParameters, type ActionSpace, type ActionSpaceType, type ActionType, type ActivityType, type AgencyEvent, type AgencyEventType, type AgencyToolCall, type AgencyToolResult, type Agent, type AgentAutonomy, type AgentMessage, type AgentPermissionLevel, type AgentRole, type AgentRun, type AgentStatus, type AgentTask, type AnnotationSummary, type ApiError, type ApiKey, type ApiKeyScope, type ApiResponse, type AppSettings, type ArtifactType, type AudioContent, type AudioData, type AudioFormat, type AuthResponse, type AuthState, type AutoTagRule, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, type BatchEmbedRequest, type BatchEmbedResponse, type BatchItemResult, type BatchOperationError, type BatchOperationOptions, type BatchOperationProgress, type BatchOperationRequest, type BatchOperationResult, type BatchOperationType, type BatchSummarizeProgress, type BatchSummarizeRequest, type BulkTagOperation, CHUNKING_DEFAULTS, type ChatCompletionMessage, type ChatCompletionRequest, type ChatCompletionResponse, type Checkpoint, type ChunkingConfig, type ChunkingStrategy, type CloudProviderConfig, type CodeHighlight, type CodePurpose, type CollaborationActivity, type CollaborationMessage, type CollaborationMessageType, type CollaborationSyncState, type CollaborationUser, type Collection, type CollectionEventType, type CollectionMembership, type CollectionSortOrder, type CollectionType, type CommentReaction, type CompareSessionsRequest, type ComparisonDifference, type ContentPart, type ContextSegment, type ContextSegmentType, type CreateApiKeyRequest, type CreateApiKeyResponse, type CreateSweMemoryRequest, type CreateSweProjectRequest, type CreateSweRuleRequest, type CreateTeamRequest, type CursorPosition, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SMART_COLLECTIONS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, type DayCount, type Decision, type DetectedProblem, type DeviceSession, type DistanceMetric, type Document, type DocumentChunk, type DocumentType, EMBEDDING_MODELS, type EditOperation, type EditOperationType, type EmbedDocument, type EmbeddableType, type Embedding, type EmbeddingChunk, type EmbeddingConfig, type EmbeddingMetadata, type EmbeddingModel, type EmbeddingModelInfo, type EmbeddingProvider, type EntityMention, type EntityType, type ExecutionResult, type ExportOptions, type ExtractedEntity, type ExtractedTopic, type FileChange, type FileChangeSummary, type FilterCondition, type FilterGroup, type FilterOperator, type FilterableField, type FindSimilarRequest, type Folder, type FolderTree, type GenerateSummaryRequest, type GenerateSummaryResponse, type GitCommit, type GitRepository, type GpuInfo, type GroupBy, type GroupByOption, type GroupedSearchResults, HIGHLIGHT_COLORS, type HardwareInfo, type Hook, type HookAction, type HookActionResult, type HookActionType, type HookCondition, type HookExecutionResult, type HookPreset, type HookTrigger, type HookTriggerType, type HybridSearchQuery, type HybridSearchResult, type ImageContent, type ImageData, type ImageFormat, type ImportResult, type ImportSource, type ImportanceLevel, type IncrementalSummaryState, type IndexBuildProgress, type IndexHealth, type IndexSettings, type IndexType, type Integration, type IntegrationAuthType, type IntegrationCategory, type IntegrationConfig, type IntegrationCredentials, type IntegrationStatus, type InvitationStatus, type InviteMemberRequest, type JointState, type KeyPoint, type KeyPointCategory, type KeyboardShortcut, type KeywordBoost, type LocalLLMConfig, type LoginRequest, type ManipulatorType, type McpTool, type McpToolCall, type McpToolResult, type MemoryConfig, type MemoryEntry, type MemorySource, type MemoryStats, type MemoryType, type Mention, type Message, type MessageHighlight, type Modality, type ModalityCapabilities, type ModelCategory, type ModelConfig, type ModelParameters, type ModelProvider, type MonitorStats, type MultimodalMessage, type MultimodalModel, type NavigationCapability, type NodeStatus, type NotificationPreferences, type OrchestrationType, type OrchestratorResult, type OrganizationEvent, type OrganizationPreferences, PERMISSION_HIERARCHY, PRESENCE_COLORS, type PaginatedResponse, type PasswordChangeRequest, type PasswordResetRequest, type PermissionCheck, type PermissionLevel, type Pipeline, type PopularQuery, type PresenceEvent, type PresenceEventType, type ProactiveAction, type Provider, type ProviderCount, type ProviderHealth, type ProviderSettings, type ProviderStatus, type ProviderType, type RAGConfig, type RebuildIndexRequest, type RefreshTokenRequest, type RefreshTokenResponse, type RegisterRequest, type RemoteEvent, type RemoteEventType, type RemoteLogLevel, type RemoteMonitorConfig, type RemoteNode, type RemoteTask, type RemoteTaskResult, type RemoteTaskStatus, type ResourceUsage, type RobotCapabilities, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWE_PROJECT_TEMPLATES, SYSTEM_TAGS, type SearchAnalytics, type SearchFilters, type SearchHighlight, type SearchOptions, type SearchRequest, type SearchResponse, type SearchResult, type SearchResultGroup, type SearchResultSession, type SelectionAction, type SelectionRange, type SelectionState, type SemanticSearchQuery, type SemanticSearchResult, type SensorData, type SensorType, type SensorValues, type SentimentAnalysis, type SentimentScore, type Session, type SessionAccess, type SessionAnnotations, type SessionBookmark, type SessionComment, type SessionComparison, type SessionFilter, type SessionNote, type SessionPresence, type SessionShare, type SessionSummary, type SessionTag, type SessionTagAnalysis, type SessionTemplate, type SessionWithMessages, type ShareLink, type ShareLinkProvider, type ShareSessionRequest, type ShareType, type ShortcutAction, type ShortcutCategory, type SimilarDocument, type SimilarityMetric, type SmartCollectionRules, type Statistics, type StreamChunk, type SubscribeRequest, type Subscription, type SubscriptionLimits, type SubscriptionPricing, type SubscriptionTier, type SubscriptionUsage, type SuggestRequest, type Suggestion, type SummarizationConfig, type SummarizationOptions, type SummarizationProvider, type SummarizationStrategy, type SummaryMetrics, type SummarySection, type SummaryTemplate, type SummaryType, type SummaryUpdateTrigger, type SummaryVersion, type Swarm, type SwarmAgent, type SwarmStatus, type SwarmWorkflow, type SweBatchMemoryImport, type SweContextInjection, type SweContextSnapshot, type SweFileChange, type SweFileNode, type SweGitChange, type SweGitStatus, type SweImportance, type SweMemory, type SweMemoryCategory, type SweMemorySource, type SweMessage, type SweOperation, type SweProject, type SweProjectStats, type SweProjectTemplate, type SweRule, type SweRuleCategory, type SweRuleCondition, type SweRuleScope, type SweSearchResult, type SweSession, type SweSessionWithMessages, type SweTerminalResult, type SweTool, type SweToolCall, type SweToolExecutionRequest, type SweToolResult, TAG_COLORS, TAG_COLOR_STYLES, TAG_COLOR_STYLES_DARK, TEMPLATE_CATEGORIES, type Tag, type TagAssignment, type TagColor, type TagEventType, type TagScope, type TagSuggestion, type TagWithHierarchy, type TaskArtifact, type TaskLogEntry, type TaskMetrics, type TaskPriority, type TaskStatus, type TeamInvitation, type TeamMember, type TeamPermissions, type TeamRole, type TeamWorkspace, type TeamWorkspaceSettings, type TemplateCategory, type TemplateMessage, type TemplateVariable, type ThemeMode, type TokenUsage, type ToolInvocation, type UpdatePermissionRequest, type User, type UserPreferences, type UserStatus, type VectorIndexStatus, type VectorSearchResult, type VectorStoreConfig, type VectorStoreType, type VersionVector, type VideoContent, type VideoSource, type ViewMode, type WorkflowEdge, type WorkflowNode, type Workspace, type WorkspaceBounds, type WorkspaceFilter, type WorkspaceStats, type WorkspaceVisibility, buildFolderTree, buildTagPath, calculateCompressionRatio, chunkText, cosineSimilarity, estimateTokens, evaluateCondition, formatShortcut, generateCollectionId, generateTagId, getInitials, getTagColorStyles, getUserColor, hasPermission, initialSelectionState, matchesShortcut, normalizeVector, parseKeyboardEvent, selectionReducer };

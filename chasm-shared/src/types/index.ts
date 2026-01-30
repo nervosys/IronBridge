@@ -2525,3 +2525,4 @@ export * from './batch';
 export * from './collaboration';
 export * from './summarization';
 export * from './search';
+export * from './tagging';

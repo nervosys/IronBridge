@@ -241,7 +241,7 @@ function ExistingShareRow({
 }) {
     // _onUpdate available for future inline editing
     void _onUpdate;
-    
+
     const shareTypeIcons: Record<ShareType, React.ReactNode> = {
         link: <LinkIcon className="w-4 h-4" />,
         email: <MailIcon className="w-4 h-4" />,

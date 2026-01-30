@@ -600,7 +600,7 @@ export function SemanticSearchPanel({
 }: SemanticSearchPanelProps) {
     // _onSaveSearch available for future implementation
     void _onSaveSearch;
-    
+
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState<SearchFilters>({});
     const [groupBy, setGroupBy] = useState<GroupByOption>('none');

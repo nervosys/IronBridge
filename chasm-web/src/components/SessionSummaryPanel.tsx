@@ -377,8 +377,8 @@ function ActionItemsList({
                         </button>
                         <div className="flex-1 min-w-0">
                             <p className={`text-sm ${item.status === 'completed' || item.status === 'cancelled'
-                                    ? 'text-gray-500 line-through'
-                                    : 'text-gray-900 dark:text-gray-100'
+                                ? 'text-gray-500 line-through'
+                                : 'text-gray-900 dark:text-gray-100'
                                 }`}>
                                 {item.content}
                             </p>
@@ -548,7 +548,7 @@ export function SessionSummaryPanel({
 }: SessionSummaryPanelProps) {
     // _session available for future use (e.g., showing session context)
     void _session;
-    
+
     const [summaryType, setSummaryType] = useState<SummaryType>('standard');
 
     return (

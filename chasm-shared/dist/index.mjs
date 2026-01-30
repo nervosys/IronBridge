@@ -653,6 +653,175 @@ function chunkText(text, options = {}) {
   return chunks.filter((c) => c.length >= CHUNKING_DEFAULTS.minChunkSize);
 }
 
+// src/types/tagging.ts
+var TAG_COLOR_STYLES = {
+  red: { bg: "#FEE2E2", text: "#991B1B", border: "#FECACA" },
+  orange: { bg: "#FFEDD5", text: "#9A3412", border: "#FED7AA" },
+  yellow: { bg: "#FEF3C7", text: "#92400E", border: "#FDE68A" },
+  green: { bg: "#D1FAE5", text: "#065F46", border: "#A7F3D0" },
+  teal: { bg: "#CCFBF1", text: "#0F766E", border: "#99F6E4" },
+  blue: { bg: "#DBEAFE", text: "#1E40AF", border: "#BFDBFE" },
+  indigo: { bg: "#E0E7FF", text: "#3730A3", border: "#C7D2FE" },
+  purple: { bg: "#EDE9FE", text: "#5B21B6", border: "#DDD6FE" },
+  pink: { bg: "#FCE7F3", text: "#9D174D", border: "#FBCFE8" },
+  gray: { bg: "#F3F4F6", text: "#374151", border: "#E5E7EB" }
+};
+var TAG_COLOR_STYLES_DARK = {
+  red: { bg: "#7F1D1D", text: "#FCA5A5", border: "#991B1B" },
+  orange: { bg: "#7C2D12", text: "#FDBA74", border: "#9A3412" },
+  yellow: { bg: "#78350F", text: "#FCD34D", border: "#92400E" },
+  green: { bg: "#064E3B", text: "#6EE7B7", border: "#065F46" },
+  teal: { bg: "#134E4A", text: "#5EEAD4", border: "#0F766E" },
+  blue: { bg: "#1E3A8A", text: "#93C5FD", border: "#1E40AF" },
+  indigo: { bg: "#312E81", text: "#A5B4FC", border: "#3730A3" },
+  purple: { bg: "#4C1D95", text: "#C4B5FD", border: "#5B21B6" },
+  pink: { bg: "#831843", text: "#F9A8D4", border: "#9D174D" },
+  gray: { bg: "#374151", text: "#D1D5DB", border: "#4B5563" }
+};
+var SYSTEM_TAGS = [
+  { name: "Favorite", color: "yellow", icon: "\u2B50", isSystem: true },
+  { name: "Important", color: "red", icon: "\u2757", isSystem: true },
+  { name: "Todo", color: "blue", icon: "\u{1F4CB}", isSystem: true },
+  { name: "Done", color: "green", icon: "\u2705", isSystem: true },
+  { name: "Bug", color: "red", icon: "\u{1F41B}", isSystem: true },
+  { name: "Feature", color: "purple", icon: "\u2728", isSystem: true },
+  { name: "Question", color: "teal", icon: "\u2753", isSystem: true },
+  { name: "Learning", color: "indigo", icon: "\u{1F4DA}", isSystem: true }
+];
+var DEFAULT_SMART_COLLECTIONS = [
+  {
+    name: "Recent",
+    type: "recent",
+    icon: "\u{1F550}",
+    smartRules: {
+      filters: {
+        logic: "and",
+        conditions: [
+          { field: "updatedAt", operator: "greaterThan", value: "-7d" }
+        ]
+      },
+      refreshInterval: 0
+    }
+  },
+  {
+    name: "Starred",
+    type: "favorite",
+    icon: "\u2B50",
+    smartRules: {
+      filters: {
+        logic: "and",
+        conditions: [{ field: "isStarred", operator: "equals", value: true }]
+      },
+      refreshInterval: 0
+    }
+  },
+  {
+    name: "Has Code",
+    type: "smart",
+    icon: "\u{1F4BB}",
+    smartRules: {
+      filters: {
+        logic: "and",
+        conditions: [{ field: "hasCode", operator: "equals", value: true }]
+      },
+      refreshInterval: 5
+    }
+  },
+  {
+    name: "Long Sessions",
+    type: "smart",
+    icon: "\u{1F4DD}",
+    smartRules: {
+      filters: {
+        logic: "and",
+        conditions: [{ field: "messageCount", operator: "greaterThan", value: 20 }]
+      },
+      refreshInterval: 5
+    }
+  }
+];
+function getTagColorStyles(color, isDarkMode) {
+  return isDarkMode ? TAG_COLOR_STYLES_DARK[color] : TAG_COLOR_STYLES[color];
+}
+function buildTagPath(tag, allTags) {
+  const path = [tag.name];
+  let current = tag;
+  while (current.parentId) {
+    const parent = allTags.find((t) => t.id === current.parentId);
+    if (!parent) break;
+    path.unshift(parent.name);
+    current = parent;
+  }
+  return path.join("/");
+}
+function buildFolderTree(folders, collections, parentId, depth = 0) {
+  return folders.filter((f) => f.parentId === parentId).sort((a, b) => a.displayOrder - b.displayOrder).map((folder) => ({
+    ...folder,
+    children: buildFolderTree(folders, collections, folder.id, depth + 1),
+    collections: collections.filter((c) => c.parentId === folder.id),
+    sessionCount: 0,
+    // Would be calculated from actual data
+    path: "",
+    // Would be built from hierarchy
+    depth
+  }));
+}
+function evaluateCondition(condition, sessionValue) {
+  const { operator, value } = condition;
+  switch (operator) {
+    case "equals":
+      return sessionValue === value;
+    case "notEquals":
+      return sessionValue !== value;
+    case "contains":
+      return String(sessionValue).toLowerCase().includes(String(value).toLowerCase());
+    case "notContains":
+      return !String(sessionValue).toLowerCase().includes(String(value).toLowerCase());
+    case "startsWith":
+      return String(sessionValue).toLowerCase().startsWith(String(value).toLowerCase());
+    case "endsWith":
+      return String(sessionValue).toLowerCase().endsWith(String(value).toLowerCase());
+    case "greaterThan":
+      return Number(sessionValue) > Number(value);
+    case "lessThan":
+      return Number(sessionValue) < Number(value);
+    case "greaterOrEqual":
+      return Number(sessionValue) >= Number(value);
+    case "lessOrEqual":
+      return Number(sessionValue) <= Number(value);
+    case "between":
+      if (Array.isArray(value) && value.length === 2) {
+        const num = Number(sessionValue);
+        const [min, max] = value;
+        return num >= min && num <= max;
+      }
+      return false;
+    case "in":
+      return Array.isArray(value) && value.includes(sessionValue);
+    case "notIn":
+      return Array.isArray(value) && !value.includes(sessionValue);
+    case "isEmpty":
+      return sessionValue === null || sessionValue === void 0 || sessionValue === "";
+    case "isNotEmpty":
+      return sessionValue !== null && sessionValue !== void 0 && sessionValue !== "";
+    case "matches":
+      try {
+        const regex = new RegExp(String(value), "i");
+        return regex.test(String(sessionValue));
+      } catch {
+        return false;
+      }
+    default:
+      return false;
+  }
+}
+function generateTagId() {
+  return `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+function generateCollectionId() {
+  return `col_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
 // src/types/index.ts
 var SWE_PROJECT_TEMPLATES = [
   {
@@ -3316,6 +3485,6 @@ var HOOK_ACTIONS = {
   translate: { id: "translate", name: "Translate", category: "ai" }
 };
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, CHUNKING_DEFAULTS, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, EMBEDDING_MODELS, EXPORT_FORMATS, HIGHLIGHT_COLORS, HOOK_ACTIONS, HOOK_TRIGGERS, INTEGRATIONS, INTEGRATION_CATEGORIES, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ORCHESTRATION_MODES, PERMISSION_HIERARCHY, PRESENCE_COLORS, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWARM_STATUSES, SWARM_TEMPLATES, SWE_PROJECT_TEMPLATES, TAG_COLORS, TASK_STATUSES, TEMPLATE_CATEGORIES, TOOL_CATEGORIES, VLA_MODELS, VLM_MODELS, api, calculateCompressionRatio, capitalize, chunk, chunkText, cosineSimilarity, countTotalTokens, createApiClient, debounce, deepClone, deepMerge, delay, downloadExport, estimateTokenCount, estimateTokens, exportSession, exportToHtml, exportToJson, exportToMarkdown, exportToPdf, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatShortcut, formatTime, formatTokens, generateShortId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, getInitials, getModelsByCategory, getUserColor, getVLAModels, getVLMModels, groupBy, hasPermission, hexToRgb, initialSelectionState, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, matchesShortcut, normalizePath, normalizeVector, omit, parseKeyboardEvent, pick, retry, rgbToHex, safeJsonParse, selectionReducer, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, CHUNKING_DEFAULTS, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SMART_COLLECTIONS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, EMBEDDING_MODELS, EXPORT_FORMATS, HIGHLIGHT_COLORS, HOOK_ACTIONS, HOOK_TRIGGERS, INTEGRATIONS, INTEGRATION_CATEGORIES, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ORCHESTRATION_MODES, PERMISSION_HIERARCHY, PRESENCE_COLORS, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWARM_STATUSES, SWARM_TEMPLATES, SWE_PROJECT_TEMPLATES, SYSTEM_TAGS, TAG_COLORS, TAG_COLOR_STYLES, TAG_COLOR_STYLES_DARK, TASK_STATUSES, TEMPLATE_CATEGORIES, TOOL_CATEGORIES, VLA_MODELS, VLM_MODELS, api, buildFolderTree, buildTagPath, calculateCompressionRatio, capitalize, chunk, chunkText, cosineSimilarity, countTotalTokens, createApiClient, debounce, deepClone, deepMerge, delay, downloadExport, estimateTokenCount, estimateTokens, evaluateCondition, exportSession, exportToHtml, exportToJson, exportToMarkdown, exportToPdf, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatShortcut, formatTime, formatTokens, generateCollectionId, generateShortId, generateTagId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, getInitials, getModelsByCategory, getTagColorStyles, getUserColor, getVLAModels, getVLMModels, groupBy, hasPermission, hexToRgb, initialSelectionState, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, matchesShortcut, normalizePath, normalizeVector, omit, parseKeyboardEvent, pick, retry, rgbToHex, safeJsonParse, selectionReducer, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map
