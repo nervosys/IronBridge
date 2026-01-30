@@ -1,0 +1,36 @@
+{
+    "sessionId": "demo-continue-002",
+    "title": "React Component Optimization",
+    "workspaceDirectory": "/home/user/projects/web-app",
+    "history": [
+        {
+            "message": {
+                "role": "user",
+                "content": "My React component is re-rendering too often. How can I optimize it?"
+            },
+            "contextItems": [
+                {
+                    "content": "import React, { useState, useEffect } from 'react';\n\nexport function DataTable({ data, onRowClick, filters }) {\n  const [sortedData, setSortedData] = useState([]);\n  const [sortColumn, setSortColumn] = useState('name');\n  const [sortDirection, setSortDirection] = useState('asc');\n\n  useEffect(() => {\n    const sorted = [...data].sort((a, b) => {\n      if (sortDirection === 'asc') {\n        return a[sortColumn] > b[sortColumn] ? 1 : -1;\n      }\n      return a[sortColumn] < b[sortColumn] ? 1 : -1;\n    });\n    setSortedData(sorted);\n  }, [data, sortColumn, sortDirection]);\n\n  const filteredData = sortedData.filter(row => {\n    return Object.entries(filters).every(([key, value]) => {\n      return row[key].includes(value);\n    });\n  });\n\n  return (\n    <table>\n      <thead>\n        <tr>\n          {Object.keys(data[0] || {}).map(col => (\n            <th key={col} onClick={() => handleSort(col)}>{col}</th>\n          ))}\n        </tr>\n      </thead>\n      <tbody>\n        {filteredData.map((row, idx) => (\n          <tr key={idx} onClick={() => onRowClick(row)}>\n            {Object.values(row).map((cell, i) => (\n              <td key={i}>{cell}</td>\n            ))}\n          </tr>\n        ))}\n      </tbody>\n    </table>\n  );\n}",
+                    "name": "DataTable.tsx",
+                    "description": "Data table component with sorting and filtering"
+                }
+            ],
+            "editorState": "My React component is re-rendering too often. How can I optimize it?"
+        },
+        {
+            "message": {
+                "role": "assistant",
+                "content": "I can see several optimization opportunities in your `DataTable` component. Here's an optimized version:\n\n```tsx\nimport React, { useState, useMemo, useCallback, memo } from 'react';\n\ninterface DataTableProps<T extends Record<string, unknown>> {\n  data: T[];\n  onRowClick: (row: T) => void;\n  filters: Record<string, string>;\n}\n\n// Memoized table row component\nconst TableRow = memo(function TableRow<T extends Record<string, unknown>>({\n  row,\n  onClick,\n  columns\n}: {\n  row: T;\n  onClick: () => void;\n  columns: string[];\n}) {\n  return (\n    <tr onClick={onClick}>\n      {columns.map((col) => (\n        <td key={col}>{String(row[col])}</td>\n      ))}\n    </tr>\n  );\n});\n\nexport const DataTable = memo(function DataTable<T extends Record<string, unknown>>({\n  data,\n  onRowClick,\n  filters\n}: DataTableProps<T>) {\n  const [sortColumn, setSortColumn] = useState<string>('name');\n  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');\n\n  // Memoize column names\n  const columns = useMemo(() => {\n    return data.length > 0 ? Object.keys(data[0]) : [];\n  }, [data]);\n\n  // Memoize sorted data - only recalculate when dependencies change\n  const sortedData = useMemo(() => {\n    return [...data].sort((a, b) => {\n      const aVal = a[sortColumn];\n      const bVal = b[sortColumn];\n      const comparison = String(aVal).localeCompare(String(bVal));\n      return sortDirection === 'asc' ? comparison : -comparison;\n    });\n  }, [data, sortColumn, sortDirection]);\n\n  // Memoize filtered data\n  const filteredData = useMemo(() => {\n    return sortedData.filter(row => {\n      return Object.entries(filters).every(([key, value]) => {\n        return String(row[key]).toLowerCase().includes(value.toLowerCase());\n      });\n    });\n  }, [sortedData, filters]);\n\n  // Memoize sort handler\n  const handleSort = useCallback((column: string) => {\n    setSortColumn(prev => {\n      if (prev === column) {\n        setSortDirection(d => d === 'asc' ? 'desc' : 'asc');\n        return prev;\n      }\n      setSortDirection('asc');\n      return column;\n    });\n  }, []);\n\n  // Memoize row click handlers\n  const handleRowClick = useCallback((row: T) => {\n    onRowClick(row);\n  }, [onRowClick]);\n\n  return (\n    <table>\n      <thead>\n        <tr>\n          {columns.map(col => (\n            <th\n              key={col}\n              onClick={() => handleSort(col)}\n              style={{ cursor: 'pointer' }}\n            >\n              {col}\n              {sortColumn === col && (sortDirection === 'asc' ? ' ↑' : ' ↓')}\n            </th>\n          ))}\n        </tr>\n      </thead>\n      <tbody>\n        {filteredData.map((row, idx) => (\n          <TableRow\n            key={row.id ?? idx}\n            row={row}\n            onClick={() => handleRowClick(row)}\n            columns={columns}\n          />\n        ))}\n      </tbody>\n    </table>\n  );\n});\n```\n\n## Key Optimizations:\n\n1. **`useMemo` for expensive computations** - Sorting and filtering only run when their dependencies change\n\n2. **`useCallback` for event handlers** - Prevents creating new function references on every render\n\n3. **`memo` for component memoization** - Both `DataTable` and `TableRow` are memoized\n\n4. **Removed unnecessary `useEffect`** - The sorting logic is now handled with `useMemo` instead\n\n5. **Stable keys** - Using `row.id` when available instead of array index\n\n6. **Extracted `TableRow` component** - Allows individual rows to skip re-renders",
+                "toolCalls": []
+            },
+            "contextItems": []
+        }
+    ],
+    "mode": "chat",
+    "chatModelTitle": "GPT-4o",
+    "usage": {
+        "totalCost": 0.0156,
+        "promptTokens": 1890,
+        "completionTokens": 1420
+    }
+}

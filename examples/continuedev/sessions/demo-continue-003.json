@@ -1,0 +1,52 @@
+{
+    "sessionId": "demo-continue-003",
+    "title": "Rust Error Handling Patterns",
+    "workspaceDirectory": "/home/user/projects/rust-cli",
+    "history": [
+        {
+            "message": {
+                "role": "user",
+                "content": "What's the best way to handle errors in Rust? I'm building a CLI tool and want to provide good error messages to users."
+            },
+            "contextItems": [
+                {
+                    "content": "use std::fs;\n\nfn main() {\n    let content = fs::read_to_string(\"config.toml\").unwrap();\n    let config: Config = toml::from_str(&content).unwrap();\n    run(config);\n}\n\nfn run(config: Config) {\n    // TODO: implement\n}",
+                    "name": "main.rs",
+                    "description": "CLI entry point"
+                }
+            ],
+            "editorState": "What's the best way to handle errors in Rust?"
+        },
+        {
+            "message": {
+                "role": "assistant",
+                "content": "For CLI tools in Rust, I recommend using the **`anyhow`** crate for application-level error handling and **`thiserror`** for library-level custom errors. Here's a comprehensive approach:\n\n## Setup\n\nAdd to `Cargo.toml`:\n```toml\n[dependencies]\nanyhow = \"1.0\"\nthiserror = \"1.0\"\n```\n\n## Define Custom Errors with `thiserror`\n\n```rust\nuse thiserror::Error;\nuse std::path::PathBuf;\n\n#[derive(Error, Debug)]\npub enum ConfigError {\n    #[error(\"Configuration file not found: {path}\")]\n    NotFound { path: PathBuf },\n    \n    #[error(\"Failed to read configuration file: {source}\")]\n    ReadError {\n        #[from]\n        source: std::io::Error,\n    },\n    \n    #[error(\"Invalid configuration format: {source}\")]\n    ParseError {\n        #[from]\n        source: toml::de::Error,\n    },\n    \n    #[error(\"Missing required field: {field}\")]\n    MissingField { field: String },\n    \n    #[error(\"Invalid value for '{field}': {message}\")]\n    InvalidValue { field: String, message: String },\n}\n```\n\n## Application-Level Error Handling with `anyhow`\n\n```rust\nuse anyhow::{Context, Result, bail};\nuse std::fs;\nuse std::path::Path;\n\nfn main() -> Result<()> {\n    let config = load_config(\"config.toml\")\n        .context(\"Failed to initialize application\")?;\n    \n    run(config)\n}\n\nfn load_config(path: impl AsRef<Path>) -> Result<Config> {\n    let path = path.as_ref();\n    \n    if !path.exists() {\n        bail!(ConfigError::NotFound { path: path.to_path_buf() });\n    }\n    \n    let content = fs::read_to_string(path)\n        .with_context(|| format!(\"Failed to read {}\", path.display()))?;\n    \n    let config: Config = toml::from_str(&content)\n        .with_context(|| format!(\"Failed to parse {}\", path.display()))?;\n    \n    validate_config(&config)?;\n    \n    Ok(config)\n}\n\nfn validate_config(config: &Config) -> Result<()> {\n    if config.name.is_empty() {\n        bail!(ConfigError::MissingField { field: \"name\".into() });\n    }\n    \n    if config.port == 0 {\n        bail!(ConfigError::InvalidValue {\n            field: \"port\".into(),\n            message: \"Port must be non-zero\".into(),\n        });\n    }\n    \n    Ok(())\n}\n```\n\n## Pretty Error Display for CLI\n\nFor beautiful error messages, consider using the **`miette`** crate:\n\n```rust\nuse miette::{IntoDiagnostic, WrapErr};\n\nfn main() -> miette::Result<()> {\n    let content = fs::read_to_string(\"config.toml\")\n        .into_diagnostic()\n        .wrap_err(\"Could not read configuration file\")\n        .wrap_err_with(|| \"Tip: Make sure config.toml exists in the current directory\")?;\n    \n    Ok(())\n}\n```\n\n## Key Patterns:\n\n1. **Use `?` operator** - Propagate errors ergonomically\n2. **Add context** - Use `.context()` or `.with_context()` to add helpful messages\n3. **Custom errors** - Define domain-specific errors with `thiserror`\n4. **Never use `.unwrap()` in production** - Always handle errors properly\n5. **User-friendly messages** - Write error messages for humans, not developers",
+                "toolCalls": []
+            },
+            "contextItems": []
+        },
+        {
+            "message": {
+                "role": "user",
+                "content": "How do I implement a retry mechanism for network operations?"
+            },
+            "contextItems": [],
+            "editorState": "How do I implement a retry mechanism for network operations?"
+        },
+        {
+            "message": {
+                "role": "assistant",
+                "content": "Here's a robust retry mechanism with exponential backoff:\n\n```rust\nuse anyhow::{Context, Result};\nuse std::time::Duration;\nuse tokio::time::sleep;\n\n/// Retry configuration\npub struct RetryConfig {\n    /// Maximum number of attempts\n    pub max_attempts: u32,\n    /// Initial delay between retries\n    pub initial_delay: Duration,\n    /// Maximum delay between retries\n    pub max_delay: Duration,\n    /// Multiplier for exponential backoff\n    pub backoff_multiplier: f64,\n}\n\nimpl Default for RetryConfig {\n    fn default() -> Self {\n        Self {\n            max_attempts: 3,\n            initial_delay: Duration::from_millis(100),\n            max_delay: Duration::from_secs(30),\n            backoff_multiplier: 2.0,\n        }\n    }\n}\n\n/// Execute an async operation with retry logic\npub async fn with_retry<F, Fut, T, E>(\n    config: &RetryConfig,\n    operation: F,\n) -> Result<T>\nwhere\n    F: Fn() -> Fut,\n    Fut: std::future::Future<Output = Result<T, E>>,\n    E: std::error::Error + Send + Sync + 'static,\n{\n    let mut delay = config.initial_delay;\n    let mut last_error = None;\n\n    for attempt in 1..=config.max_attempts {\n        match operation().await {\n            Ok(result) => return Ok(result),\n            Err(e) => {\n                last_error = Some(e);\n                \n                if attempt == config.max_attempts {\n                    break;\n                }\n\n                tracing::warn!(\n                    attempt = attempt,\n                    max_attempts = config.max_attempts,\n                    delay_ms = delay.as_millis(),\n                    \"Operation failed, retrying...\"\n                );\n\n                sleep(delay).await;\n                \n                // Exponential backoff with jitter\n                delay = std::cmp::min(\n                    Duration::from_secs_f64(\n                        delay.as_secs_f64() * config.backoff_multiplier\n                    ),\n                    config.max_delay,\n                );\n            }\n        }\n    }\n\n    Err(last_error.unwrap())\n        .context(format!(\"Failed after {} attempts\", config.max_attempts))\n}\n\n// Usage example\nasync fn fetch_data(url: &str) -> Result<String> {\n    let config = RetryConfig::default();\n    \n    with_retry(&config, || async {\n        reqwest::get(url)\n            .await?\n            .text()\n            .await\n    }).await\n}\n```\n\n## Alternative: Using the `backoff` crate\n\n```rust\nuse backoff::{ExponentialBackoff, future::retry};\n\nasync fn fetch_with_backoff(url: &str) -> Result<String> {\n    let backoff = ExponentialBackoff::default();\n    \n    retry(backoff, || async {\n        reqwest::get(url)\n            .await\n            .map_err(backoff::Error::transient)?\n            .text()\n            .await\n            .map_err(backoff::Error::transient)\n    }).await\n    .context(\"Request failed after retries\")\n}\n```\n\n## Key Features:\n\n1. **Exponential backoff** - Delays increase between retries\n2. **Maximum delay cap** - Prevents excessively long waits\n3. **Configurable attempts** - Customize retry behavior\n4. **Proper error propagation** - Preserves the last error for debugging\n5. **Logging** - Tracks retry attempts for observability",
+                "toolCalls": []
+            },
+            "contextItems": []
+        }
+    ],
+    "mode": "chat",
+    "chatModelTitle": "Claude 3.5 Sonnet",
+    "usage": {
+        "totalCost": 0.0234,
+        "promptTokens": 3120,
+        "completionTokens": 2890
+    }
+}

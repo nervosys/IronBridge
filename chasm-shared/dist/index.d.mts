@@ -7,10 +7,26 @@ declare const PROVIDERS: {
     readonly copilot: {
         readonly id: "copilot";
         readonly name: "GitHub Copilot";
-        readonly type: "cloud";
+        readonly type: "local";
         readonly models: readonly ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "o1-preview", "o1-mini"];
         readonly color: "#1f6feb";
         readonly icon: "github";
+    };
+    readonly cursor: {
+        readonly id: "cursor";
+        readonly name: "Cursor";
+        readonly type: "local";
+        readonly models: readonly ["cursor-fast", "gpt-4o", "claude-3.5-sonnet"];
+        readonly color: "#00d4aa";
+        readonly icon: "cursor";
+    };
+    readonly continuedev: {
+        readonly id: "continuedev";
+        readonly name: "Continue.dev";
+        readonly type: "local";
+        readonly models: readonly [];
+        readonly color: "#ff6b6b";
+        readonly icon: "continue";
     };
     readonly openai: {
         readonly id: "openai";

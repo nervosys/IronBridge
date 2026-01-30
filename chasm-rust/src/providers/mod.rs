@@ -29,6 +29,7 @@
 #[allow(dead_code)]
 pub mod cloud;
 pub mod config;
+pub mod continuedev;
 pub mod cursor;
 #[allow(dead_code)]
 pub mod discovery;

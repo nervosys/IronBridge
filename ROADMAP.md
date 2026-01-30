@@ -107,7 +107,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 #### Integrations
 - [ ] GitHub Copilot Chat deep integration
 - [ ] Cursor IDE support
-- [ ] Continue.dev support
+- [x] Continue.dev support
 - [ ] Claude Desktop/API
 - [ ] ChatGPT API
 - [ ] Local LLM providers (Ollama, LM Studio, etc.)
@@ -141,7 +141,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | GitHub Copilot Chat | ✅       | ✅    | 🚧    | Primary |
 | VS Code Copilot     | ✅       | ✅    | 🚧    | Primary |
 | Cursor              | 📋       | 📋    | 📋    | Planned |
-| Continue.dev        | 📋       | 📋    | 📋    | Planned |
+| Continue.dev        | ✅       | 📋    | 📋    | Active  |
 | GPT4All             | 📋       | 📋    | 📋    | Planned |
 | Jan                 | 📋       | 📋    | 📋    | Planned |
 | LlamaFile           | 📋       | 📋    | 📋    | Planned |

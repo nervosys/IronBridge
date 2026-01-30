@@ -13,16 +13,36 @@
 
 export const PROVIDERS = {
     // =========================================================================
-    // Cloud Providers
+    // IDE/Editor Providers (file-based storage)
     // =========================================================================
     copilot: {
         id: 'copilot',
         name: 'GitHub Copilot',
-        type: 'cloud' as const,
+        type: 'local' as const,
         models: ['gpt-4o', 'gpt-4o-mini', 'claude-3.5-sonnet', 'o1-preview', 'o1-mini'],
         color: '#1f6feb',
         icon: 'github',
     },
+    cursor: {
+        id: 'cursor',
+        name: 'Cursor',
+        type: 'local' as const,
+        models: ['cursor-fast', 'gpt-4o', 'claude-3.5-sonnet'],
+        color: '#00d4aa',
+        icon: 'cursor',
+    },
+    continuedev: {
+        id: 'continuedev',
+        name: 'Continue.dev',
+        type: 'local' as const,
+        models: [],
+        color: '#ff6b6b',
+        icon: 'continue',
+    },
+
+    // =========================================================================
+    // Cloud Providers
+    // =========================================================================
     openai: {
         id: 'openai',
         name: 'OpenAI',

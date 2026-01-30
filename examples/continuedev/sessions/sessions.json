@@ -1,0 +1,20 @@
+[
+    {
+        "sessionId": "demo-continue-001",
+        "title": "Python Data Processing with Pandas",
+        "dateCreated": "1706140800000",
+        "workspaceDirectory": "/home/user/projects/data-pipeline"
+    },
+    {
+        "sessionId": "demo-continue-002",
+        "title": "React Component Optimization",
+        "dateCreated": "1706227200000",
+        "workspaceDirectory": "/home/user/projects/web-app"
+    },
+    {
+        "sessionId": "demo-continue-003",
+        "title": "Rust Error Handling Patterns",
+        "dateCreated": "1706313600000",
+        "workspaceDirectory": "/home/user/projects/rust-cli"
+    }
+]
