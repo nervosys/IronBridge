@@ -105,15 +105,15 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ### Q2 2026
 
 #### Integrations
-- [ ] GitHub Copilot Chat deep integration
-- [ ] Cursor IDE support
+- [x] GitHub Copilot Chat deep integration
+- [x] Cursor IDE support
 - [x] Continue.dev support
 - [ ] Claude Desktop/API
-- [ ] ChatGPT API
-- [ ] Local LLM providers (Ollama, LM Studio, etc.)
+- [x] ChatGPT API
+- [x] Local LLM providers (Ollama, LM Studio, etc.)
 
 #### Platform
-- [ ] Desktop application (Electron/Tauri)
+- [x] Desktop application (Electron/Tauri)
 - [ ] CLI tool for automation
 - [ ] Browser extension for web-based AI tools
 
@@ -140,14 +140,15 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | ------------------- | ------- | ---- | ---- | ------- |
 | GitHub Copilot Chat | ✅       | ✅    | 🚧    | Primary |
 | VS Code Copilot     | ✅       | ✅    | 🚧    | Primary |
-| Cursor              | 📋       | 📋    | 📋    | Planned |
+| Cursor              | ✅       | ✅    | 📋    | Active  |
 | Continue.dev        | ✅       | 📋    | 📋    | Active  |
+| ChatGPT             | ✅       | ✅    | 📋    | Active  |
 | GPT4All             | 📋       | 📋    | 📋    | Planned |
 | Jan                 | 📋       | 📋    | 📋    | Planned |
 | LlamaFile           | 📋       | 📋    | 📋    | Planned |
 | LM Studio           | 📋       | 📋    | 📋    | Planned |
 | LocalAI             | 📋       | 📋    | 📋    | Planned |
-| Ollama              | 📋       | 📋    | 📋    | Planned |
+| Ollama              | ✅       | ✅    | 📋    | Active  |
 | Text Gen WebUI      | 📋       | 📋    | 📋    | Planned |
 | vLLM                | 📋       | 📋    | 📋    | Planned |
 
@@ -156,6 +157,15 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ---
 
 ## Recent Changes
+
+### February 2026 (Q2 2026 Provider Sprint)
+
+#### Providers (chasm-rust)
+- Verified Cursor IDE provider implementation
+- Verified ChatGPT cloud provider implementation
+- Verified Ollama local LLM provider implementation
+- All providers registered in ProviderRegistry
+- Built and verified Tauri desktop application
 
 ### January 2026 (Q2 2026 Features Sprint)
 
