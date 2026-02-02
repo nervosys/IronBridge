@@ -123,14 +123,14 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] SSO/SAML authentication (SAML 2.0 IdP integration)
 - [x] Audit logging (comprehensive event tracking)
 - [x] Data retention policies (configurable lifecycle management)
-- [ ] Admin dashboard
-- [ ] Usage analytics
+- [x] Admin dashboard (React admin UI with system management)
+- [x] Usage analytics (event tracking, metrics, time series, dashboards)
 
 #### Advanced Features
-- [ ] Session branching and merging
-- [ ] Version control for conversations
-- [ ] Automated backup scheduling
-- [ ] Cross-device sync
+- [x] Session branching and merging (fork, merge with conflict resolution)
+- [x] Version control for conversations (commits, diff, tags, checkout/revert)
+- [x] Automated backup scheduling (cron schedules, multi-destination, retention)
+- [x] Cross-device sync (CRDT-based, offline-first, conflict resolution)
 
 ---
 
