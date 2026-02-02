@@ -12,14 +12,14 @@ A Chrome/Firefox extension for capturing and managing AI chat sessions from web-
 
 ## Supported Providers
 
-| Provider | Status | Notes |
-|----------|--------|-------|
-| ChatGPT | ✅ Full | chat.openai.com, chatgpt.com |
-| Claude | ✅ Full | claude.ai |
-| Gemini | ✅ Full | gemini.google.com |
-| Copilot | 🔄 Basic | copilot.microsoft.com |
-| Poe | 🔄 Basic | poe.com |
-| Perplexity | 🔄 Basic | perplexity.ai |
+| Provider   | Status  | Notes                        |
+| ---------- | ------- | ---------------------------- |
+| ChatGPT    | ✅ Full  | chat.openai.com, chatgpt.com |
+| Claude     | ✅ Full  | claude.ai                    |
+| Gemini     | ✅ Full  | gemini.google.com            |
+| Copilot    | 🔄 Basic | copilot.microsoft.com        |
+| Poe        | 🔄 Basic | poe.com                      |
+| Perplexity | 🔄 Basic | perplexity.ai                |
 
 ## Installation
 

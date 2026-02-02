@@ -383,7 +383,10 @@ impl SsoService {
     }
 
     /// List all configured IdPs
-    pub async fn list_idps(&self, organization_id: Option<&str>) -> Result<Vec<SamlIdpConfig>, String> {
+    pub async fn list_idps(
+        &self,
+        organization_id: Option<&str>,
+    ) -> Result<Vec<SamlIdpConfig>, String> {
         self.db
             .list_sso_idps(organization_id)
             .map_err(|e| format!("Database error: {}", e))
@@ -415,11 +418,12 @@ impl SsoService {
     }
 
     /// Update an IdP configuration
-    pub async fn update_idp(&self, idp_id: &str, request: UpdateIdpRequest) -> Result<SamlIdpConfig, String> {
-        let mut idp = self
-            .get_idp(idp_id)
-            .await?
-            .ok_or("IdP not found")?;
+    pub async fn update_idp(
+        &self,
+        idp_id: &str,
+        request: UpdateIdpRequest,
+    ) -> Result<SamlIdpConfig, String> {
+        let mut idp = self.get_idp(idp_id).await?.ok_or("IdP not found")?;
 
         if let Some(name) = request.name {
             idp.name = name;
@@ -460,7 +464,10 @@ impl SsoService {
     }
 
     /// Initiate SSO login flow
-    pub async fn initiate_sso(&self, request: InitiateSsoRequest) -> Result<InitiateSsoResponse, String> {
+    pub async fn initiate_sso(
+        &self,
+        request: InitiateSsoRequest,
+    ) -> Result<InitiateSsoResponse, String> {
         // Find the IdP
         let idp = if let Some(idp_id) = &request.idp_id {
             self.get_idp(idp_id).await?
@@ -511,20 +518,26 @@ impl SsoService {
     }
 
     /// Handle SAML callback (Assertion Consumer Service)
-    pub async fn handle_callback(&self, request: SamlCallbackRequest) -> Result<AuthResponse, String> {
+    pub async fn handle_callback(
+        &self,
+        request: SamlCallbackRequest,
+    ) -> Result<AuthResponse, String> {
         // Decode SAML Response
         let response_xml = BASE64
             .decode(&request.saml_response)
             .map_err(|e| format!("Invalid base64: {}", e))?;
 
-        let response_str = String::from_utf8(response_xml)
-            .map_err(|e| format!("Invalid UTF-8: {}", e))?;
+        let response_str =
+            String::from_utf8(response_xml).map_err(|e| format!("Invalid UTF-8: {}", e))?;
 
         // Parse SAML Response (simplified - production would use proper XML parsing)
         let saml_response = self.parse_saml_response(&response_str)?;
 
         if saml_response.status != SamlStatus::Success {
-            return Err(format!("SAML authentication failed: {:?}", saml_response.status));
+            return Err(format!(
+                "SAML authentication failed: {:?}",
+                saml_response.status
+            ));
         }
 
         let assertion = saml_response.assertion.ok_or("No assertion in response")?;
@@ -539,15 +552,19 @@ impl SsoService {
             .ok_or("IdP not found")?;
 
         // Extract user attributes
-        let email = self.get_attribute(&assertion, &idp.attribute_mappings.email)
+        let email = self
+            .get_attribute(&assertion, &idp.attribute_mappings.email)
             .or_else(|| Some(assertion.subject.name_id.clone()))
             .ok_or("Email not found in assertion")?;
 
-        let display_name = self.get_attribute(&assertion, &idp.attribute_mappings.display_name)
+        let display_name = self
+            .get_attribute(&assertion, &idp.attribute_mappings.display_name)
             .unwrap_or_else(|| email.split('@').next().unwrap_or(&email).to_string());
 
         // Find or create user
-        let user = self.find_or_create_user(&idp, &email, &display_name).await?;
+        let user = self
+            .find_or_create_user(&idp, &email, &display_name)
+            .await?;
 
         // Create SSO session
         let sso_session = SsoSession {
@@ -616,12 +633,13 @@ impl SsoService {
     fn parse_saml_response(&self, xml: &str) -> Result<SamlResponse, String> {
         // Simplified parsing - production would use proper XML library
         // This is a placeholder that extracts basic information
-        let id = self.extract_xml_attr(xml, "Response", "ID")
+        let id = self
+            .extract_xml_attr(xml, "Response", "ID")
             .unwrap_or_default();
-        let in_response_to = self.extract_xml_attr(xml, "Response", "InResponseTo")
+        let in_response_to = self
+            .extract_xml_attr(xml, "Response", "InResponseTo")
             .unwrap_or_default();
-        let issuer = self.extract_xml_element(xml, "Issuer")
-            .unwrap_or_default();
+        let issuer = self.extract_xml_element(xml, "Issuer").unwrap_or_default();
 
         let status = if xml.contains("urn:oasis:names:tc:SAML:2.0:status:Success") {
             SamlStatus::Success
@@ -652,28 +670,33 @@ impl SsoService {
     }
 
     fn parse_assertion(&self, xml: &str) -> Result<SamlAssertion, String> {
-        let id = self.extract_xml_attr(xml, "Assertion", "ID")
+        let id = self
+            .extract_xml_attr(xml, "Assertion", "ID")
             .unwrap_or_default();
-        let issuer = self.extract_xml_element(xml, "Issuer")
-            .unwrap_or_default();
+        let issuer = self.extract_xml_element(xml, "Issuer").unwrap_or_default();
 
         // Extract NameID
-        let name_id = self.extract_xml_element(xml, "NameID")
+        let name_id = self
+            .extract_xml_element(xml, "NameID")
             .ok_or("NameID not found")?;
-        let name_id_format = self.extract_xml_attr(xml, "NameID", "Format")
+        let name_id_format = self
+            .extract_xml_attr(xml, "NameID", "Format")
             .unwrap_or_default();
 
         // Extract conditions
-        let not_before = self.extract_xml_attr(xml, "Conditions", "NotBefore")
+        let not_before = self
+            .extract_xml_attr(xml, "Conditions", "NotBefore")
             .unwrap_or_default();
-        let not_on_or_after = self.extract_xml_attr(xml, "Conditions", "NotOnOrAfter")
+        let not_on_or_after = self
+            .extract_xml_attr(xml, "Conditions", "NotOnOrAfter")
             .unwrap_or_default();
 
         // Extract attributes (simplified)
         let attributes = self.parse_attributes(xml);
 
         // Extract authn statement
-        let authn_instant = self.extract_xml_attr(xml, "AuthnStatement", "AuthnInstant")
+        let authn_instant = self
+            .extract_xml_attr(xml, "AuthnStatement", "AuthnInstant")
             .unwrap_or_default();
         let session_index = self.extract_xml_attr(xml, "AuthnStatement", "SessionIndex");
 
@@ -700,11 +723,11 @@ impl SsoService {
 
     fn parse_attributes(&self, xml: &str) -> HashMap<String, Vec<String>> {
         let mut attributes = HashMap::new();
-        
+
         // Simple regex-like extraction (production would use proper XML parsing)
         // This finds Attribute elements and their AttributeValue children
         let attr_pattern = r#"Name="([^"]+)".*?<.*?AttributeValue[^>]*>([^<]+)<"#;
-        
+
         // For now, return empty - proper implementation would parse XML
         attributes
     }
@@ -714,7 +737,9 @@ impl SsoService {
 
         // Check time conditions
         if !assertion.conditions.not_before.is_empty() {
-            if let Ok(not_before) = chrono::DateTime::parse_from_rfc3339(&assertion.conditions.not_before) {
+            if let Ok(not_before) =
+                chrono::DateTime::parse_from_rfc3339(&assertion.conditions.not_before)
+            {
                 if now < not_before.with_timezone(&Utc) {
                     return Err("Assertion not yet valid".to_string());
                 }
@@ -722,7 +747,9 @@ impl SsoService {
         }
 
         if !assertion.conditions.not_on_or_after.is_empty() {
-            if let Ok(not_on_or_after) = chrono::DateTime::parse_from_rfc3339(&assertion.conditions.not_on_or_after) {
+            if let Ok(not_on_or_after) =
+                chrono::DateTime::parse_from_rfc3339(&assertion.conditions.not_on_or_after)
+            {
                 if now >= not_on_or_after.with_timezone(&Utc) {
                     return Err("Assertion has expired".to_string());
                 }
@@ -733,18 +760,33 @@ impl SsoService {
     }
 
     fn get_attribute(&self, assertion: &SamlAssertion, name: &str) -> Option<String> {
-        assertion.attributes.get(name).and_then(|v| v.first()).cloned()
+        assertion
+            .attributes
+            .get(name)
+            .and_then(|v| v.first())
+            .cloned()
     }
 
     fn extract_domain(&self, email: &str) -> String {
         email.split('@').last().unwrap_or("").to_string()
     }
 
-    async fn find_or_create_user(&self, idp: &SamlIdpConfig, email: &str, display_name: &str) -> Result<User, String> {
+    async fn find_or_create_user(
+        &self,
+        idp: &SamlIdpConfig,
+        email: &str,
+        display_name: &str,
+    ) -> Result<User, String> {
         // Try to find existing user
-        if let Some(user) = self.db.get_user_by_email(email).map_err(|e| e.to_string())? {
+        if let Some(user) = self
+            .db
+            .get_user_by_email(email)
+            .map_err(|e| e.to_string())?
+        {
             // Update last login
-            self.db.update_user_login(&user.id).map_err(|e| e.to_string())?;
+            self.db
+                .update_user_login(&user.id)
+                .map_err(|e| e.to_string())?;
             return Ok(user);
         }
 
@@ -783,9 +825,9 @@ impl SsoService {
     }
 
     fn extract_xml_element(&self, xml: &str, element: &str) -> Option<String> {
-        let start_tag = format!("<{}",element);
+        let start_tag = format!("<{}", element);
         let end_tag = format!("</{}>", element);
-        
+
         if let Some(start) = xml.find(&start_tag) {
             if let Some(content_start) = xml[start..].find('>') {
                 let content_start = start + content_start + 1;
@@ -889,6 +931,6 @@ pub fn configure_sso_routes(cfg: &mut web::ServiceConfig) {
             .route("/idps", web::get().to(list_idps))
             .route("/idps", web::post().to(create_idp))
             .route("/idps/{idp_id}", web::put().to(update_idp))
-            .route("/idps/{idp_id}", web::delete().to(delete_idp))
+            .route("/idps/{idp_id}", web::delete().to(delete_idp)),
     );
 }

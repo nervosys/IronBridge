@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use tokio::time;
 use uuid::Uuid;
 
-use crate::db::Database;
 use super::audit::{AuditAction, AuditCategory, AuditEventBuilder, AuditService};
+use crate::db::Database;
 
 // =============================================================================
 // Retention Policy Configuration
@@ -130,30 +130,17 @@ pub enum RetentionCondition {
         field: AgeField,
     },
     /// Based on tags
-    HasTag {
-        tag: String,
-    },
+    HasTag { tag: String },
     /// Based on status
-    Status {
-        status: String,
-    },
+    Status { status: String },
     /// Based on metadata field
-    MetadataMatch {
-        field: String,
-        value: String,
-    },
+    MetadataMatch { field: String, value: String },
     /// Combined conditions (AND)
-    And {
-        conditions: Vec<RetentionCondition>,
-    },
+    And { conditions: Vec<RetentionCondition> },
     /// Combined conditions (OR)
-    Or {
-        conditions: Vec<RetentionCondition>,
-    },
+    Or { conditions: Vec<RetentionCondition> },
     /// Negated condition
-    Not {
-        condition: Box<RetentionCondition>,
-    },
+    Not { condition: Box<RetentionCondition> },
 }
 
 /// Fields that can be used for age-based conditions
@@ -174,13 +161,9 @@ pub enum RetentionPeriod {
     /// Keep forever (no expiry)
     Forever,
     /// Keep for specified duration
-    Duration {
-        days: u32,
-    },
+    Duration { days: u32 },
     /// Keep until specific date
-    Until {
-        date: DateTime<Utc>,
-    },
+    Until { date: DateTime<Utc> },
     /// Keep for compliance period then archive
     ComplianceArchive {
         /// Active retention period
@@ -210,14 +193,9 @@ pub enum RetentionSchedule {
     /// Run on demand only
     Manual,
     /// Run at specific interval
-    Interval {
-        hours: u32,
-    },
+    Interval { hours: u32 },
     /// Run daily at specific time (UTC)
-    Daily {
-        hour: u8,
-        minute: u8,
-    },
+    Daily { hour: u8, minute: u8 },
     /// Run weekly on specific day
     Weekly {
         day: u8, // 0 = Sunday, 6 = Saturday
@@ -332,7 +310,10 @@ impl RetentionService {
     }
 
     /// Get all retention policies
-    pub async fn list_policies(&self, organization_id: Option<&str>) -> Result<Vec<RetentionPolicy>, String> {
+    pub async fn list_policies(
+        &self,
+        organization_id: Option<&str>,
+    ) -> Result<Vec<RetentionPolicy>, String> {
         self.db
             .list_retention_policies(organization_id)
             .map_err(|e| format!("Database error: {}", e))
@@ -346,7 +327,10 @@ impl RetentionService {
     }
 
     /// Create a new retention policy
-    pub async fn create_policy(&self, request: CreatePolicyRequest) -> Result<RetentionPolicy, String> {
+    pub async fn create_policy(
+        &self,
+        request: CreatePolicyRequest,
+    ) -> Result<RetentionPolicy, String> {
         let now = Utc::now().timestamp();
 
         let policy = RetentionPolicy {
@@ -371,21 +355,27 @@ impl RetentionService {
 
         // Audit log
         if let Some(audit) = &self.audit_service {
-            audit.log_builder(
-                AuditEventBuilder::new()
-                    .category(AuditCategory::Configuration)
-                    .action(AuditAction::Created)
-                    .resource("retention_policy", &policy.id)
-                    .description(format!("Created retention policy: {}", policy.name))
-                    .success()
-            ).await;
+            audit
+                .log_builder(
+                    AuditEventBuilder::new()
+                        .category(AuditCategory::Configuration)
+                        .action(AuditAction::Created)
+                        .resource("retention_policy", &policy.id)
+                        .description(format!("Created retention policy: {}", policy.name))
+                        .success(),
+                )
+                .await;
         }
 
         Ok(policy)
     }
 
     /// Update a retention policy
-    pub async fn update_policy(&self, policy_id: &str, request: UpdatePolicyRequest) -> Result<RetentionPolicy, String> {
+    pub async fn update_policy(
+        &self,
+        policy_id: &str,
+        request: UpdatePolicyRequest,
+    ) -> Result<RetentionPolicy, String> {
         let mut policy = self
             .get_policy(policy_id)
             .await?
@@ -422,14 +412,16 @@ impl RetentionService {
 
         // Audit log
         if let Some(audit) = &self.audit_service {
-            audit.log_builder(
-                AuditEventBuilder::new()
-                    .category(AuditCategory::Configuration)
-                    .action(AuditAction::Updated)
-                    .resource("retention_policy", &policy.id)
-                    .description(format!("Updated retention policy: {}", policy.name))
-                    .success()
-            ).await;
+            audit
+                .log_builder(
+                    AuditEventBuilder::new()
+                        .category(AuditCategory::Configuration)
+                        .action(AuditAction::Updated)
+                        .resource("retention_policy", &policy.id)
+                        .description(format!("Updated retention policy: {}", policy.name))
+                        .success(),
+                )
+                .await;
         }
 
         Ok(policy)
@@ -437,7 +429,10 @@ impl RetentionService {
 
     /// Delete a retention policy
     pub async fn delete_policy(&self, policy_id: &str) -> Result<(), String> {
-        let policy = self.get_policy(policy_id).await?.ok_or("Policy not found")?;
+        let policy = self
+            .get_policy(policy_id)
+            .await?
+            .ok_or("Policy not found")?;
 
         self.db
             .delete_retention_policy(policy_id)
@@ -445,21 +440,26 @@ impl RetentionService {
 
         // Audit log
         if let Some(audit) = &self.audit_service {
-            audit.log_builder(
-                AuditEventBuilder::new()
-                    .category(AuditCategory::Configuration)
-                    .action(AuditAction::Deleted)
-                    .resource("retention_policy", policy_id)
-                    .description(format!("Deleted retention policy: {}", policy.name))
-                    .success()
-            ).await;
+            audit
+                .log_builder(
+                    AuditEventBuilder::new()
+                        .category(AuditCategory::Configuration)
+                        .action(AuditAction::Deleted)
+                        .resource("retention_policy", policy_id)
+                        .description(format!("Deleted retention policy: {}", policy.name))
+                        .success(),
+                )
+                .await;
         }
 
         Ok(())
     }
 
     /// Execute a retention policy immediately
-    pub async fn execute_policy(&self, policy_id: &str) -> Result<RetentionExecutionResult, String> {
+    pub async fn execute_policy(
+        &self,
+        policy_id: &str,
+    ) -> Result<RetentionExecutionResult, String> {
         let policy = self
             .get_policy(policy_id)
             .await?
@@ -477,40 +477,47 @@ impl RetentionService {
 
         // Process each resource type
         for resource_type in &policy.resource_types {
-            let type_stats = self.process_resource_type(&policy, *resource_type, &mut actions_taken).await?;
+            let type_stats = self
+                .process_resource_type(&policy, *resource_type, &mut actions_taken)
+                .await?;
             total_failed += type_stats.failed;
             stats.insert(*resource_type, type_stats);
         }
 
         let completed_at = Utc::now();
         let total_processed: usize = stats.values().map(|s| s.scanned).sum();
-        let total_affected: usize = stats.values().map(|s| {
-            s.deleted + s.archived + s.anonymized + s.soft_deleted
-        }).sum();
+        let total_affected: usize = stats
+            .values()
+            .map(|s| s.deleted + s.archived + s.anonymized + s.soft_deleted)
+            .sum();
 
         // Update policy execution time
-        self.db.update_retention_policy_execution(
-            policy_id,
-            completed_at.timestamp(),
-            self.calculate_next_run(&policy.schedule, Some(completed_at.timestamp())),
-        ).map_err(|e| format!("Failed to update execution time: {}", e))?;
+        self.db
+            .update_retention_policy_execution(
+                policy_id,
+                completed_at.timestamp(),
+                self.calculate_next_run(&policy.schedule, Some(completed_at.timestamp())),
+            )
+            .map_err(|e| format!("Failed to update execution time: {}", e))?;
 
         // Audit log
         if let Some(audit) = &self.audit_service {
-            audit.log_builder(
-                AuditEventBuilder::new()
-                    .category(AuditCategory::Administration)
-                    .action(AuditAction::RetentionPolicyApplied)
-                    .resource("retention_policy", policy_id)
-                    .description(format!(
-                        "Executed retention policy '{}': {} items processed, {} affected",
-                        policy.name, total_processed, total_affected
-                    ))
-                    .detail("total_processed", total_processed)
-                    .detail("total_affected", total_affected)
-                    .detail("total_failed", total_failed)
-                    .success()
-            ).await;
+            audit
+                .log_builder(
+                    AuditEventBuilder::new()
+                        .category(AuditCategory::Administration)
+                        .action(AuditAction::RetentionPolicyApplied)
+                        .resource("retention_policy", policy_id)
+                        .description(format!(
+                            "Executed retention policy '{}': {} items processed, {} affected",
+                            policy.name, total_processed, total_affected
+                        ))
+                        .detail("total_processed", total_processed)
+                        .detail("total_affected", total_affected)
+                        .detail("total_failed", total_failed)
+                        .success(),
+                )
+                .await;
         }
 
         Ok(RetentionExecutionResult {
@@ -544,12 +551,18 @@ impl RetentionService {
 
         // Process each expired item
         for item in expired_items {
-            let result = self.process_expired_item(&policy, resource_type, &item, &mut stats).await;
+            let result = self
+                .process_expired_item(&policy, resource_type, &item, &mut stats)
+                .await;
 
             let action_log = RetentionActionLog {
                 resource_type,
                 resource_id: item.id.clone(),
-                action: policy.expiry_actions.first().copied().unwrap_or(ExpiryAction::SoftDelete),
+                action: policy
+                    .expiry_actions
+                    .first()
+                    .copied()
+                    .unwrap_or(ExpiryAction::SoftDelete),
                 success: result.is_ok(),
                 error: result.err(),
                 timestamp: Utc::now(),
@@ -567,7 +580,9 @@ impl RetentionService {
         resource_type: ResourceType,
     ) -> Result<Vec<ExpiredItem>, String> {
         // Find matching rule with highest priority
-        let rule = policy.rules.iter()
+        let rule = policy
+            .rules
+            .iter()
             .filter(|r| self.condition_applies(resource_type, &r.condition))
             .max_by_key(|r| r.priority);
 
@@ -593,16 +608,20 @@ impl RetentionService {
             .map_err(|e| format!("Database error: {}", e))
     }
 
-    fn condition_applies(&self, _resource_type: ResourceType, condition: &RetentionCondition) -> bool {
+    fn condition_applies(
+        &self,
+        _resource_type: ResourceType,
+        condition: &RetentionCondition,
+    ) -> bool {
         match condition {
             RetentionCondition::Always => true,
             RetentionCondition::Age { .. } => true,
-            RetentionCondition::And { conditions } => {
-                conditions.iter().all(|c| self.condition_applies(_resource_type, c))
-            }
-            RetentionCondition::Or { conditions } => {
-                conditions.iter().any(|c| self.condition_applies(_resource_type, c))
-            }
+            RetentionCondition::And { conditions } => conditions
+                .iter()
+                .all(|c| self.condition_applies(_resource_type, c)),
+            RetentionCondition::Or { conditions } => conditions
+                .iter()
+                .any(|c| self.condition_applies(_resource_type, c)),
             RetentionCondition::Not { condition } => {
                 !self.condition_applies(_resource_type, condition)
             }
@@ -621,32 +640,38 @@ impl RetentionService {
         for action in &policy.expiry_actions {
             match action {
                 ExpiryAction::Delete => {
-                    self.db.delete_item(resource_type, &item.id)
+                    self.db
+                        .delete_item(resource_type, &item.id)
                         .map_err(|e| format!("Delete failed: {}", e))?;
                     stats.deleted += 1;
                     stats.bytes_freed += item.size_bytes.unwrap_or(0);
                 }
                 ExpiryAction::Archive => {
-                    self.db.archive_item(resource_type, &item.id)
+                    self.db
+                        .archive_item(resource_type, &item.id)
                         .map_err(|e| format!("Archive failed: {}", e))?;
                     stats.archived += 1;
                 }
                 ExpiryAction::SoftDelete => {
-                    self.db.soft_delete_item(resource_type, &item.id)
+                    self.db
+                        .soft_delete_item(resource_type, &item.id)
                         .map_err(|e| format!("Soft delete failed: {}", e))?;
                     stats.soft_deleted += 1;
                 }
                 ExpiryAction::Anonymize => {
-                    self.db.anonymize_item(resource_type, &item.id)
+                    self.db
+                        .anonymize_item(resource_type, &item.id)
                         .map_err(|e| format!("Anonymize failed: {}", e))?;
                     stats.anonymized += 1;
                 }
                 ExpiryAction::ExportBeforeDelete => {
-                    self.db.export_item(resource_type, &item.id)
+                    self.db
+                        .export_item(resource_type, &item.id)
                         .map_err(|e| format!("Export failed: {}", e))?;
                     stats.exported += 1;
                     // Then delete
-                    self.db.delete_item(resource_type, &item.id)
+                    self.db
+                        .delete_item(resource_type, &item.id)
                         .map_err(|e| format!("Delete after export failed: {}", e))?;
                     stats.deleted += 1;
                 }
@@ -661,7 +686,11 @@ impl RetentionService {
     }
 
     /// Calculate next run time based on schedule
-    fn calculate_next_run(&self, schedule: &RetentionSchedule, last_run: Option<i64>) -> Option<i64> {
+    fn calculate_next_run(
+        &self,
+        schedule: &RetentionSchedule,
+        last_run: Option<i64>,
+    ) -> Option<i64> {
         let now = Utc::now();
         let last = last_run.map(|ts| DateTime::from_timestamp(ts, 0).unwrap_or(now));
 
@@ -672,7 +701,8 @@ impl RetentionService {
                 Some(next.timestamp())
             }
             RetentionSchedule::Daily { hour, minute } => {
-                let mut next = now.date_naive()
+                let mut next = now
+                    .date_naive()
                     .and_hms_opt(*hour as u32, *minute as u32, 0)
                     .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                     .unwrap_or(now);
@@ -693,7 +723,8 @@ impl RetentionService {
             }
             RetentionSchedule::Monthly { day, hour, minute } => {
                 // Simplified: use same day next month
-                let next = now.date_naive()
+                let next = now
+                    .date_naive()
                     .with_day(*day as u32)
                     .and_then(|d| d.and_hms_opt(*hour as u32, *minute as u32, 0))
                     .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
@@ -710,7 +741,7 @@ impl RetentionService {
 
             loop {
                 interval.tick().await;
-                
+
                 if let Err(e) = self.run_due_policies().await {
                     eprintln!("Retention scheduler error: {}", e);
                 }
@@ -721,7 +752,8 @@ impl RetentionService {
     /// Execute all policies that are due
     async fn run_due_policies(&self) -> Result<(), String> {
         let now = Utc::now().timestamp();
-        let due_policies = self.db
+        let due_policies = self
+            .db
             .get_due_retention_policies(now)
             .map_err(|e| format!("Database error: {}", e))?;
 
@@ -799,7 +831,9 @@ pub async fn get_policy(
     let policy_id = path.into_inner();
     match retention_service.get_policy(&policy_id).await {
         Ok(Some(policy)) => HttpResponse::Ok().json(policy),
-        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({ "error": "Policy not found" })),
+        Ok(None) => {
+            HttpResponse::NotFound().json(serde_json::json!({ "error": "Policy not found" }))
+        }
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
 }
@@ -822,7 +856,10 @@ pub async fn update_policy(
     request: web::Json<UpdatePolicyRequest>,
 ) -> HttpResponse {
     let policy_id = path.into_inner();
-    match retention_service.update_policy(&policy_id, request.into_inner()).await {
+    match retention_service
+        .update_policy(&policy_id, request.into_inner())
+        .await
+    {
         Ok(policy) => HttpResponse::Ok().json(policy),
         Err(e) => HttpResponse::BadRequest().json(serde_json::json!({ "error": e })),
     }
@@ -861,6 +898,9 @@ pub fn configure_retention_routes(cfg: &mut web::ServiceConfig) {
             .route("/policies/{policy_id}", web::get().to(get_policy))
             .route("/policies/{policy_id}", web::put().to(update_policy))
             .route("/policies/{policy_id}", web::delete().to(delete_policy))
-            .route("/policies/{policy_id}/execute", web::post().to(execute_policy))
+            .route(
+                "/policies/{policy_id}/execute",
+                web::post().to(execute_policy),
+            ),
     );
 }

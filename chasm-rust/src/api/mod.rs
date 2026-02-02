@@ -15,7 +15,9 @@ mod state;
 mod sync;
 mod websocket;
 
-pub use audit::{configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService};
+pub use audit::{
+    configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
+};
 pub use auth::configure_auth_routes;
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
 pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};

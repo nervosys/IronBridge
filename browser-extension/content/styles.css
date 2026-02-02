@@ -3,200 +3,202 @@
 
 /* Overlay indicator */
 #chasm-indicator {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 999999;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 #chasm-indicator .chasm-badge {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: white;
-  padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: chasm-fade-in 0.3s ease forwards;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: chasm-fade-in 0.3s ease forwards;
 }
 
 #chasm-indicator .chasm-badge:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
 }
 
 @keyframes chasm-fade-in {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Toast notifications */
 .chasm-toast {
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
-  z-index: 999999;
-  background: #1a1a2e;
-  color: #e2e8f0;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  border-left: 3px solid #8b5cf6;
-  max-width: 300px;
-  animation: chasm-slide-in 0.3s ease forwards;
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 999999;
+    background: #1a1a2e;
+    color: #e2e8f0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-left: 3px solid #8b5cf6;
+    max-width: 300px;
+    animation: chasm-slide-in 0.3s ease forwards;
 }
 
 .chasm-toast.success {
-  border-left-color: #10b981;
+    border-left-color: #10b981;
 }
 
 .chasm-toast.error {
-  border-left-color: #ef4444;
+    border-left-color: #ef4444;
 }
 
 @keyframes chasm-slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 /* Highlight overlay for selection */
 .chasm-highlight {
-  background-color: rgba(139, 92, 246, 0.15) !important;
-  outline: 2px solid rgba(139, 92, 246, 0.5) !important;
-  outline-offset: 2px;
-  border-radius: 4px;
+    background-color: rgba(139, 92, 246, 0.15) !important;
+    outline: 2px solid rgba(139, 92, 246, 0.5) !important;
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 /* Export button overlay */
 .chasm-export-button {
-  position: absolute;
-  top: -30px;
-  right: 0;
-  background: #8b5cf6;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 999998;
+    position: absolute;
+    top: -30px;
+    right: 0;
+    background: #8b5cf6;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 999998;
 }
 
 .chasm-export-button:hover {
-  background: #7c3aed;
+    background: #7c3aed;
 }
 
 /* Show on message hover */
 [class*="message"]:hover .chasm-export-button,
 [class*="turn"]:hover .chasm-export-button {
-  opacity: 1;
+    opacity: 1;
 }
 
 /* Loading spinner */
 .chasm-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: chasm-spin 0.8s linear infinite;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: chasm-spin 0.8s linear infinite;
 }
 
 @keyframes chasm-spin {
-  to {
-    transform: rotate(360deg);
-  }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Status indicator */
 .chasm-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .chasm-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #64748b;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #64748b;
 }
 
 .chasm-status-dot.connected {
-  background: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
 }
 
 .chasm-status-dot.disconnected {
-  background: #ef4444;
+    background: #ef4444;
 }
 
 /* Mini menu */
 .chasm-mini-menu {
-  position: fixed;
-  background: #1a1a2e;
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 999999;
-  display: none;
+    position: fixed;
+    background: #1a1a2e;
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 999999;
+    display: none;
 }
 
 .chasm-mini-menu.visible {
-  display: block;
-  animation: chasm-scale-in 0.15s ease forwards;
+    display: block;
+    animation: chasm-scale-in 0.15s ease forwards;
 }
 
 @keyframes chasm-scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .chasm-mini-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: none;
-  color: #e2e8f0;
-  padding: 8px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: 4px;
-  white-space: nowrap;
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: #e2e8f0;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    white-space: nowrap;
 }
 
 .chasm-mini-menu button:hover {
-  background: rgba(139, 92, 246, 0.2);
+    background: rgba(139, 92, 246, 0.2);
 }
 
 .chasm-mini-menu button .icon {
-  margin-right: 8px;
+    margin-right: 8px;
 }

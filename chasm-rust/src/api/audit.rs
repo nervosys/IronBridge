@@ -360,7 +360,12 @@ impl AuditEventBuilder {
         self
     }
 
-    pub fn resource_with_name(mut self, resource_type: &str, resource_id: &str, name: &str) -> Self {
+    pub fn resource_with_name(
+        mut self,
+        resource_type: &str,
+        resource_id: &str,
+        name: &str,
+    ) -> Self {
         self.resource = Some(AuditResource {
             resource_type: resource_type.to_string(),
             resource_id: resource_id.to_string(),
@@ -380,9 +385,14 @@ impl AuditEventBuilder {
         self.request = Some(AuditRequest {
             method: req.method().to_string(),
             path: req.path().to_string(),
-            query: req.query_string().is_empty().then(|| None).unwrap_or(Some(req.query_string().to_string())),
+            query: req
+                .query_string()
+                .is_empty()
+                .then(|| None)
+                .unwrap_or(Some(req.query_string().to_string())),
             ip_address: connection_info.realip_remote_addr().map(|s| s.to_string()),
-            user_agent: req.headers()
+            user_agent: req
+                .headers()
                 .get("user-agent")
                 .and_then(|h| h.to_str().ok())
                 .map(|s| s.to_string()),
@@ -429,9 +439,9 @@ impl AuditEventBuilder {
         let category = self.category.ok_or("Category is required")?;
         let action = self.action.ok_or("Action is required")?;
 
-        let description = self.description.unwrap_or_else(|| {
-            format!("{:?} - {:?}", category, action)
-        });
+        let description = self
+            .description
+            .unwrap_or_else(|| format!("{:?} - {:?}", category, action));
 
         Ok(AuditEvent {
             id: Uuid::new_v4().to_string(),
@@ -603,21 +613,13 @@ impl AuditService {
     }
 
     /// Export audit events (for compliance)
-    pub async fn export(
-        &self,
-        query: AuditQuery,
-        format: ExportFormat,
-    ) -> Result<Vec<u8>, String> {
+    pub async fn export(&self, query: AuditQuery, format: ExportFormat) -> Result<Vec<u8>, String> {
         let result = self.query(query).await?;
 
         match format {
-            ExportFormat::Json => {
-                serde_json::to_vec_pretty(&result.events)
-                    .map_err(|e| format!("JSON serialization error: {}", e))
-            }
-            ExportFormat::Csv => {
-                self.events_to_csv(&result.events)
-            }
+            ExportFormat::Json => serde_json::to_vec_pretty(&result.events)
+                .map_err(|e| format!("JSON serialization error: {}", e)),
+            ExportFormat::Csv => self.events_to_csv(&result.events),
             ExportFormat::JsonLines => {
                 let mut output = Vec::new();
                 for event in &result.events {
@@ -633,16 +635,32 @@ impl AuditService {
 
     fn events_to_csv(&self, events: &[AuditEvent]) -> Result<Vec<u8>, String> {
         let mut output = String::new();
-        
+
         // Header
         output.push_str("id,timestamp,category,action,outcome,actor_id,actor_email,resource_type,resource_id,description,error\n");
-        
+
         // Rows
         for event in events {
-            let actor_id = event.actor.as_ref().map(|a| &a.user_id).unwrap_or(&String::new());
-            let actor_email = event.actor.as_ref().map(|a| &a.email).unwrap_or(&String::new());
-            let resource_type = event.resource.as_ref().map(|r| &r.resource_type).unwrap_or(&String::new());
-            let resource_id = event.resource.as_ref().map(|r| &r.resource_id).unwrap_or(&String::new());
+            let actor_id = event
+                .actor
+                .as_ref()
+                .map(|a| &a.user_id)
+                .unwrap_or(&String::new());
+            let actor_email = event
+                .actor
+                .as_ref()
+                .map(|a| &a.email)
+                .unwrap_or(&String::new());
+            let resource_type = event
+                .resource
+                .as_ref()
+                .map(|r| &r.resource_type)
+                .unwrap_or(&String::new());
+            let resource_id = event
+                .resource
+                .as_ref()
+                .map(|r| &r.resource_id)
+                .unwrap_or(&String::new());
             let error = event.error.as_ref().unwrap_or(&String::new());
 
             output.push_str(&format!(
@@ -660,7 +678,7 @@ impl AuditService {
                 csv_escape(error),
             ));
         }
-        
+
         Ok(output.into_bytes())
     }
 }
@@ -757,7 +775,9 @@ pub async fn get_audit_event(
     let event_id = path.into_inner();
     match audit_service.get_event(&event_id).await {
         Ok(Some(event)) => HttpResponse::Ok().json(event),
-        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({ "error": "Event not found" })),
+        Ok(None) => {
+            HttpResponse::NotFound().json(serde_json::json!({ "error": "Event not found" }))
+        }
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
 }
@@ -771,7 +791,10 @@ pub async fn get_resource_audit_history(
     let (resource_type, resource_id) = path.into_inner();
     let limit = query.get("limit").and_then(|s| s.parse().ok());
 
-    match audit_service.get_resource_history(&resource_type, &resource_id, limit).await {
+    match audit_service
+        .get_resource_history(&resource_type, &resource_id, limit)
+        .await
+    {
         Ok(events) => HttpResponse::Ok().json(events),
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
@@ -784,11 +807,20 @@ pub async fn get_user_audit_history(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
     let user_id = path.into_inner();
-    let from = query.get("from").and_then(|s| DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&Utc));
-    let to = query.get("to").and_then(|s| DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&Utc));
+    let from = query
+        .get("from")
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+    let to = query
+        .get("to")
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
     let limit = query.get("limit").and_then(|s| s.parse().ok());
 
-    match audit_service.get_user_activity(&user_id, from, to, limit).await {
+    match audit_service
+        .get_user_activity(&user_id, from, to, limit)
+        .await
+    {
         Ok(events) => HttpResponse::Ok().json(events),
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
@@ -813,10 +845,16 @@ pub async fn export_audit_logs(
         ExportFormat::JsonLines => "application/x-ndjson",
     };
 
-    match audit_service.export(request.into_inner().query, format).await {
+    match audit_service
+        .export(request.into_inner().query, format)
+        .await
+    {
         Ok(data) => HttpResponse::Ok()
             .content_type(content_type)
-            .append_header(("Content-Disposition", "attachment; filename=\"audit-log.export\""))
+            .append_header((
+                "Content-Disposition",
+                "attachment; filename=\"audit-log.export\"",
+            ))
             .body(data),
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
@@ -828,9 +866,12 @@ pub fn configure_audit_routes(cfg: &mut web::ServiceConfig) {
         web::scope("/audit")
             .route("", web::get().to(query_audit_logs))
             .route("/{event_id}", web::get().to(get_audit_event))
-            .route("/resource/{type}/{id}", web::get().to(get_resource_audit_history))
+            .route(
+                "/resource/{type}/{id}",
+                web::get().to(get_resource_audit_history),
+            )
             .route("/user/{user_id}", web::get().to(get_user_audit_history))
-            .route("/export", web::post().to(export_audit_logs))
+            .route("/export", web::post().to(export_audit_logs)),
     );
 }
 
