@@ -120,9 +120,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ### Q3 2026
 
 #### Enterprise Features
-- [ ] SSO/SAML authentication
-- [ ] Audit logging
-- [ ] Data retention policies
+- [x] SSO/SAML authentication (SAML 2.0 IdP integration)
+- [x] Audit logging (comprehensive event tracking)
+- [x] Data retention policies (configurable lifecycle management)
 - [ ] Admin dashboard
 - [ ] Usage analytics
 

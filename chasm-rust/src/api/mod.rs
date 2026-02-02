@@ -5,14 +5,20 @@
 //! Provides a REST API for the web frontend and mobile app to interact with CSM.
 //! Uses Actix-web for the HTTP server.
 
+mod audit;
 mod auth;
 mod handlers_simple;
 mod handlers_swe;
+mod retention;
+mod sso;
 mod state;
 mod sync;
 mod websocket;
 
+pub use audit::{configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService};
 pub use auth::configure_auth_routes;
+pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
+pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
 pub use websocket::{configure_websocket_routes, WebSocketState};
