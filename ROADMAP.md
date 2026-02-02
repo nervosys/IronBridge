@@ -114,7 +114,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 #### Platform
 - [x] Desktop application (Electron/Tauri)
-- [ ] CLI tool for automation
+- [x] CLI tool for automation (chasm-cli v1.3.1 on crates.io)
 - [x] Browser extension for web-based AI tools (Chrome/Firefox Manifest V3)
 
 ### Q3 2026
