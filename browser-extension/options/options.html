@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chasm Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <img src="../icons/icon48.png" alt="Chasm" width="32" height="32">
+        <h1>Chasm Settings</h1>
+      </div>
+      <p class="subtitle">Configure your AI session management</p>
+    </header>
+
+    <main>
+      <!-- Connection Settings -->
+      <section class="settings-group">
+        <h2>🔗 Connection</h2>
+        
+        <div class="setting">
+          <label for="apiUrl">API URL</label>
+          <input type="url" id="apiUrl" placeholder="http://localhost:8787">
+          <p class="help">The URL of your Chasm API server</p>
+        </div>
+
+        <div class="setting">
+          <label for="apiKey">API Key (optional)</label>
+          <input type="password" id="apiKey" placeholder="Enter API key if required">
+          <p class="help">Required only if your server has authentication enabled</p>
+        </div>
+
+        <div class="setting inline">
+          <button id="testConnection" class="btn secondary">
+            Test Connection
+          </button>
+          <span id="connectionStatus" class="status"></span>
+        </div>
+      </section>
+
+      <!-- Auto Harvest Settings -->
+      <section class="settings-group">
+        <h2>🌾 Auto Harvest</h2>
+        
+        <div class="setting">
+          <label class="toggle">
+            <input type="checkbox" id="autoHarvest">
+            <span class="slider"></span>
+            <span class="label">Enable automatic harvesting</span>
+          </label>
+          <p class="help">Periodically check for new sessions across all providers</p>
+        </div>
+
+        <div class="setting">
+          <label for="harvestInterval">Harvest Interval</label>
+          <select id="harvestInterval">
+            <option value="15">Every 15 minutes</option>
+            <option value="30" selected>Every 30 minutes</option>
+            <option value="60">Every hour</option>
+            <option value="120">Every 2 hours</option>
+            <option value="360">Every 6 hours</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Notification Settings -->
+      <section class="settings-group">
+        <h2>🔔 Notifications</h2>
+        
+        <div class="setting">
+          <label class="toggle">
+            <input type="checkbox" id="notifications" checked>
+            <span class="slider"></span>
+            <span class="label">Show notifications</span>
+          </label>
+          <p class="help">Display browser notifications for export status</p>
+        </div>
+
+        <div class="setting">
+          <label class="toggle">
+            <input type="checkbox" id="soundEnabled">
+            <span class="slider"></span>
+            <span class="label">Play sounds</span>
+          </label>
+          <p class="help">Audio feedback for successful exports</p>
+        </div>
+      </section>
+
+      <!-- Provider Settings -->
+      <section class="settings-group">
+        <h2>🤖 Providers</h2>
+        <p class="section-desc">Select which AI providers to monitor</p>
+        
+        <div class="provider-grid">
+          <label class="provider-toggle">
+            <input type="checkbox" name="provider" value="chatgpt" checked>
+            <span class="provider-card">
+              <span class="icon">🤖</span>
+              <span class="name">ChatGPT</span>
+            </span>
+          </label>
+          
+          <label class="provider-toggle">
+            <input type="checkbox" name="provider" value="claude" checked>
+            <span class="provider-card">
+              <span class="icon">🧠</span>
+              <span class="name">Claude</span>
+            </span>
+          </label>
+          
+          <label class="provider-toggle">
+            <input type="checkbox" name="provider" value="gemini" checked>
+            <span class="provider-card">
+              <span class="icon">✨</span>
+              <span class="name">Gemini</span>
+            </span>
+          </label>
+          
+          <label class="provider-toggle">
+            <input type="checkbox" name="provider" value="copilot">
+            <span class="provider-card">
+              <span class="icon">🔷</span>
+              <span class="name">Copilot</span>
+            </span>
+          </label>
+          
+          <label class="provider-toggle">
+            <input type="checkbox" name="provider" value="poe">
+            <span class="provider-card">
+              <span class="icon">💬</span>
+              <span class="name">Poe</span>
+            </span>
+          </label>
+          
+          <label class="provider-toggle">
+            <input type="checkbox" name="provider" value="perplexity">
+            <span class="provider-card">
+              <span class="icon">🔍</span>
+              <span class="name">Perplexity</span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Export Settings -->
+      <section class="settings-group">
+        <h2>📤 Export</h2>
+        
+        <div class="setting">
+          <label for="exportFormat">Default Format</label>
+          <select id="exportFormat">
+            <option value="json" selected>JSON</option>
+            <option value="markdown">Markdown</option>
+            <option value="html">HTML</option>
+            <option value="text">Plain Text</option>
+          </select>
+        </div>
+
+        <div class="setting">
+          <label class="toggle">
+            <input type="checkbox" id="includeMetadata" checked>
+            <span class="slider"></span>
+            <span class="label">Include metadata</span>
+          </label>
+          <p class="help">Add timestamps, model info, and source URLs</p>
+        </div>
+      </section>
+
+      <!-- Data Management -->
+      <section class="settings-group">
+        <h2>💾 Data</h2>
+        
+        <div class="setting inline">
+          <button id="exportSettings" class="btn secondary">Export Settings</button>
+          <button id="importSettings" class="btn secondary">Import Settings</button>
+          <input type="file" id="importFile" accept=".json" hidden>
+        </div>
+
+        <div class="setting">
+          <button id="clearCache" class="btn danger">Clear Local Cache</button>
+          <p class="help">Remove all locally cached session data</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <button id="saveSettings" class="btn primary">Save Settings</button>
+      <button id="resetSettings" class="btn secondary">Reset to Defaults</button>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

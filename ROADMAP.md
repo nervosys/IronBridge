@@ -108,14 +108,14 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] GitHub Copilot Chat deep integration
 - [x] Cursor IDE support
 - [x] Continue.dev support
-- [ ] Claude Desktop/API
+- [x] Claude Desktop/API
 - [x] ChatGPT API
 - [x] Local LLM providers (Ollama, LM Studio, etc.)
 
 #### Platform
 - [x] Desktop application (Electron/Tauri)
 - [ ] CLI tool for automation
-- [ ] Browser extension for web-based AI tools
+- [x] Browser extension for web-based AI tools (Chrome/Firefox Manifest V3)
 
 ### Q3 2026
 

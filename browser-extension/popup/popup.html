@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chasm</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="header">
+      <div class="logo">
+        <img src="../icons/icon32.png" alt="Chasm">
+        <h1>Chasm</h1>
+      </div>
+      <span class="version">v1.0.0</span>
+    </header>
+
+    <main class="content">
+      <!-- Connection Status -->
+      <section class="status-section">
+        <div class="status-indicator" id="connectionStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Checking connection...</span>
+        </div>
+      </section>
+
+      <!-- Current Page Info -->
+      <section class="page-section" id="pageSection">
+        <h2>Current Page</h2>
+        <div class="provider-info" id="providerInfo">
+          <span class="provider-icon">🤖</span>
+          <span class="provider-name">Detecting...</span>
+        </div>
+      </section>
+
+      <!-- Quick Actions -->
+      <section class="actions-section">
+        <h2>Quick Actions</h2>
+        <div class="action-buttons">
+          <button class="action-btn primary" id="harvestBtn">
+            <span class="icon">📥</span>
+            <span>Harvest Sessions</span>
+          </button>
+          <button class="action-btn" id="exportBtn">
+            <span class="icon">📤</span>
+            <span>Export Current</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Stats -->
+      <section class="stats-section">
+        <h2>Session Stats</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="totalSessions">-</span>
+            <span class="stat-label">Total Sessions</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="totalMessages">-</span>
+            <span class="stat-label">Messages</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="providers">-</span>
+            <span class="stat-label">Providers</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <a href="#" id="openDashboard">Open Dashboard</a>
+      <span class="separator">•</span>
+      <a href="#" id="openSettings">Settings</a>
+    </footer>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
