@@ -5,21 +5,27 @@
 //! Provides a REST API for the web frontend and mobile app to interact with CSM.
 //! Uses Actix-web for the HTTP server.
 
+#[cfg(feature = "enterprise")]
 mod audit;
 mod auth;
 mod handlers_simple;
 mod handlers_swe;
+#[cfg(feature = "enterprise")]
 mod retention;
+#[cfg(feature = "enterprise")]
 mod sso;
 mod state;
 mod sync;
 mod websocket;
 
+#[cfg(feature = "enterprise")]
 pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
 };
 pub use auth::configure_auth_routes;
+#[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
+#[cfg(feature = "enterprise")]
 pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
@@ -271,3 +277,5 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     eprintln!("[DEBUG] Server stopped.");
     Ok(())
 }
+
+

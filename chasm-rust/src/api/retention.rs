@@ -13,7 +13,7 @@ use tokio::time;
 use uuid::Uuid;
 
 use super::audit::{AuditAction, AuditCategory, AuditEventBuilder, AuditService};
-use crate::db::Database;
+use super::audit::Database;
 
 // =============================================================================
 // Retention Policy Configuration

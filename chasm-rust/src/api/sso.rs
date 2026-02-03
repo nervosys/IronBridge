@@ -16,7 +16,7 @@ use std::io::Read;
 use uuid::Uuid;
 
 use super::auth::{AuthResponse, Claims, PublicUser, SubscriptionTier, User};
-use crate::db::Database;
+use super::audit::Database;
 
 // =============================================================================
 // SSO Configuration
@@ -582,7 +582,10 @@ impl SsoService {
             .map_err(|e| format!("Failed to store SSO session: {}", e))?;
 
         // Generate JWT tokens
-        let (access_token, refresh_token) = super::auth::generate_tokens(&user)?;
+        let access_token = super::auth::generate_access_token(&user)
+            .ok_or_else(|| "Failed to generate access token".to_string())?;
+        let refresh_token = super::auth::generate_refresh_token(&user)
+            .ok_or_else(|| "Failed to generate refresh token".to_string())?;
 
         Ok(AuthResponse {
             user: user.into(),
