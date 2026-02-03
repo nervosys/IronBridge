@@ -18,7 +18,8 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | **csm-web**          | 🟢 Active | React web application                    |
 | **csm-app**          | � Active | React Native mobile app                  |
 | **csm-shared**       | 🟢 Active | Shared TypeScript types and utilities    |
-| **vscode-extension** | 🟢 Active | VS Code extension for session management |
+| **vscode-extension**  | 🟢 Active | VS Code extension for session management |
+| **browser-extension** | 🟢 Active | Chrome/Firefox extension for web AI chat |
 
 ---
 
@@ -152,6 +153,30 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Workflow automation engine (triggers, conditions, actions)
 - [x] Extended provider support (GPT4All, Jan, LM Studio, LocalAI, TextGen WebUI)
 
+### Q1 2027
+
+#### Browser Extension Enhancement
+- [x] Additional provider content scripts (Copilot, Poe, Perplexity)
+- [x] Auto-harvest with configurable schedules
+- [x] Firefox Manifest V2 compatibility
+- [ ] Firefox Add-on Store publication
+- [ ] Chrome Web Store publication
+
+#### API Enhancements
+- [ ] GraphQL API endpoint
+- [ ] Webhook integrations
+- [ ] OpenAPI/Swagger documentation
+
+### Q2 2027
+
+#### AI Agents
+- [ ] Autonomous session archival agent
+- [ ] Context-aware search refinement
+
+#### Ecosystem
+- [ ] JetBrains IDE plugin
+- [ ] Neovim/Vim plugin
+
 ---
 
 ## Provider Support Matrix
@@ -278,4 +303,7 @@ See [CONTRIBUTING.md](csm-rust/CONTRIBUTING.md) for guidelines on contributing t
 ## License
 
 This project is licensed under the terms specified in [LICENSE](LICENSE).
+
+
+
 
