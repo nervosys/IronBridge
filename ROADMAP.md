@@ -1,6 +1,6 @@
 # Chasm Roadmap
 
-> **Last Updated:** January 29, 2026
+> **Last Updated:** February 3, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
 
@@ -132,6 +132,26 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Automated backup scheduling (cron schedules, multi-destination, retention)
 - [x] Cross-device sync (CRDT-based, offline-first, conflict resolution)
 
+### Q4 2026
+
+#### Sync Completion
+- [x] Bidirectional sync engine (push/pull with change tracking)
+- [x] Conflict resolution strategies (LocalWins, RemoteWins, MostRecent, Manual)
+- [x] Provider-specific sync adapters (VSCode, extensible to others)
+
+#### AI & Intelligence
+- [x] Topic extraction and categorization
+- [x] Conversation insights generation
+- [x] Sentiment analysis (lexicon-based)
+- [x] Quality scoring for sessions
+- [x] Similarity detection (Jaccard-based)
+- [x] Session recommendation engine
+
+#### Platform Maturity
+- [x] Plugin system architecture (manifest, lifecycle, event hooks)
+- [x] Workflow automation engine (triggers, conditions, actions)
+- [x] Extended provider support (GPT4All, Jan, LM Studio, LocalAI, TextGen WebUI)
+
 ---
 
 ## Provider Support Matrix
@@ -157,6 +177,43 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ---
 
 ## Recent Changes
+
+### February 2026 (Q4 2026 Platform Maturity)
+
+#### Sync Engine (chasm-rust)
+- Created bidirectional sync module with conflict resolution
+- Implemented SessionSyncState tracking with hash-based change detection
+- Added conflict strategies: LocalWins, RemoteWins, MostRecent, KeepBoth, Manual
+- Created VSCodeSyncAdapter for Copilot Chat sessions
+
+#### AI Intelligence (chasm-rust)
+- Created intelligence module with AI-powered analysis
+- Implemented TopicExtractor for keyword-based topic detection
+- Added InsightsGenerator for conversation key points
+- Created SentimentAnalyzer with lexicon-based scoring
+- Implemented QualityScorer for session quality metrics
+- Added SimilarityDetector using Jaccard similarity
+
+#### Plugin System (chasm-rust)
+- Created extensible plugin architecture (~650 lines)
+- Implemented PluginManifest with permissions and metadata
+- Added PluginManager for lifecycle management
+- Created event hook system with priority ordering
+- Implemented PluginRegistry for discovery
+
+#### Workflow Automation (chasm-rust)
+- Created automation engine (~960 lines)
+- Implemented triggers: Event, Schedule, Interval, Manual
+- Added conditions: And, Or, Not, Compare, TimeWindow, Matches
+- Created actions: Export, Archive, Sync, Harvest, Notify, Shell, Http
+- Added workflow execution engine with run tracking
+
+#### Provider Expansion (chasm-rust)
+- Enhanced GPT4All provider with session harvesting
+- Enhanced Jan provider with session harvesting
+- Enhanced LM Studio provider with session harvesting
+- Enhanced LocalAI provider with session harvesting
+- Enhanced Text Gen WebUI provider with session harvesting
 
 ### February 2026 (Q2 2026 Provider Sprint)
 
