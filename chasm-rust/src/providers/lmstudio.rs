@@ -300,7 +300,10 @@ impl LmStudioProvider {
 
         Ok(ChatSession {
             id: conv.id.clone(),
-            title: conv.title.clone().unwrap_or_else(|| "LM Studio Chat".to_string()),
+            title: conv
+                .title
+                .clone()
+                .unwrap_or_else(|| "LM Studio Chat".to_string()),
             provider: "lmstudio".to_string(),
             model: conv.model.clone(),
             messages: chat_messages,

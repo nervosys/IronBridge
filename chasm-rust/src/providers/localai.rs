@@ -143,11 +143,8 @@ impl LocalAiProvider {
         {
             Ok(response) if response.status() == 200 => {
                 if let Ok(models_resp) = response.into_json::<LocalAiModelsResponse>() {
-                    let models: Vec<String> = models_resp
-                        .data
-                        .iter()
-                        .map(|m| m.id.clone())
-                        .collect();
+                    let models: Vec<String> =
+                        models_resp.data.iter().map(|m| m.id.clone()).collect();
                     return (true, models);
                 }
                 (true, Vec::new())

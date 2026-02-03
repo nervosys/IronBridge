@@ -241,7 +241,11 @@ impl BranchingService {
 
         // Copy messages up to fork point to new branch
         let branch_id = branch.id.clone();
-        self.copy_messages_to_branch(&request.session_id, &branch_id, &request.fork_from_message_id)?;
+        self.copy_messages_to_branch(
+            &request.session_id,
+            &branch_id,
+            &request.fork_from_message_id,
+        )?;
 
         let mut branches = self.branches.write().map_err(|e| e.to_string())?;
         branches.insert(branch.id.clone(), branch.clone());
@@ -343,7 +347,10 @@ impl BranchingService {
                 merged_messages.extend(target_messages.clone());
                 for msg in source_messages {
                     // Check for duplicates
-                    if !target_messages.iter().any(|t| t.content == msg.content && t.role == msg.role) {
+                    if !target_messages
+                        .iter()
+                        .any(|t| t.content == msg.content && t.role == msg.role)
+                    {
                         merged_messages.push(msg);
                     }
                 }
@@ -422,8 +429,10 @@ impl BranchingService {
         let base_messages = self.get_branch_messages(base_branch_id).await?;
         let compare_messages = self.get_branch_messages(compare_branch_id).await?;
 
-        let base_ids: std::collections::HashSet<_> = base_messages.iter().map(|m| m.id.clone()).collect();
-        let compare_ids: std::collections::HashSet<_> = compare_messages.iter().map(|m| m.id.clone()).collect();
+        let base_ids: std::collections::HashSet<_> =
+            base_messages.iter().map(|m| m.id.clone()).collect();
+        let compare_ids: std::collections::HashSet<_> =
+            compare_messages.iter().map(|m| m.id.clone()).collect();
 
         let base_only: Vec<_> = base_messages
             .iter()
@@ -460,7 +469,10 @@ impl BranchingService {
     // =========================================================================
 
     /// Get messages for a branch
-    pub async fn get_branch_messages(&self, branch_id: &str) -> Result<Vec<BranchedMessage>, String> {
+    pub async fn get_branch_messages(
+        &self,
+        branch_id: &str,
+    ) -> Result<Vec<BranchedMessage>, String> {
         let messages = self.messages.read().map_err(|e| e.to_string())?;
         Ok(messages.get(branch_id).cloned().unwrap_or_default())
     }
@@ -534,7 +546,10 @@ pub async fn list_branches(
 ) -> HttpResponse {
     let session_id = match query.get("session_id") {
         Some(id) => id,
-        None => return HttpResponse::BadRequest().json(serde_json::json!({ "error": "session_id required" })),
+        None => {
+            return HttpResponse::BadRequest()
+                .json(serde_json::json!({ "error": "session_id required" }))
+        }
     };
 
     match service.list_branches(session_id).await {

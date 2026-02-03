@@ -167,10 +167,7 @@ impl JanProvider {
                 if path.exists() {
                     return Some(path);
                 }
-                let app_support = home
-                    .join("Library")
-                    .join("Application Support")
-                    .join("Jan");
+                let app_support = home.join("Library").join("Application Support").join("Jan");
                 if app_support.exists() {
                     return Some(app_support);
                 }
@@ -225,7 +222,10 @@ impl JanProvider {
     /// Check if API endpoint is available
     fn check_api_availability(endpoint: &str) -> bool {
         let url = format!("{}/models", endpoint);
-        match ureq::get(&url).timeout(std::time::Duration::from_secs(2)).call() {
+        match ureq::get(&url)
+            .timeout(std::time::Duration::from_secs(2))
+            .call()
+        {
             Ok(response) => response.status() == 200,
             Err(_) => false,
         }
@@ -349,7 +349,10 @@ impl JanProvider {
 
         Ok(ChatSession {
             id: thread.id.clone(),
-            title: thread.title.clone().unwrap_or_else(|| "Jan Chat".to_string()),
+            title: thread
+                .title
+                .clone()
+                .unwrap_or_else(|| "Jan Chat".to_string()),
             provider: "jan".to_string(),
             model: None,
             messages: chat_messages,

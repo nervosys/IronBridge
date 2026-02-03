@@ -143,14 +143,14 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | Cursor              | ✅       | ✅    | 📋    | Active  |
 | Continue.dev        | ✅       | 📋    | 📋    | Active  |
 | ChatGPT             | ✅       | ✅    | 📋    | Active  |
-| GPT4All             | 📋       | 📋    | 📋    | Planned |
-| Jan                 | 📋       | 📋    | 📋    | Planned |
-| LlamaFile           | 📋       | 📋    | 📋    | Planned |
-| LM Studio           | 📋       | 📋    | 📋    | Planned |
-| LocalAI             | 📋       | 📋    | 📋    | Planned |
+| GPT4All             | ✅       | ✅    | 📋    | Active  |
+| Jan                 | ✅       | ✅    | 📋    | Active  |
+| LlamaFile           | ✅       | ✅    | —     | Active  |
+| LM Studio           | ✅       | ✅    | 📋    | Active  |
+| LocalAI             | ✅       | ✅    | —     | Active  |
 | Ollama              | ✅       | ✅    | 📋    | Active  |
-| Text Gen WebUI      | 📋       | 📋    | 📋    | Planned |
-| vLLM                | 📋       | 📋    | 📋    | Planned |
+| Text Gen WebUI      | ✅       | ✅    | 📋    | Active  |
+| vLLM                | ✅       | ✅    | —     | Active  |
 
 **Legend:** ✅ Complete | 🚧 In Progress | 📋 Planned
 
@@ -221,3 +221,4 @@ See [CONTRIBUTING.md](csm-rust/CONTRIBUTING.md) for guidelines on contributing t
 ## License
 
 This project is licensed under the terms specified in [LICENSE](LICENSE).
+

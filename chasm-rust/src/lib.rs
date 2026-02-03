@@ -43,6 +43,7 @@
 #![allow(clippy::type_complexity)]
 
 pub mod agency;
+pub mod automation;
 pub mod browser;
 pub mod cli;
 pub mod cloud_sync;
@@ -51,10 +52,13 @@ pub mod database;
 pub mod encryption;
 pub mod error;
 pub mod integrations;
+pub mod intelligence;
 pub mod mcp;
 pub mod models;
+pub mod plugins;
 pub mod providers;
 pub mod storage;
+pub mod sync;
 pub mod telemetry;
 pub mod tui;
 pub mod workspace;

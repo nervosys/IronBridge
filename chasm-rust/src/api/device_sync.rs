@@ -94,7 +94,7 @@ impl Default for DeviceSyncConfig {
             sync_on_cellular: true,
             wifi_only: false,
             max_cache_size: 100 * 1024 * 1024, // 100MB
-            sync_interval: 0,                   // Real-time
+            sync_interval: 0,                  // Real-time
             sync_scope: SyncScope::default(),
         }
     }
@@ -435,7 +435,9 @@ impl CrossDeviceSyncService {
         let mut conflicts = Vec::new();
 
         // Get next logical clock value
-        let clock = self.logical_clock.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let clock = self
+            .logical_clock
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         let mut operations = self.operations.write().map_err(|e| e.to_string())?;
 
@@ -443,7 +445,7 @@ impl CrossDeviceSyncService {
             // Check for conflicts
             if let Some(conflict) = self.detect_conflict(&op, &operations) {
                 rejected.push(op.id.clone());
-                
+
                 let conflict_record = SyncConflict {
                     id: Uuid::new_v4().to_string(),
                     resource_type: op.resource_type,
@@ -454,9 +456,9 @@ impl CrossDeviceSyncService {
                     created_at: Utc::now(),
                     resolved: false,
                 };
-                
+
                 conflicts.push(conflict_record.clone());
-                
+
                 // Store conflict
                 let mut conflict_store = self.conflicts.write().map_err(|e| e.to_string())?;
                 conflict_store.insert(conflict_record.id.clone(), conflict_record);
@@ -494,10 +496,7 @@ impl CrossDeviceSyncService {
     }
 
     /// Pull changes for a device
-    pub async fn pull_changes(
-        &self,
-        request: PullChangesRequest,
-    ) -> Result<SyncDelta, String> {
+    pub async fn pull_changes(&self, request: PullChangesRequest) -> Result<SyncDelta, String> {
         let operations = self.operations.read().map_err(|e| e.to_string())?;
         let limit = request.limit.unwrap_or(100);
 
@@ -521,7 +520,7 @@ impl CrossDeviceSyncService {
                         }
                     }
                 }
-                
+
                 // No cursor = include all
                 true
             })
@@ -590,7 +589,8 @@ impl CrossDeviceSyncService {
                 e.resource_type == op.resource_type
                     && e.resource_id == op.resource_id
                     && e.device_id != op.device_id
-                    && e.timestamp > op.timestamp - chrono::Duration::seconds(5) // Within 5 seconds
+                    && e.timestamp > op.timestamp - chrono::Duration::seconds(5)
+                // Within 5 seconds
             })
             .last()
             .cloned()
@@ -650,7 +650,12 @@ pub async fn register_device(
 ) -> HttpResponse {
     let request = body.into_inner();
     match service
-        .register_device(&request.user_id, &request.name, request.device_type, request.platform)
+        .register_device(
+            &request.user_id,
+            &request.name,
+            request.device_type,
+            request.platform,
+        )
         .await
     {
         Ok(device) => HttpResponse::Created().json(device),

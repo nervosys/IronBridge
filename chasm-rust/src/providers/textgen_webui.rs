@@ -250,7 +250,11 @@ impl TextGenWebUiProvider {
         for entry in std::fs::read_dir(characters_path)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map(|e| e == "yaml" || e == "json").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "yaml" || e == "json")
+                .unwrap_or(false)
+            {
                 if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
                     characters.push(name.to_string());
                 }

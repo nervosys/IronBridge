@@ -103,9 +103,7 @@ impl Default for BackupScope {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BackupDestination {
     /// Local filesystem
-    Local {
-        path: String,
-    },
+    Local { path: String },
     /// Amazon S3
     S3 {
         bucket: String,
@@ -292,7 +290,10 @@ impl BackupService {
     // =========================================================================
 
     /// Create a new backup schedule
-    pub async fn create_schedule(&self, schedule: BackupSchedule) -> Result<BackupSchedule, String> {
+    pub async fn create_schedule(
+        &self,
+        schedule: BackupSchedule,
+    ) -> Result<BackupSchedule, String> {
         let mut schedule = schedule;
         schedule.id = Uuid::new_v4().to_string();
         schedule.created_at = Utc::now();
@@ -306,7 +307,10 @@ impl BackupService {
     }
 
     /// List all schedules
-    pub async fn list_schedules(&self, owner_id: Option<&str>) -> Result<Vec<BackupSchedule>, String> {
+    pub async fn list_schedules(
+        &self,
+        owner_id: Option<&str>,
+    ) -> Result<Vec<BackupSchedule>, String> {
         let schedules = self.schedules.read().map_err(|e| e.to_string())?;
         let result: Vec<_> = schedules
             .values()
@@ -374,7 +378,11 @@ impl BackupService {
     }
 
     /// Enable/disable a schedule
-    pub async fn set_schedule_enabled(&self, id: &str, enabled: bool) -> Result<BackupSchedule, String> {
+    pub async fn set_schedule_enabled(
+        &self,
+        id: &str,
+        enabled: bool,
+    ) -> Result<BackupSchedule, String> {
         let mut schedules = self.schedules.write().map_err(|e| e.to_string())?;
         let schedule = schedules
             .get_mut(id)
@@ -427,7 +435,8 @@ impl BackupService {
 
         // In production, this would spawn an async task to perform the backup
         // For now, simulate starting the backup
-        self.execute_backup(&backup_id, &scope, &destination).await?;
+        self.execute_backup(&backup_id, &scope, &destination)
+            .await?;
 
         let backups = self.backups.read().map_err(|e| e.to_string())?;
         backups
@@ -468,7 +477,8 @@ impl BackupService {
                 started_at = backup.started_at;
                 backup.status = BackupStatus::Completed;
                 backup.completed_at = Some(completed_at);
-                backup.duration_secs = Some((completed_at - backup.started_at).num_seconds() as u64);
+                backup.duration_secs =
+                    Some((completed_at - backup.started_at).num_seconds() as u64);
                 backup.size_bytes = 1024 * 1024; // Simulated 1MB
                 backup.item_count = 100; // Simulated 100 items
                 backup.checksum = Some(format!("sha256:{}", Uuid::new_v4()));
@@ -587,8 +597,13 @@ impl BackupService {
             BackupDestination::S3 { bucket, prefix, .. } => {
                 format!("s3://{}/{}/backup_{}.tar.gz", bucket, prefix, timestamp)
             }
-            BackupDestination::AzureBlob { container, prefix, .. } => {
-                format!("azure://{}/{}/backup_{}.tar.gz", container, prefix, timestamp)
+            BackupDestination::AzureBlob {
+                container, prefix, ..
+            } => {
+                format!(
+                    "azure://{}/{}/backup_{}.tar.gz",
+                    container, prefix, timestamp
+                )
             }
             BackupDestination::Gcs { bucket, prefix, .. } => {
                 format!("gs://{}/{}/backup_{}.tar.gz", bucket, prefix, timestamp)
@@ -683,7 +698,10 @@ pub async fn update_schedule(
     path: web::Path<String>,
     body: web::Json<ScheduleUpdate>,
 ) -> HttpResponse {
-    match service.update_schedule(&path.into_inner(), body.into_inner()).await {
+    match service
+        .update_schedule(&path.into_inner(), body.into_inner())
+        .await
+    {
         Ok(schedule) => HttpResponse::Ok().json(schedule),
         Err(e) => HttpResponse::BadRequest().json(serde_json::json!({ "error": e })),
     }
@@ -716,7 +734,10 @@ pub async fn disable_schedule(
     service: web::Data<BackupService>,
     path: web::Path<String>,
 ) -> HttpResponse {
-    match service.set_schedule_enabled(&path.into_inner(), false).await {
+    match service
+        .set_schedule_enabled(&path.into_inner(), false)
+        .await
+    {
         Ok(schedule) => HttpResponse::Ok().json(schedule),
         Err(e) => HttpResponse::BadRequest().json(serde_json::json!({ "error": e })),
     }
@@ -751,11 +772,7 @@ pub async fn list_backups(
     query: web::Query<ListBackupsQuery>,
 ) -> HttpResponse {
     match service
-        .list_backups(
-            query.schedule_id.as_deref(),
-            query.status,
-            query.limit,
-        )
+        .list_backups(query.schedule_id.as_deref(), query.status, query.limit)
         .await
     {
         Ok(backups) => HttpResponse::Ok().json(backups),

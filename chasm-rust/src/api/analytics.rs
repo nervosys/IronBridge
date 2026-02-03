@@ -423,7 +423,8 @@ impl AnalyticsService {
         organization_id: Option<&str>,
     ) -> Result<TimeSeries, String> {
         let (start, end) = self.period_to_range(period);
-        let data = self.db
+        let data = self
+            .db
             .get_time_series(metric, start, end, granularity, organization_id)
             .map_err(|e| format!("Failed to get time series: {}", e))?;
 
@@ -440,24 +441,34 @@ impl AnalyticsService {
         organization_id: Option<&str>,
     ) -> Result<DashboardSummary, String> {
         let stats = self.get_system_stats().await?;
-        let usage = self.get_usage_metrics(TimePeriod::Last7Days, organization_id).await?;
-        let providers = self.get_provider_stats(TimePeriod::Last30Days, organization_id).await?;
-        let top_users = self.get_top_users(TimePeriod::Last30Days, organization_id, 10).await?;
+        let usage = self
+            .get_usage_metrics(TimePeriod::Last7Days, organization_id)
+            .await?;
+        let providers = self
+            .get_provider_stats(TimePeriod::Last30Days, organization_id)
+            .await?;
+        let top_users = self
+            .get_top_users(TimePeriod::Last30Days, organization_id, 10)
+            .await?;
 
         // Get time series for charts
-        let sessions_trend = self.get_time_series(
-            "sessions",
-            TimePeriod::Last30Days,
-            Granularity::Day,
-            organization_id,
-        ).await?;
+        let sessions_trend = self
+            .get_time_series(
+                "sessions",
+                TimePeriod::Last30Days,
+                Granularity::Day,
+                organization_id,
+            )
+            .await?;
 
-        let users_trend = self.get_time_series(
-            "active_users",
-            TimePeriod::Last30Days,
-            Granularity::Day,
-            organization_id,
-        ).await?;
+        let users_trend = self
+            .get_time_series(
+                "active_users",
+                TimePeriod::Last30Days,
+                Granularity::Day,
+                organization_id,
+            )
+            .await?;
 
         Ok(DashboardSummary {
             stats,
@@ -480,8 +491,7 @@ impl AnalyticsService {
 
         match format {
             ExportFormat::Json => {
-                serde_json::to_vec_pretty(&summary)
-                    .map_err(|e| format!("JSON error: {}", e))
+                serde_json::to_vec_pretty(&summary).map_err(|e| format!("JSON error: {}", e))
             }
             ExportFormat::Csv => {
                 // Simplified CSV export
@@ -489,7 +499,10 @@ impl AnalyticsService {
                 output.push_str("metric,value\n");
                 output.push_str(&format!("total_users,{}\n", summary.stats.total_users));
                 output.push_str(&format!("active_users,{}\n", summary.stats.active_users));
-                output.push_str(&format!("total_sessions,{}\n", summary.stats.total_sessions));
+                output.push_str(&format!(
+                    "total_sessions,{}\n",
+                    summary.stats.total_sessions
+                ));
                 output.push_str(&format!("api_requests,{}\n", summary.stats.api_requests));
                 Ok(output.into_bytes())
             }
@@ -503,28 +516,40 @@ impl AnalyticsService {
     fn period_to_range(&self, period: TimePeriod) -> (DateTime<Utc>, DateTime<Utc>) {
         let now = Utc::now();
         let start = match period {
-            TimePeriod::Today => now.date_naive().and_hms_opt(0, 0, 0)
+            TimePeriod::Today => now
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
                 .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                 .unwrap_or(now),
-            TimePeriod::Yesterday => (now - Duration::days(1)).date_naive().and_hms_opt(0, 0, 0)
+            TimePeriod::Yesterday => (now - Duration::days(1))
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
                 .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                 .unwrap_or(now),
             TimePeriod::Last7Days => now - Duration::days(7),
             TimePeriod::Last30Days => now - Duration::days(30),
             TimePeriod::Last90Days => now - Duration::days(90),
-            TimePeriod::ThisMonth => now.date_naive().with_day(1)
+            TimePeriod::ThisMonth => now
+                .date_naive()
+                .with_day(1)
                 .and_then(|d| d.and_hms_opt(0, 0, 0))
                 .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                 .unwrap_or(now),
-            TimePeriod::LastMonth => (now - Duration::days(30)).date_naive().with_day(1)
+            TimePeriod::LastMonth => (now - Duration::days(30))
+                .date_naive()
+                .with_day(1)
                 .and_then(|d| d.and_hms_opt(0, 0, 0))
                 .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                 .unwrap_or(now),
-            TimePeriod::ThisYear => now.date_naive().with_ordinal(1)
+            TimePeriod::ThisYear => now
+                .date_naive()
+                .with_ordinal(1)
                 .and_then(|d| d.and_hms_opt(0, 0, 0))
                 .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                 .unwrap_or(now),
-            TimePeriod::AllTime | TimePeriod::Custom => DateTime::from_timestamp(0, 0).unwrap_or(now),
+            TimePeriod::AllTime | TimePeriod::Custom => {
+                DateTime::from_timestamp(0, 0).unwrap_or(now)
+            }
         };
         (start, now)
     }
@@ -643,7 +668,10 @@ pub async fn get_timeseries(
     let granularity = query.granularity.unwrap_or(Granularity::Day);
     let org_id = query.organization_id.as_deref();
 
-    match analytics.get_time_series(&query.metric, period, granularity, org_id).await {
+    match analytics
+        .get_time_series(&query.metric, period, granularity, org_id)
+        .await
+    {
         Ok(series) => HttpResponse::Ok().json(series),
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
@@ -686,7 +714,10 @@ pub async fn export_analytics(
     match analytics.export_analytics(period, org_id, format).await {
         Ok(data) => HttpResponse::Ok()
             .content_type(content_type)
-            .append_header(("Content-Disposition", "attachment; filename=\"analytics.export\""))
+            .append_header((
+                "Content-Disposition",
+                "attachment; filename=\"analytics.export\"",
+            ))
             .body(data),
         Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({ "error": e })),
     }
@@ -715,6 +746,6 @@ pub fn configure_analytics_routes(cfg: &mut web::ServiceConfig) {
             .route("/timeseries", web::get().to(get_timeseries))
             .route("/dashboard", web::get().to(get_dashboard))
             .route("/export", web::post().to(export_analytics))
-            .route("/track", web::post().to(track_event))
+            .route("/track", web::post().to(track_event)),
     );
 }

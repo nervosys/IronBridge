@@ -210,7 +210,10 @@ impl Gpt4AllProvider {
     fn check_api_availability(endpoint: &str) -> bool {
         // Simple connectivity check
         let url = format!("{}/models", endpoint);
-        match ureq::get(&url).timeout(std::time::Duration::from_secs(2)).call() {
+        match ureq::get(&url)
+            .timeout(std::time::Duration::from_secs(2))
+            .call()
+        {
             Ok(response) => response.status() == 200,
             Err(_) => false,
         }
@@ -346,7 +349,10 @@ impl Gpt4AllProvider {
 
         Ok(ChatSession {
             id: conv.id.to_string(),
-            title: conv.name.clone().unwrap_or_else(|| "GPT4All Chat".to_string()),
+            title: conv
+                .name
+                .clone()
+                .unwrap_or_else(|| "GPT4All Chat".to_string()),
             provider: "gpt4all".to_string(),
             model: conv.model.clone(),
             messages: chat_messages,

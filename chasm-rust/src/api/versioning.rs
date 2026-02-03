@@ -305,10 +305,16 @@ impl VersionControlService {
         let base_snapshot = self.get_snapshot(base_commit_id).await?;
         let compare_snapshot = self.get_snapshot(compare_commit_id).await?;
 
-        let base_ids: std::collections::HashSet<_> =
-            base_snapshot.messages.iter().map(|m| m.id.clone()).collect();
-        let compare_ids: std::collections::HashSet<_> =
-            compare_snapshot.messages.iter().map(|m| m.id.clone()).collect();
+        let base_ids: std::collections::HashSet<_> = base_snapshot
+            .messages
+            .iter()
+            .map(|m| m.id.clone())
+            .collect();
+        let compare_ids: std::collections::HashSet<_> = compare_snapshot
+            .messages
+            .iter()
+            .map(|m| m.id.clone())
+            .collect();
 
         // Find added (in compare but not in base)
         let added: Vec<_> = compare_snapshot
@@ -339,7 +345,11 @@ impl VersionControlService {
         // Find modified (in both but content differs)
         let mut modified = Vec::new();
         for base_msg in &base_snapshot.messages {
-            if let Some(compare_msg) = compare_snapshot.messages.iter().find(|m| m.id == base_msg.id) {
+            if let Some(compare_msg) = compare_snapshot
+                .messages
+                .iter()
+                .find(|m| m.id == base_msg.id)
+            {
                 if base_msg.content != compare_msg.content {
                     modified.push(DiffModification {
                         message_id: base_msg.id.clone(),
@@ -396,9 +406,18 @@ impl VersionControlService {
         let target_snapshot = self.get_snapshot(target_commit_id).await?;
         let target_commit = self.get_commit(target_commit_id).await?;
 
-        let revert_message = format!("Revert to commit {} ({})", target_commit.short_id, target_commit.message);
+        let revert_message = format!(
+            "Revert to commit {} ({})",
+            target_commit.short_id, target_commit.message
+        );
 
-        self.commit(session_id, &revert_message, author, target_snapshot.messages).await
+        self.commit(
+            session_id,
+            &revert_message,
+            author,
+            target_snapshot.messages,
+        )
+        .await
     }
 
     // =========================================================================
@@ -425,11 +444,11 @@ impl VersionControlService {
         };
 
         let mut tags = self.tags.write().map_err(|e| e.to_string())?;
-        
+
         if tags.contains_key(name) {
             return Err(format!("Tag '{}' already exists", name));
         }
-        
+
         tags.insert(name.to_string(), tag.clone());
 
         Ok(tag)
@@ -460,7 +479,7 @@ impl VersionControlService {
         let tag = tags
             .get(tag_name)
             .ok_or_else(|| format!("Tag not found: {}", tag_name))?;
-        
+
         self.get_commit(&tag.commit_id).await
     }
 
@@ -513,7 +532,12 @@ pub async fn create_commit(
     };
 
     match service
-        .commit(&request.session_id, &request.message, author, request.messages)
+        .commit(
+            &request.session_id,
+            &request.message,
+            author,
+            request.messages,
+        )
         .await
     {
         Ok(commit) => HttpResponse::Created().json(commit),
