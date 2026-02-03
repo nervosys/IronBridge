@@ -163,9 +163,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [ ] Chrome Web Store publication
 
 #### API Enhancements
-- [ ] GraphQL API endpoint
-- [ ] Webhook integrations
-- [ ] OpenAPI/Swagger documentation
+- [x] GraphQL API endpoint
+- [x] Webhook integrations
+- [x] OpenAPI/Swagger documentation
 
 ### Q2 2027
 
