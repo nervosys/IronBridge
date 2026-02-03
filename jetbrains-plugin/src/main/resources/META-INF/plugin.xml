@@ -1,0 +1,114 @@
+<idea-plugin>
+    <id>io.chasm.plugin</id>
+    <name>Chasm - Chat Session Manager</name>
+    <version>1.0.0</version>
+    <vendor email="hello@nervosys.ai" url="https://github.com/nervosys/chasm">Nervosys LLC</vendor>
+
+    <description><![CDATA[
+    <h2>Chasm - Universal Chat Session Manager</h2>
+    <p>Harvest, view, and manage AI chat sessions from JetBrains AI Assistant and other providers.</p>
+    
+    <h3>Features</h3>
+    <ul>
+        <li>📥 Harvest chat sessions from JetBrains AI Assistant</li>
+        <li>📊 View session history with full message content</li>
+        <li>🔍 Search across all your AI conversations</li>
+        <li>🏷️ Tag and organize sessions</li>
+        <li>📤 Export sessions to Markdown, JSON, or HTML</li>
+        <li>🔄 Sync with Chasm server for cross-tool access</li>
+    </ul>
+    
+    <h3>Quick Start</h3>
+    <ol>
+        <li>Install the plugin</li>
+        <li>Open the Chasm tool window (View → Tool Windows → Chasm)</li>
+        <li>Click "Harvest" to import your chat sessions</li>
+    </ol>
+    
+    <p>Part of the Chasm ecosystem for unified AI chat management.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+    <h3>1.0.0</h3>
+    <ul>
+        <li>Initial release</li>
+        <li>JetBrains AI Assistant session harvesting</li>
+        <li>Session viewer and search</li>
+        <li>Chasm server integration</li>
+    </ul>
+    ]]></change-notes>
+
+    <!-- Product compatibility -->
+    <idea-version since-build="233" until-build="243.*"/>
+
+    <!-- Plugin dependencies -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Tool Window -->
+        <toolWindow id="Chasm" 
+                    secondary="true" 
+                    icon="/icons/chasm.svg"
+                    anchor="right"
+                    factoryClass="io.chasm.plugin.ui.ChasmToolWindowFactory"/>
+
+        <!-- Settings -->
+        <applicationConfigurable 
+            parentId="tools"
+            instance="io.chasm.plugin.settings.ChasmSettingsConfigurable"
+            id="io.chasm.plugin.settings"
+            displayName="Chasm"/>
+
+        <!-- Application Service -->
+        <applicationService 
+            serviceImplementation="io.chasm.plugin.services.ChasmService"/>
+
+        <!-- Project Service -->
+        <projectService 
+            serviceImplementation="io.chasm.plugin.services.ChasmProjectService"/>
+
+        <!-- Notifications -->
+        <notificationGroup id="Chasm Notifications" 
+                          displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <!-- Add to Tools menu -->
+        <group id="Chasm.ToolsMenu" text="Chasm" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            
+            <action id="Chasm.Harvest"
+                    class="io.chasm.plugin.actions.HarvestAction"
+                    text="Harvest Sessions"
+                    description="Import AI chat sessions"
+                    icon="/icons/harvest.svg"/>
+                    
+            <action id="Chasm.Search"
+                    class="io.chasm.plugin.actions.SearchAction"
+                    text="Search Sessions"
+                    description="Search across all chat sessions"
+                    icon="/icons/search.svg"/>
+                    
+            <action id="Chasm.Sync"
+                    class="io.chasm.plugin.actions.SyncAction"
+                    text="Sync with Server"
+                    description="Synchronize with Chasm server"
+                    icon="/icons/sync.svg"/>
+                    
+            <separator/>
+            
+            <action id="Chasm.Settings"
+                    class="io.chasm.plugin.actions.OpenSettingsAction"
+                    text="Settings"
+                    description="Open Chasm settings"/>
+        </group>
+
+        <!-- Editor context menu -->
+        <action id="Chasm.SaveToSession"
+                class="io.chasm.plugin.actions.SaveToSessionAction"
+                text="Save Selection to Chasm"
+                description="Save selected code to a Chasm session">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
