@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2026 Nervosys LLC
+// Copyright (c) 2024-2028 Nervosys LLC
 // SPDX-License-Identifier: Apache-2.0
 //! HTTP API Server for Chat System Manager
 //!
@@ -8,12 +8,14 @@
 #[cfg(feature = "enterprise")]
 mod audit;
 mod auth;
+pub mod caching;
 mod docs;
 mod graphql;
 mod handlers_simple;
 mod handlers_swe;
 #[cfg(feature = "enterprise")]
 mod retention;
+pub mod sdk;
 #[cfg(feature = "enterprise")]
 mod sso;
 mod state;
@@ -283,5 +285,6 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     eprintln!("[DEBUG] Server stopped.");
     Ok(())
 }
+
 
 
