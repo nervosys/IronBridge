@@ -124,15 +124,15 @@ jetbrains-plugin/
 
 The plugin communicates with the Chasm server via HTTP REST API:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Check server health |
-| `/api/workspaces` | GET | List workspaces |
-| `/api/sessions` | GET | List sessions |
-| `/api/sessions/{id}` | GET | Get session details |
-| `/api/search` | GET | Search sessions |
-| `/api/harvest` | POST | Trigger harvest |
-| `/api/stats` | GET | Get statistics |
+| Endpoint             | Method | Description         |
+| -------------------- | ------ | ------------------- |
+| `/health`            | GET    | Check server health |
+| `/api/workspaces`    | GET    | List workspaces     |
+| `/api/sessions`      | GET    | List sessions       |
+| `/api/sessions/{id}` | GET    | Get session details |
+| `/api/search`        | GET    | Search sessions     |
+| `/api/harvest`       | POST   | Trigger harvest     |
+| `/api/stats`         | GET    | Get statistics      |
 
 ## License
 

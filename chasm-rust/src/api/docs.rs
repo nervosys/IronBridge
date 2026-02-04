@@ -37,10 +37,9 @@ pub async fn swagger_ui() -> impl Responder {
 /// Convert YAML to JSON string
 fn serde_yaml_to_json(yaml: &str) -> Result<String, String> {
     // Simple YAML to JSON conversion using serde_json
-    let value: serde_json::Value = serde_yaml::from_str(yaml)
-        .map_err(|e| format!("YAML parse error: {}", e))?;
-    serde_json::to_string_pretty(&value)
-        .map_err(|e| format!("JSON serialize error: {}", e))
+    let value: serde_json::Value =
+        serde_yaml::from_str(yaml).map_err(|e| format!("YAML parse error: {}", e))?;
+    serde_json::to_string_pretty(&value).map_err(|e| format!("JSON serialize error: {}", e))
 }
 
 /// Configure documentation routes
@@ -50,7 +49,7 @@ pub fn configure_docs_routes(cfg: &mut web::ServiceConfig) {
             .route("", web::get().to(swagger_ui))
             .route("/", web::get().to(swagger_ui))
             .route("/openapi.yaml", web::get().to(openapi_yaml))
-            .route("/openapi.json", web::get().to(openapi_json))
+            .route("/openapi.json", web::get().to(openapi_json)),
     );
 }
 

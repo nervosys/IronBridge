@@ -332,10 +332,9 @@ impl ArchivalAgent {
                         result.skipped_count += 1;
                     }
                     Err(e) => {
-                        result.errors.push(format!(
-                            "Failed to archive {}: {}",
-                            candidate.session_id, e
-                        ));
+                        result
+                            .errors
+                            .push(format!("Failed to archive {}: {}", candidate.session_id, e));
                     }
                 }
             } else {
@@ -458,7 +457,12 @@ impl ArchivalScheduler {
                 );
 
                 // Wait for next interval
-                tokio::time::sleep(interval.to_std().unwrap_or(std::time::Duration::from_secs(3600))).await;
+                tokio::time::sleep(
+                    interval
+                        .to_std()
+                        .unwrap_or(std::time::Duration::from_secs(3600)),
+                )
+                .await;
             }
         });
     }
@@ -491,13 +495,13 @@ mod tests {
     #[tokio::test]
     async fn test_add_remove_policy() {
         let agent = ArchivalAgent::new();
-        
+
         let custom_policy = ArchivalPolicy {
             name: "aggressive".to_string(),
             inactive_days: 7,
             ..Default::default()
         };
-        
+
         agent.add_policy(custom_policy).await;
         let policies = agent.get_policies().await;
         assert_eq!(policies.len(), 2);

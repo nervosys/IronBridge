@@ -61,25 +61,25 @@ let g:chasm_no_mappings = 0
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `:ChasmHealth` | Check server health |
-| `:ChasmHarvest` | Harvest new sessions |
-| `:ChasmSync` | Sync with server |
-| `:ChasmStats` | Show statistics |
-| `:ChasmSearch [query]` | Search sessions |
-| `:ChasmSessions` | List all sessions |
-| `:ChasmView [id]` | View session details |
+| Command                | Description          |
+| ---------------------- | -------------------- |
+| `:ChasmHealth`         | Check server health  |
+| `:ChasmHarvest`        | Harvest new sessions |
+| `:ChasmSync`           | Sync with server     |
+| `:ChasmStats`          | Show statistics      |
+| `:ChasmSearch [query]` | Search sessions      |
+| `:ChasmSessions`       | List all sessions    |
+| `:ChasmView [id]`      | View session details |
 
 ## Keymaps
 
 Default keymaps (can be disabled with `g:chasm_no_mappings`):
 
-| Keymap | Action |
-|--------|--------|
-| `<leader>cs` | Search sessions |
+| Keymap       | Action           |
+| ------------ | ---------------- |
+| `<leader>cs` | Search sessions  |
 | `<leader>ch` | Harvest sessions |
-| `<leader>cv` | View sessions |
+| `<leader>cv` | View sessions    |
 | `<leader>cy` | Sync with server |
 
 ## Usage

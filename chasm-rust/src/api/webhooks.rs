@@ -184,7 +184,7 @@ impl WebhookState {
     /// Dispatch an event to all subscribed webhooks
     pub async fn dispatch(&self, event: WebhookEvent, data: serde_json::Value) {
         let webhooks = self.get_for_event(&event);
-        
+
         for webhook in webhooks {
             let payload = WebhookPayload {
                 id: Uuid::new_v4().to_string(),
@@ -195,11 +195,11 @@ impl WebhookState {
             };
 
             let delivery = self.deliver(&webhook, &payload).await;
-            
+
             // Store delivery result
             let mut deliveries = self.deliveries.write().unwrap();
             deliveries.push(delivery);
-            
+
             // Keep only last 1000 deliveries
             if deliveries.len() > 1000 {
                 deliveries.drain(0..deliveries.len() - 1000);
@@ -300,10 +300,10 @@ fn compute_signature(secret: &str, body: &str) -> String {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(body.as_bytes());
-    
+
     let result = mac.finalize();
     hex::encode(result.into_bytes())
 }
@@ -311,7 +311,11 @@ fn compute_signature(secret: &str, body: &str) -> String {
 /// Hex encoding helper
 mod hex {
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{:02x}", b)).collect()
+        bytes
+            .as_ref()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect()
     }
 }
 
@@ -405,7 +409,7 @@ pub async fn update_webhook(
     body: web::Json<UpdateWebhookRequest>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
+
     if let Some(mut webhook) = state.get(&id) {
         if let Some(name) = &body.name {
             webhook.name = name.clone();
@@ -462,7 +466,7 @@ pub async fn test_webhook(
     body: web::Json<TestWebhookRequest>,
 ) -> impl Responder {
     let id = path.into_inner();
-    
+
     if let Some(webhook) = state.get(&id) {
         let event = body.event.clone().unwrap_or(WebhookEvent::SessionCreated);
         let test_data = serde_json::json!({
@@ -520,18 +524,17 @@ pub async fn get_all_deliveries(
 
 /// Configure webhook routes
 pub fn configure_webhook_routes(cfg: &mut web::ServiceConfig, state: web::Data<Arc<WebhookState>>) {
-    cfg.app_data(state)
-        .service(
-            web::scope("/webhooks")
-                .route("", web::get().to(list_webhooks))
-                .route("", web::post().to(create_webhook))
-                .route("/deliveries", web::get().to(get_all_deliveries))
-                .route("/{id}", web::get().to(get_webhook))
-                .route("/{id}", web::put().to(update_webhook))
-                .route("/{id}", web::delete().to(delete_webhook))
-                .route("/{id}/test", web::post().to(test_webhook))
-                .route("/{id}/deliveries", web::get().to(get_deliveries))
-        );
+    cfg.app_data(state).service(
+        web::scope("/webhooks")
+            .route("", web::get().to(list_webhooks))
+            .route("", web::post().to(create_webhook))
+            .route("/deliveries", web::get().to(get_all_deliveries))
+            .route("/{id}", web::get().to(get_webhook))
+            .route("/{id}", web::put().to(update_webhook))
+            .route("/{id}", web::delete().to(delete_webhook))
+            .route("/{id}/test", web::post().to(test_webhook))
+            .route("/{id}/deliveries", web::get().to(get_deliveries)),
+    );
 }
 
 /// Create webhook state

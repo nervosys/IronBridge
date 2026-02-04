@@ -310,7 +310,9 @@ impl SearchRefinementAgent {
 
         // Keep only last 1000 searches
         if state.search_history.len() > 1000 {
-            state.search_history.drain(0..state.search_history.len() - 1000);
+            state
+                .search_history
+                .drain(0..state.search_history.len() - 1000);
         }
 
         // Update analytics
@@ -326,9 +328,9 @@ impl SearchRefinementAgent {
         let pattern = self.extract_pattern(query);
         if let Some(existing) = state.patterns.iter_mut().find(|p| p.pattern == pattern) {
             existing.frequency += 1;
-            existing.avg_results =
-                (existing.avg_results * (existing.frequency - 1) as f64 + result_count as f64)
-                    / existing.frequency as f64;
+            existing.avg_results = (existing.avg_results * (existing.frequency - 1) as f64
+                + result_count as f64)
+                / existing.frequency as f64;
         } else {
             state.patterns.push(QueryPattern {
                 pattern,
@@ -448,10 +450,32 @@ impl SearchRefinementAgent {
     /// Check if query is technical
     fn is_technical_query(&self, query: &str) -> bool {
         let technical_terms = [
-            "function", "class", "method", "api", "error", "bug", "code",
-            "implement", "debug", "async", "await", "promise", "callback",
-            "component", "module", "import", "export", "typescript", "javascript",
-            "python", "rust", "react", "vue", "angular", "node", "sql",
+            "function",
+            "class",
+            "method",
+            "api",
+            "error",
+            "bug",
+            "code",
+            "implement",
+            "debug",
+            "async",
+            "await",
+            "promise",
+            "callback",
+            "component",
+            "module",
+            "import",
+            "export",
+            "typescript",
+            "javascript",
+            "python",
+            "rust",
+            "react",
+            "vue",
+            "angular",
+            "node",
+            "sql",
         ];
 
         technical_terms.iter().any(|term| query.contains(term))
@@ -468,13 +492,7 @@ impl SearchRefinementAgent {
         // Keep structure but replace specific terms with placeholders
         words
             .iter()
-            .map(|w| {
-                if w.len() > 5 {
-                    "[TERM]"
-                } else {
-                    *w
-                }
-            })
+            .map(|w| if w.len() > 5 { "[TERM]" } else { *w })
             .collect::<Vec<_>>()
             .join(" ")
     }
@@ -534,7 +552,7 @@ mod tests {
             time_range: None,
         };
         let refinements = agent.refine_query("function", Some(context)).await;
-        
+
         // Should have contextual refinements
         let has_contextual = refinements
             .iter()
@@ -546,7 +564,7 @@ mod tests {
     async fn test_spelling_correction() {
         let agent = SearchRefinementAgent::new();
         let refinements = agent.refine_query("pytohn function", None).await;
-        
+
         let has_correction = refinements
             .iter()
             .any(|r| r.refinement_type == RefinementType::Correction);
@@ -557,7 +575,7 @@ mod tests {
     async fn test_record_search() {
         let agent = SearchRefinementAgent::new();
         agent.record_search("test query", 10, vec![]).await;
-        
+
         let analytics = agent.get_analytics().await;
         assert_eq!(analytics.total_searches, 1);
         assert_eq!(analytics.successful_searches, 1);

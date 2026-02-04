@@ -38,7 +38,9 @@
         "default_title": "Chasm - Chat Session Manager"
     },
     "background": {
-        "scripts": ["background/service-worker.js"],
+        "scripts": [
+            "background/service-worker.js"
+        ],
         "persistent": false
     },
     "content_scripts": [
@@ -47,32 +49,60 @@
                 "https://chat.openai.com/*",
                 "https://chatgpt.com/*"
             ],
-            "js": ["content/chatgpt.js"],
-            "css": ["content/styles.css"],
+            "js": [
+                "content/chatgpt.js"
+            ],
+            "css": [
+                "content/styles.css"
+            ],
             "run_at": "document_idle"
         },
         {
-            "matches": ["https://claude.ai/*"],
-            "js": ["content/claude.js"],
-            "css": ["content/styles.css"],
+            "matches": [
+                "https://claude.ai/*"
+            ],
+            "js": [
+                "content/claude.js"
+            ],
+            "css": [
+                "content/styles.css"
+            ],
             "run_at": "document_idle"
         },
         {
-            "matches": ["https://gemini.google.com/*"],
-            "js": ["content/gemini.js"],
-            "css": ["content/styles.css"],
+            "matches": [
+                "https://gemini.google.com/*"
+            ],
+            "js": [
+                "content/gemini.js"
+            ],
+            "css": [
+                "content/styles.css"
+            ],
             "run_at": "document_idle"
         },
         {
-            "matches": ["https://copilot.microsoft.com/*"],
-            "js": ["content/copilot.js"],
-            "css": ["content/styles.css"],
+            "matches": [
+                "https://copilot.microsoft.com/*"
+            ],
+            "js": [
+                "content/copilot.js"
+            ],
+            "css": [
+                "content/styles.css"
+            ],
             "run_at": "document_idle"
         },
         {
-            "matches": ["https://poe.com/*"],
-            "js": ["content/poe.js"],
-            "css": ["content/styles.css"],
+            "matches": [
+                "https://poe.com/*"
+            ],
+            "js": [
+                "content/poe.js"
+            ],
+            "css": [
+                "content/styles.css"
+            ],
             "run_at": "document_idle"
         },
         {
@@ -80,8 +110,12 @@
                 "https://perplexity.ai/*",
                 "https://www.perplexity.ai/*"
             ],
-            "js": ["content/perplexity.js"],
-            "css": ["content/styles.css"],
+            "js": [
+                "content/perplexity.js"
+            ],
+            "css": [
+                "content/styles.css"
+            ],
             "run_at": "document_idle"
         }
     ],
@@ -89,7 +123,9 @@
         "page": "options/options.html",
         "browser_style": true
     },
-    "web_accessible_resources": ["icons/*"],
+    "web_accessible_resources": [
+        "icons/*"
+    ],
     "browser_specific_settings": {
         "gecko": {
             "id": "chasm@nervosys.com",

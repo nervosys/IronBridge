@@ -88,7 +88,8 @@ pub struct ChatSession {
 impl ChatSession {
     /// Collect all text content from the session (user messages and responses)
     pub fn collect_all_text(&self) -> String {
-        self.requests.iter()
+        self.requests
+            .iter()
             .flat_map(|req| {
                 let mut texts = Vec::new();
                 if let Some(msg) = &req.message {
@@ -109,17 +110,21 @@ impl ChatSession {
 
     /// Get user message texts
     pub fn user_messages(&self) -> Vec<&str> {
-        self.requests.iter()
+        self.requests
+            .iter()
             .filter_map(|req| req.message.as_ref().and_then(|m| m.text.as_deref()))
             .collect()
     }
 
     /// Get assistant response texts
     pub fn assistant_responses(&self) -> Vec<String> {
-        self.requests.iter()
+        self.requests
+            .iter()
             .filter_map(|req| {
                 req.response.as_ref().and_then(|r| {
-                    r.get("result").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    r.get("result")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
                 })
             })
             .collect()

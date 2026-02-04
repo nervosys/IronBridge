@@ -362,7 +362,10 @@ pub enum ErrorStrategy {
     /// Continue to next action
     Continue,
     /// Retry N times
-    Retry { max_attempts: u32, delay_seconds: u64 },
+    Retry {
+        max_attempts: u32,
+        delay_seconds: u64,
+    },
     /// Execute fallback actions
     Fallback { actions: Vec<Action> },
 }
@@ -413,7 +416,7 @@ impl ExecutionContext {
     /// Interpolate variables in a string
     pub fn interpolate(&self, template: &str) -> String {
         let mut result = template.to_string();
-        
+
         for (key, value) in &self.variables {
             let placeholder = format!("{{{{{}}}}}", key);
             let replacement = match value {
@@ -422,7 +425,7 @@ impl ExecutionContext {
             };
             result = result.replace(&placeholder, &replacement);
         }
-        
+
         result
     }
 }
@@ -501,7 +504,10 @@ impl AutomationEngine {
     /// Register a workflow
     pub async fn register(&self, workflow: Workflow) -> Result<()> {
         self.validate_workflow(&workflow)?;
-        self.workflows.write().await.insert(workflow.id.clone(), workflow);
+        self.workflows
+            .write()
+            .await
+            .insert(workflow.id.clone(), workflow);
         Ok(())
     }
 
@@ -521,7 +527,10 @@ impl AutomationEngine {
 
     /// Unregister a workflow
     pub async fn unregister(&self, workflow_id: &str) -> Result<()> {
-        self.workflows.write().await.remove(workflow_id)
+        self.workflows
+            .write()
+            .await
+            .remove(workflow_id)
             .ok_or_else(|| anyhow!("Workflow not found: {}", workflow_id))?;
         Ok(())
     }
@@ -537,30 +546,41 @@ impl AutomationEngine {
     }
 
     /// Trigger a workflow manually
-    pub async fn trigger(&self, workflow_id: &str, event: Option<serde_json::Value>) -> Result<String> {
-        let workflow = self.workflows.read().await
+    pub async fn trigger(
+        &self,
+        workflow_id: &str,
+        event: Option<serde_json::Value>,
+    ) -> Result<String> {
+        let workflow = self
+            .workflows
+            .read()
+            .await
             .get(workflow_id)
             .cloned()
             .ok_or_else(|| anyhow!("Workflow not found: {}", workflow_id))?;
-        
+
         if !workflow.enabled {
             return Err(anyhow!("Workflow is disabled"));
         }
-        
+
         self.execute_workflow(&workflow, event).await
     }
 
     /// Execute a workflow
-    async fn execute_workflow(&self, workflow: &Workflow, event: Option<serde_json::Value>) -> Result<String> {
+    async fn execute_workflow(
+        &self,
+        workflow: &Workflow,
+        event: Option<serde_json::Value>,
+    ) -> Result<String> {
         let mut ctx = ExecutionContext::new(workflow.id.clone(), event);
-        
+
         // Check conditions
         for condition in &workflow.conditions {
             if !self.evaluate_condition(condition, &ctx).await? {
                 return Err(anyhow!("Workflow conditions not met"));
             }
         }
-        
+
         let run = WorkflowRun {
             id: ctx.run_id.clone(),
             workflow_id: workflow.id.clone(),
@@ -571,16 +591,16 @@ impl AutomationEngine {
             results: Vec::new(),
             error: None,
         };
-        
+
         self.record_run(run.clone()).await;
-        
+
         // Execute actions
         let mut final_status = RunStatus::Completed;
         let mut final_error = None;
-        
+
         for (i, action) in workflow.actions.iter().enumerate() {
             let start = std::time::Instant::now();
-            
+
             match self.execute_action(action, &mut ctx).await {
                 Ok(data) => {
                     ctx.results.push(ActionResult {
@@ -601,7 +621,7 @@ impl AutomationEngine {
                         duration_ms: start.elapsed().as_millis() as u64,
                         executed_at: Utc::now(),
                     });
-                    
+
                     match &workflow.on_error {
                         ErrorStrategy::Stop => {
                             final_status = RunStatus::Failed;
@@ -609,11 +629,17 @@ impl AutomationEngine {
                             break;
                         }
                         ErrorStrategy::Continue => continue,
-                        ErrorStrategy::Retry { max_attempts, delay_seconds } => {
+                        ErrorStrategy::Retry {
+                            max_attempts,
+                            delay_seconds,
+                        } => {
                             // Simple retry logic
                             let mut retry_success = false;
                             for _ in 0..*max_attempts {
-                                tokio::time::sleep(tokio::time::Duration::from_secs(*delay_seconds)).await;
+                                tokio::time::sleep(tokio::time::Duration::from_secs(
+                                    *delay_seconds,
+                                ))
+                                .await;
                                 if self.execute_action(action, &mut ctx).await.is_ok() {
                                     retry_success = true;
                                     break;
@@ -634,13 +660,14 @@ impl AutomationEngine {
                 }
             }
         }
-        
+
         // Update run record
-        self.update_run(&ctx.run_id, final_status, final_error, ctx.results).await;
-        
+        self.update_run(&ctx.run_id, final_status, final_error, ctx.results)
+            .await;
+
         // Update workflow stats
         self.update_workflow_stats(&workflow.id).await;
-        
+
         Ok(ctx.run_id)
     }
 
@@ -651,67 +678,74 @@ impl AutomationEngine {
         ctx: &'a ExecutionContext,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + Send + 'a>> {
         Box::pin(async move {
-        match condition {
-            Condition::And { conditions } => {
-                for c in conditions {
-                    if !self.evaluate_condition(c, ctx).await? {
-                        return Ok(false);
+            match condition {
+                Condition::And { conditions } => {
+                    for c in conditions {
+                        if !self.evaluate_condition(c, ctx).await? {
+                            return Ok(false);
+                        }
+                    }
+                    Ok(true)
+                }
+                Condition::Or { conditions } => {
+                    for c in conditions {
+                        if self.evaluate_condition(c, ctx).await? {
+                            return Ok(true);
+                        }
+                    }
+                    Ok(false)
+                }
+                Condition::Not { condition } => {
+                    Ok(!self.evaluate_condition(condition, ctx).await?)
+                }
+                Condition::Compare {
+                    left,
+                    operator,
+                    right,
+                } => {
+                    let left_val = ctx.interpolate(left);
+                    self.compare_values(&left_val, operator, right)
+                }
+                Condition::Exists { path } => Ok(ctx.variables.contains_key(path)),
+                Condition::Matches { value, pattern } => {
+                    let val = ctx.interpolate(value);
+                    let re = regex::Regex::new(pattern)?;
+                    Ok(re.is_match(&val))
+                }
+                Condition::TimeWindow { start, end, days } => {
+                    let now = Utc::now();
+                    let current_time = now.time();
+                    let current_day = now.weekday();
+
+                    // Check day of week
+                    if let Some(valid_days) = days {
+                        if !valid_days.contains(&current_day) {
+                            return Ok(false);
+                        }
+                    }
+
+                    // Check time window
+                    if start <= end {
+                        Ok(current_time >= *start && current_time <= *end)
+                    } else {
+                        // Window spans midnight
+                        Ok(current_time >= *start || current_time <= *end)
                     }
                 }
-                Ok(true)
-            }
-            Condition::Or { conditions } => {
-                for c in conditions {
-                    if self.evaluate_condition(c, ctx).await? {
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
-            }
-            Condition::Not { condition } => {
-                Ok(!self.evaluate_condition(condition, ctx).await?)
-            }
-            Condition::Compare { left, operator, right } => {
-                let left_val = ctx.interpolate(left);
-                self.compare_values(&left_val, operator, right)
-            }
-            Condition::Exists { path } => {
-                Ok(ctx.variables.contains_key(path))
-            }
-            Condition::Matches { value, pattern } => {
-                let val = ctx.interpolate(value);
-                let re = regex::Regex::new(pattern)?;
-                Ok(re.is_match(&val))
-            }
-            Condition::TimeWindow { start, end, days } => {
-                let now = Utc::now();
-                let current_time = now.time();
-                let current_day = now.weekday();
-                
-                // Check day of week
-                if let Some(valid_days) = days {
-                    if !valid_days.contains(&current_day) {
-                        return Ok(false);
-                    }
-                }
-                
-                // Check time window
-                if start <= end {
-                    Ok(current_time >= *start && current_time <= *end)
-                } else {
-                    // Window spans midnight
-                    Ok(current_time >= *start || current_time <= *end)
+                Condition::Expression { expr: _ } => {
+                    // Would need expression evaluator
+                    Ok(true)
                 }
             }
-            Condition::Expression { expr: _ } => {
-                // Would need expression evaluator
-                Ok(true)
-            }
-        }
         })
     }
 
-    fn compare_values(&self, left: &str, op: &CompareOp, right: &serde_json::Value) -> Result<bool> {
+    fn compare_values(
+        &self,
+        left: &str,
+        op: &CompareOp,
+        right: &serde_json::Value,
+    ) -> Result<bool> {
         match op {
             CompareOp::Equals => {
                 if let serde_json::Value::String(s) = right {
@@ -767,7 +801,7 @@ impl AutomationEngine {
                     serde_json::Value::Number(n) => n.as_f64().unwrap_or(0.0),
                     _ => right.to_string().parse()?,
                 };
-                
+
                 Ok(match op {
                     CompareOp::GreaterThan => left_num > right_num,
                     CompareOp::GreaterOrEqual => left_num >= right_num,
@@ -780,113 +814,188 @@ impl AutomationEngine {
     }
 
     /// Execute an action (boxed for recursion)
-    fn execute_action<'a>(&'a self, action: &'a Action, ctx: &'a mut ExecutionContext) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<serde_json::Value>>> + Send + 'a>> {
+    fn execute_action<'a>(
+        &'a self,
+        action: &'a Action,
+        ctx: &'a mut ExecutionContext,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Option<serde_json::Value>>> + Send + 'a>,
+    > {
         Box::pin(async move {
-        match action {
-            Action::Export { filter, format, output } => {
-                // Would call actual export logic
-                log::info!("Exporting sessions: filter={:?}, format={}, output={}", filter, format, output);
-                Ok(Some(serde_json::json!({ "exported": true })))
-            }
-            Action::Archive { filter, destination } => {
-                log::info!("Archiving sessions: filter={:?}, destination={}", filter, destination);
-                Ok(Some(serde_json::json!({ "archived": true })))
-            }
-            Action::Delete { filter } => {
-                log::info!("Deleting sessions: filter={:?}", filter);
-                Ok(Some(serde_json::json!({ "deleted": true })))
-            }
-            Action::Tag { filter, add_tags, remove_tags } => {
-                log::info!("Tagging sessions: filter={:?}, add={:?}, remove={:?}", filter, add_tags, remove_tags);
-                Ok(Some(serde_json::json!({ "tagged": true })))
-            }
-            Action::Sync { provider, direction } => {
-                log::info!("Syncing with provider {}: direction={:?}", provider, direction);
-                Ok(Some(serde_json::json!({ "synced": true })))
-            }
-            Action::Harvest { provider } => {
-                log::info!("Harvesting from provider: {:?}", provider);
-                Ok(Some(serde_json::json!({ "harvested": true })))
-            }
-            Action::Plugin { plugin_id, action, params } => {
-                log::info!("Executing plugin {}: action={}, params={:?}", plugin_id, action, params);
-                Ok(Some(serde_json::json!({ "plugin_executed": true })))
-            }
-            Action::Notify { channel, message, title } => {
-                let msg = ctx.interpolate(message);
-                log::info!("Sending notification: channel={:?}, title={:?}, message={}", channel, title, msg);
-                Ok(Some(serde_json::json!({ "notified": true })))
-            }
-            Action::Http { url, method, headers, body } => {
-                let url = ctx.interpolate(url);
-                log::info!("HTTP request: {} {}", method, url);
-                // Would make actual HTTP request
-                Ok(Some(serde_json::json!({ "status": 200 })))
-            }
-            Action::Shell { command, cwd, env } => {
-                let cmd = ctx.interpolate(command);
-                log::info!("Executing shell: {} (cwd={:?})", cmd, cwd);
-                // Would execute actual command
-                Ok(Some(serde_json::json!({ "exit_code": 0 })))
-            }
-            Action::SetVariable { name, value } => {
-                ctx.set_var(name.clone(), value.clone());
-                Ok(None)
-            }
-            Action::If { condition, then, else_ } => {
-                if self.evaluate_condition(condition, ctx).await? {
-                    for action in then {
-                        self.execute_action(action, ctx).await?;
-                    }
-                } else if let Some(else_actions) = else_ {
-                    for action in else_actions {
-                        self.execute_action(action, ctx).await?;
-                    }
+            match action {
+                Action::Export {
+                    filter,
+                    format,
+                    output,
+                } => {
+                    // Would call actual export logic
+                    log::info!(
+                        "Exporting sessions: filter={:?}, format={}, output={}",
+                        filter,
+                        format,
+                        output
+                    );
+                    Ok(Some(serde_json::json!({ "exported": true })))
                 }
-                Ok(None)
-            }
-            Action::ForEach { items, as_var, actions } => {
-                if let Some(arr) = ctx.get_var(items) {
-                    if let serde_json::Value::Array(items_arr) = arr.clone() {
-                        for item in items_arr {
-                            ctx.set_var(as_var.clone(), item);
-                            for action in actions {
-                                self.execute_action(action, ctx).await?;
+                Action::Archive {
+                    filter,
+                    destination,
+                } => {
+                    log::info!(
+                        "Archiving sessions: filter={:?}, destination={}",
+                        filter,
+                        destination
+                    );
+                    Ok(Some(serde_json::json!({ "archived": true })))
+                }
+                Action::Delete { filter } => {
+                    log::info!("Deleting sessions: filter={:?}", filter);
+                    Ok(Some(serde_json::json!({ "deleted": true })))
+                }
+                Action::Tag {
+                    filter,
+                    add_tags,
+                    remove_tags,
+                } => {
+                    log::info!(
+                        "Tagging sessions: filter={:?}, add={:?}, remove={:?}",
+                        filter,
+                        add_tags,
+                        remove_tags
+                    );
+                    Ok(Some(serde_json::json!({ "tagged": true })))
+                }
+                Action::Sync {
+                    provider,
+                    direction,
+                } => {
+                    log::info!(
+                        "Syncing with provider {}: direction={:?}",
+                        provider,
+                        direction
+                    );
+                    Ok(Some(serde_json::json!({ "synced": true })))
+                }
+                Action::Harvest { provider } => {
+                    log::info!("Harvesting from provider: {:?}", provider);
+                    Ok(Some(serde_json::json!({ "harvested": true })))
+                }
+                Action::Plugin {
+                    plugin_id,
+                    action,
+                    params,
+                } => {
+                    log::info!(
+                        "Executing plugin {}: action={}, params={:?}",
+                        plugin_id,
+                        action,
+                        params
+                    );
+                    Ok(Some(serde_json::json!({ "plugin_executed": true })))
+                }
+                Action::Notify {
+                    channel,
+                    message,
+                    title,
+                } => {
+                    let msg = ctx.interpolate(message);
+                    log::info!(
+                        "Sending notification: channel={:?}, title={:?}, message={}",
+                        channel,
+                        title,
+                        msg
+                    );
+                    Ok(Some(serde_json::json!({ "notified": true })))
+                }
+                Action::Http {
+                    url,
+                    method,
+                    headers,
+                    body,
+                } => {
+                    let url = ctx.interpolate(url);
+                    log::info!("HTTP request: {} {}", method, url);
+                    // Would make actual HTTP request
+                    Ok(Some(serde_json::json!({ "status": 200 })))
+                }
+                Action::Shell { command, cwd, env } => {
+                    let cmd = ctx.interpolate(command);
+                    log::info!("Executing shell: {} (cwd={:?})", cmd, cwd);
+                    // Would execute actual command
+                    Ok(Some(serde_json::json!({ "exit_code": 0 })))
+                }
+                Action::SetVariable { name, value } => {
+                    ctx.set_var(name.clone(), value.clone());
+                    Ok(None)
+                }
+                Action::If {
+                    condition,
+                    then,
+                    else_,
+                } => {
+                    if self.evaluate_condition(condition, ctx).await? {
+                        for action in then {
+                            self.execute_action(action, ctx).await?;
+                        }
+                    } else if let Some(else_actions) = else_ {
+                        for action in else_actions {
+                            self.execute_action(action, ctx).await?;
+                        }
+                    }
+                    Ok(None)
+                }
+                Action::ForEach {
+                    items,
+                    as_var,
+                    actions,
+                } => {
+                    if let Some(arr) = ctx.get_var(items) {
+                        if let serde_json::Value::Array(items_arr) = arr.clone() {
+                            for item in items_arr {
+                                ctx.set_var(as_var.clone(), item);
+                                for action in actions {
+                                    self.execute_action(action, ctx).await?;
+                                }
                             }
                         }
                     }
+                    Ok(None)
                 }
-                Ok(None)
-            }
-            Action::Delay { seconds } => {
-                tokio::time::sleep(tokio::time::Duration::from_secs(*seconds)).await;
-                Ok(None)
-            }
-            Action::Log { level, message } => {
-                let msg = ctx.interpolate(message);
-                match level {
-                    LogLevel::Debug => log::debug!("{}", msg),
-                    LogLevel::Info => log::info!("{}", msg),
-                    LogLevel::Warning => log::warn!("{}", msg),
-                    LogLevel::Error => log::error!("{}", msg),
+                Action::Delay { seconds } => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(*seconds)).await;
+                    Ok(None)
                 }
-                Ok(None)
+                Action::Log { level, message } => {
+                    let msg = ctx.interpolate(message);
+                    match level {
+                        LogLevel::Debug => log::debug!("{}", msg),
+                        LogLevel::Info => log::info!("{}", msg),
+                        LogLevel::Warning => log::warn!("{}", msg),
+                        LogLevel::Error => log::error!("{}", msg),
+                    }
+                    Ok(None)
+                }
             }
-        }
         })
     }
 
     async fn record_run(&self, run: WorkflowRun) {
         let mut runs = self.runs.write().await;
         runs.push(run);
-        
+
         // Trim history
         if runs.len() > self.max_history {
             runs.remove(0);
         }
     }
 
-    async fn update_run(&self, run_id: &str, status: RunStatus, error: Option<String>, results: Vec<ActionResult>) {
+    async fn update_run(
+        &self,
+        run_id: &str,
+        status: RunStatus,
+        error: Option<String>,
+        results: Vec<ActionResult>,
+    ) {
         let mut runs = self.runs.write().await;
         if let Some(run) = runs.iter_mut().find(|r| r.id == run_id) {
             run.status = status;
@@ -917,7 +1026,12 @@ impl AutomationEngine {
 
     /// Get specific run
     pub async fn get_run(&self, run_id: &str) -> Option<WorkflowRun> {
-        self.runs.read().await.iter().find(|r| r.id == run_id).cloned()
+        self.runs
+            .read()
+            .await
+            .iter()
+            .find(|r| r.id == run_id)
+            .cloned()
     }
 }
 
@@ -928,7 +1042,7 @@ mod tests {
     #[tokio::test]
     async fn test_automation_engine() {
         let engine = AutomationEngine::new(100);
-        
+
         let workflow = Workflow {
             id: "test-workflow".to_string(),
             name: "Test Workflow".to_string(),
@@ -936,22 +1050,20 @@ mod tests {
             enabled: true,
             triggers: vec![Trigger::Manual],
             conditions: vec![],
-            actions: vec![
-                Action::Log {
-                    level: LogLevel::Info,
-                    message: "Test action executed".to_string(),
-                },
-            ],
+            actions: vec![Action::Log {
+                level: LogLevel::Info,
+                message: "Test action executed".to_string(),
+            }],
             on_error: ErrorStrategy::Stop,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_run: None,
             run_count: 0,
         };
-        
+
         engine.register(workflow).await.unwrap();
         let run_id = engine.trigger("test-workflow", None).await.unwrap();
-        
+
         let run = engine.get_run(&run_id).await.unwrap();
         assert_eq!(run.status, RunStatus::Completed);
     }
@@ -960,7 +1072,7 @@ mod tests {
     fn test_interpolation() {
         let mut ctx = ExecutionContext::new("test".to_string(), None);
         ctx.set_var("name".to_string(), serde_json::json!("World"));
-        
+
         let result = ctx.interpolate("Hello, {{name}}!");
         assert_eq!(result, "Hello, World!");
     }

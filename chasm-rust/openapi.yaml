@@ -4,18 +4,18 @@ info:
   description: |
     REST API for Chasm (Chat Session Manager) - a unified platform for harvesting, 
     managing, and analyzing AI chat sessions across multiple providers and tools.
-    
+
     ## Authentication
-    
+
     Currently the API supports local access without authentication. Enterprise features
     include SSO/SAML authentication and API key-based access.
-    
+
     ## Rate Limiting
-    
+
     Rate limiting is optional and configurable per-installation.
-    
+
     ## WebSocket
-    
+
     Real-time updates are available via WebSocket at `/ws`.
   version: 1.3.0
   contact:
@@ -63,12 +63,12 @@ paths:
       description: Check if the API server is running and healthy
       operationId: healthCheck
       responses:
-        '200':
+        "200":
           description: Server is healthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                $ref: "#/components/schemas/HealthResponse"
 
   /system/info:
     get:
@@ -76,12 +76,12 @@ paths:
       summary: Get system information
       operationId: getSystemInfo
       responses:
-        '200':
+        "200":
           description: System information
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemInfo'
+                $ref: "#/components/schemas/SystemInfo"
 
   /system/vacuum:
     post:
@@ -90,7 +90,7 @@ paths:
       description: Optimize and compact the SQLite database
       operationId: vacuumDatabase
       responses:
-        '200':
+        "200":
           description: Database vacuumed successfully
 
   /system/cache/clear:
@@ -99,7 +99,7 @@ paths:
       summary: Clear cache
       operationId: clearCache
       responses:
-        '200':
+        "200":
           description: Cache cleared successfully
 
   /workspaces:
@@ -108,17 +108,17 @@ paths:
       summary: List workspaces
       operationId: listWorkspaces
       parameters:
-        - $ref: '#/components/parameters/limitParam'
-        - $ref: '#/components/parameters/offsetParam'
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
       responses:
-        '200':
+        "200":
           description: List of workspaces
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Workspace'
+                  $ref: "#/components/schemas/Workspace"
     post:
       tags: [Workspaces]
       summary: Create workspace
@@ -128,14 +128,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateWorkspace'
+              $ref: "#/components/schemas/CreateWorkspace"
       responses:
-        '201':
+        "201":
           description: Workspace created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Workspace'
+                $ref: "#/components/schemas/Workspace"
 
   /workspaces/discover:
     post:
@@ -144,14 +144,14 @@ paths:
       description: Scan for VS Code workspaces on the system
       operationId: discoverWorkspaces
       responses:
-        '200':
+        "200":
           description: Discovered workspaces
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Workspace'
+                  $ref: "#/components/schemas/Workspace"
 
   /workspaces/{id}:
     get:
@@ -159,43 +159,43 @@ paths:
       summary: Get workspace by ID
       operationId: getWorkspace
       parameters:
-        - $ref: '#/components/parameters/workspaceId'
+        - $ref: "#/components/parameters/workspaceId"
       responses:
-        '200':
+        "200":
           description: Workspace details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Workspace'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Workspace"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       tags: [Workspaces]
       summary: Update workspace
       operationId: updateWorkspace
       parameters:
-        - $ref: '#/components/parameters/workspaceId'
+        - $ref: "#/components/parameters/workspaceId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateWorkspace'
+              $ref: "#/components/schemas/UpdateWorkspace"
       responses:
-        '200':
+        "200":
           description: Workspace updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Workspace'
+                $ref: "#/components/schemas/Workspace"
     delete:
       tags: [Workspaces]
       summary: Delete workspace
       operationId: deleteWorkspace
       parameters:
-        - $ref: '#/components/parameters/workspaceId'
+        - $ref: "#/components/parameters/workspaceId"
       responses:
-        '204':
+        "204":
           description: Workspace deleted
 
   /workspaces/{id}/refresh:
@@ -205,9 +205,9 @@ paths:
       description: Re-scan workspace for chat sessions
       operationId: refreshWorkspace
       parameters:
-        - $ref: '#/components/parameters/workspaceId'
+        - $ref: "#/components/parameters/workspaceId"
       responses:
-        '200':
+        "200":
           description: Workspace refreshed
 
   /sessions:
@@ -216,8 +216,8 @@ paths:
       summary: List sessions
       operationId: listSessions
       parameters:
-        - $ref: '#/components/parameters/limitParam'
-        - $ref: '#/components/parameters/offsetParam'
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
         - name: workspace_id
           in: query
           schema:
@@ -232,12 +232,12 @@ paths:
           schema:
             type: boolean
       responses:
-        '200':
+        "200":
           description: List of sessions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SessionList'
+                $ref: "#/components/schemas/SessionList"
     post:
       tags: [Sessions]
       summary: Create session
@@ -247,14 +247,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateSession'
+              $ref: "#/components/schemas/CreateSession"
       responses:
-        '201':
+        "201":
           description: Session created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Session'
+                $ref: "#/components/schemas/Session"
 
   /sessions/merge:
     post:
@@ -267,14 +267,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MergeSessionsRequest'
+              $ref: "#/components/schemas/MergeSessionsRequest"
       responses:
-        '200':
+        "200":
           description: Sessions merged
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Session'
+                $ref: "#/components/schemas/Session"
 
   /sessions/{id}:
     get:
@@ -282,43 +282,43 @@ paths:
       summary: Get session by ID
       operationId: getSession
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
       responses:
-        '200':
+        "200":
           description: Session details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Session'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Session"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       tags: [Sessions]
       summary: Update session
       operationId: updateSession
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateSession'
+              $ref: "#/components/schemas/UpdateSession"
       responses:
-        '200':
+        "200":
           description: Session updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Session'
+                $ref: "#/components/schemas/Session"
     delete:
       tags: [Sessions]
       summary: Delete session
       operationId: deleteSession
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
       responses:
-        '204':
+        "204":
           description: Session deleted
 
   /sessions/{id}/archive:
@@ -327,9 +327,9 @@ paths:
       summary: Archive session
       operationId: archiveSession
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
       responses:
-        '200':
+        "200":
           description: Session archived
 
   /sessions/{id}/fork:
@@ -339,14 +339,14 @@ paths:
       description: Create a copy of the session for branching
       operationId: forkSession
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
       responses:
-        '201':
+        "201":
           description: Session forked
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Session'
+                $ref: "#/components/schemas/Session"
 
   /sessions/{id}/export:
     get:
@@ -354,7 +354,7 @@ paths:
       summary: Export session
       operationId: exportSession
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
         - name: format
           in: query
           schema:
@@ -362,7 +362,7 @@ paths:
             enum: [json, markdown, html, pdf]
             default: json
       responses:
-        '200':
+        "200":
           description: Exported session
           content:
             application/json:
@@ -385,37 +385,37 @@ paths:
       summary: List session messages
       operationId: listMessages
       parameters:
-        - $ref: '#/components/parameters/sessionId'
-        - $ref: '#/components/parameters/limitParam'
-        - $ref: '#/components/parameters/offsetParam'
+        - $ref: "#/components/parameters/sessionId"
+        - $ref: "#/components/parameters/limitParam"
+        - $ref: "#/components/parameters/offsetParam"
       responses:
-        '200':
+        "200":
           description: List of messages
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Message'
+                  $ref: "#/components/schemas/Message"
     post:
       tags: [Sessions]
       summary: Add message to session
       operationId: createMessage
       parameters:
-        - $ref: '#/components/parameters/sessionId'
+        - $ref: "#/components/parameters/sessionId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateMessage'
+              $ref: "#/components/schemas/CreateMessage"
       responses:
-        '201':
+        "201":
           description: Message created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
+                $ref: "#/components/schemas/Message"
 
   /providers:
     get:
@@ -423,14 +423,14 @@ paths:
       summary: List providers
       operationId: listProviders
       responses:
-        '200':
+        "200":
           description: List of configured providers
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Provider'
+                  $ref: "#/components/schemas/Provider"
     post:
       tags: [Providers]
       summary: Create provider
@@ -440,14 +440,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateProvider'
+              $ref: "#/components/schemas/CreateProvider"
       responses:
-        '201':
+        "201":
           description: Provider created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Provider'
+                $ref: "#/components/schemas/Provider"
 
   /providers/{id}:
     get:
@@ -455,37 +455,37 @@ paths:
       summary: Get provider by ID
       operationId: getProvider
       parameters:
-        - $ref: '#/components/parameters/providerId'
+        - $ref: "#/components/parameters/providerId"
       responses:
-        '200':
+        "200":
           description: Provider details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Provider'
+                $ref: "#/components/schemas/Provider"
     put:
       tags: [Providers]
       summary: Update provider
       operationId: updateProvider
       parameters:
-        - $ref: '#/components/parameters/providerId'
+        - $ref: "#/components/parameters/providerId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateProvider'
+              $ref: "#/components/schemas/UpdateProvider"
       responses:
-        '200':
+        "200":
           description: Provider updated
     delete:
       tags: [Providers]
       summary: Delete provider
       operationId: deleteProvider
       parameters:
-        - $ref: '#/components/parameters/providerId'
+        - $ref: "#/components/parameters/providerId"
       responses:
-        '204':
+        "204":
           description: Provider deleted
 
   /providers/{id}/health:
@@ -494,14 +494,14 @@ paths:
       summary: Check provider health
       operationId: checkProviderHealth
       parameters:
-        - $ref: '#/components/parameters/providerId'
+        - $ref: "#/components/parameters/providerId"
       responses:
-        '200':
+        "200":
           description: Provider health status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProviderHealth'
+                $ref: "#/components/schemas/ProviderHealth"
 
   /providers/{id}/models:
     get:
@@ -509,16 +509,16 @@ paths:
       summary: List provider models
       operationId: listProviderModels
       parameters:
-        - $ref: '#/components/parameters/providerId'
+        - $ref: "#/components/parameters/providerId"
       responses:
-        '200':
+        "200":
           description: Available models
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Model'
+                  $ref: "#/components/schemas/Model"
 
   /agents:
     get:
@@ -526,14 +526,14 @@ paths:
       summary: List agents
       operationId: listAgents
       responses:
-        '200':
+        "200":
           description: List of agents
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Agent'
+                  $ref: "#/components/schemas/Agent"
     post:
       tags: [Agents]
       summary: Create agent
@@ -543,14 +543,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAgent'
+              $ref: "#/components/schemas/CreateAgent"
       responses:
-        '201':
+        "201":
           description: Agent created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Agent'
+                $ref: "#/components/schemas/Agent"
 
   /agents/{id}:
     get:
@@ -558,37 +558,37 @@ paths:
       summary: Get agent by ID
       operationId: getAgent
       parameters:
-        - $ref: '#/components/parameters/agentId'
+        - $ref: "#/components/parameters/agentId"
       responses:
-        '200':
+        "200":
           description: Agent details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Agent'
+                $ref: "#/components/schemas/Agent"
     put:
       tags: [Agents]
       summary: Update agent
       operationId: updateAgent
       parameters:
-        - $ref: '#/components/parameters/agentId'
+        - $ref: "#/components/parameters/agentId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateAgent'
+              $ref: "#/components/schemas/UpdateAgent"
       responses:
-        '200':
+        "200":
           description: Agent updated
     delete:
       tags: [Agents]
       summary: Delete agent
       operationId: deleteAgent
       parameters:
-        - $ref: '#/components/parameters/agentId'
+        - $ref: "#/components/parameters/agentId"
       responses:
-        '204':
+        "204":
           description: Agent deleted
 
   /chat/completions:
@@ -602,14 +602,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatCompletionRequest'
+              $ref: "#/components/schemas/ChatCompletionRequest"
       responses:
-        '200':
+        "200":
           description: Chat completion response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChatCompletionResponse'
+                $ref: "#/components/schemas/ChatCompletionResponse"
 
   /search:
     get:
@@ -622,14 +622,14 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limitParam'
+        - $ref: "#/components/parameters/limitParam"
       responses:
-        '200':
+        "200":
           description: Search results
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchResults'
+                $ref: "#/components/schemas/SearchResults"
 
   /search/sessions:
     get:
@@ -642,16 +642,16 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limitParam'
+        - $ref: "#/components/parameters/limitParam"
       responses:
-        '200':
+        "200":
           description: Session search results
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Session'
+                  $ref: "#/components/schemas/Session"
 
   /search/semantic:
     get:
@@ -665,14 +665,14 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/limitParam'
+        - $ref: "#/components/parameters/limitParam"
       responses:
-        '200':
+        "200":
           description: Semantic search results
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SemanticSearchResults'
+                $ref: "#/components/schemas/SemanticSearchResults"
 
   /stats/overview:
     get:
@@ -680,12 +680,12 @@ paths:
       summary: Get statistics overview
       operationId: getStatsOverview
       responses:
-        '200':
+        "200":
           description: Statistics overview
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatsOverview'
+                $ref: "#/components/schemas/StatsOverview"
 
   /stats/providers:
     get:
@@ -693,14 +693,14 @@ paths:
       summary: Get provider statistics
       operationId: getProviderStats
       responses:
-        '200':
+        "200":
           description: Provider statistics
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProviderStats'
+                  $ref: "#/components/schemas/ProviderStats"
 
   /stats/timeline:
     get:
@@ -715,14 +715,14 @@ paths:
             enum: [day, week, month, year]
             default: week
       responses:
-        '200':
+        "200":
           description: Timeline statistics
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/TimelineStats'
+                  $ref: "#/components/schemas/TimelineStats"
 
   /harvest:
     post:
@@ -734,14 +734,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/HarvestRequest'
+              $ref: "#/components/schemas/HarvestRequest"
       responses:
-        '200':
+        "200":
           description: Harvest results
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HarvestResponse'
+                $ref: "#/components/schemas/HarvestResponse"
 
   /sync:
     post:
@@ -750,12 +750,12 @@ paths:
       description: Synchronize sessions with cloud storage
       operationId: syncSessions
       responses:
-        '200':
+        "200":
           description: Sync results
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SyncResponse'
+                $ref: "#/components/schemas/SyncResponse"
 
   /settings:
     get:
@@ -763,12 +763,12 @@ paths:
       summary: Get settings
       operationId: getSettings
       responses:
-        '200':
+        "200":
           description: Application settings
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Settings'
+                $ref: "#/components/schemas/Settings"
     put:
       tags: [Settings]
       summary: Update settings
@@ -778,9 +778,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Settings'
+              $ref: "#/components/schemas/Settings"
       responses:
-        '200':
+        "200":
           description: Settings updated
 
 components:
@@ -833,13 +833,13 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
     BadRequest:
       description: Invalid request
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
 
   schemas:
     Error:
@@ -958,7 +958,7 @@ components:
         sessions:
           type: array
           items:
-            $ref: '#/components/schemas/Session'
+            $ref: "#/components/schemas/Session"
         total:
           type: integer
         limit:
@@ -979,7 +979,7 @@ components:
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/CreateMessage'
+            $ref: "#/components/schemas/CreateMessage"
 
     UpdateSession:
       type: object
@@ -1048,7 +1048,18 @@ components:
           type: string
         type:
           type: string
-          enum: [copilot, cursor, chatgpt, claude, ollama, lm-studio, openai, anthropic, custom]
+          enum:
+            [
+              copilot,
+              cursor,
+              chatgpt,
+              claude,
+              ollama,
+              lm-studio,
+              openai,
+              anthropic,
+              custom,
+            ]
         enabled:
           type: boolean
         base_url:
@@ -1234,11 +1245,11 @@ components:
         sessions:
           type: array
           items:
-            $ref: '#/components/schemas/Session'
+            $ref: "#/components/schemas/Session"
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/Message'
+            $ref: "#/components/schemas/Message"
         total:
           type: integer
 
@@ -1251,7 +1262,7 @@ components:
             type: object
             properties:
               session:
-                $ref: '#/components/schemas/Session'
+                $ref: "#/components/schemas/Session"
               relevance:
                 type: number
               snippet:

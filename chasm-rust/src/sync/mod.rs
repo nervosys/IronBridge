@@ -7,8 +7,7 @@
 pub mod bidirectional;
 
 pub use bidirectional::{
-    BidirectionalSyncConfig, BidirectionalSyncEngine, ChangeOrigin, ChangeType,
-    ConflictStrategy, ConflictType, ConflictVersion, EntityType, ProviderSyncAdapter,
+    compute_session_hash, BidirectionalSyncConfig, BidirectionalSyncEngine, ChangeOrigin,
+    ChangeType, ConflictStrategy, ConflictType, ConflictVersion, EntityType, ProviderSyncAdapter,
     SessionSyncState, SyncChange, SyncConflict, SyncResult, SyncStatus, VSCodeSyncAdapter,
-    compute_session_hash,
 };

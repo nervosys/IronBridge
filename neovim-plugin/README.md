@@ -91,25 +91,25 @@ require("chasm").setup({
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `:ChasmSearch [query]` | Search sessions |
-| `:ChasmHarvest` | Harvest new sessions |
-| `:ChasmSync` | Sync with server |
-| `:ChasmView [id]` | View session details |
-| `:ChasmStats` | Show statistics |
-| `:ChasmHealth` | Check server health |
+| Command                | Description          |
+| ---------------------- | -------------------- |
+| `:ChasmSearch [query]` | Search sessions      |
+| `:ChasmHarvest`        | Harvest new sessions |
+| `:ChasmSync`           | Sync with server     |
+| `:ChasmView [id]`      | View session details |
+| `:ChasmStats`          | Show statistics      |
+| `:ChasmHealth`         | Check server health  |
 
 ## Keymaps
 
 Default keymaps (configurable):
 
-| Keymap | Action |
-|--------|--------|
-| `<leader>cs` | Search sessions |
-| `<leader>ch` | Harvest sessions |
+| Keymap       | Action                        |
+| ------------ | ----------------------------- |
+| `<leader>cs` | Search sessions               |
+| `<leader>ch` | Harvest sessions              |
 | `<leader>cv` | View current/selected session |
-| `<leader>cy` | Sync with server |
+| `<leader>cy` | Sync with server              |
 
 ## Telescope Integration
 
