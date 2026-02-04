@@ -170,12 +170,12 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ### Q2 2027
 
 #### AI Agents
-- [ ] Autonomous session archival agent
-- [ ] Context-aware search refinement
+- [x] Autonomous session archival agent
+- [x] Context-aware search refinement
 
 #### Ecosystem
-- [ ] JetBrains IDE plugin
-- [ ] Neovim/Vim plugin
+- [x] JetBrains IDE plugin
+- [x] Neovim/Vim plugin
 
 ---
 
@@ -203,6 +203,33 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ## Recent Changes
 
+### February 2027 (Q2 2027 AI Agents and Ecosystem)
+
+#### Autonomous Agents (chasm-rust)
+- Created archival.rs (~521 lines) - Autonomous session archival agent
+  - ArchivalPolicy with configurable inactivity thresholds, message counts, provider filters
+  - ArchivalCandidate for session evaluation with priority scoring
+  - ArchivalDecision with confidence scoring and reasoning
+  - Policy matching for exclude/include tags (pinned, important, archive)
+- Created search_refinement.rs (~584 lines) - Context-aware search refinement
+  - SearchContext with recent queries, sessions, workspace, provider history
+  - QueryRefinement suggestions with confidence scores
+  - RefinementType: Specificity, Broadening, Correction, Synonyms, Contextual, Temporal
+  - EnrichedSearchResult with relevance scoring
+
+#### JetBrains Plugin (jetbrains-plugin)
+- Created Kotlin/IntelliJ plugin with Gradle build
+- Implemented ChasmService for server communication
+- Added actions: Harvest, Sync, Search, SaveToSession, OpenSettings
+- Created tool window panel with session browser
+- Settings configurable for server URL and sync options
+
+#### Vim Plugin (vim-plugin)
+- Created vim-plug/Vundle/Pathogen compatible plugin
+- Autoload functions for HTTP requests via curl
+- Commands: ChasmHealth, ChasmHarvest, ChasmSync, ChasmStats, ChasmSearch, ChasmSessions, ChasmView
+- Quickfix list integration for session browsing
+- Configurable keymaps with leader prefix
 ### February 2026 (Q4 2026 Platform Maturity)
 
 #### Sync Engine (chasm-rust)
