@@ -224,6 +224,66 @@ chasm mcp serve
 - `chasm_search_sessions` - Search across all sessions
 - `chasm_get_stats` - Get database statistics
 
+## 🏢 Enterprise Features
+
+### Multi-Tenancy
+
+Support for multiple isolated tenants with subscription tiers:
+
+| Tier         | Users  | Storage | Features                              |
+| ------------ | ------ | ------- | ------------------------------------- |
+| Free         | 5      | 1 GB    | Basic harvest, local storage          |
+| Starter      | 25     | 10 GB   | Cloud sync, API access                |
+| Professional | 100    | 100 GB  | SSO, advanced analytics, priority     |
+| Enterprise   | Custom | Custom  | Audit logs, compliance, white-label   |
+
+### Compliance Frameworks
+
+- SOC 2 Type II
+- HIPAA
+- GDPR
+- CCPA
+- ISO 27001
+- FedRAMP
+- PCI DSS
+
+### White-Labeling
+
+Custom branding support including logos, themes, domains, and email templates.
+
+## 👥 Team Features
+
+- **Team Workspaces**: Shared workspaces with role-based access
+- **RBAC**: Owner, Admin, Member, Viewer roles with granular permissions
+- **Activity Feeds**: Real-time team activity tracking
+- **Session Sharing**: Share sessions with permissions (view, comment, edit)
+
+## 🧠 AI Intelligence
+
+- **Topic Extraction**: Automatic categorization of session content
+- **Session Summarization**: AI-powered conversation summaries
+- **Quality Scoring**: Score sessions by depth, code ratio, tool usage
+- **Recommendations**: Personalized session suggestions based on usage
+- **Similarity Detection**: Find related sessions using Jaccard similarity
+
+## 🔀 Multi-Model Routing
+
+Intelligent routing across AI providers:
+
+```rust
+use chasm::routing::{ModelRouter, TaskType, RoutingStrategy};
+
+let router = ModelRouter::new(RoutingStrategy::Balanced);
+
+// Automatic model selection based on task
+let response = router.route(TaskType::Coding, "Fix this bug...").await?;
+let response = router.route(TaskType::Creative, "Write a story...").await?;
+```
+
+### Supported Task Types
+
+Coding, CodeReview, Debugging, Writing, Creative, Math, Analysis, Research, Translation, Summarization, QuestionAnswering, Vision, Reasoning, Quick
+
 ## 🤖 Agency (Agent Development Kit)
 
 **Agency** is Chasm's Rust-native framework for building, orchestrating, and deploying AI agents. It provides a complete toolkit for creating autonomous agents that can reason, use tools, and collaborate in multi-agent workflows.

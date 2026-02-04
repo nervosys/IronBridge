@@ -2,7 +2,7 @@
 
 **Universal Chat Session Manager** — Harvest, merge, and recover AI chat history across workspaces and providers.
 
---
+---
 
 ## Features
 
@@ -15,6 +15,11 @@
 - 🎛️ **Interactive TUI** — Browse workspaces and sessions in the terminal
 - 🤖 **MCP Server** — Model Context Protocol integration for AI agents
 - 📦 **Git Integration** — Version control your chat histories
+- 🌐 **REST & GraphQL API** — Build custom integrations
+- 🔐 **Enterprise Features** — SSO, audit logging, compliance (SOC2, HIPAA, GDPR)
+- 👥 **Team Collaboration** — Workspaces, RBAC, session sharing
+- 🧠 **AI Intelligence** — Topic extraction, summarization, recommendations
+- 🔌 **Plugin System** — Extensible architecture with event hooks
 
 ## Install
 
@@ -87,9 +92,54 @@ chasm harvest share <url>          # Import share link
 
 | Type           | Providers                                                       |
 | -------------- | --------------------------------------------------------------- |
-| **Editors**    | GitHub Copilot, Cursor, Windsurf                                |
+| **Editors**    | GitHub Copilot, Cursor, Windsurf, Continue.dev                  |
 | **Local LLMs** | Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile       |
 | **Cloud**      | ChatGPT, Claude, Gemini, Perplexity, DeepSeek (via share links) |
+
+## Ecosystem
+
+| Component               | Description                              | Status  |
+| ----------------------- | ---------------------------------------- | ------- |
+| **chasm-rust**          | Core Rust library and CLI                | ✅ Stable |
+| **chasm-web**           | React web application                    | ✅ Stable |
+| **chasm-app**           | React Native mobile app                  | ✅ Stable |
+| **chasm-desktop**       | Tauri desktop application                | ✅ Stable |
+| **vscode-extension**    | VS Code extension                        | ✅ Stable |
+| **browser-extension**   | Chrome/Firefox extension                 | ✅ Stable |
+| **jetbrains-plugin**    | IntelliJ/PyCharm/WebStorm plugin         | ✅ Stable |
+| **vim-plugin**          | Vim 8.0+ plugin                          | ✅ Stable |
+| **neovim-plugin**       | Neovim 0.8+ plugin with Telescope        | ✅ Stable |
+
+## API Server
+
+Start the REST/GraphQL API server:
+
+```bash
+chasm api serve --port 8787
+```
+
+### REST Endpoints
+
+| Method | Endpoint              | Description              |
+| ------ | --------------------- | ------------------------ |
+| GET    | `/api/health`         | Health check             |
+| GET    | `/api/workspaces`     | List workspaces          |
+| GET    | `/api/sessions`       | List sessions            |
+| GET    | `/api/sessions/:id`   | Get session with messages|
+| POST   | `/api/harvest`        | Trigger harvest          |
+| GET    | `/api/stats`          | Database statistics      |
+
+### GraphQL
+
+```bash
+# GraphQL endpoint
+curl -X POST http://localhost:8787/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ sessions { id title provider } }"}'
+
+# GraphQL Playground
+open http://localhost:8787/graphql/playground
+```
 
 ## MCP Server
 
@@ -98,12 +148,12 @@ AI agent integration via Model Context Protocol:
 ```json
 {
   "mcpServers": {
-    "chasm": { "command": "csm-mcp" }
+    "chasm": { "command": "chasm-mcp" }
   }
 }
 ```
 
-Tools: `csm_list_workspaces`, `csm_list_sessions`, `csm_show_session`, `csm_search`, `csm_detect`, `csm_register_all`
+Tools: `chasm_list_workspaces`, `chasm_list_sessions`, `chasm_show_session`, `chasm_search`, `chasm_detect`, `chasm_register_all`
 
 ## TUI
 
@@ -111,15 +161,35 @@ Tools: `csm_list_workspaces`, `csm_list_sessions`, `csm_show_session`, `csm_sear
 chasm run tui    # Interactive browser (↑↓/jk to navigate, Enter to select, ? for help)
 ```
 
+## Agency (AI Agent Framework)
+
+```bash
+chasm agency run --agent researcher "What are the latest AI trends?"
+chasm agency run --orchestration swarm "Build a REST API"
+```
+
+## Enterprise Features
+
+- **SSO/SAML**: Okta, Azure AD, Google, OneLogin, Auth0
+- **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS
+- **Audit Logging**: Comprehensive event tracking with data classification
+- **Multi-tenancy**: Subscription tiers, tenant isolation, white-labeling
+- **Team Workspaces**: RBAC, activity feeds, session sharing
+
 ## Project Structure
 
 ```bash
 chasm/
-├── chasm-rust/        # CLI (Rust)
-├── chasm-web/         # Web UI (React)
-├── chasm-app/         # Mobile (React Native)
-├── vscode-extension/  # VS Code extension
-└── examples/          # Provider examples
+├── chasm-rust/          # Core CLI and API server (Rust)
+├── chasm-web/           # Web dashboard (React)
+├── chasm-app/           # Mobile app (React Native)
+├── chasm-desktop/       # Desktop app (Tauri)
+├── vscode-extension/    # VS Code extension
+├── browser-extension/   # Chrome/Firefox extension
+├── jetbrains-plugin/    # JetBrains IDEs plugin
+├── vim-plugin/          # Vim plugin
+├── neovim-plugin/       # Neovim plugin
+└── examples/            # Provider examples
 ```
 
 ## License

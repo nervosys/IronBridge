@@ -1,6 +1,6 @@
-# Chat System Manager (CSM)
+# Chasm VS Code Extension
 
-A VS Code extension that provides a graphical interface for managing VS Code chat sessions across workspaces.
+A VS Code extension that provides a graphical interface for managing AI chat sessions across workspaces.
 
 ## Features
 
@@ -10,6 +10,9 @@ A VS Code extension that provides a graphical interface for managing VS Code cha
 - **Git Versioning**: Initialize git tracking for chat sessions, create snapshots and commits
 - **Migration Support**: Create and restore migration packages for moving to new machines
 - **Interactive TUI**: Launch the terminal-based interface directly from VS Code
+- **Quick Search**: Search sessions using Command Palette
+- **Orphaned Recovery**: Detect and recover orphaned sessions from old workspace hashes
+- **Session Preview**: View session content inline
 
 ## Requirements
 
