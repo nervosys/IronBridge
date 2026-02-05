@@ -25,7 +25,7 @@ pub struct SdkConfig {
 }
 
 /// SDK language
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SdkLanguage {
     Python,

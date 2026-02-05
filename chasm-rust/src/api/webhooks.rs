@@ -202,7 +202,8 @@ impl WebhookState {
 
             // Keep only last 1000 deliveries
             if deliveries.len() > 1000 {
-                deliveries.drain(0..deliveries.len() - 1000);
+                let drain_count = deliveries.len() - 1000;
+                deliveries.drain(0..drain_count);
             }
         }
     }

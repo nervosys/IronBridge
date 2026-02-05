@@ -48,11 +48,14 @@ fn main() -> Result<()> {
         // ====================================================================
         Commands::List { command } => match command {
             Some(ListCommands::Workspaces) => commands::list_workspaces(),
-            Some(ListCommands::Sessions { project_path }) => {
-                commands::list_sessions(project_path.as_deref())
+            Some(ListCommands::Sessions { project_path, size, provider, all_providers }) => {
+                commands::list_sessions(project_path.as_deref(), size, provider.as_deref(), all_providers)
+            }
+            Some(ListCommands::Agents { project_path, size, provider }) => {
+                commands::list_agents_sessions(project_path.as_deref(), size, provider.as_deref())
             }
             Some(ListCommands::Path { project_path }) => {
-                commands::list_sessions(project_path.as_deref())
+                commands::list_sessions(project_path.as_deref(), false, None, false)
             }
             Some(ListCommands::Orphaned { path }) => commands::list_orphaned(path.as_deref()),
             None => commands::list_workspaces(), // Default to workspaces
@@ -73,6 +76,10 @@ fn main() -> Result<()> {
                 content,
                 after,
                 before,
+                date,
+                all,
+                provider,
+                all_providers,
                 limit,
             }) => {
                 let pattern = pattern.unwrap_or_else(get_current_dir_name);
@@ -83,6 +90,10 @@ fn main() -> Result<()> {
                     content,
                     after.as_deref(),
                     before.as_deref(),
+                    date.as_deref(),
+                    all,
+                    provider.as_deref(),
+                    all_providers,
                     limit,
                 )
             }
@@ -99,6 +110,10 @@ fn main() -> Result<()> {
                     false,
                     None,
                     None,
+                    None,
+                    false,
+                    None, // provider
+                    false, // all_providers
                     50,
                 )
             }
@@ -118,8 +133,15 @@ fn main() -> Result<()> {
                 session_id,
                 project_path,
             }) => commands::show_session(&session_id, project_path.as_deref()),
+            Some(ShowCommands::Agent {
+                session_id,
+                project_path,
+            }) => commands::show_agent_session(&session_id, project_path.as_deref()),
             Some(ShowCommands::Path { project_path }) => {
                 commands::history_show(project_path.as_deref())
+            }
+            Some(ShowCommands::Timeline { project_path, agents, provider, all_providers }) => {
+                commands::show_timeline(project_path.as_deref(), agents, provider.as_deref(), all_providers)
             }
             None => commands::history_show(None), // Default to current directory
         },

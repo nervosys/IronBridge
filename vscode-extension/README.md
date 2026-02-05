@@ -13,6 +13,7 @@ A VS Code extension that provides a graphical interface for managing AI chat ses
 - **Quick Search**: Search sessions using Command Palette
 - **Orphaned Recovery**: Detect and recover orphaned sessions from old workspace hashes
 - **Session Preview**: View session content inline
+- **Real-time Recording**: Automatically capture sessions as you work to prevent data loss from crashes
 
 ## Requirements
 
@@ -69,6 +70,8 @@ Access commands via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
 | `CSM: Create Migration Package`  | Package all sessions for migration   |
 | `CSM: Restore Migration Package` | Restore sessions from package        |
 | `CSM: Show Version`              | Display CSM version                  |
+| `CSM: Toggle Recording`          | Enable/disable real-time recording   |
+| `CSM: Recording Status`          | Show current recording status        |
 
 ### Context Menus
 
@@ -81,10 +84,13 @@ Right-click on workspaces in the tree view for quick actions:
 
 ## Extension Settings
 
-| Setting                 | Default | Description                  |
-| ----------------------- | ------- | ---------------------------- |
-| `csm.binaryPath`        | `"csm"` | Path to csm binary           |
-| `csm.showNotifications` | `true`  | Show operation notifications |
+| Setting                   | Default                   | Description                      |
+| ------------------------- | ------------------------- | -------------------------------- |
+| `csm.binaryPath`          | `"csm"`                   | Path to csm binary               |
+| `csm.showNotifications`   | `true`                    | Show operation notifications     |
+| `csm.api.baseUrl`         | `"http://localhost:3000"` | Chasm API server URL             |
+| `csm.recording.enabled`   | `false`                   | Enable real-time recording       |
+| `csm.recording.providers` | `["vscode", "cursor"]`    | Providers to record from         |
 
 ## Development
 
@@ -103,6 +109,77 @@ npm run lint
 
 # Run tests
 npm test
+```
+
+## Real-time Recording
+
+The extension can capture chat sessions in real-time from multiple AI chat providers, preventing data loss from crashes or unexpected closures.
+
+### Supported Providers
+
+| Provider | Status | Storage Location |
+|----------|--------|------------------|
+| VS Code Copilot | ✅ | `~/.config/Code/User/workspaceStorage/*/chatSessions/` |
+| Cursor | ✅ | `~/.config/Cursor/User/workspaceStorage/*/chatSessions/` |
+| Continue.dev | ✅ | `~/.continue/sessions/` |
+| Claude Code | ✅ | `~/.config/claude-code/sessions/` |
+| OpenCode | ✅ | `~/.config/opencode/conversations/` |
+| OpenClaw | ✅ | `~/.config/openclaw/chat-history/` |
+| Antigravity | ✅ | `~/.config/antigravity/sessions/` |
+| Windsurf | ✅ | `~/.config/Windsurf/User/workspaceStorage/*/chatSessions/` |
+| Zed | ✅ | `~/.config/zed/conversations/` |
+| Codespaces | ✅ | Same as VS Code |
+
+### How It Works
+
+1. **File Watcher**: Monitors session directories for all enabled providers
+2. **Event Buffering**: Batches events to reduce API calls
+3. **Heartbeat**: Maintains connection health with periodic pings
+4. **Snapshots**: Periodically saves full session state for recovery
+
+### Setup
+
+1. Start the Chasm API server:
+
+```bash
+csm serve --port 3000
+```
+
+2. Enable recording in VS Code settings:
+
+```json
+{
+  "csm.recording.enabled": true,
+  "csm.recording.providers": ["vscode", "cursor", "continuedev"],
+  "csm.api.baseUrl": "http://localhost:3000"
+}
+```
+
+3. Or toggle via Command Palette: `CSM: Toggle Recording`
+
+### Provider Configuration
+
+By default, the extension records from VS Code and Cursor. To add more providers:
+
+```json
+{
+  "csm.recording.providers": [
+    "vscode",
+    "cursor",
+    "continuedev",
+    "claude-code",
+    "opencode",
+    "windsurf"
+  ]
+}
+```
+
+### Recovery
+
+If VS Code crashes while recording is enabled, your sessions are preserved on the Chasm server. Use the recovery endpoint to retrieve them:
+
+```bash
+curl http://localhost:3000/api/recording/recovery
 ```
 
 ## Testing

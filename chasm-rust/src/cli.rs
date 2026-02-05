@@ -208,6 +208,34 @@ pub enum ListCommands {
         /// Filter by project path
         #[arg(long)]
         project_path: Option<String>,
+
+        /// Show file sizes
+        #[arg(long, short = 's')]
+        size: bool,
+
+        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
+
+        /// Include all providers
+        #[arg(long)]
+        all_providers: bool,
+    },
+
+    /// List agent mode sessions (Copilot Edits / chatEditingSessions)
+    #[command(visible_alias = "a")]
+    Agents {
+        /// Filter by project path
+        #[arg(long)]
+        project_path: Option<String>,
+
+        /// Show file sizes
+        #[arg(long, short = 's')]
+        size: bool,
+
+        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
     },
 
     /// List sessions for a specific project path
@@ -263,6 +291,22 @@ pub enum FindCommands {
         #[arg(long)]
         before: Option<String>,
 
+        /// Filter by internal message timestamp date (YYYY-MM-DD)
+        #[arg(long)]
+        date: Option<String>,
+
+        /// Search across all workspaces (not just current project)
+        #[arg(long, short = 'a')]
+        all: bool,
+
+        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
+
+        /// Search across all providers
+        #[arg(long)]
+        all_providers: bool,
+
         /// Limit number of results
         #[arg(long, short = 'n', default_value = "50")]
         limit: usize,
@@ -303,10 +347,39 @@ pub enum ShowCommands {
         project_path: Option<String>,
     },
 
+    /// Show agent mode session details (Copilot Edits)
+    #[command(visible_alias = "a")]
+    Agent {
+        /// Agent session ID
+        session_id: String,
+
+        /// Project path to search in
+        #[arg(long)]
+        project_path: Option<String>,
+    },
+
     /// Show chat history timeline for a project path
     Path {
         /// Path to the project (default: current directory)
         project_path: Option<String>,
+    },
+
+    /// Show timeline of session activity with gaps visualization
+    Timeline {
+        /// Path to the project (default: current directory)
+        project_path: Option<String>,
+
+        /// Include agent mode sessions
+        #[arg(long, short = 'a')]
+        agents: bool,
+
+        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
+
+        /// Include all providers (aggregate timeline)
+        #[arg(long)]
+        all_providers: bool,
     },
 }
 

@@ -34,6 +34,25 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Show notifications for operations"
+                },
+                "csm.api.baseUrl": {
+                    "type": "string",
+                    "default": "http://localhost:3000",
+                    "description": "Base URL for CSM API server (for real-time recording)"
+                },
+                "csm.recording.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable real-time session recording to prevent data loss"
+                },
+                "csm.recording.providers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["vscode", "cursor", "continuedev", "claude-code", "opencode", "openclaw", "antigravity", "windsurf", "zed", "codespaces"]
+                    },
+                    "default": ["vscode", "cursor"],
+                    "description": "AI chat providers to record sessions from"
                 }
             }
         },
@@ -187,6 +206,16 @@
                 "command": "csm.previewSession",
                 "title": "CSM: Preview Session",
                 "icon": "$(open-preview)"
+            },
+            {
+                "command": "csm.toggleRecording",
+                "title": "CSM: Toggle Real-Time Recording",
+                "icon": "$(record)"
+            },
+            {
+                "command": "csm.recordingStatus",
+                "title": "CSM: Recording Status",
+                "icon": "$(pulse)"
             }
         ],
         "viewsContainers": {

@@ -444,7 +444,138 @@ export class CsmApiClient {
             return this._post('/api/v1/mcp/tools/call', { name, arguments: args });
         },
     };
+
+    // =========================================================================
+    // Recording API (Real-time Session Recording)
+    // =========================================================================
+
+    recording = {
+        /**
+         * Send recording events to the backend
+         */
+        sendEvents: (events: RecordingEventPayload[]): Promise<ApiResponse<RecordingEventsResponse>> => {
+            return this._post('/api/recording/events', { events });
+        },
+
+        /**
+         * Store a full session snapshot
+         */
+        storeSnapshot: (snapshot: RecordingEventPayload): Promise<ApiResponse<RecordingAckResponse>> => {
+            return this._post('/api/recording/snapshot', snapshot);
+        },
+
+        /**
+         * Get recording service status
+         */
+        status: (): Promise<ApiResponse<RecordingStatusResponse>> => {
+            return this._get('/api/recording/status');
+        },
+
+        /**
+         * List active recording sessions
+         */
+        listSessions: (): Promise<ApiResponse<ActiveRecordingSessionsResponse>> => {
+            return this._get('/api/recording/sessions');
+        },
+
+        /**
+         * Get a specific recording session
+         */
+        getSession: (sessionId: string): Promise<ApiResponse<ActiveRecordingSession>> => {
+            return this._get(`/api/recording/session/${sessionId}`);
+        },
+
+        /**
+         * Get recovery info for a session
+         */
+        getRecovery: (sessionId: string): Promise<ApiResponse<RecordingRecoveryResponse>> => {
+            return this._get(`/api/recording/session/${sessionId}/recovery`);
+        },
+    };
 }
+
+// =============================================================================
+// Recording Types
+// =============================================================================
+
+// These interfaces use snake_case to match the Rust API exactly
+/* eslint-disable @typescript-eslint/naming-convention */
+
+export interface RecordingEventPayload {
+    type: string;
+    session_id: string;
+    [key: string]: unknown;
+}
+
+export interface RecordingEventsResponse {
+    processed: number;
+    responses: RecordingAckResponse[];
+}
+
+export interface RecordingAckResponse {
+    type: 'ack' | 'error' | 'recovery';
+    event_id?: string;
+    session_id?: string;
+    status?: string;
+    code?: string;
+    message?: string;
+}
+
+export interface RecordingStatusResponse {
+    status: string;
+    active_sessions: number;
+    dirty_sessions: number;
+    config: {
+        persist_interval_secs: number;
+        max_memory_messages: number;
+        session_timeout_secs: number;
+    };
+}
+
+export interface ActiveRecordingSessionsResponse {
+    active_sessions: ActiveRecordingSessionSummary[];
+    total: number;
+}
+
+export interface ActiveRecordingSessionSummary {
+    session_id: string;
+    provider: string;
+    title?: string;
+    workspace_path?: string;
+    message_count: number;
+    started_at: string;
+    last_activity: string;
+    is_dirty: boolean;
+}
+
+export interface ActiveRecordingSession {
+    session_id: string;
+    provider: string;
+    title?: string;
+    workspace_path?: string;
+    messages: RecordedMessagePayload[];
+    message_count: number;
+    started_at: string;
+    last_activity: string;
+}
+
+export interface RecordedMessagePayload {
+    message_id: string;
+    role: string;
+    content: string;
+    model?: string;
+    created_at: number;
+    parent_id?: string;
+    metadata?: Record<string, unknown>;
+}
+
+export interface RecordingRecoveryResponse {
+    session_id: string;
+    last_message_id?: string;
+    message_count: number;
+}
+
+/* eslint-enable @typescript-eslint/naming-convention */
 
 /**
  * Singleton API client instance

@@ -1,6 +1,6 @@
 # Chasm Roadmap
 
-> **Last Updated:** February 3, 2026
+> **Last Updated:** February 4, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
 
@@ -71,6 +71,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Inline session preview
 - [x] One-click harvest from workspace
 - [x] Orphaned session recovery
+- [x] Real-time session recording (prevents data loss from crashes)
+- [x] Recording API with event buffering and snapshots
+- [x] Multi-provider recording support (VS Code, Cursor, Continue.dev, Claude Code, OpenCode, Windsurf, etc.)
 
 ### Documentation
 - [x] Sales presentation (Typst)
@@ -226,6 +229,10 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | GitHub Copilot Chat | ✅       | ✅    | 🚧    | Primary |
 | VS Code Copilot     | ✅       | ✅    | 🚧    | Primary |
 | Cursor              | ✅       | ✅    | 📋    | Active  |
+| ClaudeCode          | ✅       | ✅    | 📋    | Active  |
+| OpenCode            | ✅       | ✅    | 📋    | Active  |
+| OpenClaw            | ✅       | ✅    | 📋    | Active  |
+| Antigravity         | ✅       | ✅    | 📋    | Active  |
 | Continue.dev        | ✅       | 📋    | 📋    | Active  |
 | ChatGPT             | ✅       | ✅    | 📋    | Active  |
 | GPT4All             | ✅       | ✅    | 📋    | Active  |
@@ -242,6 +249,24 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ---
 
 ## Recent Changes
+
+### February 2026 (v1.1.0 Multi-Provider Forensics)
+
+#### Multi-Provider Session Forensics (chasm-rust)
+- Added cross-provider session discovery and analysis
+- New providers: ClaudeCode, OpenCode, OpenClaw, Antigravity
+- Commands support `--provider` and `--all-providers` flags:
+  - `chasm list sessions` - List sessions from specific or all providers
+  - `chasm list agents` - List agent mode sessions across providers
+  - `chasm show timeline` - Aggregate timeline visualization
+  - `chasm find session` - Search across all providers
+- Cross-platform storage detection (Windows, macOS, Linux)
+- Provider aliases: `claudecode`/`claude`, `opencode`, `openclaw`/`claw`, `antigravity`/`ag`
+
+#### JSONL Format Support (chasm-rust)
+- Handle VS Code 1.109.0+ event-sourced session format
+- Automatic detection and parsing of `.jsonl` session files  
+- Session state reconstruction from event streams
 
 ### February 2027 (Q2 2027 AI Agents and Ecosystem)
 

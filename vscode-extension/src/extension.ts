@@ -8,10 +8,13 @@ import { CsmExecutor } from './csmExecutor';
 import { WorkspaceProvider, WorkspaceItem } from './workspaceProvider';
 import { SessionProvider } from './sessionProvider';
 import { CsmChatPanel } from './chatPanel';
+import { SessionRecorder } from './sessionRecorder';
+import { createApiClient } from './apiClient';
 
 let executor: CsmExecutor;
 let workspaceProvider: WorkspaceProvider;
 let sessionProvider: SessionProvider;
+let sessionRecorder: SessionRecorder | undefined;
 let outputChannel: vscode.OutputChannel;
 
 /**
@@ -227,6 +230,21 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize tree providers
     workspaceProvider = new WorkspaceProvider(executor);
     sessionProvider = new SessionProvider(executor, outputChannel);
+
+    // Initialize real-time session recorder
+    const recordingEnabled = vscode.workspace.getConfiguration('csm').get<boolean>('recording.enabled', false);
+    const apiBaseUrl = vscode.workspace.getConfiguration('csm').get<string>('api.baseUrl', 'http://localhost:3000');
+
+    if (recordingEnabled) {
+        const apiClient = createApiClient({ baseUrl: apiBaseUrl }, outputChannel);
+        sessionRecorder = new SessionRecorder(apiClient, outputChannel);
+        sessionRecorder.start().then(() => {
+            outputChannel.appendLine('Session recorder started');
+        }).catch(err => {
+            outputChannel.appendLine(`Failed to start session recorder: ${err.message}`);
+        });
+        context.subscriptions.push({ dispose: () => sessionRecorder?.dispose() });
+    }
 
     // Register tree views
     const workspaceTreeView = vscode.window.createTreeView('csm.workspaces', {
@@ -993,6 +1011,56 @@ export function activate(context: vscode.ExtensionContext) {
 
             // Show preview in output panel
             await openChatSession(sessionId, outputChannel);
+        }),
+
+        // Toggle real-time session recording
+        vscode.commands.registerCommand('csm.toggleRecording', async () => {
+            const config = vscode.workspace.getConfiguration('csm');
+            const currentState = config.get<boolean>('recording.enabled', false);
+
+            if (currentState) {
+                // Stop recording
+                if (sessionRecorder) {
+                    sessionRecorder.stop();
+                    outputChannel.appendLine('Session recording stopped');
+                }
+                await config.update('recording.enabled', false, vscode.ConfigurationTarget.Global);
+                vscode.window.showInformationMessage('Session recording disabled');
+            } else {
+                // Start recording
+                await config.update('recording.enabled', true, vscode.ConfigurationTarget.Global);
+                const apiBaseUrl = config.get<string>('api.baseUrl', 'http://localhost:3000');
+                const apiClient = createApiClient({ baseUrl: apiBaseUrl }, outputChannel);
+                sessionRecorder = new SessionRecorder(apiClient, outputChannel);
+                try {
+                    await sessionRecorder.start();
+                    outputChannel.appendLine('Session recording started');
+                    vscode.window.showInformationMessage('Session recording enabled');
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to start recording: ${(err as Error).message}`);
+                }
+            }
+        }),
+
+        // Show recording status
+        vscode.commands.registerCommand('csm.recordingStatus', async () => {
+            if (!sessionRecorder) {
+                vscode.window.showInformationMessage('Session recording is not active');
+                return;
+            }
+
+            const isConnected = sessionRecorder.isConnected;
+            const bufferSize = sessionRecorder.bufferSize;
+            const watchedPaths = sessionRecorder.watchedPaths;
+
+            outputChannel.show();
+            outputChannel.appendLine('=== Session Recording Status ===');
+            outputChannel.appendLine(`Connected: ${isConnected ? 'Yes' : 'No'}`);
+            outputChannel.appendLine(`Buffered events: ${bufferSize}`);
+            outputChannel.appendLine(`Watched paths: ${watchedPaths.length}`);
+            for (const p of watchedPaths) {
+                outputChannel.appendLine(`  - ${p}`);
+            }
         })
     );
 

@@ -160,11 +160,8 @@ impl ArchivalAgent {
     pub fn new() -> Self {
         let config = AgentConfig {
             name: "archival-agent".to_string(),
-            description: Some("Autonomous session archival agent".to_string()),
-            model: "gemini-2.0-flash".to_string(),
-            system_prompt: Some(ARCHIVAL_SYSTEM_PROMPT.to_string()),
-            temperature: 0.3,
-            max_tokens: 1024,
+            description: "Autonomous session archival agent".to_string(),
+            instruction: ARCHIVAL_SYSTEM_PROMPT.to_string(),
             ..Default::default()
         };
 
@@ -430,41 +427,19 @@ impl ArchivalScheduler {
     }
 
     /// Start the scheduler
+    /// Note: This currently logs a start message. Full background scheduling
+    /// requires a LocalSet or refactoring ChatDatabase for Send+Sync.
     pub async fn start(&self) {
         let mut active = self.active.write().await;
         *active = true;
         drop(active);
 
-        let agent = self.agent.clone();
-        let active_flag = self.active.clone();
-        let interval = self.interval;
-
-        tokio::spawn(async move {
-            loop {
-                // Check if still active
-                {
-                    let active = active_flag.read().await;
-                    if !*active {
-                        break;
-                    }
-                }
-
-                // Run the agent
-                let result = agent.run().await;
-                println!(
-                    "[ArchivalAgent] Run complete: {} archived, {} skipped, {}ms",
-                    result.archived_count, result.skipped_count, result.duration_ms
-                );
-
-                // Wait for next interval
-                tokio::time::sleep(
-                    interval
-                        .to_std()
-                        .unwrap_or(std::time::Duration::from_secs(3600)),
-                )
-                .await;
-            }
-        });
+        // TODO: Implement background scheduling with LocalSet
+        // For now, just mark as active - call run() manually
+        println!(
+            "[ArchivalScheduler] Started with interval {:?}. Call run() to execute.",
+            self.interval
+        );
     }
 
     /// Stop the scheduler

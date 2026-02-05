@@ -170,7 +170,7 @@ pub struct Notification {
 }
 
 /// Type of notification
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationType {
     /// Team invitation
@@ -381,7 +381,10 @@ impl ActivityManager {
             if !user_prefs.in_app_enabled {
                 return;
             }
-            if let Some(enabled) = user_prefs.enabled_types.get(&notification.notification_type) {
+            if let Some(enabled) = user_prefs
+                .enabled_types
+                .get(&notification.notification_type)
+            {
                 if !enabled {
                     return;
                 }
@@ -390,10 +393,7 @@ impl ActivityManager {
 
         // Store notification
         let mut notifications = self.notifications.write().await;
-        notifications
-            .entry(user_id)
-            .or_default()
-            .push(notification);
+        notifications.entry(user_id).or_default().push(notification);
     }
 
     /// Get unread notifications for a user

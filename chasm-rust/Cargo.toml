@@ -44,7 +44,7 @@ once_cell = "1.19"
 urlencoding = "2.1"
 
 # UUID generation
-uuid = { version = "1.6", features = ["v4"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
@@ -88,7 +88,7 @@ actix-cors = "0.7"
 actix-files = "0.6"
 
 # GraphQL
-async-graphql = "7"
+async-graphql = { version = "7", features = ["chrono"] }
 async-graphql-actix-web = "7"
 
 # Async streaming for SSE

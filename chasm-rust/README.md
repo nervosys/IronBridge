@@ -178,17 +178,23 @@ chasm api serve --host 0.0.0.0 --port 8787
 
 ### Endpoints
 
-| Method | Endpoint                  | Description               |
-| ------ | ------------------------- | ------------------------- |
-| GET    | `/api/health`             | Health check              |
-| GET    | `/api/workspaces`         | List workspaces           |
-| GET    | `/api/workspaces/:id`     | Get workspace details     |
-| GET    | `/api/sessions`           | List sessions             |
-| GET    | `/api/sessions/:id`       | Get session with messages |
-| GET    | `/api/sessions/search?q=` | Search sessions           |
-| GET    | `/api/stats`              | Database statistics       |
-| GET    | `/api/providers`          | List supported providers  |
-| GET    | `/api/agents`             | List available agents     |
+| Method | Endpoint                      | Description                   |
+| ------ | ----------------------------- | ----------------------------- |
+| GET    | `/api/health`                 | Health check                  |
+| GET    | `/api/workspaces`             | List workspaces               |
+| GET    | `/api/workspaces/:id`         | Get workspace details         |
+| GET    | `/api/sessions`               | List sessions                 |
+| GET    | `/api/sessions/:id`           | Get session with messages     |
+| GET    | `/api/sessions/search?q=`     | Search sessions               |
+| GET    | `/api/stats`                  | Database statistics           |
+| GET    | `/api/providers`              | List supported providers      |
+| GET    | `/api/agents`                 | List available agents         |
+| POST   | `/api/recording/events`       | Send recording events         |
+| POST   | `/api/recording/snapshot`     | Store session snapshot        |
+| GET    | `/api/recording/sessions`     | List active recording sessions|
+| GET    | `/api/recording/sessions/:id` | Get recorded session          |
+| GET    | `/api/recording/recovery`     | Recover sessions after crash  |
+| GET    | `/api/recording/status`       | Recording service status      |
 
 ### Example
 
@@ -666,6 +672,10 @@ curl -X POST http://localhost:3000/api/v1/swarms/{id}/start \
 - ✅ Cursor
 - ✅ Windsurf
 - ✅ Continue.dev
+- ✅ ClaudeCode
+- ✅ OpenCode
+- ✅ OpenClaw
+- ✅ Antigravity
 
 ### Local LLMs
 - ✅ Ollama

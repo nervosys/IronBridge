@@ -18,11 +18,16 @@ mod retention;
 pub mod sdk;
 #[cfg(feature = "enterprise")]
 mod sso;
+mod recording;
 mod state;
 mod sync;
 mod webhooks;
 mod websocket;
 
+pub use recording::{
+    configure_recording_routes, create_recording_state, RecordingConfig, RecordingEvent,
+    RecordingResponse, RecordingState,
+};
 #[cfg(feature = "enterprise")]
 pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,

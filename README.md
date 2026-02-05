@@ -90,11 +90,11 @@ chasm harvest share <url>          # Import share link
 
 ## Supported Providers
 
-| Type           | Providers                                                       |
-| -------------- | --------------------------------------------------------------- |
-| **Editors**    | GitHub Copilot, Cursor, Windsurf, Continue.dev                  |
-| **Local LLMs** | Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile       |
-| **Cloud**      | ChatGPT, Claude, Gemini, Perplexity, DeepSeek (via share links) |
+| Type           | Providers                                                                    |
+| -------------- | ---------------------------------------------------------------------------- |
+| **Editors**    | GitHub Copilot, Cursor, Windsurf, Continue.dev, ClaudeCode, OpenCode, OpenClaw, Antigravity |
+| **Local LLMs** | Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile                    |
+| **Cloud**      | ChatGPT, Claude, Gemini, Perplexity, DeepSeek (via share links)              |
 
 ## Ecosystem
 

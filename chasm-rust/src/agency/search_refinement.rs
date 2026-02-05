@@ -166,11 +166,8 @@ impl SearchRefinementAgent {
     pub fn new() -> Self {
         let config = AgentConfig {
             name: "search-refinement-agent".to_string(),
-            description: Some("Context-aware search query refinement".to_string()),
-            model: "gemini-2.0-flash".to_string(),
-            system_prompt: Some(SEARCH_SYSTEM_PROMPT.to_string()),
-            temperature: 0.4,
-            max_tokens: 512,
+            description: "Context-aware search query refinement".to_string(),
+            instruction: SEARCH_SYSTEM_PROMPT.to_string(),
             ..Default::default()
         };
 
@@ -309,10 +306,9 @@ impl SearchRefinementAgent {
         });
 
         // Keep only last 1000 searches
-        if state.search_history.len() > 1000 {
-            state
-                .search_history
-                .drain(0..state.search_history.len() - 1000);
+        let history_len = state.search_history.len();
+        if history_len > 1000 {
+            state.search_history.drain(0..history_len - 1000);
         }
 
         // Update analytics
