@@ -910,15 +910,15 @@ impl AutomationEngine {
                 Action::Http {
                     url,
                     method,
-                    headers,
-                    body,
+                    headers: _,
+                    body: _,
                 } => {
                     let url = ctx.interpolate(url);
                     log::info!("HTTP request: {} {}", method, url);
                     // Would make actual HTTP request
                     Ok(Some(serde_json::json!({ "status": 200 })))
                 }
-                Action::Shell { command, cwd, env } => {
+                Action::Shell { command, cwd, env: _ } => {
                     let cmd = ctx.interpolate(command);
                     log::info!("Executing shell: {} (cwd={:?})", cmd, cwd);
                     // Would execute actual command

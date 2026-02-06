@@ -502,18 +502,19 @@ export default function Overview() {
                                         border: '1px solid hsl(var(--border))',
                                         borderRadius: '8px',
                                     }}
-                                    formatter={(value: number, name: string) => {
+                                    formatter={(value, name) => {
                                         const labels: Record<string, string> = {
                                             sessions: 'Sessions',
                                             messages: 'Messages',
                                             prevSessions: 'Prev Sessions',
                                             prevMessages: 'Prev Messages',
                                         };
-                                        return [value.toLocaleString(), labels[name] || name];
+                                        const numValue = typeof value === 'number' ? value : 0;
+                                        return [numValue.toLocaleString(), labels[String(name)] || String(name)];
                                     }}
-                                    labelFormatter={(label: string, payload: readonly { payload?: ActivityDataPoint }[]) => {
-                                        const data = payload?.[0]?.payload;
-                                        return data?.fullDate || label;
+                                    labelFormatter={(label, payload) => {
+                                        const data = (payload as { payload?: ActivityDataPoint }[])?.[0]?.payload;
+                                        return data?.fullDate || String(label);
                                     }}
                                 />
                                 {/* Previous period areas (rendered first, behind current) */}

@@ -53,7 +53,7 @@ function computeDiff(messagesA: Message[], messagesB: Message[]): DiffResult[] {
     return results;
 }
 
-function MessageCard({ message, variant: _variant }: { message: Message; variant: 'A' | 'B' | 'diff' }) {
+function MessageCard({ message }: { message: Message }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const content = message.content;
     const isLong = content.length > 300;
@@ -116,14 +116,14 @@ function DiffRow({ diff }: { diff: DiffResult }) {
             </div>
             <div className={`${diff.type === 'added' ? 'opacity-30' : ''}`}>
                 {diff.messageA ? (
-                    <MessageCard message={diff.messageA} variant="A" />
+                    <MessageCard message={diff.messageA} />
                 ) : (
                     <div className="text-[hsl(var(--muted-foreground))] text-sm italic">No message</div>
                 )}
             </div>
             <div className={`${diff.type === 'removed' ? 'opacity-30' : ''}`}>
                 {diff.messageB ? (
-                    <MessageCard message={diff.messageB} variant="B" />
+                    <MessageCard message={diff.messageB} />
                 ) : (
                     <div className="text-[hsl(var(--muted-foreground))] text-sm italic">No message</div>
                 )}
@@ -132,46 +132,26 @@ function DiffRow({ diff }: { diff: DiffResult }) {
     );
 }
 
-export function SessionDiff({
+function SessionSelector({
+    side,
+    session,
+    expanded,
+    setExpanded,
+    availableSessions,
     sessionA,
     sessionB,
     onSelectSession,
-    availableSessions,
-}: SessionDiffProps) {
-    const [showOnlyDiffs, setShowOnlyDiffs] = useState(false);
-    const [expandedA, setExpandedA] = useState(false);
-    const [expandedB, setExpandedB] = useState(false);
-
-    const diff = useMemo(() => {
-        if (!sessionA || !sessionB) return [];
-        return computeDiff(sessionA.messages, sessionB.messages);
-    }, [sessionA, sessionB]);
-
-    const filteredDiff = useMemo(() => {
-        if (!showOnlyDiffs) return diff;
-        return diff.filter((d) => d.type !== 'unchanged');
-    }, [diff, showOnlyDiffs]);
-
-    const stats = useMemo(() => {
-        return {
-            added: diff.filter((d) => d.type === 'added').length,
-            removed: diff.filter((d) => d.type === 'removed').length,
-            modified: diff.filter((d) => d.type === 'modified').length,
-            unchanged: diff.filter((d) => d.type === 'unchanged').length,
-        };
-    }, [diff]);
-
-    const SessionSelector = ({
-        side,
-        session,
-        expanded,
-        setExpanded,
-    }: {
-        side: 'A' | 'B';
-        session: SessionWithMessages | null;
-        expanded: boolean;
-        setExpanded: (v: boolean) => void;
-    }) => (
+}: {
+    side: 'A' | 'B';
+    session: SessionWithMessages | null;
+    expanded: boolean;
+    setExpanded: (v: boolean) => void;
+    availableSessions: Session[];
+    sessionA: SessionWithMessages | null;
+    sessionB: SessionWithMessages | null;
+    onSelectSession: (side: 'A' | 'B') => void;
+}) {
+    return (
         <div className="relative">
             <button
                 onClick={() => setExpanded(!expanded)}
@@ -234,6 +214,36 @@ export function SessionDiff({
             )}
         </div>
     );
+}
+
+export function SessionDiff({
+    sessionA,
+    sessionB,
+    onSelectSession,
+    availableSessions,
+}: SessionDiffProps) {
+    const [showOnlyDiffs, setShowOnlyDiffs] = useState(false);
+    const [expandedA, setExpandedA] = useState(false);
+    const [expandedB, setExpandedB] = useState(false);
+
+    const diff = useMemo(() => {
+        if (!sessionA || !sessionB) return [];
+        return computeDiff(sessionA.messages, sessionB.messages);
+    }, [sessionA, sessionB]);
+
+    const filteredDiff = useMemo(() => {
+        if (!showOnlyDiffs) return diff;
+        return diff.filter((d) => d.type !== 'unchanged');
+    }, [diff, showOnlyDiffs]);
+
+    const stats = useMemo(() => {
+        return {
+            added: diff.filter((d) => d.type === 'added').length,
+            removed: diff.filter((d) => d.type === 'removed').length,
+            modified: diff.filter((d) => d.type === 'modified').length,
+            unchanged: diff.filter((d) => d.type === 'unchanged').length,
+        };
+    }, [diff]);
 
     return (
         <div className="space-y-6">
@@ -261,6 +271,10 @@ export function SessionDiff({
                         session={sessionA}
                         expanded={expandedA}
                         setExpanded={setExpandedA}
+                        availableSessions={availableSessions}
+                        sessionA={sessionA}
+                        sessionB={sessionB}
+                        onSelectSession={onSelectSession}
                     />
                 </div>
                 <div>
@@ -272,6 +286,10 @@ export function SessionDiff({
                         session={sessionB}
                         expanded={expandedB}
                         setExpanded={setExpandedB}
+                        availableSessions={availableSessions}
+                        sessionA={sessionA}
+                        sessionB={sessionB}
+                        onSelectSession={onSelectSession}
                     />
                 </div>
             </div>

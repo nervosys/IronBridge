@@ -4,7 +4,7 @@
 //!
 //! Provides a GraphQL endpoint alongside REST for flexible querying.
 
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use async_graphql::{
     Context, EmptySubscription, FieldResult, InputObject, Object, Schema, SimpleObject, ID,
 };

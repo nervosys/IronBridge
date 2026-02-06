@@ -593,7 +593,7 @@ export default function Accounts() {
                                             border: '1px solid hsl(var(--border))',
                                             borderRadius: '8px',
                                         }}
-                                        formatter={(value: number) => [value.toLocaleString(), 'Messages']}
+                                        formatter={(value) => [(typeof value === 'number' ? value : 0).toLocaleString(), 'Messages']}
                                     />
                                 </PieChart>
                             </ResponsiveContainer>

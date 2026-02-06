@@ -250,6 +250,7 @@ export function SyncStatusPanel({ syncState, onSync, syncHistory = [] }: SyncSta
 // Hook for managing sync state
 // =============================================================================
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useSyncState(initialState?: Partial<SyncState>) {
     const [syncState, setSyncState] = useState<SyncState>({
         status: 'idle',

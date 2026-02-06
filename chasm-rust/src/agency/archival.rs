@@ -182,7 +182,7 @@ impl ArchivalAgent {
 
     /// Create with custom policies
     pub fn with_policies(policies: Vec<ArchivalPolicy>) -> Self {
-        let mut agent = Self::new();
+        let agent = Self::new();
         let mut state = agent.state.blocking_write();
         state.policies = policies;
         drop(state);
@@ -218,8 +218,8 @@ impl ArchivalAgent {
     /// Scan for archival candidates
     pub async fn scan_candidates(&self) -> Vec<ArchivalCandidate> {
         let state = self.state.read().await;
-        let mut candidates = Vec::new();
-        let now = Utc::now();
+        let candidates = Vec::new();
+        let _now = Utc::now();
 
         // In real implementation, query database for sessions
         // For now, return placeholder logic
@@ -279,7 +279,7 @@ impl ArchivalAgent {
     }
 
     /// Archive a single session
-    pub async fn archive_session(&self, session_id: &str) -> Result<bool, String> {
+    pub async fn archive_session(&self, _session_id: &str) -> Result<bool, String> {
         // In real implementation:
         // 1. Mark session as archived in database
         // 2. Optionally compress/export

@@ -403,7 +403,7 @@ export const BatchOperationsToolbar: React.FC<BatchOperationsToolbarProps> = ({
             if (result.failedCount === 0) {
                 dispatch({ type: 'deselectAll' });
             }
-        } catch (error) {
+        } catch {
             setProgress((prev) => prev ? { ...prev, status: 'failed' } : null);
         }
     }, [state.selectedIds, onBatchOperation]);
@@ -584,6 +584,7 @@ export const BatchOperationsToolbar: React.FC<BatchOperationsToolbarProps> = ({
 // Hook for Selection State
 // =============================================================================
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBatchSelection(allSessionIds: string[]) {
     const [state, dispatch] = useReducer(selectionReducer, initialSelectionState);
 

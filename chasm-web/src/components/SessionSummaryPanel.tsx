@@ -233,8 +233,6 @@ function SectionsList({ sections }: { sections: SummarySection[] }) {
 }
 
 function KeyPointsList({ keyPoints }: { keyPoints: KeyPoint[] }) {
-    if (keyPoints.length === 0) return null;
-
     const grouped = useMemo(() => {
         const groups: Record<string, KeyPoint[]> = {};
         keyPoints.forEach((kp) => {
@@ -243,6 +241,8 @@ function KeyPointsList({ keyPoints }: { keyPoints: KeyPoint[] }) {
         });
         return groups;
     }, [keyPoints]);
+
+    if (keyPoints.length === 0) return null;
 
     const categoryIcons: Record<string, React.ReactNode> = {
         requirement: <ListIcon className="w-4 h-4" />,

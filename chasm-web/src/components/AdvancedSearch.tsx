@@ -379,6 +379,7 @@ export function AdvancedSearch({
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const createDefaultFilters = (): SearchFilters => ({ ...defaultFilters });
 
 export default AdvancedSearch;

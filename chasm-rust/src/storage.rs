@@ -25,13 +25,120 @@ pub enum VsCodeSessionFormat {
     JsonLines,
 }
 
+/// Session schema version - tracks the internal structure version
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SessionSchemaVersion {
+    /// Version 1 - Original format (basic fields)
+    V1 = 1,
+    /// Version 2 - Added more metadata fields
+    V2 = 2,
+    /// Version 3 - Current format with full request/response structure
+    V3 = 3,
+    /// Unknown version
+    Unknown = 0,
+}
+
+impl SessionSchemaVersion {
+    /// Create from version number
+    pub fn from_version(v: u32) -> Self {
+        match v {
+            1 => Self::V1,
+            2 => Self::V2,
+            3 => Self::V3,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// Get version number
+    pub fn version_number(&self) -> u32 {
+        match self {
+            Self::V1 => 1,
+            Self::V2 => 2,
+            Self::V3 => 3,
+            Self::Unknown => 0,
+        }
+    }
+
+    /// Get description
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::V1 => "v1 (basic)",
+            Self::V2 => "v2 (extended metadata)",
+            Self::V3 => "v3 (full structure)",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for SessionSchemaVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+/// Result of session format detection
+#[derive(Debug, Clone)]
+pub struct SessionFormatInfo {
+    /// File format (JSON or JSONL)
+    pub format: VsCodeSessionFormat,
+    /// Schema version detected from content
+    pub schema_version: SessionSchemaVersion,
+    /// Confidence level (0.0 - 1.0)
+    pub confidence: f32,
+    /// Detection method used
+    pub detection_method: &'static str,
+}
+
 impl VsCodeSessionFormat {
-    /// Detect format from file path
+    /// Detect format from file path (by extension)
     pub fn from_path(path: &Path) -> Self {
         match path.extension().and_then(|e| e.to_str()) {
             Some("jsonl") => Self::JsonLines,
             _ => Self::LegacyJson,
         }
+    }
+
+    /// Detect format from content by analyzing structure
+    pub fn from_content(content: &str) -> Self {
+        let trimmed = content.trim();
+        
+        // JSONL: Multiple lines starting with { or first line has {"kind":
+        if trimmed.starts_with("{\"kind\":") || trimmed.starts_with("{ \"kind\":") {
+            return Self::JsonLines;
+        }
+        
+        // Count lines that look like JSON objects
+        let mut json_object_lines = 0;
+        let mut total_non_empty_lines = 0;
+        
+        for line in trimmed.lines().take(10) {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            total_non_empty_lines += 1;
+            
+            // Check if line is a JSON object with "kind" field (JSONL marker)
+            if line.starts_with('{') && line.contains("\"kind\"") {
+                json_object_lines += 1;
+            }
+        }
+        
+        // If multiple lines look like JSONL entries, it's JSONL
+        if json_object_lines >= 2 || (json_object_lines == 1 && total_non_empty_lines == 1 && trimmed.contains("\n{")) {
+            return Self::JsonLines;
+        }
+        
+        // Check if it's a single JSON object (legacy format)
+        if trimmed.starts_with('{') && trimmed.ends_with('}') {
+            // Look for ChatSession structure markers
+            if trimmed.contains("\"sessionId\"") || trimmed.contains("\"creationDate\"") || trimmed.contains("\"requests\"") {
+                return Self::LegacyJson;
+            }
+        }
+        
+        // Default to legacy JSON if unclear
+        Self::LegacyJson
     }
 
     /// Get minimum VS Code version that uses this format
@@ -47,6 +154,14 @@ impl VsCodeSessionFormat {
         match self {
             Self::LegacyJson => "Legacy JSON (single object)",
             Self::JsonLines => "JSON Lines (event-sourced, VS Code 1.109.0+)",
+        }
+    }
+    
+    /// Get short format name
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::LegacyJson => "json",
+            Self::JsonLines => "jsonl",
         }
     }
 }
@@ -302,7 +417,86 @@ pub fn is_session_file_extension(ext: &std::ffi::OsStr) -> bool {
     ext == "json" || ext == "jsonl"
 }
 
-/// Parse a session file, automatically detecting format (.json or .jsonl)
+/// Detect session format and version from content
+pub fn detect_session_format(content: &str) -> SessionFormatInfo {
+    let format = VsCodeSessionFormat::from_content(content);
+    let trimmed = content.trim();
+    
+    // Detect schema version based on format
+    let (schema_version, confidence, method) = match format {
+        VsCodeSessionFormat::JsonLines => {
+            // For JSONL, check the first line's "v" object for version
+            if let Some(first_line) = trimmed.lines().next() {
+                if let Ok(entry) = serde_json::from_str::<serde_json::Value>(first_line) {
+                    if let Some(v) = entry.get("v") {
+                        if let Some(ver) = v.get("version").and_then(|x| x.as_u64()) {
+                            (SessionSchemaVersion::from_version(ver as u32), 0.95, "jsonl-version-field")
+                        } else {
+                            // No version field, likely v3 (current default)
+                            (SessionSchemaVersion::V3, 0.7, "jsonl-default")
+                        }
+                    } else {
+                        (SessionSchemaVersion::V3, 0.6, "jsonl-no-v-field")
+                    }
+                } else {
+                    (SessionSchemaVersion::Unknown, 0.3, "jsonl-parse-error")
+                }
+            } else {
+                (SessionSchemaVersion::Unknown, 0.2, "jsonl-empty")
+            }
+        }
+        VsCodeSessionFormat::LegacyJson => {
+            // For JSON, directly check the version field
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                if let Some(ver) = json.get("version").and_then(|x| x.as_u64()) {
+                    (SessionSchemaVersion::from_version(ver as u32), 0.95, "json-version-field")
+                } else {
+                    // Infer from structure
+                    if json.get("requests").is_some() && json.get("sessionId").is_some() {
+                        (SessionSchemaVersion::V3, 0.8, "json-structure-inference")
+                    } else if json.get("messages").is_some() {
+                        (SessionSchemaVersion::V1, 0.7, "json-legacy-structure")
+                    } else {
+                        (SessionSchemaVersion::Unknown, 0.4, "json-unknown-structure")
+                    }
+                }
+            } else {
+                // Try sanitizing and parsing again
+                let sanitized = sanitize_json_unicode(trimmed);
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&sanitized) {
+                    if let Some(ver) = json.get("version").and_then(|x| x.as_u64()) {
+                        (SessionSchemaVersion::from_version(ver as u32), 0.9, "json-version-after-sanitize")
+                    } else {
+                        (SessionSchemaVersion::V3, 0.6, "json-default-after-sanitize")
+                    }
+                } else {
+                    (SessionSchemaVersion::Unknown, 0.2, "json-parse-error")
+                }
+            }
+        }
+    };
+    
+    SessionFormatInfo {
+        format,
+        schema_version,
+        confidence,
+        detection_method: method,
+    }
+}
+
+/// Parse session content with automatic format detection
+pub fn parse_session_auto(content: &str) -> std::result::Result<(ChatSession, SessionFormatInfo), serde_json::Error> {
+    let format_info = detect_session_format(content);
+    
+    let session = match format_info.format {
+        VsCodeSessionFormat::JsonLines => parse_session_jsonl(content)?,
+        VsCodeSessionFormat::LegacyJson => parse_session_json(content)?,
+    };
+    
+    Ok((session, format_info))
+}
+
+/// Parse a session file, automatically detecting format from content (not just extension)
 pub fn parse_session_file(path: &Path) -> std::result::Result<ChatSession, serde_json::Error> {
     let content = std::fs::read_to_string(path).map_err(|e| {
         serde_json::Error::io(std::io::Error::new(
@@ -311,10 +505,9 @@ pub fn parse_session_file(path: &Path) -> std::result::Result<ChatSession, serde
         ))
     })?;
 
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("jsonl") => parse_session_jsonl(&content),
-        _ => parse_session_json(&content),
-    }
+    // Use content-based auto-detection
+    let (session, _format_info) = parse_session_auto(&content)?;
+    Ok(session)
 }
 
 /// Get the path to the workspace storage database

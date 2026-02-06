@@ -503,7 +503,7 @@ impl SyncManager {
             .as_ref()
             .ok_or_else(|| anyhow!("Sync service not initialized"))?;
 
-        let mut result = SyncResult {
+        let result = SyncResult {
             uploaded: 0,
             downloaded: 0,
             conflicts: 0,
@@ -511,7 +511,7 @@ impl SyncManager {
         };
 
         // Get remote sessions
-        let remote_sessions = service.list_remote_sessions().await?;
+        let _remote_sessions = service.list_remote_sessions().await?;
 
         // Update state
         self.state.last_full_sync = Some(

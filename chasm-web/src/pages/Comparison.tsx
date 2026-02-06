@@ -514,7 +514,7 @@ export default function Comparison() {
                                 <Tooltip
                                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                                     labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                    formatter={(value: number) => [`$${value.toFixed(2)}`, '']}
+                                    formatter={(value) => [`$${(typeof value === 'number' ? value : 0).toFixed(2)}`, '']}
                                 />
                                 <Legend />
                                 <Bar dataKey="input" name="Input Cost" fill="#22c55e" radius={[0, 4, 4, 0]} />
@@ -540,7 +540,7 @@ export default function Comparison() {
                                 <Tooltip
                                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                                     labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                    formatter={(value: number) => [`${value}`, 'Value Score']}
+                                    formatter={(value) => [`${typeof value === 'number' ? value : 0}`, 'Value Score']}
                                 />
                                 <Bar dataKey="value" name="Value Score" fill="#f59e0b" radius={[0, 4, 4, 0]} />
                             </BarChart>
@@ -567,7 +567,7 @@ export default function Comparison() {
                                 <Tooltip
                                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                                     labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                    formatter={(value: number) => [`${value}%`, 'Accuracy']}
+                                    formatter={(value) => [`${typeof value === 'number' ? value : 0}%`, 'Accuracy']}
                                 />
                                 <Bar dataKey="accuracy" name="Accuracy" fill="#a855f7" radius={[0, 4, 4, 0]} />
                             </BarChart>
@@ -665,12 +665,13 @@ export default function Comparison() {
                                 <Tooltip
                                     cursor={{ strokeDasharray: '3 3' }}
                                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                                    formatter={(value: number, name: string) => {
-                                        if (name === 'Cost') return [`$${value.toFixed(2)}`, name];
-                                        if (name === 'Accuracy') return [`${value}%`, name];
-                                        return [value, name];
+                                    formatter={(value, name) => {
+                                        const numValue = typeof value === 'number' ? value : 0;
+                                        if (name === 'Cost') return [`$${numValue.toFixed(2)}`, name];
+                                        if (name === 'Accuracy') return [`${numValue}%`, name];
+                                        return [numValue, String(name)];
                                     }}
-                                    labelFormatter={(_, payload) => payload[0]?.payload?.name || ''}
+                                    labelFormatter={(_, payload) => (payload as { payload?: { name?: string } }[])?.[0]?.payload?.name || ''}
                                 />
                                 {allProviders.filter(p => selectedProviders.includes(p)).map(provider => (
                                     <Scatter

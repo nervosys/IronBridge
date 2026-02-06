@@ -463,7 +463,7 @@ impl TeamSearchEngine {
     }
 
     /// Calculate facets from search results
-    fn calculate_facets(&self, sessions: &[&SessionData], query: &TeamSearchQuery) -> SearchFacets {
+    fn calculate_facets(&self, sessions: &[&SessionData], _query: &TeamSearchQuery) -> SearchFacets {
         let mut providers: HashMap<String, usize> = HashMap::new();
         let mut members: HashMap<String, MemberFacet> = HashMap::new();
         let mut tags: HashMap<String, usize> = HashMap::new();

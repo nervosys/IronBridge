@@ -1650,7 +1650,7 @@ pub fn list_agents_sessions(
     show_size: bool,
     provider: Option<&str>,
 ) -> Result<()> {
-    use colored::*;
+    
 
     // Get storage paths based on provider filter
     let storage_paths = get_agent_storage_paths(provider)?;
@@ -1909,7 +1909,7 @@ pub fn show_agent_session(session_id: &str, project_path: Option<&str>) -> Resul
             let mut total_size: u64 = 0;
             if let Ok(files) = std::fs::read_dir(&session_dir) {
                 for file in files.filter_map(|f| f.ok()) {
-                    let path = file.path();
+                    let _path = file.path();
                     let name = file.file_name().to_string_lossy().to_string();
                     let size = file.metadata().map(|m| m.len()).unwrap_or(0);
                     total_size += size;

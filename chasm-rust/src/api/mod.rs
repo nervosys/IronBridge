@@ -25,23 +25,19 @@ mod webhooks;
 mod websocket;
 
 pub use recording::{
-    configure_recording_routes, create_recording_state, RecordingConfig, RecordingEvent,
-    RecordingResponse, RecordingState,
+    configure_recording_routes, create_recording_state,
 };
 #[cfg(feature = "enterprise")]
 pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
 };
 pub use auth::configure_auth_routes;
-pub use docs::configure_docs_routes;
-pub use graphql::{configure_graphql_routes, create_schema as create_graphql_schema, ChasmSchema};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
 #[cfg(feature = "enterprise")]
 pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
-pub use webhooks::{configure_webhook_routes, create_webhook_state, WebhookEvent, WebhookState};
 pub use websocket::{configure_websocket_routes, WebSocketState};
 
 use actix_cors::Cors;
@@ -226,6 +222,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     let state = web::Data::new(AppState::new(db, db_path));
     let sync_state = web::Data::new(create_sync_state());
     let ws_state = web::Data::new(WebSocketState::new());
+    let recording_state = web::Data::new(create_recording_state());
     let cors_origins = config.cors_origins.clone();
 
     println!("[*] CSM API Server starting...");
@@ -241,6 +238,13 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     println!("[*] SWE Mode endpoints:");
     println!("   GET /api/swe/projects   - List SWE projects");
     println!("   POST /api/swe/projects  - Create SWE project");
+    println!();
+    println!("[*] Recording endpoints:");
+    println!("   POST /recording/events    - Send recording events");
+    println!("   POST /recording/snapshot  - Store session snapshot");
+    println!("   GET /recording/sessions   - List active sessions");
+    println!("   GET /recording/status     - Recording status");
+    println!("   GET /recording/ws         - WebSocket for real-time recording");
     println!();
     println!("[*] Sync endpoints:");
     println!("   GET /sync/version       - Get current sync version");
@@ -273,11 +277,13 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .app_data(state.clone())
             .app_data(sync_state.clone())
             .app_data(ws_state.clone())
+            .app_data(recording_state.clone())
             .wrap(cors)
             .wrap(middleware::Logger::default())
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)
+            .configure(configure_recording_routes)
             .configure(|cfg| configure_websocket_routes(cfg, ws_state.clone()))
     });
 

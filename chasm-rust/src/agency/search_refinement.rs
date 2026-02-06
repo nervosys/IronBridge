@@ -344,7 +344,7 @@ impl SearchRefinementAgent {
     }
 
     /// Suggest related searches based on a result
-    pub async fn suggest_follow_ups(&self, session_id: &str, query: &str) -> Vec<String> {
+    pub async fn suggest_follow_ups(&self, _session_id: &str, query: &str) -> Vec<String> {
         let mut suggestions = Vec::new();
 
         // Based on common follow-up patterns
@@ -379,7 +379,7 @@ impl SearchRefinementAgent {
         .cloned()
         .collect();
 
-        let words: Vec<&str> = query.split_whitespace().collect();
+        let _words: Vec<&str> = query.split_whitespace().collect();
         for (typo, correct) in &corrections_map {
             if query.to_lowercase().contains(typo) {
                 let corrected = query.to_lowercase().replace(typo, correct);

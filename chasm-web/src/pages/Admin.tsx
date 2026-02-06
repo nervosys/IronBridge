@@ -8,9 +8,7 @@ import {
     Activity,
     Database,
     Settings,
-    AlertTriangle,
     CheckCircle,
-    Clock,
     TrendingUp,
     Server,
     Key,
@@ -83,10 +81,6 @@ export default function Admin() {
     const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        loadData();
-    }, [activeTab]);
-
     const loadData = async () => {
         setLoading(true);
         // Simulated data - would be API calls in production
@@ -127,6 +121,11 @@ export default function Admin() {
 
         setLoading(false);
     };
+
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        loadData();
+    }, [activeTab]);
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: Activity },
@@ -636,7 +635,7 @@ function OverviewTab({ stats }: { stats: SystemStats }) {
     );
 }
 
-function StatCard({ icon: Icon, label, value, change }: { icon: any; label: string; value: string; change?: string }) {
+function StatCard({ icon: Icon, label, value, change }: { icon: React.ComponentType<{ size?: number }>; label: string; value: string; change?: string }) {
     return (
         <div className="stat-card">
             <div className="label">

@@ -374,8 +374,8 @@ impl AnalyticsEngine {
     fn calculate_overview(
         &self,
         sessions: &[&SessionAnalyticsData],
-        members: &[MemberAnalyticsData],
-        period: AnalyticsPeriod,
+        _members: &[MemberAnalyticsData],
+        _period: AnalyticsPeriod,
     ) -> OverviewMetrics {
         let total_sessions = sessions.len() as u64;
         let total_messages: u64 = sessions.iter().map(|s| s.message_count as u64).sum();
@@ -642,7 +642,7 @@ impl AnalyticsEngine {
     fn calculate_collaboration_metrics(
         &self,
         sessions: &[&SessionAnalyticsData],
-        members: &[MemberAnalyticsData],
+        _members: &[MemberAnalyticsData],
     ) -> CollaborationMetrics {
         let shared_sessions = sessions.iter().filter(|s| s.is_shared).count() as u64;
         let total_comments: u64 = sessions.iter().map(|s| s.comment_count as u64).sum();

@@ -249,7 +249,8 @@ function ExistingShareRow({
         user: <UserIcon className="w-4 h-4" />,
     };
 
-    const isExpired = share.expiresAt && share.expiresAt < Date.now();
+    const [now] = useState(() => Date.now());
+    const isExpired = share.expiresAt && share.expiresAt < now;
 
     return (
         <div className={`flex items-center gap-3 p-3 rounded-lg border

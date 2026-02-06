@@ -27,8 +27,8 @@ use clap::Parser;
 use cli::{
     AgencyCommands, ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands,
     FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands,
-    MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands, ShowCommands,
-    TelemetryCommands,
+    MergeCommands, MigrationCommands, MoveCommands, ProviderCommands,
+    RunCommands, ShowCommands, TelemetryCommands,
 };
 
 /// Get the current directory name as a default pattern
@@ -582,6 +582,63 @@ fn main() -> Result<()> {
                     commands::harvest_git_restore(path.as_deref(), &commit)
                 }
             },
+        },
+
+        // ====================================================================
+        // Recover Commands
+        // ====================================================================
+        Commands::Recover { command } => match command {
+            cli::RecoverCommands::Scan {
+                provider,
+                verbose,
+                include_old,
+            } => commands::recover_scan(&provider, verbose, include_old),
+            cli::RecoverCommands::Recording {
+                server,
+                session,
+                output,
+            } => commands::recover_from_recording(&server, session.as_deref(), output.as_deref()),
+            cli::RecoverCommands::Database {
+                backup,
+                session,
+                output,
+                format,
+            } => commands::recover_from_database(&backup, session.as_deref(), output.as_deref(), &format),
+            cli::RecoverCommands::Jsonl {
+                file,
+                output,
+                aggressive,
+            } => commands::recover_jsonl(&file, output.as_deref(), aggressive),
+            cli::RecoverCommands::Orphans {
+                provider,
+                unindexed,
+                verify,
+            } => commands::recover_orphans(&provider, unindexed, verify),
+            cli::RecoverCommands::Repair {
+                path,
+                backup,
+                dry_run,
+            } => commands::recover_repair(&path, backup, dry_run),
+            cli::RecoverCommands::Status { provider, system } => {
+                commands::recover_status(&provider, system)
+            }
+            cli::RecoverCommands::Convert {
+                input,
+                output,
+                format,
+                compat,
+            } => commands::recover_convert(&input, output.as_deref(), format.as_deref(), &compat),
+            cli::RecoverCommands::Extract {
+                path,
+                output,
+                all_formats,
+                include_edits,
+            } => commands::recover_extract(&path, output.as_deref(), all_formats, include_edits),
+            cli::RecoverCommands::Detect {
+                file,
+                verbose,
+                json,
+            } => commands::recover_detect(&file, verbose, json),
         },
 
         // ====================================================================

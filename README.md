@@ -40,8 +40,8 @@ chasm find session "auth"    # Search session content
 Recover orphaned sessions when VS Code creates a new workspace hash:
 
 ```bash
-chasm detect orphaned /path/to/project           # Find orphaned sessions
-chasm detect orphaned -r /path/to/project        # Recover to active workspace
+chasm detect orphaned /path/to/project              # Find orphaned sessions
+chasm detect orphaned -r /path/to/project           # Recover to active workspace
 chasm register all --force --path /path/to/project  # Register in VS Code
 # Then: Ctrl+Shift+P → Developer: Reload Window
 ```
@@ -90,25 +90,25 @@ chasm harvest share <url>          # Import share link
 
 ## Supported Providers
 
-| Type           | Providers                                                                    |
-| -------------- | ---------------------------------------------------------------------------- |
+| Type           | Providers                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------- |
 | **Editors**    | GitHub Copilot, Cursor, Windsurf, Continue.dev, ClaudeCode, OpenCode, OpenClaw, Antigravity |
-| **Local LLMs** | Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile                    |
-| **Cloud**      | ChatGPT, Claude, Gemini, Perplexity, DeepSeek (via share links)              |
+| **Local LLMs** | Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile                                   |
+| **Cloud**      | ChatGPT, Claude, Gemini, Perplexity, DeepSeek (via share links)                             |
 
 ## Ecosystem
 
-| Component               | Description                              | Status  |
-| ----------------------- | ---------------------------------------- | ------- |
-| **chasm-rust**          | Core Rust library and CLI                | ✅ Stable |
-| **chasm-web**           | React web application                    | ✅ Stable |
-| **chasm-app**           | React Native mobile app                  | ✅ Stable |
-| **chasm-desktop**       | Tauri desktop application                | ✅ Stable |
-| **vscode-extension**    | VS Code extension                        | ✅ Stable |
-| **browser-extension**   | Chrome/Firefox extension                 | ✅ Stable |
-| **jetbrains-plugin**    | IntelliJ/PyCharm/WebStorm plugin         | ✅ Stable |
-| **vim-plugin**          | Vim 8.0+ plugin                          | ✅ Stable |
-| **neovim-plugin**       | Neovim 0.8+ plugin with Telescope        | ✅ Stable |
+| Component             | Description                       | Status   |
+| --------------------- | --------------------------------- | -------- |
+| **chasm-rust**        | Core Rust library and CLI         | ✅ Stable |
+| **chasm-web**         | React web application             | ✅ Stable |
+| **chasm-app**         | React Native mobile app           | ✅ Stable |
+| **chasm-desktop**     | Tauri desktop application         | ✅ Stable |
+| **vscode-extension**  | VS Code extension                 | ✅ Stable |
+| **browser-extension** | Chrome/Firefox extension          | ✅ Stable |
+| **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable |
+| **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable |
+| **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable |
 
 ## API Server
 
@@ -120,14 +120,14 @@ chasm api serve --port 8787
 
 ### REST Endpoints
 
-| Method | Endpoint              | Description              |
-| ------ | --------------------- | ------------------------ |
-| GET    | `/api/health`         | Health check             |
-| GET    | `/api/workspaces`     | List workspaces          |
-| GET    | `/api/sessions`       | List sessions            |
-| GET    | `/api/sessions/:id`   | Get session with messages|
-| POST   | `/api/harvest`        | Trigger harvest          |
-| GET    | `/api/stats`          | Database statistics      |
+| Method | Endpoint            | Description               |
+| ------ | ------------------- | ------------------------- |
+| GET    | `/api/health`       | Health check              |
+| GET    | `/api/workspaces`   | List workspaces           |
+| GET    | `/api/sessions`     | List sessions             |
+| GET    | `/api/sessions/:id` | Get session with messages |
+| POST   | `/api/harvest`      | Trigger harvest           |
+| GET    | `/api/stats`        | Database statistics       |
 
 ### GraphQL
 

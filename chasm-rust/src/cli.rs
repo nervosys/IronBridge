@@ -157,6 +157,16 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Recover Commands
+    // ============================================================================
+    /// Recover lost chat sessions from backups, recording state, or corrupted files
+    #[command(visible_alias = "restore")]
+    Recover {
+        #[command(subcommand)]
+        command: RecoverCommands,
+    },
+
+    // ============================================================================
     // API Server Commands
     // ============================================================================
     /// Start the HTTP API server for the web frontend
@@ -1359,6 +1369,165 @@ pub enum HarvestGitCommands {
         /// Path to the harvest database
         #[arg(long)]
         path: Option<String>,
+    },
+}
+
+// ============================================================================
+// Recover Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum RecoverCommands {
+    /// Scan for recoverable sessions from various sources
+    Scan {
+        /// Provider to scan: vscode, cursor, all (default: all)
+        #[arg(long, default_value = "all")]
+        provider: String,
+
+        /// Show detailed information about each session
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Include sessions older than normal retention period
+        #[arg(long)]
+        include_old: bool,
+    },
+
+    /// Recover sessions from the recording API server
+    Recording {
+        /// Server URL (default: http://localhost:8787)
+        #[arg(long, default_value = "http://localhost:8787")]
+        server: String,
+
+        /// Only recover specific session ID
+        #[arg(long)]
+        session: Option<String>,
+
+        /// Output directory for recovered sessions
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Recover sessions from SQLite database backups
+    Database {
+        /// Path to the database backup file
+        backup: String,
+
+        /// Extract specific session by ID
+        #[arg(long)]
+        session: Option<String>,
+
+        /// Output directory for recovered sessions
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Output format: json, jsonl, md (default: json)
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
+    /// Recover sessions from incomplete/corrupted JSONL files
+    Jsonl {
+        /// Path to the JSONL file to repair
+        file: String,
+
+        /// Output file for recovered sessions (default: same name with .recovered suffix)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Attempt aggressive recovery (may produce incomplete sessions)
+        #[arg(long)]
+        aggressive: bool,
+    },
+
+    /// List sessions from VS Code's workspaceStorage that may be orphaned
+    Orphans {
+        /// Provider to check: vscode, cursor, all (default: all)
+        #[arg(long, default_value = "all")]
+        provider: String,
+
+        /// Show sessions not in the SQLite state database
+        #[arg(long)]
+        unindexed: bool,
+
+        /// Check if files actually exist on disk
+        #[arg(long)]
+        verify: bool,
+    },
+
+    /// Repair corrupted session files in place
+    Repair {
+        /// Path to the session directory or file
+        path: String,
+
+        /// Create backup before repair
+        #[arg(long, default_value = "true")]
+        backup: bool,
+
+        /// Dry run - show what would be repaired without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Show recovery status and recommendations
+    Status {
+        /// Provider to check: vscode, cursor, all (default: all)
+        #[arg(long, default_value = "all")]
+        provider: String,
+
+        /// Check disk space and file system health
+        #[arg(long)]
+        system: bool,
+    },
+
+    /// Convert session files between JSON and JSONL formats
+    Convert {
+        /// Input file to convert (.json or .jsonl)
+        input: String,
+
+        /// Output file (auto-detects format from extension, or uses --format)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Output format: json, jsonl (default: opposite of input)
+        #[arg(long)]
+        format: Option<String>,
+
+        /// VS Code version compatibility: legacy (< 1.109), modern (>= 1.109), both
+        #[arg(long, default_value = "both")]
+        compat: String,
+    },
+
+    /// Extract sessions from a VS Code workspace by project path
+    Extract {
+        /// Project directory path (will find corresponding workspace hash)
+        path: String,
+
+        /// Output directory for extracted sessions
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Include both JSON and JSONL formats if available
+        #[arg(long)]
+        all_formats: bool,
+
+        /// Include editing session fragments (agent mode work)
+        #[arg(long)]
+        include_edits: bool,
+    },
+
+    /// Detect and display session format and version information
+    Detect {
+        /// Session file to analyze (.json or .jsonl)
+        file: String,
+
+        /// Show raw format detection details
+        #[arg(long)]
+        verbose: bool,
+
+        /// Output detection result as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 

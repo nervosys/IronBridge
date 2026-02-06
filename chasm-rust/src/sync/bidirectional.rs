@@ -371,7 +371,7 @@ impl BidirectionalSyncEngine {
     pub fn resolve_conflict_manually(
         &mut self,
         conflict_id: &str,
-        resolution: ConflictStrategy,
+        _resolution: ConflictStrategy,
         resolved_session: ChatSession,
     ) -> Result<()> {
         if let Some(conflict) = self.conflicts.iter_mut().find(|c| c.id == conflict_id) {

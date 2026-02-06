@@ -20,11 +20,13 @@
 //! - **Batch**: Periodic sync via REST (fallback)
 //! - **Hybrid**: WebSocket with REST checkpoint backup
 
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use actix_web::{web, Error, HttpRequest, HttpResponse, Responder};
 use chrono::{DateTime, Utc};
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -610,6 +612,205 @@ pub async fn recording_status(
 }
 
 // =============================================================================
+// WebSocket Recording Support
+// =============================================================================
+
+const WS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const WS_CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// WebSocket messages for recording (client -> server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RecordingWsMessage {
+    /// Client wants to send recording events
+    Events { events: Vec<RecordingEvent> },
+    /// Client wants to subscribe to a session's events
+    Subscribe { session_id: String },
+    /// Client wants to unsubscribe from a session
+    Unsubscribe { session_id: String },
+    /// Ping for keepalive
+    Ping { timestamp: i64 },
+}
+
+/// Server responses for WebSocket (server -> client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RecordingWsResponse {
+    /// Connected successfully
+    Connected { client_id: String },
+    /// Events processed
+    EventsProcessed { count: usize, responses: Vec<RecordingResponse> },
+    /// Subscribed to session
+    Subscribed { session_id: String },
+    /// Unsubscribed from session  
+    Unsubscribed { session_id: String },
+    /// Event broadcast (from another client or server)
+    EventBroadcast { event: RecordingEvent },
+    /// Pong response
+    Pong { timestamp: i64, server_time: i64 },
+    /// Error
+    Error { code: String, message: String },
+}
+
+/// Handle incoming WebSocket message
+fn handle_ws_message(
+    text: &str,
+    state: &Arc<RecordingState>,
+    subscribed_sessions: &mut Vec<String>,
+) -> Option<RecordingWsResponse> {
+    match serde_json::from_str::<RecordingWsMessage>(text) {
+        Ok(msg) => match msg {
+            RecordingWsMessage::Events { events } => {
+                let mut responses = Vec::new();
+                for event in events {
+                    let response = state.process_event(&event);
+                    responses.push(response);
+                    // Broadcast to subscribers
+                    let _ = state.event_tx.send(event);
+                }
+                Some(RecordingWsResponse::EventsProcessed {
+                    count: responses.len(),
+                    responses,
+                })
+            }
+            RecordingWsMessage::Subscribe { session_id } => {
+                if !subscribed_sessions.contains(&session_id) {
+                    subscribed_sessions.push(session_id.clone());
+                }
+                Some(RecordingWsResponse::Subscribed { session_id })
+            }
+            RecordingWsMessage::Unsubscribe { session_id } => {
+                subscribed_sessions.retain(|s| s != &session_id);
+                Some(RecordingWsResponse::Unsubscribed { session_id })
+            }
+            RecordingWsMessage::Ping { timestamp } => {
+                Some(RecordingWsResponse::Pong {
+                    timestamp,
+                    server_time: Utc::now().timestamp_millis(),
+                })
+            }
+        },
+        Err(e) => Some(RecordingWsResponse::Error {
+            code: "parse_error".to_string(),
+            message: format!("Invalid message: {}", e),
+        }),
+    }
+}
+
+/// Check if event should be forwarded to this client
+fn should_forward_event(event: &RecordingEvent, subscribed_sessions: &[String]) -> bool {
+    // If no specific subscriptions, forward all events
+    if subscribed_sessions.is_empty() {
+        return true;
+    }
+    
+    let session_id = match event {
+        RecordingEvent::SessionStart { session_id, .. } => Some(session_id),
+        RecordingEvent::SessionEnd { session_id, .. } => Some(session_id),
+        RecordingEvent::MessageAdd { session_id, .. } => Some(session_id),
+        RecordingEvent::MessageUpdate { session_id, .. } => Some(session_id),
+        RecordingEvent::MessageAppend { session_id, .. } => Some(session_id),
+        RecordingEvent::SessionUpdate { session_id, .. } => Some(session_id),
+        RecordingEvent::SessionSnapshot { session_id, .. } => Some(session_id),
+        RecordingEvent::Heartbeat { session_id, .. } => session_id.as_ref(),
+    };
+    
+    session_id.map(|sid| subscribed_sessions.contains(sid)).unwrap_or(false)
+}
+
+/// WebSocket endpoint for recording using actix-ws
+pub async fn recording_ws_handler(
+    req: HttpRequest,
+    body: web::Payload,
+    state: web::Data<Arc<RecordingState>>,
+) -> Result<HttpResponse, Error> {
+    // Perform WebSocket handshake
+    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+
+    let client_id = Uuid::new_v4().to_string();
+    let state_clone = state.get_ref().clone();
+
+    // Send connected message
+    let connected_msg = RecordingWsResponse::Connected {
+        client_id: client_id.clone(),
+    };
+    if let Ok(json) = serde_json::to_string(&connected_msg) {
+        let _ = session.text(json).await;
+    }
+
+    eprintln!("[WS] Recording client {} connected", client_id);
+
+    // Subscribe to broadcast channel
+    let mut broadcast_rx = state.event_tx.subscribe();
+
+    // Spawn handler task
+    let client_id_clone = client_id.clone();
+    actix_web::rt::spawn(async move {
+        let mut heartbeat_interval = tokio::time::interval(WS_HEARTBEAT_INTERVAL);
+        let mut last_heartbeat = Instant::now();
+        let mut subscribed_sessions: Vec<String> = Vec::new();
+
+        loop {
+            tokio::select! {
+                // Handle incoming messages
+                Some(msg_result) = msg_stream.next() => {
+                    match msg_result {
+                        Ok(actix_ws::Message::Text(text)) => {
+                            last_heartbeat = Instant::now();
+                            if let Some(response) = handle_ws_message(
+                                &text,
+                                &state_clone,
+                                &mut subscribed_sessions,
+                            ) {
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let _ = session.text(json).await;
+                                }
+                            }
+                        }
+                        Ok(actix_ws::Message::Ping(data)) => {
+                            last_heartbeat = Instant::now();
+                            let _ = session.pong(&data).await;
+                        }
+                        Ok(actix_ws::Message::Pong(_)) => {
+                            last_heartbeat = Instant::now();
+                        }
+                        Ok(actix_ws::Message::Close(_)) => {
+                            eprintln!("[WS] Recording client {} requested close", client_id_clone);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle broadcast messages from other clients
+                Ok(event) = broadcast_rx.recv() => {
+                    if should_forward_event(&event, &subscribed_sessions) {
+                        let msg = RecordingWsResponse::EventBroadcast { event };
+                        if let Ok(json) = serde_json::to_string(&msg) {
+                            let _ = session.text(json).await;
+                        }
+                    }
+                }
+
+                // Heartbeat check
+                _ = heartbeat_interval.tick() => {
+                    if Instant::now().duration_since(last_heartbeat) > WS_CLIENT_TIMEOUT {
+                        eprintln!("[WS] Recording client {} timed out", client_id_clone);
+                        break;
+                    }
+                    let _ = session.ping(b"").await;
+                }
+            }
+        }
+
+        let _ = session.close(None).await;
+        eprintln!("[WS] Recording client {} disconnected", client_id_clone);
+    });
+
+    Ok(response)
+}
+
+// =============================================================================
 // Route Configuration
 // =============================================================================
 
@@ -618,15 +819,18 @@ pub fn create_recording_state() -> Arc<RecordingState> {
 }
 
 pub fn configure_recording_routes(cfg: &mut web::ServiceConfig) {
+    eprintln!("[DEBUG] Configuring recording routes...");
     cfg.service(
-        web::scope("/api/recording")
+        web::scope("/recording")
             .route("/events", web::post().to(record_events))
             .route("/snapshot", web::post().to(store_snapshot))
             .route("/sessions", web::get().to(list_sessions))
             .route("/session/{id}", web::get().to(get_session))
             .route("/session/{id}/recovery", web::get().to(get_recovery))
-            .route("/status", web::get().to(recording_status)),
+            .route("/status", web::get().to(recording_status))
+            .route("/ws", web::get().to(recording_ws_handler)),
     );
+    eprintln!("[DEBUG] Recording routes configured.");
 }
 
 // =============================================================================

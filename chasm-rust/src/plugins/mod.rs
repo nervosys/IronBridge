@@ -530,7 +530,7 @@ impl PluginManager {
         matching_hooks.sort_by_key(|h| h.priority);
         
         for hook in matching_hooks {
-            let plugin = match plugins.get(&hook.plugin_id) {
+            let _plugin = match plugins.get(&hook.plugin_id) {
                 Some(p) if p.state == PluginState::Active => p,
                 _ => continue,
             };
@@ -679,7 +679,7 @@ impl PluginRegistry {
     }
 
     /// Search for plugins
-    pub async fn search(&self, query: &str, category: Option<PluginCategory>) -> Result<Vec<RegistryEntry>> {
+    pub async fn search(&self, _query: &str, _category: Option<PluginCategory>) -> Result<Vec<RegistryEntry>> {
         // In a real implementation, this would make an HTTP request
         // For now, return empty results
         Ok(Vec::new())
@@ -692,7 +692,7 @@ impl PluginRegistry {
 
     /// Download and install plugin
     pub async fn install(&self, plugin_id: &str, manager: &PluginManager) -> Result<()> {
-        let entry = self.get_plugin(plugin_id).await?;
+        let _entry = self.get_plugin(plugin_id).await?;
         
         // Download plugin
         let plugin_dir = manager.plugins_dir.join(plugin_id);
