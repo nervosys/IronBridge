@@ -601,7 +601,7 @@ pub fn harvest_scan(
     }
     println!(
         "   {} total sessions to harvest",
-        total_sessions.to_string().cyan()
+        total_sessions.to_string().truecolor(252, 152, 103)
     );
 
     Ok(())
@@ -951,14 +951,16 @@ pub fn harvest_status(path: Option<&str>) -> Result<()> {
 
     println!("{} Database: {}", "[*]".blue(), db_path.display());
     println!(
-        "{} Total Sessions: {}",
+        "{} {}: {}",
         "[*]".blue(),
-        total_sessions.to_string().cyan()
+        "Total Sessions".truecolor(171, 157, 242),
+        total_sessions.to_string().truecolor(252, 152, 103)
     );
     println!(
-        "{} Total Messages: {}",
+        "{} {}: {}",
         "[*]".blue(),
-        total_messages.to_string().cyan()
+        "Total Messages".truecolor(171, 157, 242),
+        total_messages.to_string().truecolor(252, 152, 103)
     );
 
     if let Some(ts) = last_harvest {

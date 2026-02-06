@@ -188,7 +188,7 @@ pub fn history_fetch(project_path: Option<&str>, force: bool, no_register: bool)
 
     println!(
         "Found {} historical workspace(s)\n",
-        historical_workspaces.len()
+        historical_workspaces.len().to_string().truecolor(252, 152, 103)
     );
 
     // Create chatSessions directory
@@ -238,9 +238,9 @@ pub fn history_fetch(project_path: Option<&str>, force: bool, no_register: bool)
     }
 
     println!("\n{}", "=".repeat(70));
-    println!("Fetched: {} sessions", fetched_count);
+    println!("{} {} sessions", "Fetched:".truecolor(171, 157, 242), fetched_count.to_string().truecolor(252, 152, 103));
     if skipped_count > 0 {
-        println!("Skipped: {} (use --force to overwrite)", skipped_count);
+        println!("{} {} (use --force to overwrite)", "Skipped:".truecolor(171, 157, 242), skipped_count.to_string().truecolor(252, 152, 103));
     }
 
     // Register sessions in VS Code index
@@ -683,7 +683,7 @@ pub fn merge_sessions_by_list(
         }
     }
 
-    println!("\n   Total: {} sessions found", found_sessions.len());
+    println!("\n   {}: {} sessions found", "Total".truecolor(171, 157, 242), found_sessions.len().to_string().truecolor(252, 152, 103));
 
     // Use the common merge logic
     merge_sessions_internal(
