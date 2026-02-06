@@ -51,6 +51,84 @@ pub fn export_sessions(destination: &str, hash: Option<&str>, path: Option<&str>
     Ok(())
 }
 
+/// Export chat sessions from multiple project paths (batch operation)
+pub fn export_batch(destination: &str, project_paths: &[String]) -> Result<()> {
+    let dest_base = Path::new(destination);
+    std::fs::create_dir_all(dest_base)?;
+
+    let mut total_exported = 0;
+    let mut total_projects = 0;
+    let mut projects_with_sessions = 0;
+
+    println!(
+        "\n{} Batch Exporting Sessions",
+        "=".repeat(60).dimmed()
+    );
+    println!("{}", "=".repeat(60).dimmed());
+
+    for project_path in project_paths {
+        total_projects += 1;
+        let project_name = Path::new(project_path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        print!("  {} {} ... ", "→".blue(), project_name);
+
+        match get_workspace_by_path(project_path) {
+            Ok(Some(workspace)) => {
+                if !workspace.has_chat_sessions {
+                    println!("{}", "no sessions".dimmed());
+                    continue;
+                }
+
+                // Create project-specific subdirectory
+                let project_dest = dest_base.join(&project_name);
+                std::fs::create_dir_all(&project_dest)?;
+
+                // Copy all session files
+                let mut exported_count = 0;
+                for entry in std::fs::read_dir(&workspace.chat_sessions_path)? {
+                    let entry = entry?;
+                    let src_path = entry.path();
+
+                    if src_path.extension().map(|e| e == "json").unwrap_or(false) {
+                        let dest_file = project_dest.join(entry.file_name());
+                        std::fs::copy(&src_path, &dest_file)?;
+                        exported_count += 1;
+                    }
+                }
+
+                if exported_count > 0 {
+                    projects_with_sessions += 1;
+                    total_exported += exported_count;
+                    println!("{} {} session(s)", "[OK]".green(), exported_count);
+                } else {
+                    println!("{}", "no sessions".dimmed());
+                }
+            }
+            Ok(None) => {
+                println!("{}", "workspace not found".yellow());
+            }
+            Err(e) => {
+                println!("{} {}", "[ERR]".red(), e);
+            }
+        }
+    }
+
+    println!("{}", "=".repeat(60).dimmed());
+    println!(
+        "\n{} Exported {} session(s) from {}/{} project(s) to {}",
+        "[DONE]".green().bold(),
+        total_exported,
+        projects_with_sessions,
+        total_projects,
+        destination
+    );
+
+    Ok(())
+}
+
 /// Import chat sessions into a workspace
 pub fn import_sessions(
     source: &str,

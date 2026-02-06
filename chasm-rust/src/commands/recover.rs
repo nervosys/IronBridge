@@ -10,8 +10,11 @@
 //! - Orphaned files in workspaceStorage
 
 use anyhow::{Context, Result};
+use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use crate::storage::{detect_session_format, parse_session_auto, VsCodeSessionFormat};
 
 /// Get workspace storage path for a provider
 fn get_provider_storage_path(provider: &str) -> Option<PathBuf> {
@@ -1313,6 +1316,223 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
             }
         }
         println!("    - Export to Markdown: chasm recover convert \"{}\" --format md", file);
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Upgrade Command - Upgrade session files to current provider format
+// ============================================================================
+
+/// Upgrade session files for multiple projects to the current provider format
+pub fn recover_upgrade(
+    project_paths: &[String],
+    provider: &str,
+    target_format: &str,
+    no_backup: bool,
+    dry_run: bool,
+) -> Result<()> {
+    use crate::workspace::get_workspace_by_path;
+
+    println!();
+    println!("{} Session Format Upgrade", "=".repeat(60).dimmed());
+    println!("{}", "=".repeat(60).dimmed());
+    println!();
+    println!("  Provider:      {}", if provider == "auto" { "auto-detect".cyan() } else { provider.cyan() });
+    println!("  Target format: {}", target_format.cyan());
+    println!("  Backup:        {}", if no_backup { "disabled".yellow() } else { "enabled".green() });
+    println!("  Mode:          {}", if dry_run { "DRY RUN".yellow().bold() } else { "LIVE".green().bold() });
+    println!();
+    println!("{}", "=".repeat(60).dimmed());
+
+    let mut total_upgraded = 0;
+    let mut total_skipped = 0;
+    let mut total_errors = 0;
+    let mut total_projects = 0;
+
+    for project_path in project_paths {
+        total_projects += 1;
+        let project_name = Path::new(project_path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        println!();
+        println!("  {} {}", "→".blue().bold(), project_name.bold());
+
+        // Get workspace for this project
+        let workspace = match get_workspace_by_path(project_path) {
+            Ok(Some(ws)) => ws,
+            Ok(None) => {
+                println!("    {} Workspace not found", "⚠".yellow());
+                continue;
+            }
+            Err(e) => {
+                println!("    {} Error: {}", "✗".red(), e);
+                total_errors += 1;
+                continue;
+            }
+        };
+
+        if !workspace.has_chat_sessions {
+            println!("    {} No chat sessions", "○".dimmed());
+            continue;
+        }
+
+        // Process each session file
+        let sessions_path = Path::new(&workspace.chat_sessions_path);
+        let entries = match std::fs::read_dir(sessions_path) {
+            Ok(e) => e,
+            Err(e) => {
+                println!("    {} Cannot read sessions: {}", "✗".red(), e);
+                total_errors += 1;
+                continue;
+            }
+        };
+
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let path = entry.path();
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            
+            // Only process session files
+            if ext != "json" && ext != "jsonl" {
+                continue;
+            }
+
+            let file_name = path.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            // Read and detect current format
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    println!("    {} {} - read error: {}", "✗".red(), file_name, e);
+                    total_errors += 1;
+                    continue;
+                }
+            };
+
+            let format_info = detect_session_format(&content);
+            
+            // Determine if upgrade is needed
+            let needs_upgrade = match target_format {
+                "jsonl" => matches!(format_info.format, VsCodeSessionFormat::LegacyJson),
+                "json" => matches!(format_info.format, VsCodeSessionFormat::JsonLines),
+                _ => false,
+            };
+
+            if !needs_upgrade {
+                println!("    {} {} - already {}", "○".dimmed(), file_name, target_format);
+                total_skipped += 1;
+                continue;
+            }
+
+            // Parse the session
+            let session = match parse_session_auto(&content) {
+                Ok((s, _)) => s,
+                Err(e) => {
+                    println!("    {} {} - parse error: {}", "✗".red(), file_name, e);
+                    total_errors += 1;
+                    continue;
+                }
+            };
+
+            // Convert to target format
+            let output_content = match target_format {
+                "jsonl" => match convert_to_jsonl(&session) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        println!("    {} {} - conversion error: {}", "✗".red(), file_name, e);
+                        total_errors += 1;
+                        continue;
+                    }
+                },
+                "json" => match serde_json::to_string_pretty(&session) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        println!("    {} {} - serialization error: {}", "✗".red(), file_name, e);
+                        total_errors += 1;
+                        continue;
+                    }
+                },
+                _ => {
+                    println!("    {} {} - unsupported target format: {}", "✗".red(), file_name, target_format);
+                    total_errors += 1;
+                    continue;
+                }
+            };
+
+            if dry_run {
+                println!("    {} {} - would upgrade ({} → {})", "◉".cyan(), file_name, ext, target_format);
+                total_upgraded += 1;
+                continue;
+            }
+
+            // Create backup if requested
+            if !no_backup {
+                let backup_path = path.with_extension(format!("{}.backup", ext));
+                if let Err(e) = std::fs::copy(&path, &backup_path) {
+                    println!("    {} {} - backup failed: {}", "✗".red(), file_name, e);
+                    total_errors += 1;
+                    continue;
+                }
+            }
+
+            // Determine output file path (change extension if needed)
+            let output_path = if ext != target_format {
+                path.with_extension(target_format)
+            } else {
+                path.clone()
+            };
+
+            // Write upgraded content
+            if let Err(e) = std::fs::write(&output_path, &output_content) {
+                println!("    {} {} - write error: {}", "✗".red(), file_name, e);
+                total_errors += 1;
+                continue;
+            }
+
+            // Remove old file if extension changed
+            if ext != target_format && path != output_path {
+                let _ = std::fs::remove_file(&path);
+            }
+
+            println!("    {} {} → .{}", "✓".green(), file_name, target_format);
+            total_upgraded += 1;
+        }
+    }
+
+    // Summary
+    println!();
+    println!("{}", "=".repeat(60).dimmed());
+    println!();
+    if dry_run {
+        println!(
+            "{} Would upgrade {} session(s), skip {} (already {}), {} error(s) across {} project(s)",
+            "[DRY RUN]".yellow().bold(),
+            total_upgraded,
+            total_skipped,
+            target_format,
+            total_errors,
+            total_projects
+        );
+    } else {
+        println!(
+            "{} Upgraded {} session(s), skipped {} (already {}), {} error(s) across {} project(s)",
+            "[DONE]".green().bold(),
+            total_upgraded,
+            total_skipped,
+            target_format,
+            total_errors,
+            total_projects
+        );
     }
 
     Ok(())

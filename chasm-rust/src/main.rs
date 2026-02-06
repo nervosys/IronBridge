@@ -302,8 +302,12 @@ fn main() -> Result<()> {
                 destination,
                 project_path,
             }) => commands::export_sessions(&destination, None, project_path.as_deref()),
+            Some(ExportCommands::Batch {
+                destination,
+                project_paths,
+            }) => commands::export_batch(&destination, &project_paths),
             None => {
-                eprintln!("Usage: csm export <workspace|sessions|path> ...");
+                eprintln!("Usage: csm export <workspace|sessions|path|batch> ...");
                 eprintln!("Run 'csm export --help' for more information.");
                 Ok(())
             }
@@ -555,11 +559,32 @@ fn main() -> Result<()> {
             HarvestCommands::Checkpoints { session, path } => {
                 commands::harvest_checkpoints(path.as_deref(), &session)
             }
-            HarvestCommands::Restore {
+            HarvestCommands::Revert {
                 session,
                 checkpoint,
                 path,
             } => commands::harvest_restore_checkpoint(path.as_deref(), &session, checkpoint),
+            HarvestCommands::Sync {
+                path,
+                push,
+                pull,
+                provider,
+                workspace,
+                sessions,
+                format,
+                force,
+                dry_run,
+            } => commands::harvest_sync(
+                path.as_deref(),
+                push,
+                pull,
+                provider.as_deref(),
+                workspace.as_deref(),
+                sessions.as_deref(),
+                Some(&format),
+                force,
+                dry_run,
+            ),
             HarvestCommands::Rebuild { path } => commands::harvest_rebuild_fts(path.as_deref()),
             HarvestCommands::Search {
                 query,
@@ -639,6 +664,13 @@ fn main() -> Result<()> {
                 verbose,
                 json,
             } => commands::recover_detect(&file, verbose, json),
+            cli::RecoverCommands::Upgrade {
+                project_paths,
+                provider,
+                target_format,
+                no_backup,
+                dry_run,
+            } => commands::recover_upgrade(&project_paths, &provider, &target_format, no_backup, dry_run),
         },
 
         // ====================================================================
@@ -662,6 +694,31 @@ fn main() -> Result<()> {
                 exclude,
             } => commands::register_recursive(path.as_deref(), depth, force, dry_run, &exclude),
         },
+
+        // ====================================================================
+        // Sync Commands (shortcut to harvest sync)
+        // ====================================================================
+        Commands::Sync {
+            path,
+            push,
+            pull,
+            provider,
+            workspace,
+            sessions,
+            format,
+            force,
+            dry_run,
+        } => commands::harvest_sync(
+            path.as_deref(),
+            push,
+            pull,
+            provider.as_deref(),
+            workspace.as_deref(),
+            sessions.as_deref(),
+            Some(&format),
+            force,
+            dry_run,
+        ),
 
         // ====================================================================
         // API Server

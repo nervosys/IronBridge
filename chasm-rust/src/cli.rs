@@ -141,10 +141,51 @@ pub enum Commands {
     // Register Commands
     // ============================================================================
     /// Add on-disk sessions to VS Code's database index (makes orphaned sessions visible)
-    #[command(visible_alias = "sync")]
     Register {
         #[command(subcommand)]
         command: RegisterCommands,
+    },
+
+    // ============================================================================
+    // Sync Commands (shortcut to harvest sync)
+    // ============================================================================
+    /// Sync sessions between the harvest database and provider workspaces
+    Sync {
+        /// Path to the harvest database
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Push sessions from database to provider workspaces (restore)
+        #[arg(long)]
+        push: bool,
+
+        /// Pull sessions from provider workspaces into database (backup)
+        #[arg(long)]
+        pull: bool,
+
+        /// Filter by provider name
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Filter by workspace/project path
+        #[arg(long)]
+        workspace: Option<String>,
+
+        /// Session IDs to sync (space-separated)
+        #[arg(long, num_args = 1..)]
+        sessions: Option<Vec<String>>,
+
+        /// Target format for push: auto (detect from provider), jsonl, json
+        #[arg(long, default_value = "auto")]
+        format: String,
+
+        /// Overwrite existing files without prompting
+        #[arg(long)]
+        force: bool,
+
+        /// Dry run - show what would be synced without making changes
+        #[arg(long)]
+        dry_run: bool,
     },
 
     // ============================================================================
@@ -664,6 +705,16 @@ pub enum ExportCommands {
 
         /// Source project path (default: current directory)
         project_path: Option<String>,
+    },
+
+    /// Export chat sessions from multiple project paths (batch operation)
+    Batch {
+        /// Base destination directory (subdirectories created per project)
+        destination: String,
+
+        /// Project paths to export (space-separated)
+        #[arg(required = true, num_args = 1..)]
+        project_paths: Vec<String>,
     },
 }
 
@@ -1274,17 +1325,56 @@ pub enum HarvestCommands {
         path: Option<String>,
     },
 
-    /// Restore a session to a previous checkpoint
-    Restore {
-        /// Session ID to restore
+    /// Revert a session to a previous checkpoint
+    Revert {
+        /// Session ID to revert
         session: String,
 
-        /// Checkpoint number to restore to
+        /// Checkpoint number to revert to
         checkpoint: i64,
 
         /// Path to the harvest database
         #[arg(long)]
         path: Option<String>,
+    },
+
+    /// Sync sessions between the harvest database and provider workspaces
+    Sync {
+        /// Path to the harvest database
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Push sessions from database to provider workspaces (restore)
+        #[arg(long)]
+        push: bool,
+
+        /// Pull sessions from provider workspaces into database (backup)
+        #[arg(long)]
+        pull: bool,
+
+        /// Filter by provider name
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Filter by workspace/project path
+        #[arg(long)]
+        workspace: Option<String>,
+
+        /// Session IDs to sync (space-separated)
+        #[arg(long, num_args = 1..)]
+        sessions: Option<Vec<String>>,
+
+        /// Target format for push: auto (detect from provider), jsonl, json
+        #[arg(long, default_value = "auto")]
+        format: String,
+
+        /// Overwrite existing files without prompting
+        #[arg(long)]
+        force: bool,
+
+        /// Dry run - show what would be synced without making changes
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Rebuild the full-text search index
@@ -1528,6 +1618,29 @@ pub enum RecoverCommands {
         /// Output detection result as JSON
         #[arg(long)]
         json: bool,
+    },
+
+    /// Upgrade session files to the current provider format (JSON to JSONL for VS Code 1.109+)
+    Upgrade {
+        /// Project paths to upgrade (space-separated)
+        #[arg(required = true, num_args = 1..)]
+        project_paths: Vec<String>,
+
+        /// Provider to use: vscode, cursor, auto (default: auto-detect)
+        #[arg(long, default_value = "auto")]
+        provider: String,
+
+        /// Target format: jsonl (VS Code 1.109+), json (legacy). Default: jsonl
+        #[arg(long, default_value = "jsonl")]
+        target_format: String,
+
+        /// Skip creating backup of original files
+        #[arg(long)]
+        no_backup: bool,
+
+        /// Dry run - show what would be upgraded without making changes
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 

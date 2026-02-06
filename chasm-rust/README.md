@@ -124,8 +124,11 @@ chasm api serve --port 8787
 | `chasm harvest scan`           | Scan for available providers and sessions |
 | `chasm harvest run`            | Collect sessions from all providers       |
 | `chasm harvest status`         | Show harvest database status              |
+| `chasm sync --pull`            | Pull sessions from workspaces to database |
+| `chasm sync --push`            | Push sessions from database to workspaces |
 | `chasm merge workspace <name>` | Merge sessions from a workspace           |
 | `chasm export session <id>`    | Export session to file                    |
+| `chasm export batch <dest> <paths...>` | Batch export from multiple projects |
 | `chasm import <file>`          | Import sessions from file                 |
 
 ### Session Recovery
@@ -135,6 +138,8 @@ chasm api serve --port 8787
 | `chasm detect orphaned <path>`     | Find orphaned sessions in old workspace hashes |
 | `chasm detect orphaned -r <path>`  | Recover orphaned sessions to active workspace  |
 | `chasm register all --path <path>` | Register on-disk sessions in VS Code's index   |
+| `chasm recover extract <path>`     | Extract sessions from VS Code recording state  |
+| `chasm recover upgrade <path>`     | Upgrade session format from JSON to JSONL      |
 
 #### Recovering Lost Chat History
 

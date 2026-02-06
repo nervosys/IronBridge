@@ -713,6 +713,10 @@ pub fn harvest_run(
                             pt.display_name(),
                             None,
                             None,
+                            None,           // provider_version
+                            3,              // schema_version (V3)
+                            "json",         // file_format
+                            None,           // workspace_path
                         ) {
                             Ok(updated) => {
                                 if updated {
@@ -777,6 +781,7 @@ pub fn harvest_run(
                         }
 
                         let ws_name = ws.project_path.clone();
+                        let ws_path = ws.workspace_path.to_string_lossy().to_string();
 
                         match insert_or_update_session(
                             &conn,
@@ -784,6 +789,10 @@ pub fn harvest_run(
                             "GitHub Copilot",
                             Some(&ws.hash),
                             ws_name.as_deref(),
+                            None,           // provider_version
+                            3,              // schema_version (V3)
+                            "json",         // file_format
+                            Some(&ws_path), // workspace_path
                         ) {
                             Ok(updated) => {
                                 if updated {
@@ -1415,8 +1424,12 @@ fn create_harvest_database(path: &Path) -> Result<()> {
             id TEXT PRIMARY KEY,
             provider TEXT NOT NULL,
             provider_type TEXT,
+            provider_version TEXT,
+            schema_version INTEGER DEFAULT 3,
+            file_format TEXT DEFAULT 'json',
             workspace_id TEXT,
             workspace_name TEXT,
+            workspace_path TEXT,
             title TEXT NOT NULL,
             message_count INTEGER DEFAULT 0,
             created_at INTEGER NOT NULL,
@@ -1428,6 +1441,7 @@ fn create_harvest_database(path: &Path) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_sessions_provider ON sessions(provider);
         CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON sessions(workspace_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_workspace_path ON sessions(workspace_path);
         
         -- Enhanced messages table with raw markdown and metadata
         CREATE TABLE IF NOT EXISTS messages_v2 (
@@ -1600,6 +1614,10 @@ fn insert_or_update_session(
     provider: &str,
     workspace_id: Option<&str>,
     workspace_name: Option<&str>,
+    provider_version: Option<&str>,
+    schema_version: u32,
+    file_format: &str,
+    workspace_path: Option<&str>,
 ) -> Result<bool> {
     let session_id = session
         .session_id
@@ -1624,8 +1642,9 @@ fn insert_or_update_session(
         r#"
         INSERT OR REPLACE INTO sessions 
         (id, provider, provider_type, workspace_id, workspace_name, title, 
-         message_count, created_at, updated_at, harvested_at, session_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         message_count, created_at, updated_at, harvested_at, session_json,
+         provider_version, schema_version, file_format, workspace_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         params![
             session_id,
@@ -1639,6 +1658,10 @@ fn insert_or_update_session(
             session.last_message_date,
             now,
             session_json,
+            provider_version,
+            schema_version as i64,
+            file_format,
+            workspace_path,
         ],
     )?;
 
@@ -3311,4 +3334,407 @@ fn md5_hash(data: &str) -> u128 {
         hash = hash.rotate_left(7);
     }
     hash
+}
+
+/// Sync sessions between the harvest database and provider workspaces
+///
+/// This command provides bidirectional sync capabilities:
+/// - `--push`: Write sessions from the database to provider workspace directories
+/// - `--pull`: Import sessions from provider workspaces into the database (similar to harvest run)
+///
+/// Sync supports filtering by provider, workspace, or specific session IDs.
+pub fn harvest_sync(
+    path: Option<&str>,
+    push: bool,
+    pull: bool,
+    provider: Option<&str>,
+    workspace: Option<&str>,
+    sessions: Option<&[String]>,
+    format: Option<&str>,
+    force: bool,
+    dry_run: bool,
+) -> Result<()> {
+    // Validate arguments
+    if !push && !pull {
+        anyhow::bail!("Must specify either --push or --pull (or both)");
+    }
+
+    // Determine database path
+    let db_path = get_db_path(path)?;
+
+    if !db_path.exists() {
+        anyhow::bail!(
+            "Harvest database not found at {:?}. Run 'harvest run' first.",
+            db_path
+        );
+    }
+
+    println!(
+        "{} Sync Operation",
+        if dry_run {
+            "[DRY RUN]".yellow()
+        } else {
+            "[SYNC]".green()
+        }
+    );
+    println!("   Database: {}", db_path.display().to_string().cyan());
+
+    if push {
+        println!("\n{} Push: Database → Provider Workspaces", "[→]".blue());
+        sync_push(
+            &db_path, provider, workspace, sessions, format, force, dry_run,
+        )?;
+    }
+
+    if pull {
+        println!("\n{} Pull: Provider Workspaces → Database", "[←]".blue());
+        sync_pull(&db_path, provider, workspace, sessions, force, dry_run)?;
+    }
+
+    if dry_run {
+        println!(
+            "\n{} Dry run complete. No changes were made.",
+            "[!]".yellow()
+        );
+    } else {
+        println!("\n{} Sync complete.", "[✓]".green());
+    }
+
+    Ok(())
+}
+
+/// Push sessions from the database to provider workspace directories
+fn sync_push(
+    db_path: &Path,
+    provider: Option<&str>,
+    workspace: Option<&str>,
+    sessions: Option<&[String]>,
+    format: Option<&str>,
+    force: bool,
+    dry_run: bool,
+) -> Result<()> {
+    let conn = Connection::open(db_path)?;
+
+    // Build query with filters
+    let mut sql = String::from(
+        r#"SELECT id, provider, workspace_path, workspace_name, session_json, file_format 
+           FROM sessions WHERE workspace_path IS NOT NULL"#,
+    );
+    let mut params_vec: Vec<String> = Vec::new();
+
+    if let Some(p) = provider {
+        sql.push_str(" AND provider = ?");
+        params_vec.push(p.to_string());
+    }
+
+    if let Some(w) = workspace {
+        sql.push_str(" AND (workspace_path LIKE ? OR workspace_name LIKE ?)");
+        params_vec.push(format!("%{}%", w));
+        params_vec.push(format!("%{}%", w));
+    }
+
+    if let Some(sess_ids) = sessions {
+        if !sess_ids.is_empty() {
+            let placeholders: Vec<&str> = sess_ids.iter().map(|_| "?").collect();
+            sql.push_str(&format!(" AND id IN ({})", placeholders.join(",")));
+            for id in sess_ids {
+                params_vec.push(id.clone());
+            }
+        }
+    }
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    // Build params array for rusqlite
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+        .iter()
+        .map(|s| s as &dyn rusqlite::ToSql)
+        .collect();
+
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
+        Ok((
+            row.get::<_, String>(0)?,      // id
+            row.get::<_, String>(1)?,      // provider
+            row.get::<_, String>(2)?,      // workspace_path
+            row.get::<_, Option<String>>(3)?, // workspace_name
+            row.get::<_, String>(4)?,      // session_json
+            row.get::<_, Option<String>>(5)?, // file_format
+        ))
+    })?;
+
+    let target_format = format.unwrap_or("jsonl");
+    let mut pushed = 0;
+    let mut skipped = 0;
+    let mut errors = 0;
+
+    for row_result in rows {
+        match row_result {
+            Ok((session_id, provider_name, workspace_path, workspace_name, session_json, stored_format)) => {
+                // Determine target directory
+                let ws_path = PathBuf::from(&workspace_path);
+                let chat_dir = ws_path.join(".vscode").join("chat");
+
+                // Skip if directory doesn't exist and we're not creating it
+                if !chat_dir.exists() {
+                    if !force {
+                        println!(
+                            "   {} Skipped {} - workspace chat dir not found: {}",
+                            "[~]".yellow(),
+                            session_id.dimmed(),
+                            chat_dir.display()
+                        );
+                        skipped += 1;
+                        continue;
+                    }
+                    // Create directory if force is set
+                    if !dry_run {
+                        fs::create_dir_all(&chat_dir)?;
+                    }
+                }
+
+                // Determine output format and filename
+                let (output_ext, needs_conversion) = match target_format {
+                    "jsonl" => ("jsonl", stored_format.as_deref() != Some("jsonl")),
+                    "json" => ("json", stored_format.as_deref() == Some("jsonl")),
+                    _ => ("jsonl", true), // Default to JSONL for modern VS Code
+                };
+
+                let session_file = chat_dir.join(format!("{}.{}", session_id, output_ext));
+
+                // Check if file exists
+                if session_file.exists() && !force {
+                    println!(
+                        "   {} Skipped {} - file exists (use --force to overwrite)",
+                        "[~]".yellow(),
+                        session_id.dimmed()
+                    );
+                    skipped += 1;
+                    continue;
+                }
+
+                // Parse and potentially convert the session
+                let output_content = if needs_conversion && target_format == "jsonl" {
+                    // Convert JSON to JSONL format
+                    match serde_json::from_str::<ChatSession>(&session_json) {
+                        Ok(session) => convert_session_to_jsonl(&session)?,
+                        Err(e) => {
+                            println!(
+                                "   {} Error parsing session {}: {}",
+                                "[!]".red(),
+                                session_id,
+                                e
+                            );
+                            errors += 1;
+                            continue;
+                        }
+                    }
+                } else {
+                    // Use as-is or simple format
+                    session_json.clone()
+                };
+
+                if dry_run {
+                    println!(
+                        "   {} Would write {} ({}) → {}",
+                        "[+]".green(),
+                        workspace_name.as_deref().unwrap_or(&provider_name),
+                        session_id.dimmed(),
+                        session_file.display()
+                    );
+                } else {
+                    fs::write(&session_file, &output_content)?;
+                    println!(
+                        "   {} Pushed {} ({}) → {}",
+                        "[+]".green(),
+                        workspace_name.as_deref().unwrap_or(&provider_name),
+                        session_id.dimmed(),
+                        session_file.display()
+                    );
+                }
+                pushed += 1;
+            }
+            Err(e) => {
+                println!("   {} Database error: {}", "[!]".red(), e);
+                errors += 1;
+            }
+        }
+    }
+
+    println!(
+        "\n   {} Push summary: {} pushed, {} skipped, {} errors",
+        "[=]".cyan(),
+        pushed.to_string().green(),
+        skipped.to_string().yellow(),
+        errors.to_string().red()
+    );
+
+    Ok(())
+}
+
+/// Pull sessions from provider workspaces into the database
+fn sync_pull(
+    db_path: &Path,
+    provider: Option<&str>,
+    workspace: Option<&str>,
+    sessions: Option<&[String]>,
+    force: bool,
+    dry_run: bool,
+) -> Result<()> {
+    let conn = if dry_run {
+        // For dry run, still open the DB to check existing sessions
+        Connection::open(db_path)?
+    } else {
+        Connection::open(db_path)?
+    };
+
+    // Discover workspaces
+    let workspaces = discover_workspaces()?;
+    let mut pulled = 0;
+    let mut skipped = 0;
+    let mut errors = 0;
+
+    for ws in workspaces {
+        // Filter by workspace if specified
+        if let Some(ws_filter) = workspace {
+            let ws_path_str = ws.workspace_path.to_string_lossy();
+            let ws_name = ws.project_path.as_deref().unwrap_or("");
+            if !ws_path_str.contains(ws_filter) && !ws_name.contains(ws_filter) {
+                continue;
+            }
+        }
+
+        // Filter by provider if specified (for Copilot workspaces, it's "GitHub Copilot")
+        if let Some(p) = provider {
+            if !p.eq_ignore_ascii_case("copilot")
+                && !p.eq_ignore_ascii_case("github copilot")
+                && !p.eq_ignore_ascii_case("vscode")
+            {
+                continue;
+            }
+        }
+
+        // Get sessions from this workspace
+        match get_chat_sessions_from_workspace(&ws.workspace_path) {
+            Ok(ws_sessions) => {
+                for swp in ws_sessions {
+                    // Filter by session ID if specified
+                    if let Some(sess_ids) = sessions {
+                        let sid = swp.session.session_id.as_deref().unwrap_or("");
+                        if !sess_ids.iter().any(|id| id == sid) {
+                            continue;
+                        }
+                    }
+
+                    let session_id = swp
+                        .session
+                        .session_id
+                        .clone()
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+                    // Check if session already exists
+                    let exists: bool = conn
+                        .query_row(
+                            "SELECT 1 FROM sessions WHERE id = ?",
+                            [&session_id],
+                            |_| Ok(true),
+                        )
+                        .unwrap_or(false);
+
+                    if exists && !force {
+                        skipped += 1;
+                        continue;
+                    }
+
+                    let ws_name = ws.project_path.clone();
+                    let ws_path = ws.workspace_path.to_string_lossy().to_string();
+
+                    if dry_run {
+                        println!(
+                            "   {} Would pull {} from {}",
+                            "[+]".green(),
+                            session_id.dimmed(),
+                            ws_name.as_deref().unwrap_or(&ws_path)
+                        );
+                        pulled += 1;
+                    } else {
+                        match insert_or_update_session(
+                            &conn,
+                            &swp.session,
+                            "GitHub Copilot",
+                            Some(&ws.hash),
+                            ws_name.as_deref(),
+                            None,           // provider_version
+                            3,              // schema_version (V3)
+                            "json",         // file_format (detect from swp.path extension)
+                            Some(&ws_path), // workspace_path
+                        ) {
+                            Ok(_) => {
+                                println!(
+                                    "   {} Pulled {} from {}",
+                                    "[+]".green(),
+                                    session_id.dimmed(),
+                                    ws_name.as_deref().unwrap_or(&ws_path)
+                                );
+                                pulled += 1;
+                            }
+                            Err(e) => {
+                                println!(
+                                    "   {} Error pulling {}: {}",
+                                    "[!]".red(),
+                                    session_id,
+                                    e
+                                );
+                                errors += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!(
+                    "   {} Error reading workspace {}: {}",
+                    "[!]".red(),
+                    ws.workspace_path.display(),
+                    e
+                );
+                errors += 1;
+            }
+        }
+    }
+
+    println!(
+        "\n   {} Pull summary: {} pulled, {} skipped, {} errors",
+        "[=]".cyan(),
+        pulled.to_string().green(),
+        skipped.to_string().yellow(),
+        errors.to_string().red()
+    );
+
+    Ok(())
+}
+
+/// Convert a ChatSession to JSONL format (VS Code 1.109+)
+fn convert_session_to_jsonl(session: &ChatSession) -> Result<String> {
+    use serde_json::json;
+
+    let mut lines = Vec::new();
+
+    // First line: session metadata
+    let session_meta = json!({
+        "version": 3,
+        "sessionId": session.session_id,
+        "title": session.title(),
+        "createdAt": session.creation_date,
+        "lastInteractionAt": session.last_message_date,
+        "customTitle": session.custom_title.as_deref(),
+    });
+    lines.push(serde_json::to_string(&session_meta)?);
+
+    // Subsequent lines: each request as a separate JSON object
+    for request in &session.requests {
+        let request_json = serde_json::to_string(request)?;
+        lines.push(request_json);
+    }
+
+    Ok(lines.join("\n"))
 }
