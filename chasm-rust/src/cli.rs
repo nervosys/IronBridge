@@ -111,9 +111,11 @@ pub enum Commands {
     },
 
     // ============================================================================
-    // Run Commands (TUI)
+    // Run Commands (Agent Launcher + TUI)
     // ============================================================================
-    /// Run interactive tools
+    /// Launch an AI coding agent with auto-save, or run interactive tools
+    ///
+    /// Supported agents: claude, open, claw, cursor, codex, droid, gemini
     Run {
         #[command(subcommand)]
         command: RunCommands,
@@ -981,6 +983,89 @@ pub enum MigrationCommands {
 pub enum RunCommands {
     /// Launch interactive TUI (Text User Interface)
     Tui,
+
+    /// List available agents and their installation status
+    #[command(visible_alias = "agents")]
+    ListAgents,
+
+    /// Launch Claude Code with auto-save
+    #[command(visible_aliases = ["claude-code", "claudecode"])]
+    Claude {
+        /// Extra arguments to pass to the agent
+        #[arg(last = true)]
+        args: Vec<String>,
+        /// Disable auto-save
+        #[arg(long)]
+        no_save: bool,
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Launch OpenCode with auto-save
+    #[command(visible_aliases = ["opencode", "open-code"])]
+    Open {
+        #[arg(last = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        no_save: bool,
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Launch OpenClaw (ClawdBot) with auto-save
+    #[command(visible_aliases = ["openclaw", "clawdbot"])]
+    Claw {
+        #[arg(last = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        no_save: bool,
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Launch Cursor CLI with auto-save
+    Cursor {
+        #[arg(last = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        no_save: bool,
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Launch Codex CLI (OpenAI) with auto-save
+    #[command(visible_aliases = ["codex-cli", "codexcli"])]
+    Codex {
+        #[arg(last = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        no_save: bool,
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Launch Droid CLI (Factory) with auto-save
+    #[command(visible_aliases = ["droid-cli", "droidcli", "factory"])]
+    Droid {
+        #[arg(last = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        no_save: bool,
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Launch Gemini CLI (Google) with auto-save
+    #[command(visible_aliases = ["gemini-cli", "geminicli"])]
+    Gemini {
+        #[arg(last = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        no_save: bool,
+        #[arg(short, long)]
+        verbose: bool,
+    },
 }
 
 // ============================================================================

@@ -428,10 +428,32 @@ fn main() -> Result<()> {
         },
 
         // ====================================================================
-        // Run Commands (TUI)
+        // Run Commands (Agent Launcher + TUI)
         // ====================================================================
         Commands::Run { command } => match command {
             RunCommands::Tui => tui::run_tui(),
+            RunCommands::ListAgents => commands::list_agents_cli(),
+            RunCommands::Claude { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("claude"), &args, no_save, verbose)
+            }
+            RunCommands::Open { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("open"), &args, no_save, verbose)
+            }
+            RunCommands::Claw { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("claw"), &args, no_save, verbose)
+            }
+            RunCommands::Cursor { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("cursor"), &args, no_save, verbose)
+            }
+            RunCommands::Codex { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("codex"), &args, no_save, verbose)
+            }
+            RunCommands::Droid { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("droid"), &args, no_save, verbose)
+            }
+            RunCommands::Gemini { args, no_save, verbose } => {
+                commands::run_agent_cli(Some("gemini"), &args, no_save, verbose)
+            }
         },
 
         // ====================================================================

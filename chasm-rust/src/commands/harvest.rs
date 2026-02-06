@@ -3109,12 +3109,14 @@ pub fn harvest_rebuild_fts(db_path: Option<&str>) -> Result<()> {
         "#,
     )?;
 
-    // Create new FTS table with triggers
+    // Create new FTS table with content_raw and session_id for filtering
     println!("{} Creating new FTS index...", "[*]".blue());
     conn.execute_batch(
         r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-            content_raw
+            content_raw,
+            content='messages_v2',
+            content_rowid='id'
         );
         
         CREATE TRIGGER IF NOT EXISTS messages_v2_ai AFTER INSERT ON messages_v2 BEGIN
@@ -3175,7 +3177,7 @@ pub fn harvest_search(
     println!("{}", "=".repeat(70).cyan());
     println!();
 
-    // Results: (session_id, provider, title, content)
+    // Results: (session_id, provider, title, snippet)
     let results: Vec<(String, String, String, String)> = {
         // Check if FTS table exists
         let fts_exists: bool = conn
@@ -3187,14 +3189,18 @@ pub fn harvest_search(
             .unwrap_or(false);
 
         if fts_exists {
-            // Use FTS search - query the FTS table and join with messages/sessions
+            // Use FTS5 search with built-in snippet() for fast highlighting
+            // and rank for relevance ordering, deduplicated per session
             let sql = format!(
-                "SELECT s.id, s.provider, s.title, m.content_raw
+                "SELECT s.id, s.provider, s.title,
+                        snippet(messages_fts, 0, '>>>', '<<<', '...', 32) as snip
                  FROM messages_fts fts
                  JOIN messages_v2 m ON m.id = fts.rowid
                  JOIN sessions s ON m.session_id = s.id
                  WHERE messages_fts MATCH ?
                  {}
+                 GROUP BY s.id
+                 ORDER BY rank
                  LIMIT {}",
                 if provider_filter.is_some() {
                     "AND s.provider = ?"
@@ -3228,14 +3234,19 @@ pub fn harvest_search(
                 .collect::<Result<Vec<_>, _>>()?
             }
         } else {
-            // Fall back to LIKE search
+            // Fall back to LIKE search with session deduplication
             let search_pattern = format!("%{}%", query);
             let sql = format!(
-                "SELECT s.id, s.provider, s.title, m.content_raw
+                "SELECT s.id, s.provider, s.title,
+                        SUBSTR(m.content_raw,
+                            MAX(1, INSTR(LOWER(m.content_raw), LOWER(?)) - 50),
+                            150) as snip
                  FROM messages_v2 m
                  JOIN sessions s ON m.session_id = s.id
                  WHERE m.content_raw LIKE ?
                  {}
+                 GROUP BY s.id
+                 ORDER BY s.updated_at DESC
                  LIMIT {}",
                 if provider_filter.is_some() {
                     "AND s.provider = ?"
@@ -3248,7 +3259,7 @@ pub fn harvest_search(
             let mut stmt = conn.prepare(&sql)?;
 
             if let Some(provider) = provider_filter {
-                stmt.query_map(params![search_pattern, provider], |row| {
+                stmt.query_map(params![query, search_pattern, provider], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
@@ -3258,7 +3269,7 @@ pub fn harvest_search(
                 })?
                 .collect::<Result<Vec<_>, _>>()?
             } else {
-                stmt.query_map([search_pattern], |row| {
+                stmt.query_map(params![query, search_pattern], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
@@ -3279,8 +3290,7 @@ pub fn harvest_search(
     println!("{} Found {} result(s):", "[i]".blue(), results.len());
     println!();
 
-    for (session_id, provider, title, content) in results {
-        // Highlight the search term in content
+    for (session_id, provider, title, snippet) in results {
         let display_name = if title.is_empty() {
             session_id.clone()
         } else {
@@ -3294,9 +3304,11 @@ pub fn harvest_search(
             provider.dimmed()
         );
 
-        // Show snippet around the match
-        let snippet = create_search_snippet(&content, query, 100);
-        println!("   {}", snippet.dimmed());
+        // Display the snippet (already extracted by SQL or FTS5 snippet())
+        let clean_snippet = snippet
+            .replace('\n', " ")
+            .replace('\r', "");
+        println!("   {}", clean_snippet.dimmed());
         println!();
     }
 

@@ -12,6 +12,7 @@ mod migration;
 mod providers;
 mod recover;
 mod register;
+mod run;
 mod telemetry;
 mod workspace_cmds;
 
@@ -25,5 +26,6 @@ pub use migration::*;
 pub use providers::*;
 pub use recover::*;
 pub use register::*;
+pub use run::*;
 pub use telemetry::*;
 pub use workspace_cmds::*;
