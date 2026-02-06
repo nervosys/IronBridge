@@ -51,7 +51,8 @@ fn main() -> Result<()> {
             Some(ListCommands::Sessions { project_path, size, provider, all_providers }) => {
                 commands::list_sessions(project_path.as_deref(), size, provider.as_deref(), all_providers)
             }
-            Some(ListCommands::Agents { project_path, size, provider }) => {
+            Some(ListCommands::Agents) => commands::list_agents_cli(),
+            Some(ListCommands::Edits { project_path, size, provider }) => {
                 commands::list_agents_sessions(project_path.as_deref(), size, provider.as_deref())
             }
             Some(ListCommands::Path { project_path }) => {
@@ -432,7 +433,6 @@ fn main() -> Result<()> {
         // ====================================================================
         Commands::Run { command } => match command {
             RunCommands::Tui => tui::run_tui(),
-            RunCommands::ListAgents => commands::list_agents_cli(),
             RunCommands::Claude { args, no_save, verbose } => {
                 commands::run_agent_cli(Some("claude"), &args, no_save, verbose)
             }

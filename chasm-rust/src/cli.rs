@@ -275,9 +275,13 @@ pub enum ListCommands {
         all_providers: bool,
     },
 
-    /// List agent mode sessions (Copilot Edits / chatEditingSessions)
+    /// List available AI coding agents and their installation status
     #[command(visible_alias = "a")]
-    Agents {
+    Agents,
+
+    /// List agent mode sessions (Copilot Edits / chatEditingSessions)
+    #[command(visible_alias = "e")]
+    Edits {
         /// Filter by project path
         #[arg(long)]
         project_path: Option<String>,
@@ -983,10 +987,6 @@ pub enum MigrationCommands {
 pub enum RunCommands {
     /// Launch interactive TUI (Text User Interface)
     Tui,
-
-    /// List available agents and their installation status
-    #[command(visible_alias = "agents")]
-    ListAgents,
 
     /// Launch Claude Code with auto-save
     #[command(visible_aliases = ["claude-code", "claudecode"])]

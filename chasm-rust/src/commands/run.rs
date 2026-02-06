@@ -284,7 +284,7 @@ pub fn run_agent_cli(
              \n  {}  codex     → Codex CLI (OpenAI)\
              \n  {}  droid     → Droid CLI (Factory)\
              \n  {}  gemini    → Gemini CLI (Google)\
-             \n\nOr run 'chasm run --list' to see all agents.",
+             \n\nRun 'chasm list agents' to see all agents.",
             alias,
             "*".cyan(),
             "*".cyan(),
@@ -486,7 +486,7 @@ fn auto_harvest_sessions(session_files: &[std::path::PathBuf]) -> Result<usize> 
 pub fn list_agents_cli() -> Result<()> {
     println!("{}", "=".repeat(70).cyan());
     println!(
-        "{} Available Agents for 'chasm run'",
+        "{} Available Agents",
         "[*]".bold()
     );
     println!("{}", "=".repeat(70).cyan());
