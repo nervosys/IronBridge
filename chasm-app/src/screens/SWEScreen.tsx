@@ -79,7 +79,7 @@ const sampleMemories: CodeMemory[] = [
 ];
 
 const sampleProjects: ProjectContext[] = [
-    { id: '1', name: 'ChatSessionManager', path: '/dev/csm', language: 'Rust/TypeScript', lastAccessed: '2024-12-12', memoriesCount: 24 },
+    { id: '1', name: 'Chasm', path: '/dev/chasm', language: 'Rust/TypeScript', lastAccessed: '2024-12-12', memoriesCount: 24 },
     { id: '2', name: 'csm-web', path: '/dev/csm/csm-web', language: 'TypeScript', lastAccessed: '2024-12-12', memoriesCount: 18 },
     { id: '3', name: 'csm-app', path: '/dev/csm/csm-app', language: 'TypeScript', lastAccessed: '2024-12-11', memoriesCount: 12 },
 ];

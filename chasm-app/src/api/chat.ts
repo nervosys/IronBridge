@@ -243,8 +243,8 @@ export async function sendChatCompletion(
                     'Content-Type': 'application/json',
                     ...authHeaders,
                     ...(provider.type === 'openrouter' && {
-                        'HTTP-Referer': 'https://github.com/nervosys/ChatSessionManager',
-                        'X-Title': 'CSM Mobile App',
+                        'HTTP-Referer': 'https://github.com/nervosys/chasm',
+                        'X-Title': 'Chasm Mobile App',
                     }),
                 },
                 body: JSON.stringify({

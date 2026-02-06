@@ -100,7 +100,7 @@ export function SettingsScreen() {
     };
 
     const openDocs = () => {
-        Linking.openURL('https://github.com/nervosys/ChatSessionManager');
+        Linking.openURL('https://github.com/nervosys/chasm');
     };
 
     const isLoading = statsLoading || providersLoading;

@@ -83,7 +83,7 @@ export function MoreScreen() {
             <View style={styles.header}>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>More Features</Text>
                 <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-                    Access all ChatSessionManager capabilities
+                    Access all Chasm capabilities
                 </Text>
             </View>
 
