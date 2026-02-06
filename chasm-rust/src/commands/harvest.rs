@@ -428,6 +428,9 @@ pub fn harvest_scan(
     let provider_types = vec![
         ProviderType::Copilot,
         ProviderType::Cursor,
+        ProviderType::CodexCli,
+        ProviderType::DroidCli,
+        ProviderType::GeminiCli,
         ProviderType::Ollama,
         ProviderType::Vllm,
         ProviderType::Foundry,
@@ -657,6 +660,9 @@ pub fn harvest_run(
     let provider_types = vec![
         ProviderType::Copilot,
         ProviderType::Cursor,
+        ProviderType::CodexCli,
+        ProviderType::DroidCli,
+        ProviderType::GeminiCli,
         ProviderType::Ollama,
         ProviderType::Vllm,
         ProviderType::Foundry,

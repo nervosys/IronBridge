@@ -21,6 +21,15 @@ pub enum ProviderType {
     /// Continue.dev VS Code extension
     #[serde(rename = "continuedev")]
     ContinueDev,
+    /// Codex CLI (OpenAI) - JSONL sessions in ~/.codex/sessions/
+    #[serde(rename = "codexcli")]
+    CodexCli,
+    /// Droid CLI (Factory) - JSONL sessions in ~/.factory/sessions/
+    #[serde(rename = "droidcli")]
+    DroidCli,
+    /// Gemini CLI (Google) - JSON sessions in ~/.gemini/tmp/
+    #[serde(rename = "geminicli")]
+    GeminiCli,
 
     // ========================================================================
     // Local API Providers
@@ -111,6 +120,9 @@ impl ProviderType {
             Self::Copilot => "GitHub Copilot",
             Self::Cursor => "Cursor",
             Self::ContinueDev => "Continue.dev",
+            Self::CodexCli => "Codex CLI",
+            Self::DroidCli => "Droid CLI",
+            Self::GeminiCli => "Gemini CLI",
             // Local API
             Self::Ollama => "Ollama",
             Self::Vllm => "vLLM",
@@ -149,6 +161,9 @@ impl ProviderType {
             Self::Copilot => None,
             Self::Cursor => None,
             Self::ContinueDev => None,
+            Self::CodexCli => None,
+            Self::DroidCli => None,
+            Self::GeminiCli => None,
             // Local API
             Self::Ollama => Some("http://localhost:11434"),
             Self::Vllm => Some("http://localhost:8000"),
@@ -182,7 +197,15 @@ impl ProviderType {
 
     /// Check if this provider uses local file storage for sessions
     pub fn uses_file_storage(&self) -> bool {
-        matches!(self, Self::Copilot | Self::Cursor | Self::ContinueDev)
+        matches!(
+            self,
+            Self::Copilot
+                | Self::Cursor
+                | Self::ContinueDev
+                | Self::CodexCli
+                | Self::DroidCli
+                | Self::GeminiCli
+        )
     }
 
     /// Check if this provider is a cloud-based service with conversation history API

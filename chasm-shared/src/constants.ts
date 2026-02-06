@@ -39,6 +39,30 @@ export const PROVIDERS = {
         color: '#ff6b6b',
         icon: 'continue',
     },
+    codexcli: {
+        id: 'codexcli',
+        name: 'Codex CLI',
+        type: 'local' as const,
+        models: ['codex'],
+        color: '#10a37f',
+        icon: 'openai',
+    },
+    droidcli: {
+        id: 'droidcli',
+        name: 'Droid CLI',
+        type: 'local' as const,
+        models: [],
+        color: '#6366f1',
+        icon: 'factory',
+    },
+    geminicli: {
+        id: 'geminicli',
+        name: 'Gemini CLI',
+        type: 'local' as const,
+        models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+        color: '#4285f4',
+        icon: 'google',
+    },
 
     // =========================================================================
     // Cloud Providers

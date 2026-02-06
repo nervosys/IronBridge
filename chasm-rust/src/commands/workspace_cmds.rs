@@ -1307,6 +1307,9 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
     let opencode_path = get_opencode_storage_path();
     let openclaw_path = get_openclaw_storage_path();
     let antigravity_path = get_antigravity_storage_path();
+    let codexcli_path = get_codexcli_storage_path();
+    let droidcli_path = get_droidcli_storage_path();
+    let geminicli_path = get_geminicli_storage_path();
 
     match provider {
         None => {
@@ -1343,6 +1346,21 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
             if let Some(ag) = antigravity_path {
                 if ag.exists() {
                     paths.push(("antigravity".to_string(), ag));
+                }
+            }
+            if let Some(cx) = codexcli_path {
+                if cx.exists() {
+                    paths.push(("codexcli".to_string(), cx));
+                }
+            }
+            if let Some(dr) = droidcli_path {
+                if dr.exists() {
+                    paths.push(("droidcli".to_string(), dr));
+                }
+            }
+            if let Some(gc) = geminicli_path {
+                if gc.exists() {
+                    paths.push(("geminicli".to_string(), gc));
                 }
             }
         }
@@ -1386,6 +1404,27 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
                     if let Some(ag) = antigravity_path {
                         if ag.exists() {
                             paths.push(("antigravity".to_string(), ag));
+                        }
+                    }
+                }
+                "codexcli" | "codex-cli" | "codex" => {
+                    if let Some(cx) = codexcli_path {
+                        if cx.exists() {
+                            paths.push(("codexcli".to_string(), cx));
+                        }
+                    }
+                }
+                "droidcli" | "droid-cli" | "droid" | "factory" => {
+                    if let Some(dr) = droidcli_path {
+                        if dr.exists() {
+                            paths.push(("droidcli".to_string(), dr));
+                        }
+                    }
+                }
+                "geminicli" | "gemini-cli" => {
+                    if let Some(gc) = geminicli_path {
+                        if gc.exists() {
+                            paths.push(("geminicli".to_string(), gc));
                         }
                     }
                 }
@@ -1644,6 +1683,99 @@ fn get_antigravity_storage_path() -> Option<std::path::PathBuf> {
     None
 }
 
+/// Get Codex CLI's storage path (OpenAI Codex CLI)
+/// Stores JSONL session files in ~/.codex/sessions/
+fn get_codexcli_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let codex_path = home.join(".codex").join("sessions");
+        if codex_path.exists() {
+            return Some(codex_path);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let codex_path = std::path::PathBuf::from(&appdata)
+                .join("codex")
+                .join("sessions");
+            if codex_path.exists() {
+                return Some(codex_path);
+            }
+        }
+        if let Some(local) = dirs::data_local_dir() {
+            let local_path = local.join("codex").join("sessions");
+            if local_path.exists() {
+                return Some(local_path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Get Droid CLI's storage path (Factory Droid CLI)
+/// Stores JSONL session files in ~/.factory/sessions/
+fn get_droidcli_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let droid_path = home.join(".factory").join("sessions");
+        if droid_path.exists() {
+            return Some(droid_path);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let droid_path = std::path::PathBuf::from(&appdata)
+                .join("factory")
+                .join("sessions");
+            if droid_path.exists() {
+                return Some(droid_path);
+            }
+        }
+        if let Some(local) = dirs::data_local_dir() {
+            let local_path = local.join("factory").join("sessions");
+            if local_path.exists() {
+                return Some(local_path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Get Gemini CLI's storage path (Google Gemini CLI)
+/// Stores JSON session files in ~/.gemini/tmp/
+fn get_geminicli_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let gemini_path = home.join(".gemini").join("tmp");
+        if gemini_path.exists() {
+            return Some(gemini_path);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let gemini_path = std::path::PathBuf::from(&appdata)
+                .join("gemini")
+                .join("tmp");
+            if gemini_path.exists() {
+                return Some(gemini_path);
+            }
+        }
+        if let Some(local) = dirs::data_local_dir() {
+            let local_path = local.join("gemini").join("tmp");
+            if local_path.exists() {
+                return Some(local_path);
+            }
+        }
+    }
+
+    None
+}
+
 /// List agent mode sessions (chatEditingSessions / Copilot Edits)
 pub fn list_agents_sessions(
     project_path: Option<&str>,
@@ -1658,7 +1790,7 @@ pub fn list_agents_sessions(
     if storage_paths.is_empty() {
         if let Some(p) = provider {
             println!("No storage found for provider: {}", p);
-            println!("\nSupported providers: vscode, cursor, claudecode, opencode, openclaw, antigravity");
+            println!("\nSupported providers: vscode, cursor, claudecode, opencode, openclaw, antigravity, codexcli, droidcli, geminicli");
         } else {
             println!("No workspaces found");
         }

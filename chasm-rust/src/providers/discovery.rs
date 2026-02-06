@@ -75,6 +75,9 @@ pub fn get_provider_endpoints() -> Vec<(ProviderType, Option<&'static str>)> {
     vec![
         (ProviderType::Copilot, None),
         (ProviderType::Cursor, None),
+        (ProviderType::CodexCli, None),
+        (ProviderType::DroidCli, None),
+        (ProviderType::GeminiCli, None),
         (
             ProviderType::Ollama,
             ProviderType::Ollama.default_endpoint(),

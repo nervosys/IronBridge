@@ -1,0 +1,87 @@
+# Agent Skills for Chasm
+
+A collection of AI agent skills for working with [Chasm](https://github.com/nervosys/chasm-cli)
+session histories. These skills give AI coding agents (Claude Code, Codex CLI,
+Cursor, Copilot, Gemini CLI, etc.) specialized knowledge for analyzing,
+organizing, and extracting insights from AI-assisted coding sessions.
+
+Unlike simple markdown-file skills, Chasm skills leverage a **structured SQLite
+database** with normalized tables (sessions, messages, tool_invocations,
+file_changes), **FTS5 full-text search**, and a **REST/GraphQL API** — making
+them far more powerful than flat file analysis.
+
+## Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| [session-summary](session-summary.md) | Generate standup-ready summaries of recent coding sessions |
+| [yak-detector](yak-detector.md) | Detect scope creep and yak-shaving in coding sessions |
+| [code-insight](code-insight.md) | Analyze tool invocations and file changes for code quality insights |
+| [session-organizer](session-organizer.md) | Organize and tag sessions by project, topic, and outcome |
+| [secret-guard](secret-guard.md) | Scan session history for accidentally leaked secrets |
+| [link-trail](link-trail.md) | Track and catalog all URLs referenced during sessions |
+
+## Installation
+
+### Option 1: Copy to your project
+
+```bash
+# Copy all skills to your project's agent skills directory
+cp -r skills/ .claude/skills/     # Claude Code
+cp -r skills/ .cursor/skills/     # Cursor
+cp -r skills/ .agents/skills/     # Generic
+```
+
+### Option 2: Reference from chasm
+
+Skills are bundled with chasm and can be listed via:
+
+```bash
+chasm agency templates
+```
+
+## Prerequisites
+
+These skills work with the chasm harvest database. Run the following to set up:
+
+```bash
+# Initialize the harvest database
+chasm harvest init
+
+# Scan for providers and sessions
+chasm harvest scan
+
+# Harvest all sessions into the database
+chasm harvest run
+```
+
+Once harvested, skills can query the database directly via SQL or through the
+chasm API server.
+
+## Usage
+
+Ask your AI coding agent to help with chasm-related tasks:
+
+```
+"Summarize my coding sessions from this week"
+→ Uses session-summary skill
+
+"Am I yak-shaving? Check my last 5 sessions"
+→ Uses yak-detector skill
+
+"What files did I change most across my sessions?"
+→ Uses code-insight skill
+
+"Organize my sessions by project"
+→ Uses session-organizer skill
+
+"Scan my session history for secrets"
+→ Uses secret-guard skill
+
+"What URLs did I visit in my last session?"
+→ Uses link-trail skill
+```
+
+## License
+
+Apache 2.0 — same as the chasm ecosystem.

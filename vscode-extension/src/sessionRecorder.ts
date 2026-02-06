@@ -27,7 +27,10 @@ export type ChatProvider =
     | 'antigravity' // Antigravity
     | 'windsurf'    // Codeium Windsurf
     | 'zed'         // Zed Editor
-    | 'codespaces'; // GitHub Codespaces
+    | 'codespaces'  // GitHub Codespaces
+    | 'codex-cli'   // OpenAI Codex CLI
+    | 'droid-cli'   // Factory Droid CLI
+    | 'gemini-cli'; // Google Gemini CLI
 
 /**
  * Provider-specific configuration
@@ -154,6 +157,36 @@ export const DEFAULT_PROVIDER_CONFIGS: ProviderConfig[] = [
         fileExtensions: ['.json', '.jsonl'],
         format: 'jsonl',
         perWorkspace: true,
+    },
+    {
+        provider: 'codex-cli',
+        displayName: 'Codex CLI',
+        enabled: true,
+        appDataFolder: '.codex',
+        sessionSubdir: 'sessions',
+        fileExtensions: ['.jsonl'],
+        format: 'jsonl',
+        perWorkspace: false,
+    },
+    {
+        provider: 'droid-cli',
+        displayName: 'Droid CLI',
+        enabled: true,
+        appDataFolder: '.factory',
+        sessionSubdir: 'sessions',
+        fileExtensions: ['.jsonl'],
+        format: 'jsonl',
+        perWorkspace: false,
+    },
+    {
+        provider: 'gemini-cli',
+        displayName: 'Gemini CLI',
+        enabled: true,
+        appDataFolder: '.gemini',
+        sessionSubdir: 'tmp',
+        fileExtensions: ['.json'],
+        format: 'json',
+        perWorkspace: false,
     },
 ];
 
