@@ -122,6 +122,36 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Watch Command (File-System Monitor)
+    // ============================================================================
+    /// Watch agent session directories for changes and auto-harvest
+    ///
+    /// Monitors session storage paths for new or modified files.
+    /// Default: watches all known agent directories.
+    #[command(visible_alias = "w")]
+    Watch {
+        /// Watch a specific agent's session directory (e.g., claude, gemini)
+        #[arg(short, long)]
+        agent: Option<String>,
+
+        /// Watch a custom path instead of agent directories
+        #[arg(short, long)]
+        path: Option<String>,
+
+        /// Debounce interval in seconds before harvesting (default: 3)
+        #[arg(short, long, default_value = "3")]
+        debounce: u64,
+
+        /// Detect changes without harvesting (dry-run)
+        #[arg(long)]
+        no_harvest: bool,
+
+        /// Show detailed file change events
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    // ============================================================================
     // Provider Commands
     // ============================================================================
     /// Manage LLM providers (Ollama, vLLM, Foundry, Cursor, etc.)

@@ -457,6 +457,23 @@ fn main() -> Result<()> {
         },
 
         // ====================================================================
+        // Watch Command (File-System Monitor)
+        // ====================================================================
+        Commands::Watch {
+            agent,
+            path,
+            debounce,
+            no_harvest,
+            verbose,
+        } => commands::watch_cli(
+            agent.as_deref(),
+            path.as_deref(),
+            debounce,
+            no_harvest,
+            verbose,
+        ),
+
+        // ====================================================================
         // Provider Commands
         // ====================================================================
         Commands::Provider { command } => match command {

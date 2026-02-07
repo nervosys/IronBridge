@@ -118,7 +118,7 @@ superior for privacy, enterprise, and sovereignty.*
 
 | Command Category | SpecStory | Chasm |
 |-----------------|-----------|-------|
-| **Agent execution** | `run`, `watch` | `run <agent>` (7 agents with auto-save) |
+| **Agent execution** | `run`, `watch` | `run <agent>` (7 agents with auto-save), `watch` (debounced auto-harvest) |
 | **Agent listing** | `check` | `list agents` (with installation status) |
 | **Agent detection** | — | `detect` (workspace, providers, sessions, orphaned) |
 | **Session sync** | `sync` | `sync`, `harvest sync` (push/pull, format auto-detect) |
@@ -226,12 +226,14 @@ OpenCode (`run open`) and OpenClaw (`run claw`).
 | `code-insight.md` | `specstory-project-stats` | Leverages tool_invocations + file_changes for real code quality metrics |
 | *(no equivalent needed)* | `specstory-guard` | Chasm's pre-commit hooks handle secret scanning natively |
 
-### Priority 3: File-Based Watch Mode
+### Priority 3: File-Based Watch Mode ✅ COMPLETED
 
 SpecStory's `specstory watch` monitors a directory for agent file changes
-without launching the agent. Chasm's `run <agent>` with auto-save covers the
-launch-and-capture workflow, but a standalone `chasm watch` command would add
-value for terminal-only workflows where the agent is launched separately.
+without launching the agent. Chasm's `chasm watch` command provides this same
+capability with cross-platform `notify` file-system events, debounced
+auto-harvesting, per-agent or custom-path filtering, and dry-run mode.
+Combined with `chasm run <agent>` auto-save, chasm covers both the
+launch-and-capture and watch-only workflows.
 
 ---
 
@@ -239,7 +241,7 @@ value for terminal-only workflows where the agent is launched separately.
 
 | Gap | SpecStory | Chasm | Priority |
 |-----|-----------|-------|----------|
-| Watch mode | `specstory watch` | Not yet | Medium |
+
 | Cloud SaaS | cloud.specstory.com | Self-hosted (by design) | N/A |
 | Secret guard skill | `specstory-guard` | Pre-commit hooks (native) | Low |
 
@@ -253,14 +255,15 @@ value for terminal-only workflows where the agent is launched separately.
 4. **4 Native Clients** — Desktop + Mobile + Web + Browser vs CLI only
 5. **Agent Development Kit** — Multi-agent orchestration vs none
 6. **Agent Launcher** — `chasm run <agent>` with auto-save vs simple process wrapping
-7. **Git Versioning** — Session history tracking vs none
-8. **Recovery Tools** — 8 recovery modes vs none
-9. **Privacy** — 100% self-hosted vs cloud dependency
-10. **Windows Support** — Full Windows support vs Linux/macOS only
-11. **MCP Server** — AI agent integration vs none
-12. **Enterprise** — RBAC, multitenancy, compliance vs none
-13. **Optimized Search** — FTS5 with snippet/rank + 4KB header fast-path vs cloud-only
-14. **Multi-Modal** — Vision, audio, video, embodied vs text only
+7. **File-System Watch** — `chasm watch` with debounced auto-harvest vs directory-only polling
+8. **Git Versioning** — Session history tracking vs none
+9. **Recovery Tools** — 8 recovery modes vs none
+10. **Privacy** — 100% self-hosted vs cloud dependency
+11. **Windows Support** — Full Windows support vs Linux/macOS only
+12. **MCP Server** — AI agent integration vs none
+13. **Enterprise** — RBAC, multitenancy, compliance vs none
+14. **Optimized Search** — FTS5 with snippet/rank + 4KB header fast-path vs cloud-only
+15. **Multi-Modal** — Vision, audio, video, embodied vs text only
 
 ---
 
@@ -294,10 +297,11 @@ value for terminal-only workflows where the agent is launched separately.
 - [x] Case-insensitive byte-level search (no `to_lowercase()` allocation)
 - [x] FTS5 content-sync mode for reduced storage duplication
 
-### Phase 3: Watch Command (Future)
-- [ ] Add `chasm watch <path>` for file-system monitoring
-- [ ] Auto-detect terminal agent file changes
-- [ ] Auto-harvest new/modified sessions
+### Phase 3: Watch Command ✅ COMPLETED
+- [x] Add `chasm watch` for file-system monitoring (notify crate, cross-platform)
+- [x] Auto-detect terminal agent file changes (all 7 agents)
+- [x] Auto-harvest new/modified sessions (debounced, with dry-run mode)
+- [x] Per-agent filtering (`--agent`) and custom path (`--path`) support
 
 ### Phase 4: Cloud Sync Option (Future)
 - [ ] Optional cloud sync endpoint
@@ -312,11 +316,12 @@ Chasm is a **strict superset** of SpecStory. Every SpecStory feature has a
 corresponding chasm feature that is equal or superior:
 
 - All 5 of SpecStory's terminal agents → chasm providers with `run <agent>` auto-save
+- SpecStory's `watch` → `chasm watch` with debounced auto-harvest + per-agent filtering
 - SpecStory's 6 agent skills → 5 chasm skills leveraging richer SQLite data model
 - SpecStory's `check` → `chasm list agents` + `chasm detect`
 - SpecStory's cloud SaaS → chasm's self-hosted REST + GraphQL + WebSocket API
 
-Beyond parity, chasm offers **14 major advantages** including 30+ providers,
+Beyond parity, chasm offers **15 major advantages** including 30+ providers,
 4 native clients (desktop/mobile/web/browser), multi-agent orchestration,
 git versioning, 8 recovery modes, MCP server, enterprise features, and
 complete privacy sovereignty.

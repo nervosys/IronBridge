@@ -14,23 +14,23 @@ use crate::providers::ProviderType;
 
 /// Agent binary configuration
 #[derive(Debug, Clone)]
-struct AgentConfig {
+pub(crate) struct AgentConfig {
     /// Display name
-    name: &'static str,
+    pub(crate) name: &'static str,
     /// Provider type for harvest
-    provider_type: ProviderType,
+    pub(crate) provider_type: ProviderType,
     /// Command/binary names to try (in order of preference)
-    commands: &'static [&'static str],
+    pub(crate) commands: &'static [&'static str],
     /// Default arguments when launching interactively
-    default_args: &'static [&'static str],
+    pub(crate) default_args: &'static [&'static str],
     /// Whether this agent creates files we can auto-harvest
-    harvestable: bool,
+    pub(crate) harvestable: bool,
     /// Session storage description
-    storage_hint: &'static str,
+    pub(crate) storage_hint: &'static str,
 }
 
 /// All supported agent configurations
-const AGENTS: &[AgentConfig] = &[
+pub(crate) const AGENTS: &[AgentConfig] = &[
     AgentConfig {
         name: "Claude Code",
         provider_type: ProviderType::Copilot, // uses ClaudeCode internally but maps to file harvester
@@ -90,7 +90,7 @@ const AGENTS: &[AgentConfig] = &[
 ];
 
 /// Resolve an agent alias to its configuration
-fn resolve_agent(alias: &str) -> Option<&'static AgentConfig> {
+pub(crate) fn resolve_agent(alias: &str) -> Option<&'static AgentConfig> {
     let alias_lower = alias.to_lowercase();
     match alias_lower.as_str() {
         "claude" | "claude-code" | "claudecode" => AGENTS.iter().find(|a| a.name == "Claude Code"),
@@ -182,7 +182,7 @@ fn snapshot_session_dir(config: &AgentConfig) -> Option<std::collections::HashMa
 }
 
 /// Resolve the storage path for an agent from its config
-fn resolve_storage_path(home: &std::path::Path, config: &AgentConfig) -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_storage_path(home: &std::path::Path, config: &AgentConfig) -> Option<std::path::PathBuf> {
     // Parse storage_hint like "~/.claude/projects/" into actual path
     let hint = config.storage_hint.trim_start_matches("~/");
     let path = home.join(hint);
@@ -461,7 +461,7 @@ pub fn run_agent_cli(
 }
 
 /// Auto-harvest detected session files into the harvest database
-fn auto_harvest_sessions(session_files: &[std::path::PathBuf]) -> Result<usize> {
+pub(crate) fn auto_harvest_sessions(session_files: &[std::path::PathBuf]) -> Result<usize> {
     use crate::commands::{harvest_init, harvest_run};
 
     // Check if harvest DB exists, init if needed

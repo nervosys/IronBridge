@@ -14,6 +14,7 @@ mod recover;
 mod register;
 mod run;
 mod telemetry;
+mod watch;
 mod workspace_cmds;
 
 pub use agency::*;
@@ -28,4 +29,5 @@ pub use recover::*;
 pub use register::*;
 pub use run::*;
 pub use telemetry::*;
+pub use watch::*;
 pub use workspace_cmds::*;
