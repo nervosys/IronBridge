@@ -1,8 +1,8 @@
 <p align="center">
   <h1 align="center">🗄️ Chasm</h1>
   <p align="center">
-    <strong>Universal Chat Session Manager</strong><br>
-    Harvest, merge, and analyze your AI chat history
+    <strong>Chat Session Manager (Chasm)</strong><br>
+    Bridging the divide between AI providers
   </p>
 </p>
 

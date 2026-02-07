@@ -1,6 +1,6 @@
 # Chasm 🗄️
 
-**Universal Chat Session Manager** — Harvest, merge, and recover AI chat history across workspaces and providers.
+**Chat Session Manager (Chasm):** Bridging the divide between AI providers.
 
 ---
 
