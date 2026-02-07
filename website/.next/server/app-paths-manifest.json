@@ -1,8 +1,0 @@
-{
-  "/page": "app/page.js",
-  "/docs/page": "app/docs/page.js",
-  "/docs/agents/page": "app/docs/agents/page.js",
-  "/docs/quickstart/page": "app/docs/quickstart/page.js",
-  "/docs/cli/page": "app/docs/cli/page.js",
-  "/docs/features/page": "app/docs/features/page.js"
-}
