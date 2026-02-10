@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block hero %}
+{% if page and page.is_homepage %}
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;800;900&family=Exo+2:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -316,10 +317,10 @@
     <p class="chasm-hero__tagline">Bridging the divide between AI providers</p>
 
     <div class="chasm-hero__cta">
-      <a href="getting-started/quickstart/" class="chasm-hero__btn chasm-hero__btn--primary">
+      <a href="/getting-started/quickstart/" class="chasm-hero__btn chasm-hero__btn--primary">
         ⚡ Quick Start
       </a>
-      <a href="https://github.com/nervosys/chasm" class="chasm-hero__btn chasm-hero__btn--secondary">
+      <a href="https://github.com/nervosys/chasm" target="_blank" rel="noopener" class="chasm-hero__btn chasm-hero__btn--secondary">
         ⬡ GitHub
       </a>
     </div>
@@ -406,4 +407,5 @@
     </div>
   </div>
 </section>
+{% endif %}
 {% endblock %}
