@@ -1,0 +1,409 @@
+{% extends "main.html" %}
+
+{% block hero %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;800;900&family=Exo+2:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  .chasm-hero {
+    position: relative;
+    min-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #010408 0%, #0a0e17 40%, #111827 100%);
+    overflow: hidden;
+    padding: 2rem;
+  }
+
+  .chasm-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(0, 212, 255, 0.06) 0%, transparent 60%),
+      radial-gradient(circle at 20% 80%, rgba(124, 58, 237, 0.04) 0%, transparent 50%),
+      radial-gradient(circle at 80% 60%, rgba(0, 201, 167, 0.04) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  /* Stars */
+  .chasm-hero .stars {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .chasm-hero .star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 0;
+    animation: twinkle 4s ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.6; }
+  }
+
+  .chasm-hero__content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    max-width: 800px;
+  }
+
+  .chasm-hero__logo {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1.5rem;
+  }
+
+  .chasm-hero__title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 4.5rem;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    background: linear-gradient(135deg, #00d4ff 0%, #00c9a7 50%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0 0 0.5rem;
+    line-height: 1.1;
+  }
+
+  .chasm-hero__subtitle {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 300;
+    color: #94a3b8;
+    margin: 0 0 1rem;
+    letter-spacing: 0.06em;
+  }
+
+  .chasm-hero__tagline {
+    font-size: 1rem;
+    color: #64748b;
+    margin-bottom: 2rem;
+  }
+
+  .chasm-hero__cta {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .chasm-hero__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .chasm-hero__btn--primary {
+    background: linear-gradient(135deg, #00d4ff 0%, #00c9a7 100%);
+    color: #010408;
+  }
+  .chasm-hero__btn--primary:hover {
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .chasm-hero__btn--secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+  }
+  .chasm-hero__btn--secondary:hover {
+    border-color: #00d4ff;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .chasm-hero__status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #00c9a7;
+    letter-spacing: 0.08em;
+    margin-bottom: 3rem;
+  }
+
+  /* Stats bar */
+  .chasm-hero__stats {
+    display: flex;
+    gap: 3rem;
+    justify-content: center;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+  }
+
+  .chasm-hero__stat {
+    text-align: center;
+  }
+
+  .chasm-hero__stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #00d4ff;
+    display: block;
+  }
+
+  .chasm-hero__stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #64748b;
+    margin-top: 0.25rem;
+    display: block;
+  }
+
+  /* Features grid */
+  .chasm-hero__features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    max-width: 800px;
+    margin-bottom: 3rem;
+  }
+
+  .chasm-hero__feature {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 1.2rem;
+    text-align: left;
+    transition: all 0.3s ease;
+  }
+
+  .chasm-hero__feature:hover {
+    border-color: #00d4ff;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.08);
+    transform: translateY(-2px);
+  }
+
+  .chasm-hero__feature-icon {
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .chasm-hero__feature-title {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #e2e8f0;
+    margin-bottom: 0.3rem;
+  }
+
+  .chasm-hero__feature-desc {
+    font-size: 0.78rem;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  /* Terminal preview */
+  .chasm-hero__terminal {
+    background: #0a0e17;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    max-width: 650px;
+    width: 100%;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  .chasm-hero__terminal-bar {
+    background: #111827;
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #1e293b;
+  }
+
+  .chasm-hero__terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .chasm-hero__terminal-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-left: 0.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .chasm-hero__terminal-body {
+    padding: 1rem 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+
+  .t-prompt { color: #00c9a7; }
+  .t-cmd { color: #e2e8f0; }
+  .t-flag { color: #7c3aed; }
+  .t-path { color: #f59e0b; }
+  .t-ok { color: #22c55e; }
+  .t-dim { color: #475569; }
+  .t-cyan { color: #00d4ff; }
+
+  @media (max-width: 768px) {
+    .chasm-hero__title { font-size: 2.8rem; }
+    .chasm-hero__features { grid-template-columns: repeat(2, 1fr); }
+    .chasm-hero__stats { gap: 1.5rem; }
+  }
+
+  @media (max-width: 480px) {
+    .chasm-hero__features { grid-template-columns: 1fr; }
+  }
+</style>
+
+<section class="chasm-hero">
+  <!-- Stars -->
+  <div class="stars">
+    <div class="star" style="top:8%;left:15%;animation-delay:0s"></div>
+    <div class="star" style="top:12%;left:65%;animation-delay:1.2s"></div>
+    <div class="star" style="top:25%;left:30%;animation-delay:0.5s"></div>
+    <div class="star" style="top:35%;left:80%;animation-delay:2s"></div>
+    <div class="star" style="top:5%;left:45%;animation-delay:1.8s"></div>
+    <div class="star" style="top:50%;left:10%;animation-delay:0.8s"></div>
+    <div class="star" style="top:45%;left:90%;animation-delay:3s"></div>
+    <div class="star" style="top:60%;left:55%;animation-delay:1.5s"></div>
+    <div class="star" style="top:70%;left:20%;animation-delay:2.5s"></div>
+    <div class="star" style="top:80%;left:70%;animation-delay:0.3s"></div>
+  </div>
+
+  <div class="chasm-hero__content">
+    <!-- Logo SVG -->
+    <svg class="chasm-hero__logo" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#00d4ff"/>
+          <stop offset="50%" stop-color="#00c9a7"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+      </defs>
+      <!-- Bridge arch -->
+      <path d="M15 85 Q60 20 105 85" stroke="url(#g1)" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <!-- Void below -->
+      <path d="M35 85 L45 105 M55 85 L60 110 M75 85 L70 105 M85 85 L80 100" stroke="#1e293b" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+      <!-- Pillars -->
+      <line x1="30" y1="65" x2="30" y2="85" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+      <line x1="90" y1="65" x2="90" y2="85" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+      <!-- Data nodes -->
+      <circle cx="30" cy="60" r="5" fill="#00d4ff" opacity="0.8"/>
+      <circle cx="60" cy="35" r="5" fill="#00c9a7" opacity="0.8"/>
+      <circle cx="90" cy="60" r="5" fill="#7c3aed" opacity="0.8"/>
+      <!-- Connection lines -->
+      <line x1="35" y1="58" x2="55" y2="37" stroke="#00d4ff" stroke-width="1" opacity="0.3"/>
+      <line x1="65" y1="37" x2="85" y2="58" stroke="#7c3aed" stroke-width="1" opacity="0.3"/>
+    </svg>
+
+    <h1 class="chasm-hero__title">CHASM</h1>
+    <p class="chasm-hero__subtitle">Chat Session Manager</p>
+    <p class="chasm-hero__tagline">Bridging the divide between AI providers</p>
+
+    <div class="chasm-hero__cta">
+      <a href="getting-started/quickstart/" class="chasm-hero__btn chasm-hero__btn--primary">
+        ⚡ Quick Start
+      </a>
+      <a href="https://github.com/nervosys/chasm" class="chasm-hero__btn chasm-hero__btn--secondary">
+        ⬡ GitHub
+      </a>
+    </div>
+
+    <div class="chasm-hero__status">
+      v1.3.2 • 831 TESTS PASSING • AGPL-3.0
+    </div>
+
+    <!-- Stats -->
+    <div class="chasm-hero__stats">
+      <div class="chasm-hero__stat">
+        <span class="chasm-hero__stat-value">20+</span>
+        <span class="chasm-hero__stat-label">AI Providers</span>
+      </div>
+      <div class="chasm-hero__stat">
+        <span class="chasm-hero__stat-value">831</span>
+        <span class="chasm-hero__stat-label">Tests Passing</span>
+      </div>
+      <div class="chasm-hero__stat">
+        <span class="chasm-hero__stat-value">6</span>
+        <span class="chasm-hero__stat-label">Orchestration Modes</span>
+      </div>
+      <div class="chasm-hero__stat">
+        <span class="chasm-hero__stat-value">0</span>
+        <span class="chasm-hero__stat-label">Vendor Lock-in</span>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="chasm-hero__features">
+      <div class="chasm-hero__feature">
+        <div class="chasm-hero__feature-icon">🔄</div>
+        <div class="chasm-hero__feature-title">Session Recovery</div>
+        <div class="chasm-hero__feature-desc">Recover lost VS Code chat sessions after updates, crashes, or workspace changes.</div>
+      </div>
+      <div class="chasm-hero__feature">
+        <div class="chasm-hero__feature-icon">🔍</div>
+        <div class="chasm-hero__feature-title">Harvest & Search</div>
+        <div class="chasm-hero__feature-desc">Full-text search across all your AI conversations from every provider.</div>
+      </div>
+      <div class="chasm-hero__feature">
+        <div class="chasm-hero__feature-icon">▶️</div>
+        <div class="chasm-hero__feature-title">Run & Record</div>
+        <div class="chasm-hero__feature-desc">Chat with any provider. Real-time recording ensures nothing is lost.</div>
+      </div>
+      <div class="chasm-hero__feature">
+        <div class="chasm-hero__feature-icon">🤖</div>
+        <div class="chasm-hero__feature-title">Agentic Coding</div>
+        <div class="chasm-hero__feature-desc">Multi-agent orchestration — sequential, parallel, swarm, and more.</div>
+      </div>
+      <div class="chasm-hero__feature">
+        <div class="chasm-hero__feature-icon">🔀</div>
+        <div class="chasm-hero__feature-title">Merge & Consolidate</div>
+        <div class="chasm-hero__feature-desc">Combine sessions across workspaces and time periods into one timeline.</div>
+      </div>
+      <div class="chasm-hero__feature">
+        <div class="chasm-hero__feature-icon">⏺️</div>
+        <div class="chasm-hero__feature-title">Real-time Recording</div>
+        <div class="chasm-hero__feature-desc">WebSocket + REST recording captures every conversation as it happens.</div>
+      </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="chasm-hero__terminal">
+      <div class="chasm-hero__terminal-bar">
+        <div class="chasm-hero__terminal-dot" style="background:#ff5f57"></div>
+        <div class="chasm-hero__terminal-dot" style="background:#febc2e"></div>
+        <div class="chasm-hero__terminal-dot" style="background:#28c840"></div>
+        <span class="chasm-hero__terminal-title">▸ CHASM TERMINAL</span>
+      </div>
+      <div class="chasm-hero__terminal-body">
+        <span class="t-prompt">$</span> <span class="t-cmd">cargo install chasm</span><br>
+        <span class="t-dim">  Installing chasm v1.3.2...</span><br>
+        <span class="t-ok">  ✓ Installed</span><br><br>
+        <span class="t-prompt">$</span> <span class="t-cmd">chasm harvest run</span><br>
+        <span class="t-dim">  Scanning providers...</span><br>
+        <span class="t-ok">  ✓ Copilot</span> <span class="t-dim">— 47 sessions</span><br>
+        <span class="t-ok">  ✓ Cursor</span> <span class="t-dim">— 12 sessions</span><br>
+        <span class="t-ok">  ✓ Claude Code</span> <span class="t-dim">— 8 sessions</span><br>
+        <span class="t-cyan">  Harvested: 67 sessions, 3,841 messages</span><br><br>
+        <span class="t-prompt">$</span> <span class="t-cmd">chasm harvest search</span> <span class="t-flag">"authentication"</span><br>
+        <span class="t-cyan">  Found 5 matching sessions ▸</span>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
