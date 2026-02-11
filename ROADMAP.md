@@ -1,6 +1,6 @@
 # Chasm Roadmap
 
-> **Last Updated:** February 4, 2026
+> **Last Updated:** February 10, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
 
@@ -14,12 +14,17 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 | Component            | Status   | Description                              |
 | -------------------- | -------- | ---------------------------------------- |
-| **csm-rust**         | 🟢 Active | Core Rust library and API server         |
-| **csm-web**          | 🟢 Active | React web application                    |
-| **csm-app**          | � Active | React Native mobile app                  |
-| **csm-shared**       | 🟢 Active | Shared TypeScript types and utilities    |
-| **vscode-extension**  | 🟢 Active | VS Code extension for session management |
-| **browser-extension** | 🟢 Active | Chrome/Firefox extension for web AI chat |
+| **chasm-rust**       | 🟢 Active | Core Rust CLI, library, and API server   |
+| **chasm-web**        | 🟢 Active | React web application                    |
+| **chasm-app**        | 🟢 Active | React Native mobile app                  |
+| **chasm-shared**     | 🟢 Active | Shared TypeScript types and utilities    |
+| **chasm-desktop**    | 🟢 Active | Tauri desktop application                |
+| **vscode-extension** | 🟢 Active | VS Code extension for session management |
+| **browser-extension**| 🟢 Active | Chrome/Firefox extension for web AI chat |
+| **jetbrains-plugin** | 🟢 Active | IntelliJ/JetBrains IDE plugin            |
+| **neovim-plugin**    | 🟢 Active | Neovim plugin (Lua)                      |
+| **vim-plugin**       | 🟢 Active | Vim plugin (VimScript)                   |
+| **docs website**     | 🟢 Active | MkDocs Material documentation site       |
 
 ---
 
@@ -81,30 +86,63 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] README documentation
 - [x] Ecosystem alignment docs
 - [x] Sync CONOPS documentation
+- [x] MkDocs Material documentation website (Abyss dark theme)
+- [x] Custom logo and favicon SVGs
+
+### Licensing & Governance
+- [x] AGPL-3.0-only license with commercial dual-license
+- [x] Contributor License Agreement (CLA)
+- [x] SPDX headers across all 146 source files
+- [x] Open Source Strategy documentation
+
+### Recent Features (February 2026)
+- [x] `chasm watch` — File-system monitoring for auto-harvest
+- [x] `chasm run` — Agent launcher with auto-save
+- [x] `chasm sync` — Bidirectional session backup/restore
+- [x] Real-time session recording API (crash recovery)
+- [x] Codex CLI, Droid CLI, Gemini CLI provider support
+- [x] Agent skills framework
 
 ---
 
 ## In Progress 🚧
 
+### Q1 2026
+
+#### Browser Extension Publication
+- [ ] Firefox Add-on Store publication
+- [ ] Chrome Web Store publication
+
+#### Documentation Website
+- [ ] API reference auto-generation from OpenAPI spec
+- [ ] Provider-specific setup guides
+- [ ] Video tutorials and screencasts
+- [ ] Search functionality (MkDocs search plugin)
+
+#### CLI Polish
+- [ ] Shell completions (Bash, Zsh, Fish, PowerShell)
+- [ ] `chasm doctor` — Environment diagnostics command
+- [ ] Interactive TUI improvements (session browsing)
+
+---
+
+## Completed ✅ (Previously Planned)
+
 ### Q1-Q2 2026
 
-#### Enhancements ✅
+#### Enhancements
 - [x] Session annotation and notes
 - [x] Custom session templates
 - [x] Keyboard shortcuts for power users
 - [x] Batch operations (delete, archive, export)
 
-#### Q2 2026 Features ✅
+#### Q2 2026 Features
 - [x] Multi-user collaboration
 - [x] Team workspaces
 - [x] Session sharing with permissions
 - [x] AI-powered session summarization
 - [x] Semantic search across sessions
 - [x] Custom tagging and organization
-
----
-
-## Planned 📋
 
 ### Q2 2026
 
@@ -117,8 +155,8 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Local LLM providers (Ollama, LM Studio, etc.)
 
 #### Platform
-- [x] Desktop application (Electron/Tauri)
-- [x] CLI tool for automation (chasm-cli v1.3.1 on crates.io)
+- [x] Desktop application (Tauri)
+- [x] CLI tool for automation (chasm-cli v1.3.2 on crates.io)
 - [x] Browser extension for web-based AI tools (Chrome/Firefox Manifest V3)
 
 ### Q3 2026
@@ -162,8 +200,6 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Additional provider content scripts (Copilot, Poe, Perplexity)
 - [x] Auto-harvest with configurable schedules
 - [x] Firefox Manifest V2 compatibility
-- [ ] Firefox Add-on Store publication
-- [ ] Chrome Web Store publication
 
 #### API Enhancements
 - [x] GraphQL API endpoint
@@ -230,6 +266,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | VS Code Copilot     | ✅       | ✅    | 🚧    | Primary |
 | Cursor              | ✅       | ✅    | 📋    | Active  |
 | ClaudeCode          | ✅       | ✅    | 📋    | Active  |
+| Codex CLI (OpenAI)  | ✅       | ✅    | 📋    | Active  |
+| Droid CLI (Factory) | ✅       | ✅    | 📋    | Active  |
+| Gemini CLI (Google) | ✅       | ✅    | 📋    | Active  |
 | OpenCode            | ✅       | ✅    | 📋    | Active  |
 | OpenClaw            | ✅       | ✅    | 📋    | Active  |
 | Antigravity         | ✅       | ✅    | 📋    | Active  |
@@ -249,6 +288,39 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ---
 
 ## Recent Changes
+
+### February 2026 (v1.3.2)
+
+#### License & Governance
+- Switched to AGPL-3.0-only with commercial dual-license
+- Created Contributor License Agreement (CLA)
+- Updated SPDX headers across all 146 source files
+
+#### Documentation Website
+- MkDocs Material documentation site with Abyss dark theme
+- Custom SVG logo and favicon (bridge/void gradient)
+- Sections: Getting Started, Guides, API Reference, Providers
+- Dark mode default, homepage hero with project stats
+
+#### New CLI Commands
+- `chasm watch` — File-system monitoring with auto-harvest on session changes
+- `chasm run` — Agent launcher with auto-save capabilities
+- `chasm sync` — Bidirectional session backup/restore
+
+#### New Providers
+- Codex CLI (OpenAI) — JSONL sessions in `~/.codex/sessions/`
+- Droid CLI (Factory) — JSONL sessions in `~/.factory/sessions/`
+- Gemini CLI (Google) — JSON sessions in `~/.gemini/tmp/`
+
+#### Real-time Recording API (v1.3.2)
+- Session recording to prevent data loss from editor crashes
+- Event buffering: SessionStart, MessageAdd, MessageAppend, Heartbeat
+- Snapshot storage for full session recovery
+- Multi-provider recording (VS Code, Cursor, Continue.dev, Claude Code, etc.)
+
+#### Agent Skills Framework
+- Agent skills system for extensible AI tool integration
+- SpecStory comparison documentation
 
 ### February 2026 (v1.1.0 Multi-Provider Forensics)
 
@@ -427,11 +499,11 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ## Contributing
 
-See [CONTRIBUTING.md](csm-rust/CONTRIBUTING.md) for guidelines on contributing to this project.
+See [CONTRIBUTING.md](chasm-rust/CONTRIBUTING.md) for guidelines on contributing to this project. All contributors must agree to the [CLA](CLA.md).
 
 ## License
 
-This project is licensed under the terms specified in [LICENSE](LICENSE).
+This project is licensed under [AGPL-3.0-only](LICENSE) with a [commercial dual-license](COMMERCIAL_LICENSE.md) available.
 
 
 
