@@ -125,7 +125,7 @@ pub fn discover_workspaces() -> Result<Vec<Workspace>> {
                         .filter(|e| {
                             e.path()
                                 .extension()
-                                .map(|ext| is_session_file_extension(ext))
+                                .map(is_session_file_extension)
                                 .unwrap_or(false)
                         })
                         .count()
@@ -353,7 +353,7 @@ pub fn get_chat_sessions_from_workspace(workspace_dir: &Path) -> Result<Vec<Sess
 
         if path
             .extension()
-            .map(|e| is_session_file_extension(e))
+            .map(is_session_file_extension)
             .unwrap_or(false)
         {
             if let Ok(session) = parse_session_file(&path) {

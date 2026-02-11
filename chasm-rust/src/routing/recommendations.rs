@@ -550,7 +550,7 @@ impl RecommendationEngine {
     fn generate_explanation(&self, reason: RecommendationReason, session: &SessionFeatures) -> String {
         match reason {
             RecommendationReason::SimilarContent => {
-                format!("Similar to what you're viewing")
+                "Similar to what you're viewing".to_string()
             }
             RecommendationReason::RelatedTopics => {
                 let topics = session.topics.iter().take(2).cloned().collect::<Vec<_>>().join(", ");
@@ -561,25 +561,25 @@ impl RecommendationEngine {
                 format!("Tagged with: {}", tags)
             }
             RecommendationReason::FrequentlyAccessed => {
-                format!("Frequently accessed session")
+                "Frequently accessed session".to_string()
             }
             RecommendationReason::RecentlyActive => {
-                format!("Recently active")
+                "Recently active".to_string()
             }
             RecommendationReason::HighQuality => {
                 format!("High quality session ({}% score)", session.quality_score)
             }
             RecommendationReason::SearchRelevant => {
-                format!("Matches your search")
+                "Matches your search".to_string()
             }
             RecommendationReason::Collaborative => {
-                format!("Popular with similar users")
+                "Popular with similar users".to_string()
             }
             RecommendationReason::ContinueSuggestion => {
-                format!("You might want to continue this")
+                "You might want to continue this".to_string()
             }
             RecommendationReason::Trending => {
-                format!("Trending in your team")
+                "Trending in your team".to_string()
             }
         }
     }

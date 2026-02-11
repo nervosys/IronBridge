@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2028 Nervosys LLC
+// Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Chat System Manager (CSM) - Library
 //!
@@ -44,6 +44,7 @@
 
 pub mod agency;
 pub mod analytics;
+pub mod api;
 pub mod automation;
 pub mod browser;
 pub mod cli;

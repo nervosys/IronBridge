@@ -1,7 +1,7 @@
 //! CLI Integration Tests
 //!
 //! Tests that verify the actual CLI binary works correctly.
-//! These tests run the compiled `csm` binary and check output.
+//! These tests run the compiled `chasm` binary and check output.
 
 use assert_cmd::Command;
 use predicates::prelude::*;
@@ -38,7 +38,7 @@ mod basic_cli {
             .arg("--version")
             .assert()
             .success()
-            .stdout(predicate::str::contains("csm"));
+            .stdout(predicate::str::contains("chasm"));
     }
 
     #[test]

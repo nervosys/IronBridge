@@ -6,6 +6,8 @@
 
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::type_complexity)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
 mod agency;
 mod api;
@@ -27,8 +29,8 @@ use clap::Parser;
 use cli::{
     AgencyCommands, ApiCommands, Cli, Commands, CompletionShell, DetectCommands, ExportCommands,
     FetchCommands, FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands,
-    ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands,
-    RunCommands, ShowCommands, TelemetryCommands,
+    ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands,
+    ShowCommands, TelemetryCommands,
 };
 
 /// Get the current directory name as a default pattern
@@ -48,11 +50,23 @@ fn main() -> Result<()> {
         // ====================================================================
         Commands::List { command } => match command {
             Some(ListCommands::Workspaces) => commands::list_workspaces(),
-            Some(ListCommands::Sessions { project_path, size, provider, all_providers }) => {
-                commands::list_sessions(project_path.as_deref(), size, provider.as_deref(), all_providers)
-            }
+            Some(ListCommands::Sessions {
+                project_path,
+                size,
+                provider,
+                all_providers,
+            }) => commands::list_sessions(
+                project_path.as_deref(),
+                size,
+                provider.as_deref(),
+                all_providers,
+            ),
             Some(ListCommands::Agents) => commands::list_agents_cli(),
-            Some(ListCommands::Edits { project_path, size, provider }) => {
+            Some(ListCommands::Edits {
+                project_path,
+                size,
+                provider,
+            }) => {
                 commands::list_agents_sessions(project_path.as_deref(), size, provider.as_deref())
             }
             Some(ListCommands::Path { project_path }) => {
@@ -113,7 +127,7 @@ fn main() -> Result<()> {
                     None,
                     None,
                     false,
-                    None, // provider
+                    None,  // provider
                     false, // all_providers
                     50,
                 )
@@ -141,9 +155,17 @@ fn main() -> Result<()> {
             Some(ShowCommands::Path { project_path }) => {
                 commands::history_show(project_path.as_deref())
             }
-            Some(ShowCommands::Timeline { project_path, agents, provider, all_providers }) => {
-                commands::show_timeline(project_path.as_deref(), agents, provider.as_deref(), all_providers)
-            }
+            Some(ShowCommands::Timeline {
+                project_path,
+                agents,
+                provider,
+                all_providers,
+            }) => commands::show_timeline(
+                project_path.as_deref(),
+                agents,
+                provider.as_deref(),
+                all_providers,
+            ),
             None => commands::history_show(None), // Default to current directory
         },
 
@@ -433,27 +455,41 @@ fn main() -> Result<()> {
         // ====================================================================
         Commands::Run { command } => match command {
             RunCommands::Tui => tui::run_tui(),
-            RunCommands::Claude { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("claude"), &args, no_save, verbose)
-            }
-            RunCommands::Open { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("open"), &args, no_save, verbose)
-            }
-            RunCommands::Claw { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("claw"), &args, no_save, verbose)
-            }
-            RunCommands::Cursor { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("cursor"), &args, no_save, verbose)
-            }
-            RunCommands::Codex { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("codex"), &args, no_save, verbose)
-            }
-            RunCommands::Droid { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("droid"), &args, no_save, verbose)
-            }
-            RunCommands::Gemini { args, no_save, verbose } => {
-                commands::run_agent_cli(Some("gemini"), &args, no_save, verbose)
-            }
+            RunCommands::Claude {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("claude"), &args, no_save, verbose),
+            RunCommands::Open {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("open"), &args, no_save, verbose),
+            RunCommands::Claw {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("claw"), &args, no_save, verbose),
+            RunCommands::Cursor {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("cursor"), &args, no_save, verbose),
+            RunCommands::Codex {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("codex"), &args, no_save, verbose),
+            RunCommands::Droid {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("droid"), &args, no_save, verbose),
+            RunCommands::Gemini {
+                args,
+                no_save,
+                verbose,
+            } => commands::run_agent_cli(Some("gemini"), &args, no_save, verbose),
         },
 
         // ====================================================================
@@ -667,7 +703,12 @@ fn main() -> Result<()> {
                 session,
                 output,
                 format,
-            } => commands::recover_from_database(&backup, session.as_deref(), output.as_deref(), &format),
+            } => commands::recover_from_database(
+                &backup,
+                session.as_deref(),
+                output.as_deref(),
+                &format,
+            ),
             cli::RecoverCommands::Jsonl {
                 file,
                 output,
@@ -709,7 +750,13 @@ fn main() -> Result<()> {
                 target_format,
                 no_backup,
                 dry_run,
-            } => commands::recover_upgrade(&project_paths, &provider, &target_format, no_backup, dry_run),
+            } => commands::recover_upgrade(
+                &project_paths,
+                &provider,
+                &target_format,
+                no_backup,
+                dry_run,
+            ),
         },
 
         // ====================================================================

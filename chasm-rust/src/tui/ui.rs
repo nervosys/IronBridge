@@ -633,7 +633,7 @@ fn render_search_results(frame: &mut Frame, app: &App, area: Rect) {
             let ws_name = sr
                 .workspace_project
                 .split(['/', '\\'])
-                .last()
+                .next_back()
                 .unwrap_or(&sr.workspace_project)
                 .to_string();
 

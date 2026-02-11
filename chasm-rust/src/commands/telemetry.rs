@@ -191,8 +191,8 @@ pub fn telemetry_show(
     let store = TelemetryStore::new()?;
 
     // Parse date filters
-    let after_ts = after.and_then(|d| parse_date_to_timestamp(d));
-    let before_ts = before.and_then(|d| parse_date_to_timestamp(d));
+    let after_ts = after.and_then(parse_date_to_timestamp);
+    let before_ts = before.and_then(parse_date_to_timestamp);
 
     let records = store.read_records(category, event, tag, after_ts, before_ts, Some(limit))?;
 
@@ -429,9 +429,8 @@ pub fn telemetry_config(
             println!();
             println!("To configure:");
             println!(
-                "  {} {}",
-                "chasm telemetry config".cyan(),
-                "--endpoint <URL> --api-key <KEY> --enable-remote"
+                "  {} --endpoint <URL> --api-key <KEY> --enable-remote",
+                "chasm telemetry config".cyan()
             );
         }
     }

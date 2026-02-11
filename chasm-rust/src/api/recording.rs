@@ -22,7 +22,7 @@
 
 use actix_web::{web, Error, HttpRequest, HttpResponse, Responder};
 use chrono::{DateTime, Utc};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -522,16 +522,18 @@ pub async fn list_sessions(state: web::Data<Arc<RecordingState>>) -> impl Respon
         .read()
         .map(|s| {
             s.values()
-                .map(|sess| serde_json::json!({
-                    "session_id": sess.session_id,
-                    "provider": sess.provider,
-                    "title": sess.title,
-                    "workspace_path": sess.workspace_path,
-                    "message_count": sess.messages.len(),
-                    "started_at": sess.started_at.to_rfc3339(),
-                    "last_activity": sess.last_activity.to_rfc3339(),
-                    "is_dirty": sess.is_dirty,
-                }))
+                .map(|sess| {
+                    serde_json::json!({
+                        "session_id": sess.session_id,
+                        "provider": sess.provider,
+                        "title": sess.title,
+                        "workspace_path": sess.workspace_path,
+                        "message_count": sess.messages.len(),
+                        "started_at": sess.started_at.to_rfc3339(),
+                        "last_activity": sess.last_activity.to_rfc3339(),
+                        "is_dirty": sess.is_dirty,
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -639,7 +641,10 @@ pub enum RecordingWsResponse {
     /// Connected successfully
     Connected { client_id: String },
     /// Events processed
-    EventsProcessed { count: usize, responses: Vec<RecordingResponse> },
+    EventsProcessed {
+        count: usize,
+        responses: Vec<RecordingResponse>,
+    },
     /// Subscribed to session
     Subscribed { session_id: String },
     /// Unsubscribed from session  
@@ -683,12 +688,10 @@ fn handle_ws_message(
                 subscribed_sessions.retain(|s| s != &session_id);
                 Some(RecordingWsResponse::Unsubscribed { session_id })
             }
-            RecordingWsMessage::Ping { timestamp } => {
-                Some(RecordingWsResponse::Pong {
-                    timestamp,
-                    server_time: Utc::now().timestamp_millis(),
-                })
-            }
+            RecordingWsMessage::Ping { timestamp } => Some(RecordingWsResponse::Pong {
+                timestamp,
+                server_time: Utc::now().timestamp_millis(),
+            }),
         },
         Err(e) => Some(RecordingWsResponse::Error {
             code: "parse_error".to_string(),
@@ -703,7 +706,7 @@ fn should_forward_event(event: &RecordingEvent, subscribed_sessions: &[String]) 
     if subscribed_sessions.is_empty() {
         return true;
     }
-    
+
     let session_id = match event {
         RecordingEvent::SessionStart { session_id, .. } => Some(session_id),
         RecordingEvent::SessionEnd { session_id, .. } => Some(session_id),
@@ -714,8 +717,10 @@ fn should_forward_event(event: &RecordingEvent, subscribed_sessions: &[String]) 
         RecordingEvent::SessionSnapshot { session_id, .. } => Some(session_id),
         RecordingEvent::Heartbeat { session_id, .. } => session_id.as_ref(),
     };
-    
-    session_id.map(|sid| subscribed_sessions.contains(sid)).unwrap_or(false)
+
+    session_id
+        .map(|sid| subscribed_sessions.contains(sid))
+        .unwrap_or(false)
 }
 
 /// WebSocket endpoint for recording using actix-ws

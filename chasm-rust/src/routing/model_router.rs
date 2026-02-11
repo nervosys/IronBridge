@@ -270,6 +270,7 @@ pub enum RoutingStrategy {
 
 /// Routing constraints
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct RoutingConstraints {
     /// Maximum cost per request (USD)
     pub max_cost: Option<f64>,
@@ -287,19 +288,6 @@ pub struct RoutingConstraints {
     pub require_functions: bool,
 }
 
-impl Default for RoutingConstraints {
-    fn default() -> Self {
-        Self {
-            max_cost: None,
-            max_latency_ms: None,
-            min_context_window: None,
-            allowed_providers: None,
-            blocked_providers: vec![],
-            require_vision: false,
-            require_functions: false,
-        }
-    }
-}
 
 /// Routing configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

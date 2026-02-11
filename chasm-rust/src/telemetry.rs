@@ -618,8 +618,7 @@ impl TelemetryStore {
                 return Err(CsmError::InvalidSessionFormat(format!(
                     "Unknown export format: {}",
                     format
-                ))
-                .into());
+                )));
             }
         }
 
@@ -636,7 +635,7 @@ impl TelemetryStore {
         if !self.config.is_remote_enabled() {
             return Err(CsmError::InvalidSessionFormat(
                 "Remote telemetry not configured. Use 'chasm telemetry config' to set endpoint and API key".to_string()
-            ).into());
+            ));
         }
 
         let endpoint = self.config.remote_endpoint.as_ref().unwrap();

@@ -302,7 +302,7 @@ fn list_sessions_multi_provider(
         return Ok(());
     }
 
-    let target_path = project_path.map(|p| crate::workspace::normalize_path(p));
+    let target_path = project_path.map(crate::workspace::normalize_path);
 
     #[derive(Tabled)]
     struct SessionRowMulti {
@@ -1892,7 +1892,7 @@ pub fn list_agents_sessions(
         size: String,
     }
 
-    let target_path = project_path.map(|p| crate::workspace::normalize_path(p));
+    let target_path = project_path.map(crate::workspace::normalize_path);
     let mut total_size: u64 = 0;
     let mut rows_with_size: Vec<AgentSessionRowWithSize> = Vec::new();
     let mut rows: Vec<AgentSessionRow> = Vec::new();
@@ -2039,7 +2039,7 @@ pub fn show_agent_session(session_id: &str, project_path: Option<&str>) -> Resul
 
     let storage_path = crate::workspace::get_workspace_storage_path()?;
     let session_id_lower = session_id.to_lowercase();
-    let target_path = project_path.map(|p| crate::workspace::normalize_path(p));
+    let target_path = project_path.map(crate::workspace::normalize_path);
 
     for entry in std::fs::read_dir(&storage_path)?.filter_map(|e| e.ok()) {
         let workspace_dir = entry.path();
@@ -2165,7 +2165,7 @@ pub fn show_timeline(
         return Ok(());
     }
 
-    let target_path = project_path.map(|p| crate::workspace::normalize_path(p));
+    let target_path = project_path.map(crate::workspace::normalize_path);
 
     // Collect all session dates (date -> (chat_count, agent_count, provider))
     let mut date_activity: BTreeMap<chrono::NaiveDate, (usize, usize)> = BTreeMap::new();

@@ -14,6 +14,14 @@ keywords = ["chat", "ai", "copilot", "session", "history"]
 categories = ["command-line-utilities", "development-tools", "database"]
 exclude = ["target/", "tests/fixtures/", ".github/", "*.db", "*.log"]
 
+[lib]
+name = "chasm"
+path = "src/lib.rs"
+
+[features]
+default = []
+enterprise = []
+
 [dependencies]
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env"] }
@@ -37,7 +45,9 @@ rusqlite = { version = "0.30", features = ["bundled"] }
 walkdir = "2.4"
 dirs = "5.0"
 glob = "0.3"
-notify = { version = "7.0", default-features = false, features = ["macos_fsevent"] }
+notify = { version = "7.0", default-features = false, features = [
+    "macos_fsevent",
+] }
 notify-debouncer-mini = "0.5"
 
 # Lazy static initialization

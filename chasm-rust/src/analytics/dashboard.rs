@@ -462,7 +462,7 @@ impl AnalyticsEngine {
                 timestamp: current,
                 value: *daily_tokens.get(&date_key).unwrap_or(&0) as f64,
             });
-            current = current + Duration::days(1);
+            current += Duration::days(1);
         }
 
         UsageTrends {

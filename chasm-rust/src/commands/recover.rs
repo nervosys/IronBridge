@@ -127,17 +127,16 @@ pub fn recover_scan(provider: &str, verbose: bool, _include_old: bool) -> Result
             if let Ok(entries) = fs::read_dir(&copilot_path) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.extension().map_or(false, |e| e == "jsonl") {
+                    if path.extension().is_some_and(|e| e == "jsonl") {
                         // Try to parse the file
                         if let Ok(content) = fs::read_to_string(&path) {
                             let lines: Vec<&str> = content.lines().collect();
                             let mut errors = 0;
                             for line in &lines {
-                                if !line.is_empty() {
-                                    if serde_json::from_str::<serde_json::Value>(line).is_err() {
+                                if !line.is_empty()
+                                    && serde_json::from_str::<serde_json::Value>(line).is_err() {
                                         errors += 1;
                                     }
-                                }
                             }
                             if errors > 0 {
                                 corrupted_count += 1;
@@ -436,7 +435,7 @@ pub fn recover_jsonl(file_path: &str, output: Option<&str>, aggressive: bool) ->
     println!("╚═══════════════════════════════════════════════════════════════════╝");
 
     if recovered > 0 {
-        let output_path = output.map(|s| PathBuf::from(s)).unwrap_or_else(|| {
+        let output_path = output.map(PathBuf::from).unwrap_or_else(|| {
             let p = Path::new(file_path);
             p.with_extension("recovered.jsonl")
         });
@@ -570,7 +569,7 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
         let mut repaired = 0;
         for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
             let file_path = entry.path();
-            if file_path.extension().map_or(false, |e| e == "jsonl" || e == "json") {
+            if file_path.extension().is_some_and(|e| e == "jsonl" || e == "json") {
                 if let Ok(content) = fs::read_to_string(file_path) {
                     let needs_repair = content.lines().any(|line| {
                         !line.is_empty() && serde_json::from_str::<serde_json::Value>(line).is_err()
@@ -689,7 +688,7 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
         // Check copilot history
         if let Some(history_path) = get_copilot_history_path(name) {
             let count = fs::read_dir(&history_path)
-                .map(|r| r.filter(|e| e.as_ref().map(|e| e.path().extension().map_or(false, |ext| ext == "jsonl")).unwrap_or(false)).count())
+                .map(|r| r.filter(|e| e.as_ref().map(|e| e.path().extension().is_some_and(|ext| ext == "jsonl")).unwrap_or(false)).count())
                 .unwrap_or(0);
             println!("    JSONL session files: {}", count);
         }
@@ -1104,18 +1103,18 @@ pub fn recover_extract(
         let dest_path = output_dir.join(&dest_name);
 
         if source_path.is_file() {
-            if let Ok(metadata) = fs::metadata(&source_path) {
+            if let Ok(metadata) = fs::metadata(source_path) {
                 total_size += metadata.len();
             }
             
-            fs::copy(&source_path, &dest_path)
+            fs::copy(source_path, &dest_path)
                 .with_context(|| format!("Failed to copy: {}", source_path.display()))?;
             
             file_count += 1;
             println!("    [+] {} -> {}", source_path.display(), dest_name);
         } else if source_path.is_dir() {
             // Copy directory recursively
-            copy_dir_recursive(&source_path, &dest_path)?;
+            copy_dir_recursive(source_path, &dest_path)?;
             file_count += 1;
             println!("    [+] {} (directory)", dest_name);
         }

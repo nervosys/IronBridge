@@ -919,7 +919,7 @@ impl App {
                     .and_then(|ws| ws.project_path.as_ref())
                     .map(|p| {
                         p.split(['/', '\\'])
-                            .last()
+                            .next_back()
                             .unwrap_or(p)
                             .to_string()
                     })
@@ -932,7 +932,7 @@ impl App {
                     .and_then(|ws| ws.project_path.as_ref())
                     .map(|p| {
                         p.split(['/', '\\'])
-                            .last()
+                            .next_back()
                             .unwrap_or(p)
                             .to_string()
                     })

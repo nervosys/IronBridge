@@ -19,6 +19,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `GET /api/recording/status` - Recording service status
   - Event buffering with concurrent session tracking via `RecordingState`
 
+## [1.3.1] - 2026-02-04
+
+### Changed
+
+- Bumped version for Recording API release prep
+- Updated CHANGELOG formatting
+
+## [1.3.0] - 2026-02-04
+
+### Added
+
+- **Continue.dev Provider Support** - Session harvesting for Continue.dev IDE extension
+- Published to crates.io
+
+## [1.2.0] - 2026-02-01
+
+### Added
+
+- **TUI Abyss Dark Theme** - Deep purple/green color palette matching the project brand
+- **TUI Functional Expansion** - Full CLI parity in the TUI browser
+  - Session search with real-time filtering
+  - Sort sessions by date, title, size, or message count
+  - Multi-format export (JSON, Markdown, plain text) with `e` key
+  - Delete sessions with confirmation prompt via `d` key
+  - Yank/copy session content to clipboard with `y` key
+  - Breadcrumb navigation bar
+  - Status bar with keybinding hints
+- **CLI Name Standardization** - Binary renamed from `csm` to `chasm`
+- **CLI Polish** - Shell completions, `chasm doctor`, provider guides
+- **Sync Command** - Bidirectional session backup and restore (`chasm sync`)
+- **Watch Command** - File-system monitoring for session changes (`chasm watch`)
+- **Agent Launcher** - `chasm run agent` with auto-save capability
+- **New Providers** - Codex CLI, Droid CLI, Gemini CLI support
+- **Agent Skills & SpecStory Comparison** integration
+- **OpenAPI Auto-Generated API Docs** with Swagger UI
+
+### Changed
+
+- Moved `chasm run list-agents` → `chasm list agents`
+- Updated CLI output colors to match demo.svg palette
+- Sanitized private data in repository
+- Updated dependencies and fixed lint errors
+
+### Fixed
+
+- **Release Readiness** - Added `[lib]` section to Cargo.toml (lib target: `chasm`)
+- **Feature Declaration** - Added `[features]` section with `enterprise` feature
+- **Integration Tests** - Fixed `use chasm::...` imports (previously broken by missing lib target)
+- **MCP Binary Import** - Updated `csm-mcp` to use `chasm` lib target
+- **Version Test** - Updated `test_version_flag` to expect `chasm` instead of `csm`
+- **Unused Imports** - Removed `SinkExt` from recording.rs and websocket.rs
+- **Copyright Year** - Fixed lib.rs copyright to 2024-2026
+
 ## [1.1.0] - 2026-02-04
 
 ### Added

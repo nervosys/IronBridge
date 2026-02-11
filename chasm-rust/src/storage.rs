@@ -499,8 +499,7 @@ pub fn parse_session_auto(content: &str) -> std::result::Result<(ChatSession, Se
 /// Parse a session file, automatically detecting format from content (not just extension)
 pub fn parse_session_file(path: &Path) -> std::result::Result<ChatSession, serde_json::Error> {
     let content = std::fs::read_to_string(path).map_err(|e| {
-        serde_json::Error::io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        serde_json::Error::io(std::io::Error::other(
             e.to_string(),
         ))
     })?;
@@ -630,7 +629,7 @@ pub fn sync_session_index(
             let path = entry.path();
             if path
                 .extension()
-                .map(|e| is_session_file_extension(e))
+                .map(is_session_file_extension)
                 .unwrap_or(false)
             {
                 if let Some(stem) = path.file_stem() {
@@ -661,7 +660,7 @@ pub fn sync_session_index(
 
         if path
             .extension()
-            .map(|e| is_session_file_extension(e))
+            .map(is_session_file_extension)
             .unwrap_or(false)
         {
             if let Ok(session) = parse_session_file(&path) {
@@ -728,7 +727,7 @@ pub fn register_all_sessions_from_directory(
 
         if path
             .extension()
-            .map(|e| is_session_file_extension(e))
+            .map(is_session_file_extension)
             .unwrap_or(false)
         {
             if let Ok(session) = parse_session_file(&path) {
@@ -832,7 +831,7 @@ pub fn read_empty_window_sessions() -> Result<Vec<ChatSession>> {
 
         if path
             .extension()
-            .is_some_and(|e| is_session_file_extension(e))
+            .is_some_and(is_session_file_extension)
         {
             if let Ok(session) = parse_session_file(&path) {
                 sessions.push(session);
@@ -906,7 +905,7 @@ pub fn count_empty_window_sessions() -> Result<usize> {
         .filter(|e| {
             e.path()
                 .extension()
-                .is_some_and(|ext| is_session_file_extension(ext))
+                .is_some_and(is_session_file_extension)
         })
         .count();
 
