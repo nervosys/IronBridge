@@ -12,19 +12,19 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ## Components
 
-| Component            | Status   | Description                              |
-| -------------------- | -------- | ---------------------------------------- |
-| **chasm-rust**       | 🟢 Active | Core Rust CLI, library, and API server   |
-| **chasm-web**        | 🟢 Active | React web application                    |
-| **chasm-app**        | 🟢 Active | React Native mobile app                  |
-| **chasm-shared**     | 🟢 Active | Shared TypeScript types and utilities    |
-| **chasm-desktop**    | 🟢 Active | Tauri desktop application                |
-| **vscode-extension** | 🟢 Active | VS Code extension for session management |
-| **browser-extension**| 🟢 Active | Chrome/Firefox extension for web AI chat |
-| **jetbrains-plugin** | 🟢 Active | IntelliJ/JetBrains IDE plugin            |
-| **neovim-plugin**    | 🟢 Active | Neovim plugin (Lua)                      |
-| **vim-plugin**       | 🟢 Active | Vim plugin (VimScript)                   |
-| **docs website**     | 🟢 Active | MkDocs Material documentation site       |
+| Component             | Status   | Description                              |
+| --------------------- | -------- | ---------------------------------------- |
+| **chasm-rust**        | 🟢 Active | Core Rust CLI, library, and API server   |
+| **chasm-web**         | 🟢 Active | React web application                    |
+| **chasm-app**         | 🟢 Active | React Native mobile app                  |
+| **chasm-shared**      | 🟢 Active | Shared TypeScript types and utilities    |
+| **chasm-desktop**     | 🟢 Active | Tauri desktop application                |
+| **vscode-extension**  | 🟢 Active | VS Code extension for session management |
+| **browser-extension** | 🟢 Active | Chrome/Firefox extension for web AI chat |
+| **jetbrains-plugin**  | 🟢 Active | IntelliJ/JetBrains IDE plugin            |
+| **neovim-plugin**     | 🟢 Active | Neovim plugin (Lua)                      |
+| **vim-plugin**        | 🟢 Active | Vim plugin (VimScript)                   |
+| **docs website**      | 🟢 Active | MkDocs Material documentation site       |
 
 ---
 
@@ -112,17 +112,22 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 #### Browser Extension Publication
 - [ ] Firefox Add-on Store publication
 - [ ] Chrome Web Store publication
+- [x] PNG icon generation (16, 32, 48, 128px)
+- [x] Privacy policy and store listing copy
 
 #### Documentation Website
 - [ ] API reference auto-generation from OpenAPI spec
-- [ ] Provider-specific setup guides
+- [x] Provider-specific setup guides (12 providers)
 - [ ] Video tutorials and screencasts
-- [ ] Search functionality (MkDocs search plugin)
+- [x] Search functionality (MkDocs search plugin)
 
 #### CLI Polish
-- [ ] Shell completions (Bash, Zsh, Fish, PowerShell)
-- [ ] `chasm doctor` — Environment diagnostics command
-- [ ] Interactive TUI improvements (session browsing)
+- [x] Shell completions (Bash, Zsh, Fish, PowerShell, Elvish)
+- [x] `chasm doctor` — Environment diagnostics command (13+ checks)
+- [x] `chasm provider` — Provider management commands
+- [x] `chasm watch` — File-system monitoring with auto-harvest
+- [x] Interactive TUI improvements (session browsing, export, filtering)
+- [x] CLI reference documentation (watch, provider, completions, doctor)
 
 ---
 
@@ -276,12 +281,12 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | ChatGPT             | ✅       | ✅    | 📋    | Active  |
 | GPT4All             | ✅       | ✅    | 📋    | Active  |
 | Jan                 | ✅       | ✅    | 📋    | Active  |
-| LlamaFile           | ✅       | ✅    | —     | Active  |
+| LlamaFile           | ✅       | ✅    | —    | Active  |
 | LM Studio           | ✅       | ✅    | 📋    | Active  |
-| LocalAI             | ✅       | ✅    | —     | Active  |
+| LocalAI             | ✅       | ✅    | —    | Active  |
 | Ollama              | ✅       | ✅    | 📋    | Active  |
 | Text Gen WebUI      | ✅       | ✅    | 📋    | Active  |
-| vLLM                | ✅       | ✅    | —     | Active  |
+| vLLM                | ✅       | ✅    | —    | Active  |
 
 **Legend:** ✅ Complete | 🚧 In Progress | 📋 Planned
 

@@ -22,8 +22,8 @@ info:
     name: Nervosys LLC
     url: https://github.com/nervosys/chasm
   license:
-    name: Apache 2.0
-    url: https://www.apache.org/licenses/LICENSE-2.0
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.html
 
 servers:
   - url: http://localhost:8787/api/v1

@@ -326,6 +326,164 @@ chasm git log /path/to/project
 
 ---
 
+## Watch (File-System Monitor)
+
+Watch agent session directories for changes and auto-harvest new sessions.
+
+| Command | Description |
+|---|---|
+| `chasm watch` | Watch all known agent directories for changes |
+| `chasm watch --agent <name>` | Watch a specific agent's session directory |
+| `chasm watch --path <dir>` | Watch a custom directory path |
+| `chasm watch --no-harvest` | Detect changes without harvesting (dry-run) |
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| `--agent, -a` | — | Watch a specific agent (e.g., `claude`, `gemini`, `codex`) |
+| `--path, -p` | — | Watch a custom path instead of agent directories |
+| `--debounce, -d` | `3` | Debounce interval in seconds before harvesting |
+| `--no-harvest` | `false` | Detect changes without harvesting |
+| `--verbose, -v` | `false` | Show detailed file change events |
+
+### Examples
+
+```bash
+# Watch all agent directories
+chasm watch
+
+# Watch only Claude Code sessions
+chasm watch --agent claude
+
+# Watch a custom directory with verbose output
+chasm watch --path /path/to/sessions --verbose
+
+# Dry-run: see changes without harvesting
+chasm watch --no-harvest --debounce 5
+```
+
+---
+
+## Provider Management
+
+Commands for managing LLM provider configuration and connectivity.
+
+| Command | Description |
+|---|---|
+| `chasm provider list` | List all discovered LLM providers |
+| `chasm provider info <name>` | Show detailed info about a provider |
+| `chasm provider config <name>` | Configure a provider's settings |
+| `chasm provider test <name>` | Test connection to a provider |
+| `chasm provider import --from <name>` | Import sessions from another provider |
+
+### Configuration Options
+
+```bash
+chasm provider config ollama \
+  --endpoint http://localhost:11434 \
+  --model mistral \
+  --enabled true
+
+chasm provider config openai \
+  --api-key sk-... \
+  --model gpt-4o
+```
+
+### Examples
+
+```bash
+# List all providers
+chasm provider list
+
+# Check a provider
+chasm provider info ollama
+chasm provider test ollama
+
+# Import sessions from Cursor into current project
+chasm provider import --from cursor --path .
+```
+
+---
+
+## Shell Completions
+
+Generate shell completions for your preferred shell.
+
+| Command | Description |
+|---|---|
+| `chasm completions bash` | Generate Bash completions |
+| `chasm completions zsh` | Generate Zsh completions |
+| `chasm completions fish` | Generate Fish completions |
+| `chasm completions powershell` | Generate PowerShell completions |
+| `chasm completions elvish` | Generate Elvish completions |
+
+### Installation
+
+```bash
+# Bash (add to ~/.bashrc)
+chasm completions bash > ~/.local/share/bash-completion/completions/chasm
+
+# Zsh (add to fpath)
+chasm completions zsh > ~/.zfunc/_chasm
+
+# Fish
+chasm completions fish > ~/.config/fish/completions/chasm.fish
+
+# PowerShell (add to $PROFILE)
+chasm completions powershell >> $PROFILE
+```
+
+---
+
+## Doctor (Diagnostics)
+
+Check system environment, providers, and configuration health.
+
+| Command | Description |
+|---|---|
+| `chasm doctor` | Run basic environment checks |
+| `chasm doctor --full` | Run all checks including network connectivity |
+| `chasm doctor --format json` | Output results as JSON |
+| `chasm doctor --fix` | Attempt to fix detected issues automatically |
+
+### Checks Performed
+
+| Category | Check | Requires `--full` |
+|---|---|---|
+| System | Chasm version | No |
+| System | Rust version | No |
+| System | Operating system | No |
+| Storage | VS Code session storage | No |
+| Storage | Cursor session storage | No |
+| Storage | Harvest database | No |
+| Provider | Claude Code CLI | No |
+| Provider | Codex CLI (OpenAI) | No |
+| Provider | Gemini CLI (Google) | No |
+| Tools | Git | No |
+| Tools | SQLite | No |
+| Network | Ollama server | Yes |
+| Network | LM Studio server | Yes |
+| Network | Chasm API server | Yes |
+
+### Examples
+
+```bash
+# Quick check
+chasm doctor
+
+# Full check with network tests
+chasm doctor --full
+
+# JSON output for scripting
+chasm doctor --format json
+
+# Auto-fix issues
+chasm doctor --fix
+```
+
+---
+
 ## Telemetry
 
 | Command | Description |

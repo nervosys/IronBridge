@@ -376,4 +376,31 @@ impl App {
     pub fn total_sessions(&self) -> usize {
         self.workspaces.iter().map(|w| w.chat_session_count).sum()
     }
+
+    /// Export the currently viewed session to a JSON file
+    pub fn export_current_session(&mut self) {
+        if let Some(session_info) = self.current_session() {
+            let filename = format!(
+                "chasm_export_{}.json",
+                chrono::Utc::now().format("%Y%m%d_%H%M%S")
+            );
+            match serde_json::to_string_pretty(&session_info.session) {
+                Ok(json) => match std::fs::write(&filename, &json) {
+                    Ok(_) => {
+                        self.status_message =
+                            Some(format!("Exported to {filename}"));
+                    }
+                    Err(e) => {
+                        self.status_message =
+                            Some(format!("Export failed: {e}"));
+                    }
+                },
+                Err(e) => {
+                    self.status_message = Some(format!("Serialization failed: {e}"));
+                }
+            }
+        } else {
+            self.status_message = Some("No session selected".to_string());
+        }
+    }
 }

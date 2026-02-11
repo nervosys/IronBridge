@@ -4,6 +4,7 @@
 
 mod agency;
 mod detect;
+mod doctor;
 mod export_import;
 mod git;
 mod harvest;
@@ -19,6 +20,7 @@ mod workspace_cmds;
 
 pub use agency::*;
 pub use detect::*;
+pub use doctor::*;
 pub use export_import::*;
 pub use git::*;
 pub use harvest::*;

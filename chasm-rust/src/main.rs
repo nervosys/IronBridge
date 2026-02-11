@@ -25,9 +25,9 @@ mod workspace;
 use anyhow::Result;
 use clap::Parser;
 use cli::{
-    AgencyCommands, ApiCommands, Cli, Commands, DetectCommands, ExportCommands, FetchCommands,
-    FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands, ListCommands,
-    MergeCommands, MigrationCommands, MoveCommands, ProviderCommands,
+    AgencyCommands, ApiCommands, Cli, Commands, CompletionShell, DetectCommands, ExportCommands,
+    FetchCommands, FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands,
+    ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands,
     RunCommands, ShowCommands, TelemetryCommands,
 };
 
@@ -880,6 +880,19 @@ fn main() -> Result<()> {
         },
 
         // ====================================================================
+        // Completions
+        // ====================================================================
+        Commands::Completions { shell } => {
+            generate_completions(shell);
+            Ok(())
+        }
+
+        // ====================================================================
+        // Doctor
+        // ====================================================================
+        Commands::Doctor { full, format, fix } => commands::doctor(full, &format, fix),
+
+        // ====================================================================
         // Easter Egg
         // ====================================================================
         Commands::Banner => {
@@ -887,6 +900,21 @@ fn main() -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn generate_completions(shell: CompletionShell) {
+    use clap::CommandFactory;
+    use clap_complete::{generate, Shell};
+
+    let mut cmd = Cli::command();
+    let shell = match shell {
+        CompletionShell::Bash => Shell::Bash,
+        CompletionShell::Zsh => Shell::Zsh,
+        CompletionShell::Fish => Shell::Fish,
+        CompletionShell::Powershell => Shell::PowerShell,
+        CompletionShell::Elvish => Shell::Elvish,
+    };
+    generate(shell, &mut cmd, "chasm", &mut std::io::stdout());
 }
 
 fn print_banner() {

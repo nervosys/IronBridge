@@ -268,6 +268,35 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Completions Command
+    // ============================================================================
+    /// Generate shell completions for bash, zsh, fish, or PowerShell
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
+
+    // ============================================================================
+    // Doctor Command
+    // ============================================================================
+    /// Check system environment, providers, and configuration health
+    #[command(visible_alias = "check")]
+    Doctor {
+        /// Run all checks including network connectivity
+        #[arg(long)]
+        full: bool,
+
+        /// Output format: text, json
+        #[arg(long, default_value = "text")]
+        format: String,
+
+        /// Attempt to fix detected issues automatically
+        #[arg(long)]
+        fix: bool,
+    },
+
+    // ============================================================================
     // Easter Egg
     // ============================================================================
     /// Show banner
@@ -2004,4 +2033,23 @@ fn parse_key_value(s: &str) -> std::result::Result<(String, String), String> {
         .find('=')
         .ok_or_else(|| format!("invalid key=value pair: no '=' found in '{s}'"))?;
     Ok((s[..pos].to_string(), s[pos + 1..].to_string()))
+}
+
+// ============================================================================
+// Shell Completion Enum
+// ============================================================================
+
+/// Supported shells for completion generation
+#[derive(Clone, Debug, clap::ValueEnum)]
+pub enum CompletionShell {
+    /// Bash shell
+    Bash,
+    /// Zsh shell
+    Zsh,
+    /// Fish shell
+    Fish,
+    /// PowerShell
+    Powershell,
+    /// Elvish shell
+    Elvish,
 }

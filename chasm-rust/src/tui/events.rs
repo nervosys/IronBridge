@@ -125,6 +125,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                 KeyCode::Char('r') => {
                     app.refresh();
                 }
+                KeyCode::Char('e') if app.mode == AppMode::SessionDetail => {
+                    app.export_current_session();
+                }
                 _ => continue, // No redraw needed for unhandled keys
             }
 

@@ -114,3 +114,18 @@ nav:
     - Local AI Setup: guides/local-ai.md
     - IDE Integration: guides/ide.md
     - Git Versioning: guides/git.md
+    - Provider Setup:
+      - guides/providers/index.md
+      - GitHub Copilot: guides/providers/copilot.md
+      - Cursor: guides/providers/cursor.md
+      - Claude Code: guides/providers/claude-code.md
+      - Continue.dev: guides/providers/continuedev.md
+      - Codex CLI: guides/providers/codex-cli.md
+      - Gemini CLI: guides/providers/gemini-cli.md
+      - Ollama: guides/providers/ollama.md
+      - LM Studio: guides/providers/lm-studio.md
+      - GPT4All: guides/providers/gpt4all.md
+      - LocalAI: guides/providers/localai.md
+      - OpenAI / ChatGPT: guides/providers/openai.md
+      - Anthropic / Claude: guides/providers/anthropic.md
+      - Google Gemini: guides/providers/google.md

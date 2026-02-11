@@ -68,10 +68,10 @@ pub fn render(frame: &mut Frame, app: &App) {
 /// Render the header bar
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     let title = match app.mode {
-        AppMode::Workspaces => " CCSM - Workspaces ",
-        AppMode::Sessions => " CCSM - Sessions ",
-        AppMode::SessionDetail => " CCSM - Session Details ",
-        AppMode::Help => " CCSM - Help ",
+        AppMode::Workspaces => " Chasm — Workspaces ",
+        AppMode::Sessions => " Chasm — Sessions ",
+        AppMode::SessionDetail => " Chasm — Session Details ",
+        AppMode::Help => " Chasm — Help ",
     };
 
     let stats = format!(

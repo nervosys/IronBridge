@@ -17,6 +17,7 @@ exclude = ["target/", "tests/fixtures/", ".github/", "*.db", "*.log"]
 [dependencies]
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env"] }
+clap_complete = "4.4"
 
 # Async runtime
 tokio = { version = "1.34", features = ["full"] }
