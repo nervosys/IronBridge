@@ -84,4 +84,4 @@ Ask your AI coding agent to help with chasm-related tasks:
 
 ## License
 
-Apache 2.0 — same as the chasm ecosystem.
+[AGPL-3.0](../LICENSE) with [commercial dual-license](../COMMERCIAL_LICENSE.md) — same as the chasm ecosystem.

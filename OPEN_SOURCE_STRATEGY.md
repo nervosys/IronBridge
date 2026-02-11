@@ -51,20 +51,21 @@ nervosys/csm-cloud            # Future: hosted service infrastructure
 
 ### Open Source Component (csm-rust → chasm)
 
-**Recommended License: MIT or Apache 2.0**
+**License: AGPL-3.0-only with Commercial Dual-License**
 
 | License        | Pros                                        | Cons                 |
 | -------------- | ------------------------------------------- | -------------------- |
 | **MIT**        | Simple, permissive, widely understood       | No patent protection |
 | **Apache 2.0** | Patent protection, permissive               | More complex         |
 | **MPL 2.0**    | File-level copyleft, allows proprietary use | Less common          |
-| **AGPL**       | Strong copyleft                             | May deter adoption   |
+| **AGPL-3.0** ✅ | Strong copyleft, SaaS protection            | May deter adoption   |
 
-**Recommendation: Dual MIT/Apache 2.0** (like Rust itself)
+**Decision: AGPL-3.0-only + Commercial Dual-License + CLA**
 
-- Maximum compatibility
-- Patent protection via Apache
-- Encourages adoption
+- Strong copyleft ensures open-source contributions flow back
+- SaaS protection via AGPL network-use clause
+- Commercial license available for proprietary / SaaS redistribution
+- CLA enables dual-license model for contributors
 
 ### Proprietary Components
 
@@ -176,7 +177,7 @@ Before open-sourcing, audit csm-rust for:
 name = "chasm"
 version = "1.0.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "AGPL-3.0-only"
 description = "Universal chat session manager - harvest, merge, and analyze AI chat history"
 repository = "https://github.com/nervosys/chasm"
 documentation = "https://docs.rs/chasm"
@@ -323,7 +324,7 @@ ENTERPRISE (Custom)
 
 - [x] Complete code audit
 - [x] Remove proprietary references
-- [x] Finalize licensing (Apache-2.0)
+- [x] Finalize licensing (AGPL-3.0-only + commercial dual-license)
 - [x] Create public documentation
 - [x] Set up new public repository (nervosys/chasm-cli)
 
@@ -392,7 +393,7 @@ ENTERPRISE (Custom)
 
 ```rust
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 //
 // This file is part of Chasm - Universal Chat Session Manager
 // https://github.com/nervosys/chasm
@@ -406,7 +407,7 @@ ENTERPRISE (Custom)
 **Universal Chat Session Manager** - Harvest, merge, and analyze your AI chat history.
 
 [![Crates.io](https://img.shields.io/crates/v/chasm)](https://crates.io/crates/chasm)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL_3.0-blue.svg)](LICENSE)
 [![CI](https://github.com/nervosys/chasm/workflows/CI/badge.svg)](https://github.com/nervosys/chasm/actions)
 
 ## Features
@@ -444,7 +445,7 @@ chasm api serve
 
 ## License
 
-Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+Licensed under [AGPL-3.0](LICENSE) with [commercial dual-license](COMMERCIAL_LICENSE.md) available. See [CLA.md](CLA.md) for contributor terms.
 
 ## Appendix C: File Structure for Public Repo
 
@@ -470,8 +471,9 @@ chasm/
 │   └── ... (cleaned source)
 ├── tests/
 ├── Cargo.toml
-├── LICENSE-MIT
-├── LICENSE-APACHE
+├── LICENSE
+├── COMMERCIAL_LICENSE.md
+├── CLA.md
 ├── README.md
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -487,10 +489,10 @@ chasm/
 Before proceeding, decisions needed on:
 
 1. **Name**: Keep "chasm" or use different name?
-2. **License**: MIT/Apache-2.0 dual license or single license?
+2. **License**: AGPL-3.0-only + commercial dual-license ✅
 3. **VS Code Extension**: Open source with CLI or keep proprietary?
 4. **Timeline**: When to begin Phase 1?
-5. **CLA**: Require CLA or use DCO (Developer Certificate of Origin)?
+5. **CLA**: CLA required (enables dual-license model) ✅
 
 ---
 

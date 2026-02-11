@@ -11,7 +11,7 @@
   <a href="https://docs.rs/chasm"><img src="https://docs.rs/chasm/badge.svg" alt="Documentation"></a>
   <a href="https://github.com/nervosys/chasm/actions"><img src="https://github.com/nervosys/chasm/workflows/CI/badge.svg" alt="CI Status"></a>
   <a href="https://codecov.io/gh/nervosys/chasm"><img src="https://codecov.io/gh/nervosys/chasm/branch/main/graph/badge.svg" alt="Coverage"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE--2.0-blue.svg" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL_3.0-blue.svg" alt="License"></a>
 </p>
 
 ---
@@ -743,12 +743,16 @@ cargo run -- tui
 
 ## 📜 License
 
-Licensed under either of:
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) with a
+[commercial dual-license](../COMMERCIAL_LICENSE.md) option.
 
-- Apache License, Version 2.0 ([LICENSE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE](LICENSE) or http://opensource.org/licenses/MIT)
+- **Open source users**: Full AGPL-3.0 freedoms — use, modify, distribute
+- **Network use**: Must provide source to users interacting over a network
+- **Proprietary use**: Requires a [commercial license](../COMMERCIAL_LICENSE.md)
 
-at your option.
+Contributions require signing the [CLA](../CLA.md).
+
+For commercial licensing inquiries, contact [hello@nervosys.ai](mailto:hello@nervosys.ai).
 
 ## 🤝 Contributing
 

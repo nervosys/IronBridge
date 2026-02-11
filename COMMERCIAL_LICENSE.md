@@ -1,0 +1,78 @@
+# Chasm Commercial License
+
+## Overview
+
+Chasm is dual-licensed under the **GNU Affero General Public License v3.0
+(AGPL-3.0)** and a **Commercial License** for organizations that cannot comply
+with AGPL-3.0 obligations.
+
+## When You Need a Commercial License
+
+Under the AGPL-3.0, if you modify Chasm or use it to provide a network service,
+you must make the complete source code available to users of that service. A
+commercial license removes this obligation. You need a commercial license if you:
+
+- **Offer Chasm as a service** (SaaS, hosted, managed) without open-sourcing
+  your modifications
+- **Embed or redistribute** Chasm in proprietary products
+- **White-label** Chasm for resale
+- **Cannot comply** with AGPL-3.0 source disclosure requirements
+- **Need patent indemnification** or custom warranty terms
+
+## What the Commercial License Includes
+
+- Freedom from AGPL-3.0 copyleft obligations
+- Full rights to redistribute and sublicense
+- White-label and OEM embedding rights
+- Priority support and SLA options
+- Access to enterprise features (SSO, multi-tenancy, compliance)
+- Patent and IP indemnification
+- Custom integration support
+
+## Pricing
+
+Commercial licenses are available on a per-organization basis. Pricing is
+based on:
+
+- Number of seats / developers
+- Deployment scope (single product vs. portfolio)
+- Support tier requirements
+- Custom feature development needs
+
+## Contact
+
+For commercial licensing inquiries:
+
+- **Email:** [hello@nervosys.ai](mailto:hello@nervosys.ai)
+- **Web:** [nervosys.ai](https://nervosys.ai)
+- **GitHub:** [github.com/nervosys/chasm](https://github.com/nervosys/chasm)
+
+## FAQ
+
+### Can I use Chasm internally at my company for free?
+
+**Yes.** As long as you comply with AGPL-3.0 (i.e., you make source code
+available to users who interact with Chasm over a network), you can use it
+at no cost.
+
+### Can I build a product that uses Chasm and sell it?
+
+Only if you comply with AGPL-3.0 — meaning your derivative work must also
+be AGPL-3.0 licensed and source code must be available. If you want to keep
+your code proprietary, you need a commercial license.
+
+### Can I offer Chasm as a hosted service?
+
+Under AGPL-3.0, yes — but you must provide complete corresponding source to
+all users of that service. A commercial license removes this requirement.
+
+### What about contributions?
+
+By signing the [Contributor License Agreement](CLA.md), contributors grant
+Nervosys LLC the right to use contributions under both the AGPL-3.0 and
+commercial license. This enables the dual-license model while ensuring
+contributors retain their copyright. See [CONTRIBUTING.md](chasm-rust/CONTRIBUTING.md).
+
+---
+
+Copyright 2024-2026 Nervosys LLC. All rights reserved.

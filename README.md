@@ -194,4 +194,6 @@ chasm/
 
 ## License
 
-Apache 2.0 — Made by [Nervosys](https://nervosys.ai)
+[AGPL-3.0](LICENSE) with [commercial dual-license](COMMERCIAL_LICENSE.md) — Made by [Nervosys](https://nervosys.ai)
+
+Contributions require signing the [CLA](CLA.md).

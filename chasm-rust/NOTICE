@@ -13,6 +13,8 @@ Rust Standard Library and Ecosystem
 
 This software makes use of the Rust programming language and its ecosystem,
 which are dual-licensed under Apache 2.0 and MIT licenses.
+Chasm itself is licensed under AGPL-3.0-only with a commercial dual-license
+option. See LICENSE and COMMERCIAL_LICENSE.md for details.
 
 See: https://www.rust-lang.org/policies/licenses
 
