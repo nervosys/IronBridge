@@ -13,35 +13,39 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, AppMode};
+use super::app::{App, AppMode, ExportFormat};
 
-/// Color scheme for the TUI (Ayu Monokai)
+/// Color scheme for the TUI (Abyss dark theme — matching Remotion videos)
 #[allow(dead_code)]
 pub struct Colors;
 
 #[allow(dead_code)]
 impl Colors {
     // Background colors
-    pub const HEADER_BG: Color = Color::Rgb(26, 26, 36); // Dark background
+    pub const BG: Color = Color::Rgb(10, 14, 20);          // #0a0e14 deep abyss
+    pub const HEADER_BG: Color = Color::Rgb(22, 27, 34);   // #161b22 elevated surface
 
     // Selection colors
-    pub const SELECTED_BG: Color = Color::Rgb(53, 53, 71); // Muted selection background
-    pub const SELECTED_FG: Color = Color::Rgb(166, 226, 46); // Monokai green
+    pub const SELECTED_BG: Color = Color::Rgb(8, 36, 46);    // rgba(0,212,255,0.12) over abyss
+    pub const SELECTED_FG: Color = Color::Rgb(230, 237, 243); // #e6edf3 bright text on selection
 
     // Border colors
-    pub const BORDER: Color = Color::Rgb(58, 58, 78); // Muted border
-    pub const BORDER_FOCUSED: Color = Color::Rgb(253, 151, 31); // Monokai orange
+    pub const BORDER: Color = Color::Rgb(33, 38, 45);        // #21262d subtle
+    pub const BORDER_FOCUSED: Color = Color::Rgb(0, 212, 255); // #00d4ff primary cyan
 
     // Text colors
-    pub const TEXT: Color = Color::Rgb(232, 232, 232); // Light text
-    pub const TEXT_DIM: Color = Color::Rgb(117, 113, 94); // Muted/comment color
+    pub const TEXT: Color = Color::Rgb(230, 237, 243);      // #e6edf3 crisp
+    pub const TEXT_DIM: Color = Color::Rgb(139, 148, 158);  // #8b949e muted
 
-    // Accent colors (Monokai palette)
-    pub const ACCENT: Color = Color::Rgb(102, 217, 239); // Monokai cyan
-    pub const SUCCESS: Color = Color::Rgb(166, 226, 46); // Monokai green
-    pub const WARNING: Color = Color::Rgb(230, 219, 116); // Monokai yellow
-    pub const INFO: Color = Color::Rgb(102, 217, 239); // Monokai cyan
-    pub const PURPLE: Color = Color::Rgb(174, 129, 255); // Monokai purple
+    // Accent colors (Abyss palette)
+    pub const ACCENT: Color = Color::Rgb(0, 212, 255);     // #00d4ff primary cyan
+    pub const SECONDARY: Color = Color::Rgb(124, 58, 237); // #7c3aed purple
+    pub const TEAL: Color = Color::Rgb(0, 201, 167);       // #00c9a7 accent teal
+    pub const SUCCESS: Color = Color::Rgb(63, 185, 80);    // #3fb950 green
+    pub const WARNING: Color = Color::Rgb(210, 153, 34);   // #d29922 amber
+    pub const ERROR: Color = Color::Rgb(248, 81, 73);      // #f85149 red
+    pub const INFO: Color = Color::Rgb(0, 212, 255);       // #00d4ff same as primary
+    pub const PURPLE: Color = Color::Rgb(124, 58, 237);    // #7c3aed same as secondary
 }
 
 /// Render the entire UI
@@ -59,37 +63,64 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_main_content(frame, app, chunks[1]);
     render_footer(frame, app, chunks[2]);
 
-    // Render help overlay if active
+    // Render overlays
     if app.mode == AppMode::Help {
         render_help_overlay(frame);
+    }
+    if app.export_picker_active {
+        render_export_picker(frame, app);
+    }
+    if app.search_active {
+        render_search_input(frame, app);
+    }
+    if app.confirm_delete {
+        render_delete_confirm(frame);
     }
 }
 
 /// Render the header bar
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
-    let title = match app.mode {
-        AppMode::Workspaces => " Chasm — Workspaces ",
-        AppMode::Sessions => " Chasm — Sessions ",
-        AppMode::SessionDetail => " Chasm — Session Details ",
-        AppMode::Help => " Chasm — Help ",
-    };
+    let breadcrumb = app.breadcrumb();
 
     let stats = format!(
-        " {} workspaces | {} with chats | {} total sessions ",
+        "  {} workspaces · {} with chats · {} total sessions",
         app.workspaces.len(),
         app.workspaces_with_chats(),
         app.total_sessions()
     );
 
-    let header = Paragraph::new(Line::from(vec![
-        Span::styled(title, Style::default().fg(Colors::ACCENT).bold()),
-        Span::raw(" "),
-        Span::styled(stats, Style::default().fg(Colors::TEXT_DIM)),
-    ]))
+    let mut spans = vec![
+        Span::styled(" ◆ Chasm TUI", Style::default().fg(Colors::ACCENT).bold()),
+        Span::styled("  │  ", Style::default().fg(Colors::BORDER)),
+        Span::styled(breadcrumb, Style::default().fg(Colors::TEXT)),
+    ];
+
+    // Show sort order in sessions view
+    if app.mode == AppMode::Sessions {
+        spans.push(Span::styled("  │  ", Style::default().fg(Colors::BORDER)));
+        spans.push(Span::styled(
+            format!("Sort: {}", app.sort_order.label()),
+            Style::default().fg(Colors::TEXT_DIM),
+        ));
+    }
+
+    // Show filter if active
+    if !app.session_filter_query.is_empty() && app.mode == AppMode::Sessions {
+        spans.push(Span::styled("  │  ", Style::default().fg(Colors::BORDER)));
+        spans.push(Span::styled(
+            format!("Filter: {}", app.session_filter_query),
+            Style::default().fg(Colors::ACCENT),
+        ));
+    }
+
+    // Stats at end
+    spans.push(Span::styled(stats, Style::default().fg(Colors::TEXT_DIM)));
+
+    let header = Paragraph::new(Line::from(spans))
     .block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
+            .border_style(Style::default().fg(Colors::BORDER))
             .style(Style::default().bg(Colors::HEADER_BG)),
     );
 
@@ -102,7 +133,8 @@ fn render_main_content(frame: &mut Frame, app: &App, area: Rect) {
         AppMode::Workspaces => render_workspaces_view(frame, app, area),
         AppMode::Sessions => render_sessions_view(frame, app, area),
         AppMode::SessionDetail => render_session_detail_view(frame, app, area),
-        AppMode::Help => render_workspaces_view(frame, app, area), // Show workspaces behind help
+        AppMode::SearchResults => render_search_results(frame, app, area),
+        AppMode::Help => render_workspaces_view(frame, app, area),
     }
 }
 
@@ -147,7 +179,7 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
             let status = if ws.has_chat_sessions { "[OK]" } else { "[-]" };
 
             let status_style = if ws.has_chat_sessions {
-                Style::default().fg(Colors::SUCCESS)
+                Style::default().fg(Colors::TEAL)
             } else {
                 Style::default().fg(Colors::TEXT_DIM)
             };
@@ -162,7 +194,7 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
 
             Row::new(vec![
                 Cell::from(format!("{}", display_idx + 1)),
-                Cell::from(hash).style(Style::default().fg(Colors::PURPLE)),
+                Cell::from(hash).style(Style::default().fg(Colors::TEXT_DIM)),
                 Cell::from(truncate_path(&path, 40)),
                 Cell::from(sessions).style(Style::default().fg(Colors::INFO)),
                 Cell::from(status).style(status_style),
@@ -197,7 +229,7 @@ fn render_workspace_table(frame: &mut Frame, app: &App, area: Rect) {
             )),
     )
     .row_highlight_style(Style::default().bg(Colors::SELECTED_BG))
-    .highlight_symbol(">> ");
+    .highlight_symbol("▎ ");
 
     let mut state = TableState::default();
     state.select(Some(app.workspace_index));
@@ -331,12 +363,18 @@ fn render_session_table(frame: &mut Frame, app: &App, area: Rect) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
             .title(Span::styled(
-                format!(" {} - Sessions ({}) ", ws_name, app.sessions.len()),
+                format!(
+                    " {} - Sessions ({}/{}) {} ",
+                    ws_name,
+                    app.visible_session_count(),
+                    app.sessions.len(),
+                    if !app.session_filter_query.is_empty() { "filtered" } else { "" },
+                ),
                 Style::default().fg(Colors::ACCENT),
             )),
     )
     .row_highlight_style(Style::default().bg(Colors::SELECTED_BG))
-    .highlight_symbol(">> ");
+    .highlight_symbol("▎ ");
 
     let mut state = TableState::default();
     state.select(Some(app.session_index));
@@ -381,16 +419,37 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
         // User message
         if let Some(msg) = &req.message {
             let text = msg.get_text();
-            lines.push(Line::from(vec![Span::styled(
-                format!("{}. User: ", i + 1),
-                Style::default().fg(Colors::SUCCESS).bold(),
-            )]));
+            lines.push(Line::from(vec![
+                Span::styled("▎ ", Style::default().fg(Colors::ACCENT)),
+                Span::styled(
+                    format!("{}. User", i + 1),
+                    Style::default().fg(Colors::ACCENT).bold(),
+                ),
+            ]));
             lines.push(Line::from(Span::styled(
-                truncate_string(&text, 60),
+                format!("  {}", truncate_string(&text, 55)),
                 Style::default().fg(Colors::TEXT),
             )));
-            lines.push(Line::raw(""));
         }
+
+        // Assistant response
+        if let Some(resp) = &req.response {
+            if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+                lines.push(Line::from(vec![
+                    Span::styled("▎ ", Style::default().fg(Colors::SECONDARY)),
+                    Span::styled(
+                        "Assistant",
+                        Style::default().fg(Colors::SECONDARY).bold(),
+                    ),
+                ]));
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", truncate_string(result, 55)),
+                    Style::default().fg(Colors::TEXT),
+                )));
+            }
+        }
+
+        lines.push(Line::raw(""));
     }
 
     if requests.len() > 10 {
@@ -428,18 +487,18 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
     let title = session.session.title();
     let info_text = Text::from(vec![
         Line::from(vec![
-            Span::styled("Title: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled("  Title: ", Style::default().fg(Colors::TEXT_DIM)),
             Span::styled(&title, Style::default().fg(Colors::TEXT).bold()),
         ]),
         Line::from(vec![
-            Span::styled("File: ", Style::default().fg(Colors::TEXT_DIM)),
-            Span::styled(&session.filename, Style::default().fg(Colors::PURPLE)),
-            Span::styled("  |  Modified: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled("  File: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled(&session.filename, Style::default().fg(Colors::TEAL)),
+            Span::styled("  ·  Modified: ", Style::default().fg(Colors::TEXT_DIM)),
             Span::styled(&session.last_modified, Style::default().fg(Colors::INFO)),
-            Span::styled("  |  Messages: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled("  ·  Messages: ", Style::default().fg(Colors::TEXT_DIM)),
             Span::styled(
                 format!("{}", session.message_count),
-                Style::default().fg(Colors::SUCCESS),
+                Style::default().fg(Colors::TEAL),
             ),
         ]),
     ]);
@@ -465,7 +524,7 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
                 .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| "unknown".to_string());
             lines.push(Line::from(Span::styled(
-                format!("--- {} ---", dt),
+                format!("  {} ", dt),
                 Style::default().fg(Colors::TEXT_DIM),
             )));
         }
@@ -473,15 +532,39 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
         // User message
         if let Some(msg) = &req.message {
             let text = msg.get_text();
-            lines.push(Line::from(vec![Span::styled(
-                format!("[{}] User: ", i + 1),
-                Style::default().fg(Colors::SUCCESS).bold(),
-            )]));
+            lines.push(Line::from(vec![
+                Span::styled("  ▎ ", Style::default().fg(Colors::ACCENT)),
+                Span::styled(
+                    format!("[{}] User", i + 1),
+                    Style::default().fg(Colors::ACCENT).bold(),
+                ),
+            ]));
             for line in text.lines() {
                 lines.push(Line::from(Span::styled(
                     format!("    {}", line),
                     Style::default().fg(Colors::TEXT),
                 )));
+            }
+            lines.push(Line::raw(""));
+        }
+
+        // Assistant response
+        if let Some(resp) = &req.response {
+            if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+                lines.push(Line::from(vec![
+                    Span::styled("  ▎ ", Style::default().fg(Colors::SECONDARY)),
+                    Span::styled(
+                        "Assistant",
+                        Style::default().fg(Colors::SECONDARY).bold(),
+                    ),
+                ]));
+                for line in result.lines().take(20) {
+                    lines.push(Line::from(Span::styled(
+                        format!("    {}", line),
+                        Style::default().fg(Colors::TEXT),
+                    )));
+                }
+                lines.push(Line::raw(""));
             }
         }
 
@@ -497,8 +580,8 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
 
     // Scrollbar
     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-        .begin_symbol(Some("^"))
-        .end_symbol(Some("v"));
+        .begin_symbol(Some("▲"))
+        .end_symbol(Some("▼"));
 
     let total_lines = session.session.requests.len() * 5; // Approximate
     let mut scrollbar_state = ScrollbarState::new(total_lines).position(app.detail_scroll);
@@ -513,35 +596,332 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
     );
 }
 
+/// Render the search results view
+fn render_search_results(frame: &mut Frame, app: &App, area: Rect) {
+    if app.search_results.is_empty() {
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Colors::BORDER))
+            .title(Span::styled(
+                format!(" Search: \"{}\" - No results ", app.search_query),
+                Style::default().fg(Colors::ACCENT),
+            ));
+        let text = Paragraph::new(Text::styled(
+            "No sessions found matching your query.",
+            Style::default().fg(Colors::TEXT_DIM),
+        ))
+        .block(block);
+        frame.render_widget(text, area);
+        return;
+    }
+
+    let header_cells = ["#", "Workspace", "Title", "Messages", "Modified"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Style::default().fg(Colors::ACCENT).bold()));
+
+    let header = Row::new(header_cells)
+        .style(Style::default().bg(Colors::HEADER_BG))
+        .height(1);
+
+    let rows: Vec<Row> = app
+        .search_results
+        .iter()
+        .enumerate()
+        .map(|(i, sr)| {
+            let is_selected = i == app.search_index;
+            let title = sr.session_info.session.title();
+            let ws_name = sr
+                .workspace_project
+                .split(['/', '\\'])
+                .last()
+                .unwrap_or(&sr.workspace_project)
+                .to_string();
+
+            let row_style = if is_selected {
+                Style::default()
+                    .bg(Colors::SELECTED_BG)
+                    .fg(Colors::SELECTED_FG)
+            } else {
+                Style::default().fg(Colors::TEXT)
+            };
+
+            Row::new(vec![
+                Cell::from(format!("{}", i + 1)),
+                Cell::from(truncate_string(&ws_name, 20))
+                    .style(Style::default().fg(Colors::TEAL)),
+                Cell::from(truncate_string(&title, 35)),
+                Cell::from(format!("{}", sr.session_info.message_count))
+                    .style(Style::default().fg(Colors::INFO)),
+                Cell::from(sr.session_info.last_modified.clone())
+                    .style(Style::default().fg(Colors::TEXT_DIM)),
+            ])
+            .style(row_style)
+            .height(1)
+        })
+        .collect();
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(4),
+            Constraint::Length(22),
+            Constraint::Min(20),
+            Constraint::Length(10),
+            Constraint::Length(18),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
+            .title(Span::styled(
+                format!(
+                    " Search: \"{}\" ({} results) ",
+                    app.search_query,
+                    app.search_results.len()
+                ),
+                Style::default().fg(Colors::ACCENT),
+            )),
+    )
+    .row_highlight_style(Style::default().bg(Colors::SELECTED_BG))
+    .highlight_symbol("▎ ");
+
+    let mut state = TableState::default();
+    state.select(Some(app.search_index));
+
+    frame.render_stateful_widget(table, area, &mut state);
+}
+
+/// Render export format picker overlay
+fn render_export_picker(frame: &mut Frame, app: &App) {
+    let area = centered_rect(40, 30, frame.area());
+    frame.render_widget(Clear, area);
+
+    let formats = ExportFormat::all();
+    let mut lines: Vec<Line> = vec![
+        Line::from(Span::styled(
+            "Select Export Format",
+            Style::default().fg(Colors::ACCENT).bold(),
+        )),
+        Line::raw(""),
+    ];
+
+    for (i, fmt) in formats.iter().enumerate() {
+        let is_selected = i == app.export_format_index;
+        let marker = if is_selected { "▎ " } else { "  " };
+        let style = if is_selected {
+            Style::default()
+                .fg(Colors::SELECTED_FG)
+                .bg(Colors::SELECTED_BG)
+                .bold()
+        } else {
+            Style::default().fg(Colors::TEXT)
+        };
+        lines.push(Line::from(vec![
+            Span::styled(marker, Style::default().fg(Colors::ACCENT)),
+            Span::styled(format!("[{}] {}", i + 1, fmt.label()), style),
+        ]));
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![
+        Span::styled("Enter", Style::default().fg(Colors::ACCENT)),
+        Span::styled(" confirm  ", Style::default().fg(Colors::TEXT_DIM)),
+        Span::styled("1-4", Style::default().fg(Colors::ACCENT)),
+        Span::styled(" quick select  ", Style::default().fg(Colors::TEXT_DIM)),
+        Span::styled("Esc", Style::default().fg(Colors::ACCENT)),
+        Span::styled(" cancel", Style::default().fg(Colors::TEXT_DIM)),
+    ]));
+
+    let picker = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(Span::styled(
+                    " Export ",
+                    Style::default().fg(Colors::ACCENT).bold(),
+                ))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
+                .style(Style::default().bg(Colors::BG)),
+        )
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(picker, area);
+}
+
+/// Render search input overlay
+fn render_search_input(frame: &mut Frame, app: &App) {
+    let area = centered_rect(50, 20, frame.area());
+    frame.render_widget(Clear, area);
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "Global Search",
+            Style::default().fg(Colors::ACCENT).bold(),
+        )),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled(" Query: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled(&app.search_query, Style::default().fg(Colors::TEXT)),
+            Span::styled("_", Style::default().fg(Colors::ACCENT)),
+        ]),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("Enter", Style::default().fg(Colors::ACCENT)),
+            Span::styled(" search  ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled("Esc", Style::default().fg(Colors::ACCENT)),
+            Span::styled(" cancel", Style::default().fg(Colors::TEXT_DIM)),
+        ]),
+    ];
+
+    let input = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(Span::styled(
+                    " Search ",
+                    Style::default().fg(Colors::ACCENT).bold(),
+                ))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
+                .style(Style::default().bg(Colors::BG)),
+        )
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(input, area);
+}
+
+/// Render delete confirmation overlay
+fn render_delete_confirm(frame: &mut Frame) {
+    let area = centered_rect(40, 20, frame.area());
+    frame.render_widget(Clear, area);
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "Delete Session?",
+            Style::default().fg(Colors::WARNING).bold(),
+        )),
+        Line::raw(""),
+        Line::from(Span::styled(
+            "Press d again to confirm deletion.",
+            Style::default().fg(Colors::TEXT),
+        )),
+        Line::from(Span::styled(
+            "Press Esc to cancel.",
+            Style::default().fg(Colors::TEXT_DIM),
+        )),
+    ];
+
+    let dialog = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(Span::styled(
+                    " Confirm ",
+                    Style::default().fg(Colors::WARNING).bold(),
+                ))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Colors::WARNING))
+                .style(Style::default().bg(Colors::BG)),
+        )
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(dialog, area);
+}
+
 /// Render the footer/status bar
 fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
-    let mode_hint = match app.mode {
-        AppMode::Workspaces => {
-            if app.filter_active {
-                format!(
-                    "Filter: {}_ | [Enter] confirm | [Esc] cancel",
-                    app.filter_query
-                )
-            } else {
-                "[j/k] navigate | [Enter] view sessions | [/] filter | [r] refresh | [?] help | [q] quit".to_string()
+    let spans: Vec<Span> = if app.filter_active {
+        vec![
+            Span::styled(" Filter: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled(app.filter_query.as_str(), Style::default().fg(Colors::ACCENT)),
+            Span::styled("_", Style::default().fg(Colors::ACCENT)),
+            Span::raw("  "),
+            Span::styled("Enter", Style::default().fg(Colors::ACCENT)),
+            Span::styled(" confirm  ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled("Esc", Style::default().fg(Colors::ACCENT)),
+            Span::styled(" cancel", Style::default().fg(Colors::TEXT_DIM)),
+        ]
+    } else if app.session_filter_active {
+        vec![
+            Span::styled(" Session Filter: ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled(app.session_filter_query.as_str(), Style::default().fg(Colors::ACCENT)),
+            Span::styled("_", Style::default().fg(Colors::ACCENT)),
+            Span::raw("  "),
+            Span::styled("Enter", Style::default().fg(Colors::ACCENT)),
+            Span::styled(" confirm  ", Style::default().fg(Colors::TEXT_DIM)),
+            Span::styled("Esc", Style::default().fg(Colors::ACCENT)),
+            Span::styled(" cancel", Style::default().fg(Colors::TEXT_DIM)),
+        ]
+    } else {
+        let hints: &[(&str, &str)] = match app.mode {
+            AppMode::Workspaces => &[
+                ("↑↓", "navigate"),
+                ("Enter", "select"),
+                ("/", "filter"),
+                ("s", "search"),
+                ("r", "refresh"),
+                ("?", "help"),
+                ("q", "quit"),
+            ],
+            AppMode::Sessions => &[
+                ("↑↓", "navigate"),
+                ("Enter", "details"),
+                ("/", "filter"),
+                ("o", "sort"),
+                ("e", "export"),
+                ("d", "delete"),
+                ("y", "yank"),
+                ("s", "search"),
+                ("Esc", "back"),
+                ("?", "help"),
+            ],
+            AppMode::SessionDetail => &[
+                ("↑↓", "scroll"),
+                ("e", "export"),
+                ("d", "delete"),
+                ("y", "yank"),
+                ("Esc", "back"),
+                ("?", "help"),
+            ],
+            AppMode::SearchResults => &[
+                ("↑↓", "navigate"),
+                ("Enter", "open"),
+                ("e", "export"),
+                ("y", "yank"),
+                ("Esc", "back"),
+                ("?", "help"),
+            ],
+            AppMode::Help => &[("any key", "close")],
+        };
+        let mut s: Vec<Span> = vec![Span::raw(" ")];
+        for (i, (key, desc)) in hints.iter().enumerate() {
+            if i > 0 {
+                s.push(Span::raw("  "));
             }
+            s.push(Span::styled(*key, Style::default().fg(Colors::ACCENT)));
+            s.push(Span::styled(
+                format!(" {}", desc),
+                Style::default().fg(Colors::TEXT_DIM),
+            ));
         }
-        AppMode::Sessions => {
-            "[j/k] navigate | [Enter] view details | [Esc] back | [?] help | [q] quit".to_string()
+        if let Some(msg) = &app.yank_message {
+            s.push(Span::raw("    "));
+            s.push(Span::styled(
+                msg.clone(),
+                Style::default().fg(Colors::TEAL),
+            ));
         }
-        AppMode::SessionDetail => "[j/k] scroll | [Esc] back | [?] help | [q] quit".to_string(),
-        AppMode::Help => "Press any key to close help".to_string(),
+        if let Some(status) = &app.status_message {
+            s.push(Span::raw("    "));
+            s.push(Span::styled(
+                status.clone(),
+                Style::default().fg(Colors::WARNING),
+            ));
+        }
+        s
     };
 
-    let status = app.status_message.as_deref().unwrap_or("");
-
-    let footer = Paragraph::new(Line::from(vec![
-        Span::styled(" ", Style::default()),
-        Span::styled(mode_hint, Style::default().fg(Colors::TEXT_DIM)),
-        Span::styled("  ", Style::default()),
-        Span::styled(status, Style::default().fg(Colors::WARNING)),
-    ]))
-    .block(
+    let footer = Paragraph::new(Line::from(spans)).block(
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Colors::BORDER))
@@ -553,7 +933,7 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render help overlay
 fn render_help_overlay(frame: &mut Frame) {
-    let area = centered_rect(60, 70, frame.area());
+    let area = centered_rect(60, 80, frame.area());
 
     frame.render_widget(Clear, area);
 
@@ -565,63 +945,103 @@ fn render_help_overlay(frame: &mut Frame) {
         Line::raw(""),
         Line::from(vec![Span::styled(
             "Navigation",
-            Style::default().fg(Colors::SUCCESS).bold(),
+            Style::default().fg(Colors::ACCENT).bold(),
         )]),
         Line::from(vec![
-            Span::styled("  j / Down    ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  j / Down    ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Move down", Style::default().fg(Colors::TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("  k / Up      ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  k / Up      ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Move up", Style::default().fg(Colors::TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("  g           ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  g           ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Go to top", Style::default().fg(Colors::TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("  G           ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  G           ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Go to bottom", Style::default().fg(Colors::TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("  PgUp/PgDn   ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  PgUp/PgDn   ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Page up/down", Style::default().fg(Colors::TEXT)),
         ]),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            "Actions",
-            Style::default().fg(Colors::SUCCESS).bold(),
-        )]),
         Line::from(vec![
-            Span::styled("  Enter       ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  Enter       ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Select / Enter view", Style::default().fg(Colors::TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("  Esc         ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  Esc         ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Go back / Cancel", Style::default().fg(Colors::TEXT)),
         ]),
+        Line::raw(""),
+        Line::from(vec![Span::styled(
+            "Search & Filter",
+            Style::default().fg(Colors::ACCENT).bold(),
+        )]),
         Line::from(vec![
-            Span::styled("  /           ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  /           ", Style::default().fg(Colors::ACCENT)),
             Span::styled(
-                "Start filter (workspaces view)",
+                "Filter (workspaces or sessions)",
                 Style::default().fg(Colors::TEXT),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  r           ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  s           ", Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                "Global search across all workspaces",
+                Style::default().fg(Colors::TEXT),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  o           ", Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                "Cycle sort order (sessions view)",
+                Style::default().fg(Colors::TEXT),
+            ),
+        ]),
+        Line::raw(""),
+        Line::from(vec![Span::styled(
+            "Actions",
+            Style::default().fg(Colors::ACCENT).bold(),
+        )]),
+        Line::from(vec![
+            Span::styled("  e           ", Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                "Export session (pick format)",
+                Style::default().fg(Colors::TEXT),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  d           ", Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                "Delete session (press twice to confirm)",
+                Style::default().fg(Colors::TEXT),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  y           ", Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                "Yank (copy) session text",
+                Style::default().fg(Colors::TEXT),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  r           ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Refresh data", Style::default().fg(Colors::TEXT)),
         ]),
         Line::raw(""),
         Line::from(vec![Span::styled(
             "General",
-            Style::default().fg(Colors::SUCCESS).bold(),
+            Style::default().fg(Colors::ACCENT).bold(),
         )]),
         Line::from(vec![
-            Span::styled("  ?           ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  ?           ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Toggle this help", Style::default().fg(Colors::TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("  q           ", Style::default().fg(Colors::PURPLE)),
+            Span::styled("  q           ", Style::default().fg(Colors::ACCENT)),
             Span::styled("Quit application", Style::default().fg(Colors::TEXT)),
         ]),
         Line::raw(""),
@@ -640,7 +1060,7 @@ fn render_help_overlay(frame: &mut Frame) {
                 ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Colors::BORDER_FOCUSED))
-                .style(Style::default().bg(Color::Rgb(24, 24, 37))),
+                .style(Style::default().bg(Colors::BG)),
         )
         .wrap(Wrap { trim: true });
 
