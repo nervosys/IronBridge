@@ -116,9 +116,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Privacy policy and store listing copy
 
 #### Documentation Website
-- [ ] API reference auto-generation from OpenAPI spec
+- [x] API reference auto-generation from OpenAPI spec (Swagger UI)
 - [x] Provider-specific setup guides (12 providers)
-- [ ] Video tutorials and screencasts
+- [x] Video tutorials and screencasts (Remotion)
 - [x] Search functionality (MkDocs search plugin)
 
 #### CLI Polish

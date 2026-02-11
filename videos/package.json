@@ -1,0 +1,26 @@
+{
+  "name": "chasm-videos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Programmatic video tutorials for Chasm, built with Remotion",
+  "scripts": {
+    "start": "npx remotion studio",
+    "build": "npx remotion bundle",
+    "render:getting-started": "npx remotion render GettingStarted out/getting-started.mp4",
+    "render:cli-walkthrough": "npx remotion render CLIWalkthrough out/cli-walkthrough.mp4",
+    "render:session-recovery": "npx remotion render SessionRecovery out/session-recovery.mp4",
+    "render:provider-setup": "npx remotion render ProviderSetup out/provider-setup.mp4",
+    "render:tui-browser": "npx remotion render TUIBrowser out/tui-browser.mp4",
+    "render:all": "npm run render:getting-started && npm run render:cli-walkthrough && npm run render:session-recovery && npm run render:provider-setup && npm run render:tui-browser"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.242",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.242"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

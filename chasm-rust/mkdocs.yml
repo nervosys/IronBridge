@@ -99,6 +99,7 @@ nav:
     - api/index.md
     - CLI Reference: api/cli.md
     - REST API: api/rest.md
+    - OpenAPI (Interactive): api/openapi.md
     - MCP Server: api/mcp.md
     - Providers: api/providers.md
   - Architecture:
@@ -129,3 +130,5 @@ nav:
       - OpenAI / ChatGPT: guides/providers/openai.md
       - Anthropic / Claude: guides/providers/anthropic.md
       - Google Gemini: guides/providers/google.md
+  - Videos:
+    - videos/index.md
