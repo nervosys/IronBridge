@@ -84,13 +84,13 @@ pub use providers::{
     CsmConfig, GenericMessage, GenericSession, ProviderConfig, ProviderRegistry, ProviderType,
 };
 pub use storage::{
-    add_session_to_index, backup_workspace_sessions, is_vscode_running, read_chat_session_index,
-    register_all_sessions_from_directory, write_chat_session_index,
+    add_session_to_index, backup_workspace_sessions, close_vscode_and_wait,
+    compact_session_jsonl, is_vscode_running, read_chat_session_index,
+    register_all_sessions_from_directory, reopen_vscode, repair_workspace_sessions,
+    write_chat_session_index,
 };
 pub use workspace::{
     decode_workspace_folder, discover_workspaces, find_workspace_by_path,
     get_chat_sessions_from_workspace, get_workspace_by_hash, get_workspace_by_path,
     get_workspace_storage_path, normalize_path,
 };
-
-

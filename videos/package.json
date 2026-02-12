@@ -8,10 +8,11 @@
     "build": "npx remotion bundle",
     "render:getting-started": "npx remotion render GettingStarted out/getting-started.mp4",
     "render:cli-walkthrough": "npx remotion render CLIWalkthrough out/cli-walkthrough.mp4",
+    "render:cli-usage": "npx remotion render CLIUsage out/cli-usage.mp4",
     "render:session-recovery": "npx remotion render SessionRecovery out/session-recovery.mp4",
     "render:provider-setup": "npx remotion render ProviderSetup out/provider-setup.mp4",
     "render:tui-browser": "npx remotion render TUIBrowser out/tui-browser.mp4",
-    "render:all": "npm run render:getting-started && npm run render:cli-walkthrough && npm run render:session-recovery && npm run render:provider-setup && npm run render:tui-browser"
+    "render:all": "npm run render:getting-started && npm run render:cli-walkthrough && npm run render:cli-usage && npm run render:session-recovery && npm run render:provider-setup && npm run render:tui-browser"
   },
   "dependencies": {
     "@remotion/cli": "4.0.242",

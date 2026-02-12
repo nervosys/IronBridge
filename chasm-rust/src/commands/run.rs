@@ -33,7 +33,7 @@ pub(crate) struct AgentConfig {
 pub(crate) const AGENTS: &[AgentConfig] = &[
     AgentConfig {
         name: "Claude Code",
-        provider_type: ProviderType::Copilot, // uses ClaudeCode internally but maps to file harvester
+        provider_type: ProviderType::ClaudeCode,
         commands: &["claude"],
         default_args: &[],
         harvestable: true,
@@ -41,7 +41,7 @@ pub(crate) const AGENTS: &[AgentConfig] = &[
     },
     AgentConfig {
         name: "OpenCode",
-        provider_type: ProviderType::Custom,
+        provider_type: ProviderType::OpenCode,
         commands: &["opencode"],
         default_args: &[],
         harvestable: true,
@@ -49,11 +49,19 @@ pub(crate) const AGENTS: &[AgentConfig] = &[
     },
     AgentConfig {
         name: "OpenClaw",
-        provider_type: ProviderType::Custom,
+        provider_type: ProviderType::OpenClaw,
         commands: &["openclaw", "clawdbot"],
         default_args: &[],
         harvestable: true,
         storage_hint: "~/.openclaw/chat-history/",
+    },
+    AgentConfig {
+        name: "Antigravity",
+        provider_type: ProviderType::Antigravity,
+        commands: &["antigravity", "ag"],
+        default_args: &[],
+        harvestable: true,
+        storage_hint: "~/.antigravity/sessions/",
     },
     AgentConfig {
         name: "Cursor CLI",

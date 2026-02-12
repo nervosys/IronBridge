@@ -30,6 +30,18 @@ pub enum ProviderType {
     /// Gemini CLI (Google) - JSON sessions in ~/.gemini/tmp/
     #[serde(rename = "geminicli")]
     GeminiCli,
+    /// Claude Code (Anthropic) - sessions in ~/.claude/projects/
+    #[serde(rename = "claudecode")]
+    ClaudeCode,
+    /// OpenCode - sessions in ~/.opencode/conversations/
+    #[serde(rename = "opencode")]
+    OpenCode,
+    /// OpenClaw - sessions in ~/.openclaw/chat-history/
+    #[serde(rename = "openclaw")]
+    OpenClaw,
+    /// Antigravity - sessions in workspaceStorage
+    #[serde(rename = "antigravity")]
+    Antigravity,
 
     // ========================================================================
     // Local API Providers
@@ -123,6 +135,10 @@ impl ProviderType {
             Self::CodexCli => "Codex CLI",
             Self::DroidCli => "Droid CLI",
             Self::GeminiCli => "Gemini CLI",
+            Self::ClaudeCode => "Claude Code",
+            Self::OpenCode => "OpenCode",
+            Self::OpenClaw => "OpenClaw",
+            Self::Antigravity => "Antigravity",
             // Local API
             Self::Ollama => "Ollama",
             Self::Vllm => "vLLM",
@@ -164,6 +180,10 @@ impl ProviderType {
             Self::CodexCli => None,
             Self::DroidCli => None,
             Self::GeminiCli => None,
+            Self::ClaudeCode => None,
+            Self::OpenCode => None,
+            Self::OpenClaw => None,
+            Self::Antigravity => None,
             // Local API
             Self::Ollama => Some("http://localhost:11434"),
             Self::Vllm => Some("http://localhost:8000"),
@@ -205,6 +225,10 @@ impl ProviderType {
                 | Self::CodexCli
                 | Self::DroidCli
                 | Self::GeminiCli
+                | Self::ClaudeCode
+                | Self::OpenCode
+                | Self::OpenClaw
+                | Self::Antigravity
         )
     }
 

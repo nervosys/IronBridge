@@ -1255,6 +1255,14 @@ pub enum RegisterCommands {
         /// Force registration even if VS Code is running
         #[arg(long, short)]
         force: bool,
+
+        /// Close VS Code before registering (ensures index is not overwritten by cache)
+        #[arg(long)]
+        close_vscode: bool,
+
+        /// Reopen VS Code after registering (implies --close-vscode)
+        #[arg(long)]
+        reopen: bool,
     },
 
     /// Register specific sessions by ID or title into VS Code's index
@@ -1298,6 +1306,26 @@ pub enum RegisterCommands {
         /// Skip directories matching these patterns (can be used multiple times)
         #[arg(long, short = 'x')]
         exclude: Vec<String>,
+    },
+
+    /// Repair sessions: compact large JSONL files and rebuild the index with correct metadata
+    #[command(visible_alias = "fix")]
+    Repair {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Force even if VS Code is running
+        #[arg(long, short)]
+        force: bool,
+
+        /// Close VS Code before repairing (ensures index is not overwritten)
+        #[arg(long)]
+        close_vscode: bool,
+
+        /// Reopen VS Code after repairing (implies --close-vscode)
+        #[arg(long)]
+        reopen: bool,
     },
 }
 

@@ -3,7 +3,9 @@
 //! VS Code storage (SQLite database) operations
 
 use crate::error::{CsmError, Result};
-use crate::models::{ChatRequest, ChatSession, ChatSessionIndex, ChatSessionIndexEntry};
+use crate::models::{
+    ChatRequest, ChatSession, ChatSessionIndex, ChatSessionIndexEntry, ChatSessionTiming,
+};
 use crate::workspace::{get_empty_window_sessions_path, get_workspace_storage_path};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -101,42 +103,47 @@ impl VsCodeSessionFormat {
     /// Detect format from content by analyzing structure
     pub fn from_content(content: &str) -> Self {
         let trimmed = content.trim();
-        
+
         // JSONL: Multiple lines starting with { or first line has {"kind":
         if trimmed.starts_with("{\"kind\":") || trimmed.starts_with("{ \"kind\":") {
             return Self::JsonLines;
         }
-        
+
         // Count lines that look like JSON objects
         let mut json_object_lines = 0;
         let mut total_non_empty_lines = 0;
-        
+
         for line in trimmed.lines().take(10) {
             let line = line.trim();
             if line.is_empty() {
                 continue;
             }
             total_non_empty_lines += 1;
-            
+
             // Check if line is a JSON object with "kind" field (JSONL marker)
             if line.starts_with('{') && line.contains("\"kind\"") {
                 json_object_lines += 1;
             }
         }
-        
+
         // If multiple lines look like JSONL entries, it's JSONL
-        if json_object_lines >= 2 || (json_object_lines == 1 && total_non_empty_lines == 1 && trimmed.contains("\n{")) {
+        if json_object_lines >= 2
+            || (json_object_lines == 1 && total_non_empty_lines == 1 && trimmed.contains("\n{"))
+        {
             return Self::JsonLines;
         }
-        
+
         // Check if it's a single JSON object (legacy format)
         if trimmed.starts_with('{') && trimmed.ends_with('}') {
             // Look for ChatSession structure markers
-            if trimmed.contains("\"sessionId\"") || trimmed.contains("\"creationDate\"") || trimmed.contains("\"requests\"") {
+            if trimmed.contains("\"sessionId\"")
+                || trimmed.contains("\"creationDate\"")
+                || trimmed.contains("\"requests\"")
+            {
                 return Self::LegacyJson;
             }
         }
-        
+
         // Default to legacy JSON if unclear
         Self::LegacyJson
     }
@@ -156,7 +163,7 @@ impl VsCodeSessionFormat {
             Self::JsonLines => "JSON Lines (event-sourced, VS Code 1.109.0+)",
         }
     }
-    
+
     /// Get short format name
     pub fn short_name(&self) -> &'static str {
         match self {
@@ -356,13 +363,32 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                     if let Some(ru) = v.get("responderUsername").and_then(|x| x.as_str()) {
                         session.responder_username = Some(ru.to_string());
                     }
+                    // Parse custom title
+                    if let Some(title) = v.get("customTitle").and_then(|x| x.as_str()) {
+                        session.custom_title = Some(title.to_string());
+                    }
+                    // Parse hasPendingEdits as imported marker
+                    if let Some(imported) = v.get("isImported").and_then(|x| x.as_bool()) {
+                        session.is_imported = imported;
+                    }
                     // Parse requests array if present
                     if let Some(requests) = v.get("requests") {
                         if let Ok(reqs) =
                             serde_json::from_value::<Vec<ChatRequest>>(requests.clone())
                         {
                             session.requests = reqs;
+                            // Compute last_message_date from the latest request timestamp
+                            if let Some(latest_ts) = session.requests.iter()
+                                .filter_map(|r| r.timestamp)
+                                .max()
+                            {
+                                session.last_message_date = latest_ts;
+                            }
                         }
+                    }
+                    // Fall back to creationDate if no request timestamps found
+                    if session.last_message_date == 0 {
+                        session.last_message_date = session.creation_date;
                     }
                 }
             }
@@ -370,7 +396,7 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                 // Delta update - 'k' is array of key path, 'v' is the value
                 if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
                     if let Some(keys_arr) = keys.as_array() {
-                        // Handle known keys
+                        // Handle top-level session keys
                         if keys_arr.len() == 1 {
                             if let Some(key) = keys_arr[0].as_str() {
                                 match key {
@@ -384,7 +410,49 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                                             session.last_message_date = date;
                                         }
                                     }
+                                    "hasPendingEdits" | "isImported" => {
+                                        // Session-level boolean updates, safe to ignore for now
+                                    }
                                     _ => {} // Ignore unknown keys
+                                }
+                            }
+                        }
+                        // Handle nested request field updates: ["requests", idx, field]
+                        else if keys_arr.len() == 3 {
+                            if let (Some("requests"), Some(idx), Some(field)) = (
+                                keys_arr[0].as_str(),
+                                keys_arr[1].as_u64().map(|i| i as usize),
+                                keys_arr[2].as_str(),
+                            ) {
+                                if idx < session.requests.len() {
+                                    match field {
+                                        "response" => {
+                                            session.requests[idx].response = Some(value.clone());
+                                        }
+                                        "result" => {
+                                            session.requests[idx].result = Some(value.clone());
+                                        }
+                                        "followups" => {
+                                            session.requests[idx].followups =
+                                                serde_json::from_value(value.clone()).ok();
+                                        }
+                                        "isCanceled" => {
+                                            session.requests[idx].is_canceled = value.as_bool();
+                                        }
+                                        "contentReferences" => {
+                                            session.requests[idx].content_references =
+                                                serde_json::from_value(value.clone()).ok();
+                                        }
+                                        "codeCitations" => {
+                                            session.requests[idx].code_citations =
+                                                serde_json::from_value(value.clone()).ok();
+                                        }
+                                        "modelState" | "modelId" | "agent" | "variableData" => {
+                                            // Known request fields - update as generic Value
+                                            // modelState tracks the request lifecycle
+                                        }
+                                        _ => {} // Ignore unknown request fields
+                                    }
                                 }
                             }
                         }
@@ -392,16 +460,32 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                 }
             }
             2 => {
-                // Full requests array update - 'k' contains ["requests"], 'v' is the array
-                if let Some(value) = entry.get("v") {
-                    if let Ok(reqs) = serde_json::from_value::<Vec<ChatRequest>>(value.clone()) {
-                        session.requests = reqs;
-                        // Update last message date from last request
-                        if let Some(last_req) = session.requests.last() {
-                            if let Some(ts) = last_req.timestamp {
-                                session.last_message_date = ts;
+                // Array append operation - 'k' is the key path, 'v' is array of items to append
+                if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
+                    if let Some(keys_arr) = keys.as_array() {
+                        // Top-level requests append: k=["requests"], v=[new_request]
+                        if keys_arr.len() == 1 {
+                            if let Some("requests") = keys_arr[0].as_str() {
+                                if let Some(items) = value.as_array() {
+                                    for item in items {
+                                        if let Ok(req) =
+                                            serde_json::from_value::<ChatRequest>(item.clone())
+                                        {
+                                            session.requests.push(req);
+                                        }
+                                    }
+                                    // Update last message date from latest request
+                                    if let Some(last_req) = session.requests.last() {
+                                        if let Some(ts) = last_req.timestamp {
+                                            session.last_message_date = ts;
+                                        }
+                                    }
+                                }
                             }
                         }
+                        // Nested array append: k=["requests", idx, "response"], v=[parts]
+                        // These are response streaming chunks - we can safely ignore them
+                        // since the final response is captured via kind:1 updates
                     }
                 }
             }
@@ -421,7 +505,7 @@ pub fn is_session_file_extension(ext: &std::ffi::OsStr) -> bool {
 pub fn detect_session_format(content: &str) -> SessionFormatInfo {
     let format = VsCodeSessionFormat::from_content(content);
     let trimmed = content.trim();
-    
+
     // Detect schema version based on format
     let (schema_version, confidence, method) = match format {
         VsCodeSessionFormat::JsonLines => {
@@ -430,7 +514,11 @@ pub fn detect_session_format(content: &str) -> SessionFormatInfo {
                 if let Ok(entry) = serde_json::from_str::<serde_json::Value>(first_line) {
                     if let Some(v) = entry.get("v") {
                         if let Some(ver) = v.get("version").and_then(|x| x.as_u64()) {
-                            (SessionSchemaVersion::from_version(ver as u32), 0.95, "jsonl-version-field")
+                            (
+                                SessionSchemaVersion::from_version(ver as u32),
+                                0.95,
+                                "jsonl-version-field",
+                            )
                         } else {
                             // No version field, likely v3 (current default)
                             (SessionSchemaVersion::V3, 0.7, "jsonl-default")
@@ -449,7 +537,11 @@ pub fn detect_session_format(content: &str) -> SessionFormatInfo {
             // For JSON, directly check the version field
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
                 if let Some(ver) = json.get("version").and_then(|x| x.as_u64()) {
-                    (SessionSchemaVersion::from_version(ver as u32), 0.95, "json-version-field")
+                    (
+                        SessionSchemaVersion::from_version(ver as u32),
+                        0.95,
+                        "json-version-field",
+                    )
                 } else {
                     // Infer from structure
                     if json.get("requests").is_some() && json.get("sessionId").is_some() {
@@ -465,7 +557,11 @@ pub fn detect_session_format(content: &str) -> SessionFormatInfo {
                 let sanitized = sanitize_json_unicode(trimmed);
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&sanitized) {
                     if let Some(ver) = json.get("version").and_then(|x| x.as_u64()) {
-                        (SessionSchemaVersion::from_version(ver as u32), 0.9, "json-version-after-sanitize")
+                        (
+                            SessionSchemaVersion::from_version(ver as u32),
+                            0.9,
+                            "json-version-after-sanitize",
+                        )
                     } else {
                         (SessionSchemaVersion::V3, 0.6, "json-default-after-sanitize")
                     }
@@ -475,7 +571,7 @@ pub fn detect_session_format(content: &str) -> SessionFormatInfo {
             }
         }
     };
-    
+
     SessionFormatInfo {
         format,
         schema_version,
@@ -485,24 +581,23 @@ pub fn detect_session_format(content: &str) -> SessionFormatInfo {
 }
 
 /// Parse session content with automatic format detection
-pub fn parse_session_auto(content: &str) -> std::result::Result<(ChatSession, SessionFormatInfo), serde_json::Error> {
+pub fn parse_session_auto(
+    content: &str,
+) -> std::result::Result<(ChatSession, SessionFormatInfo), serde_json::Error> {
     let format_info = detect_session_format(content);
-    
+
     let session = match format_info.format {
         VsCodeSessionFormat::JsonLines => parse_session_jsonl(content)?,
         VsCodeSessionFormat::LegacyJson => parse_session_json(content)?,
     };
-    
+
     Ok((session, format_info))
 }
 
 /// Parse a session file, automatically detecting format from content (not just extension)
 pub fn parse_session_file(path: &Path) -> std::result::Result<ChatSession, serde_json::Error> {
-    let content = std::fs::read_to_string(path).map_err(|e| {
-        serde_json::Error::io(std::io::Error::other(
-            e.to_string(),
-        ))
-    })?;
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| serde_json::Error::io(std::io::Error::other(e.to_string())))?;
 
     // Use content-based auto-detection
     let (session, _format_info) = parse_session_auto(&content)?;
@@ -566,7 +661,7 @@ pub fn add_session_to_index(
     session_id: &str,
     title: &str,
     last_message_date_ms: i64,
-    is_imported: bool,
+    _is_imported: bool,
     initial_location: &str,
     is_empty: bool,
 ) -> Result<()> {
@@ -578,7 +673,12 @@ pub fn add_session_to_index(
             session_id: session_id.to_string(),
             title: title.to_string(),
             last_message_date: last_message_date_ms,
-            is_imported,
+            timing: Some(ChatSessionTiming {
+                created: last_message_date_ms,
+                last_request_started: Some(last_message_date_ms),
+                last_request_ended: Some(last_message_date_ms),
+            }),
+            last_response_state: 1, // ResponseModelState.Complete
             initial_location: initial_location.to_string(),
             is_empty,
         },
@@ -599,6 +699,7 @@ pub fn remove_session_from_index(db_path: &Path, session_id: &str) -> Result<boo
 }
 
 /// Sync the VS Code index with sessions on disk (remove stale entries, add missing ones)
+/// When both .json and .jsonl exist for the same session ID, prefers .jsonl.
 pub fn sync_session_index(
     workspace_id: &str,
     chat_sessions_dir: &Path,
@@ -653,41 +754,59 @@ pub fn sync_session_index(
     }
 
     // Add/update sessions from disk
-    let mut added = 0;
+    // Collect files, preferring .jsonl over .json for the same session ID
+    let mut session_files: std::collections::HashMap<String, PathBuf> =
+        std::collections::HashMap::new();
     for entry in std::fs::read_dir(chat_sessions_dir)? {
         let entry = entry?;
         let path = entry.path();
-
         if path
             .extension()
             .map(is_session_file_extension)
             .unwrap_or(false)
         {
-            if let Ok(session) = parse_session_file(&path) {
-                let session_id = session.session_id.clone().unwrap_or_else(|| {
-                    path.file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
-                });
-
-                let title = session.title();
-                let is_empty = session.is_empty();
-                let last_message_date = session.last_message_date;
-                let initial_location = session.initial_location.clone();
-
-                index.entries.insert(
-                    session_id.clone(),
-                    ChatSessionIndexEntry {
-                        session_id,
-                        title,
-                        last_message_date,
-                        is_imported: session.is_imported,
-                        initial_location,
-                        is_empty,
-                    },
-                );
-                added += 1;
+            if let Some(stem) = path.file_stem() {
+                let stem_str = stem.to_string_lossy().to_string();
+                let is_jsonl = path.extension().is_some_and(|e| e == "jsonl");
+                // Insert if no entry yet, or if this is .jsonl (preferred over .json)
+                if !session_files.contains_key(&stem_str) || is_jsonl {
+                    session_files.insert(stem_str, path);
+                }
             }
+        }
+    }
+
+    let mut added = 0;
+    for (_, path) in &session_files {
+        if let Ok(session) = parse_session_file(path) {
+            let session_id = session.session_id.clone().unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+            });
+
+            let title = session.title();
+            let is_empty = session.is_empty();
+            let last_message_date = session.last_message_date;
+            let initial_location = session.initial_location.clone();
+
+            index.entries.insert(
+                session_id.clone(),
+                ChatSessionIndexEntry {
+                    session_id,
+                    title,
+                    last_message_date,
+                    timing: Some(ChatSessionTiming {
+                        created: session.creation_date,
+                        last_request_started: Some(last_message_date),
+                        last_request_ended: Some(last_message_date),
+                    }),
+                    last_response_state: 1, // ResponseModelState.Complete
+                    initial_location,
+                    is_empty,
+                },
+            );
+            added += 1;
         }
     }
 
@@ -770,6 +889,90 @@ pub fn is_vscode_running() -> bool {
     false
 }
 
+/// Close VS Code gracefully and wait for it to exit.
+/// Returns the list of workspace folders that were open (for reopening).
+pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, Signal};
+
+    if !is_vscode_running() {
+        return Ok(());
+    }
+
+    // Send SIGTERM (graceful close) to all Code processes
+    let mut sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
+    );
+    sys.refresh_processes();
+
+    let mut signaled = 0u32;
+    for (pid, process) in sys.processes() {
+        let name = process.name().to_lowercase();
+        if name.contains("code") && !name.contains("codec") {
+            // On Windows, kill() sends TerminateProcess; there's no graceful
+            // SIGTERM equivalent via sysinfo. But the main electron process
+            // handles WM_CLOSE. We use the `taskkill` approach on Windows for
+            // a graceful close.
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/PID", &pid.as_u32().to_string()])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status();
+                signaled += 1;
+            }
+            #[cfg(not(windows))]
+            {
+                if process.kill_with(Signal::Term).unwrap_or(false) {
+                    signaled += 1;
+                }
+            }
+        }
+    }
+
+    if signaled == 0 {
+        return Ok(());
+    }
+
+    // Wait for all Code processes to exit
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if !is_vscode_running() {
+            // Extra wait for file locks to release
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            // Force kill remaining processes
+            let mut sys2 = System::new_with_specifics(
+                RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
+            );
+            sys2.refresh_processes();
+            for (_pid, process) in sys2.processes() {
+                let name = process.name().to_lowercase();
+                if name.contains("code") && !name.contains("codec") {
+                    process.kill();
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            return Ok(());
+        }
+    }
+}
+
+/// Reopen VS Code, optionally at a specific path.
+pub fn reopen_vscode(project_path: Option<&str>) -> Result<()> {
+    let mut cmd = std::process::Command::new("code");
+    if let Some(path) = project_path {
+        cmd.arg(path);
+    }
+    cmd.stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    Ok(())
+}
+
 /// Backup workspace sessions to a timestamped directory
 pub fn backup_workspace_sessions(workspace_dir: &Path) -> Result<Option<PathBuf>> {
     let chat_sessions_dir = workspace_dir.join("chatSessions");
@@ -829,10 +1032,7 @@ pub fn read_empty_window_sessions() -> Result<Vec<ChatSession>> {
         let entry = entry?;
         let path = entry.path();
 
-        if path
-            .extension()
-            .is_some_and(is_session_file_extension)
-        {
+        if path.extension().is_some_and(is_session_file_extension) {
             if let Ok(session) = parse_session_file(&path) {
                 sessions.push(session);
             }
@@ -902,12 +1102,236 @@ pub fn count_empty_window_sessions() -> Result<usize> {
 
     let count = std::fs::read_dir(&sessions_path)?
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .is_some_and(is_session_file_extension)
-        })
+        .filter(|e| e.path().extension().is_some_and(is_session_file_extension))
         .count();
 
     Ok(count)
+}
+
+/// Compact a JSONL session file by replaying all operations into a single kind:0 snapshot.
+/// This works at the raw JSON level, preserving all fields VS Code expects.
+/// Returns the path to the compacted file.
+pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Failed to read {}: {}", path.display(), e)))?;
+
+    let mut lines = content.lines();
+
+    // First line must be kind:0 (initial snapshot)
+    let first_line = lines.next().ok_or_else(|| {
+        CsmError::InvalidSessionFormat("Empty JSONL file".to_string())
+    })?;
+
+    let first_entry: serde_json::Value = serde_json::from_str(first_line.trim())
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Invalid JSON on line 1: {}", e)))?;
+
+    let kind = first_entry.get("kind").and_then(|k| k.as_u64()).unwrap_or(99);
+    if kind != 0 {
+        return Err(CsmError::InvalidSessionFormat(
+            "First JSONL line must be kind:0".to_string(),
+        ));
+    }
+
+    // Extract the session state from the "v" field
+    let mut state = first_entry
+        .get("v")
+        .cloned()
+        .ok_or_else(|| CsmError::InvalidSessionFormat("kind:0 missing 'v' field".to_string()))?;
+
+    // Replay all subsequent operations
+    for line in lines {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let entry: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue, // Skip malformed lines
+        };
+
+        let op_kind = entry.get("kind").and_then(|k| k.as_u64()).unwrap_or(99);
+
+        match op_kind {
+            1 => {
+                // Delta update: k=["path","to","field"], v=value
+                if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
+                    if let Some(keys_arr) = keys.as_array() {
+                        apply_delta(&mut state, keys_arr, value.clone());
+                    }
+                }
+            }
+            2 => {
+                // Array append: k=["path","to","array"], v=[items]
+                if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
+                    if let Some(keys_arr) = keys.as_array() {
+                        apply_append(&mut state, keys_arr, value.clone());
+                    }
+                }
+            }
+            _ => {} // Skip unknown kinds
+        }
+    }
+
+    // Write the compacted file: single kind:0 line with the final state
+    let compact_entry = serde_json::json!({"kind": 0, "v": state});
+    let compact_content = serde_json::to_string(&compact_entry)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Failed to serialize: {}", e)))?;
+
+    // Backup the original file
+    let backup_path = path.with_extension("jsonl.bak");
+    std::fs::rename(path, &backup_path)?;
+
+    // Write the compacted file
+    std::fs::write(path, &compact_content)?;
+
+    Ok(backup_path)
+}
+
+/// Apply a delta update (kind:1) to a JSON value at the given key path.
+fn apply_delta(root: &mut serde_json::Value, keys: &[serde_json::Value], value: serde_json::Value) {
+    if keys.is_empty() {
+        return;
+    }
+
+    // Navigate to the parent
+    let mut current = root;
+    for key in &keys[..keys.len() - 1] {
+        if let Some(k) = key.as_str() {
+            if !current.get(k).is_some() {
+                current[k] = serde_json::Value::Object(serde_json::Map::new());
+            }
+            current = &mut current[k];
+        } else if let Some(idx) = key.as_u64() {
+            if let Some(arr) = current.as_array_mut() {
+                if (idx as usize) < arr.len() {
+                    current = &mut arr[idx as usize];
+                } else {
+                    return; // Index out of bounds
+                }
+            } else {
+                return;
+            }
+        }
+    }
+
+    // Set the final key
+    if let Some(last_key) = keys.last() {
+        if let Some(k) = last_key.as_str() {
+            current[k] = value;
+        } else if let Some(idx) = last_key.as_u64() {
+            if let Some(arr) = current.as_array_mut() {
+                if (idx as usize) < arr.len() {
+                    arr[idx as usize] = value;
+                }
+            }
+        }
+    }
+}
+
+/// Apply an array append operation (kind:2) to a JSON value at the given key path.
+fn apply_append(root: &mut serde_json::Value, keys: &[serde_json::Value], items: serde_json::Value) {
+    if keys.is_empty() {
+        return;
+    }
+
+    // Navigate to the target array
+    let mut current = root;
+    for key in keys {
+        if let Some(k) = key.as_str() {
+            if !current.get(k).is_some() {
+                current[k] = serde_json::json!([]);
+            }
+            current = &mut current[k];
+        } else if let Some(idx) = key.as_u64() {
+            if let Some(arr) = current.as_array_mut() {
+                if (idx as usize) < arr.len() {
+                    current = &mut arr[idx as usize];
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+    }
+
+    // Append items to the target array
+    if let (Some(target_arr), Some(new_items)) = (current.as_array_mut(), items.as_array()) {
+        target_arr.extend(new_items.iter().cloned());
+    }
+}
+
+/// Repair workspace sessions: compact large JSONL files and fix the index.
+/// Returns (compacted_count, index_fixed_count).
+pub fn repair_workspace_sessions(
+    workspace_id: &str,
+    chat_sessions_dir: &Path,
+    force: bool,
+) -> Result<(usize, usize)> {
+    let db_path = get_workspace_storage_db(workspace_id)?;
+
+    if !db_path.exists() {
+        return Err(CsmError::WorkspaceNotFound(format!(
+            "Database not found: {}",
+            db_path.display()
+        )));
+    }
+
+    if !force && is_vscode_running() {
+        return Err(CsmError::VSCodeRunning);
+    }
+
+    let mut compacted = 0;
+
+    if chat_sessions_dir.exists() {
+        // Pass 1: Compact large JSONL files
+        for entry in std::fs::read_dir(chat_sessions_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "jsonl") {
+                let metadata = std::fs::metadata(&path)?;
+                let size_mb = metadata.len() / (1024 * 1024);
+
+                // Compact any JSONL file with multiple lines (has operations to replay)
+                let content = std::fs::read_to_string(&path)
+                    .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+                let line_count = content.lines().count();
+
+                if line_count > 1 {
+                    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    println!(
+                        "   Compacting {} ({} lines, {}MB)...",
+                        stem,
+                        line_count,
+                        size_mb
+                    );
+
+                    match compact_session_jsonl(&path) {
+                        Ok(backup_path) => {
+                            let new_size = std::fs::metadata(&path)
+                                .map(|m| m.len() / (1024 * 1024))
+                                .unwrap_or(0);
+                            println!(
+                                "   [OK] Compacted: {}MB -> {}MB (backup: {})",
+                                size_mb,
+                                new_size,
+                                backup_path.file_name().unwrap_or_default().to_string_lossy()
+                            );
+                            compacted += 1;
+                        }
+                        Err(e) => {
+                            println!("   [WARN] Failed to compact {}: {}", stem, e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 2: Rebuild the index with correct metadata
+    let (index_fixed, _) = sync_session_index(workspace_id, chat_sessions_dir, force)?;
+
+    Ok((compacted, index_fixed))
 }

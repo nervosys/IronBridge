@@ -660,9 +660,13 @@ pub fn harvest_run(
     let provider_types = vec![
         ProviderType::Copilot,
         ProviderType::Cursor,
+        ProviderType::ClaudeCode,
         ProviderType::CodexCli,
         ProviderType::DroidCli,
         ProviderType::GeminiCli,
+        ProviderType::OpenCode,
+        ProviderType::OpenClaw,
+        ProviderType::Antigravity,
         ProviderType::Ollama,
         ProviderType::Vllm,
         ProviderType::Foundry,

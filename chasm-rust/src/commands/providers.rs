@@ -299,6 +299,14 @@ fn parse_provider_name(name: &str) -> Result<ProviderType> {
     match name.to_lowercase().as_str() {
         "copilot" | "github-copilot" | "vscode" => Ok(ProviderType::Copilot),
         "cursor" => Ok(ProviderType::Cursor),
+        "claudecode" | "claude-code" | "claude" => Ok(ProviderType::ClaudeCode),
+        "codexcli" | "codex-cli" | "codex" => Ok(ProviderType::CodexCli),
+        "droidcli" | "droid-cli" | "droid" | "factory" => Ok(ProviderType::DroidCli),
+        "geminicli" | "gemini-cli" => Ok(ProviderType::GeminiCli),
+        "opencode" | "open-code" => Ok(ProviderType::OpenCode),
+        "openclaw" | "open-claw" | "clawdbot" => Ok(ProviderType::OpenClaw),
+        "antigravity" | "ag" => Ok(ProviderType::Antigravity),
+        "continuedev" | "continue" | "continue-dev" => Ok(ProviderType::ContinueDev),
         "ollama" => Ok(ProviderType::Ollama),
         "vllm" => Ok(ProviderType::Vllm),
         "foundry" | "azure-foundry" | "foundry-local" | "ai-foundry" => Ok(ProviderType::Foundry),
@@ -324,6 +332,14 @@ fn list_provider_types() {
     eprintln!("Supported providers:");
     eprintln!("  copilot      - GitHub Copilot (VS Code)");
     eprintln!("  cursor       - Cursor IDE");
+    eprintln!("  claudecode   - Claude Code (Anthropic)");
+    eprintln!("  codex        - Codex CLI (OpenAI)");
+    eprintln!("  droid        - Droid CLI (Factory)");
+    eprintln!("  gemini-cli   - Gemini CLI (Google)");
+    eprintln!("  opencode     - OpenCode");
+    eprintln!("  openclaw     - OpenClaw");
+    eprintln!("  antigravity  - Antigravity");
+    eprintln!("  continuedev  - Continue.dev");
     eprintln!("  ollama       - Ollama local models");
     eprintln!("  vllm         - vLLM server");
     eprintln!("  foundry      - Azure AI Foundry / Foundry Local");
@@ -334,5 +350,6 @@ fn list_provider_types() {
     eprintln!("  jan          - Jan.ai");
     eprintln!("  gpt4all      - GPT4All");
     eprintln!("  llamafile    - Llamafile");
+    eprintln!("  chatgpt      - ChatGPT (OpenAI cloud)");
     eprintln!("  custom       - Custom OpenAI-compatible endpoint");
 }

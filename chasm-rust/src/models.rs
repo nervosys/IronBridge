@@ -139,6 +139,11 @@ fn default_location() -> String {
     "panel".to_string()
 }
 
+/// Default response state: Complete (1)
+fn default_response_state() -> u8 {
+    1
+}
+
 /// A single chat request (message + response)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -267,6 +272,22 @@ impl Default for ChatSessionIndex {
     }
 }
 
+/// Session timing information (VS Code 1.109+)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSessionTiming {
+    /// When the session was created (ms since epoch)
+    pub created: i64,
+
+    /// When the most recent request started (ms since epoch)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_request_started: Option<i64>,
+
+    /// When the most recent request completed (ms since epoch)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_request_ended: Option<i64>,
+}
+
 /// Entry in the chat session index
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -280,9 +301,13 @@ pub struct ChatSessionIndexEntry {
     /// Last message timestamp (milliseconds)
     pub last_message_date: i64,
 
-    /// Whether this session was imported
+    /// Session timing (VS Code 1.109+)
     #[serde(default)]
-    pub is_imported: bool,
+    pub timing: Option<ChatSessionTiming>,
+
+    /// Last response state: 0=Pending, 1=Complete, 2=Cancelled, 3=Failed, 4=NeedsInput
+    #[serde(default = "default_response_state")]
+    pub last_response_state: u8,
 
     /// Initial location (panel, terminal, etc.)
     #[serde(default = "default_location")]

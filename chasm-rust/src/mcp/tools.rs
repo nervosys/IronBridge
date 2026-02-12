@@ -599,7 +599,7 @@ fn execute_list_orphaned(path: Option<&str>) -> CallToolResult {
 fn execute_register_all(path: Option<&str>, merge: bool, force: bool) -> CallToolResult {
     use crate::commands::register_all;
 
-    match register_all(path, merge, force) {
+    match register_all(path, merge, force, false, false) {
         Ok(_) => CallToolResult {
             content: vec![ToolContent::Text {
                 text: json!({

@@ -37,6 +37,10 @@ mod provider_type_tests {
         assert_eq!(ProviderType::Jan.display_name(), "Jan.ai");
         assert_eq!(ProviderType::Gpt4All.display_name(), "GPT4All");
         assert_eq!(ProviderType::Llamafile.display_name(), "Llamafile");
+        assert_eq!(ProviderType::ClaudeCode.display_name(), "Claude Code");
+        assert_eq!(ProviderType::OpenCode.display_name(), "OpenCode");
+        assert_eq!(ProviderType::OpenClaw.display_name(), "OpenClaw");
+        assert_eq!(ProviderType::Antigravity.display_name(), "Antigravity");
         assert_eq!(ProviderType::Custom.display_name(), "Custom");
     }
 
@@ -45,6 +49,10 @@ mod provider_type_tests {
         // File-based providers should have no endpoint
         assert!(ProviderType::Copilot.default_endpoint().is_none());
         assert!(ProviderType::Cursor.default_endpoint().is_none());
+        assert!(ProviderType::ClaudeCode.default_endpoint().is_none());
+        assert!(ProviderType::OpenCode.default_endpoint().is_none());
+        assert!(ProviderType::OpenClaw.default_endpoint().is_none());
+        assert!(ProviderType::Antigravity.default_endpoint().is_none());
 
         // Server-based providers should have endpoints
         assert_eq!(
@@ -97,6 +105,10 @@ mod provider_type_tests {
         // Only Copilot and Cursor use file storage
         assert!(ProviderType::Copilot.uses_file_storage());
         assert!(ProviderType::Cursor.uses_file_storage());
+        assert!(ProviderType::ClaudeCode.uses_file_storage());
+        assert!(ProviderType::OpenCode.uses_file_storage());
+        assert!(ProviderType::OpenClaw.uses_file_storage());
+        assert!(ProviderType::Antigravity.uses_file_storage());
 
         // All API-based providers don't use file storage
         assert!(!ProviderType::Ollama.uses_file_storage());
@@ -117,6 +129,10 @@ mod provider_type_tests {
         // File-based providers are not OpenAI compatible
         assert!(!ProviderType::Copilot.is_openai_compatible());
         assert!(!ProviderType::Cursor.is_openai_compatible());
+        assert!(!ProviderType::ClaudeCode.is_openai_compatible());
+        assert!(!ProviderType::OpenCode.is_openai_compatible());
+        assert!(!ProviderType::OpenClaw.is_openai_compatible());
+        assert!(!ProviderType::Antigravity.is_openai_compatible());
 
         // All API-based providers are OpenAI compatible
         assert!(ProviderType::Ollama.is_openai_compatible());

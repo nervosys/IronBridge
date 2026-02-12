@@ -763,9 +763,13 @@ fn main() -> Result<()> {
         // Register Commands
         // ====================================================================
         Commands::Register { command } => match command {
-            cli::RegisterCommands::All { path, merge, force } => {
-                commands::register_all(path.as_deref(), merge, force)
-            }
+            cli::RegisterCommands::All {
+                path,
+                merge,
+                force,
+                close_vscode,
+                reopen,
+            } => commands::register_all(path.as_deref(), merge, force, close_vscode, reopen),
             cli::RegisterCommands::Session {
                 ids,
                 title,
@@ -779,6 +783,12 @@ fn main() -> Result<()> {
                 dry_run,
                 exclude,
             } => commands::register_recursive(path.as_deref(), depth, force, dry_run, &exclude),
+            cli::RegisterCommands::Repair {
+                path,
+                force,
+                close_vscode,
+                reopen,
+            } => commands::register_repair(path.as_deref(), force, close_vscode, reopen),
         },
 
         // ====================================================================

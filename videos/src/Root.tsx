@@ -1,6 +1,7 @@
 import { Composition } from "remotion";
 import { GettingStarted } from "./compositions/GettingStarted";
 import { CLIWalkthrough } from "./compositions/CLIWalkthrough";
+import { CLIUsage } from "./compositions/CLIUsage";
 import { SessionRecovery } from "./compositions/SessionRecovery";
 import { ProviderSetup } from "./compositions/ProviderSetup";
 import { TUIBrowser } from "./compositions/TUIBrowser";
@@ -21,6 +22,14 @@ export const RemotionRoot: React.FC = () => {
         id="CLIWalkthrough"
         component={CLIWalkthrough}
         durationInFrames={47 * VIDEO_FPS}
+        fps={VIDEO_FPS}
+        width={VIDEO_WIDTH}
+        height={VIDEO_HEIGHT}
+      />
+      <Composition
+        id="CLIUsage"
+        component={CLIUsage}
+        durationInFrames={60 * VIDEO_FPS}
         fps={VIDEO_FPS}
         width={VIDEO_WIDTH}
         height={VIDEO_HEIGHT}

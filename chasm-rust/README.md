@@ -14,6 +14,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL_3.0-blue.svg" alt="License"></a>
 </p>
 
+<p align="center">
+  <video src="https://github.com/nervosys/chasm/raw/master/videos/out/getting-started.mp4" width="800" autoplay loop muted playsinline>
+    Your browser does not support the video tag. <a href="../videos/out/getting-started.mp4">Watch the demo</a>.
+  </video>
+</p>
+
 ---
 
 **Chasm** extracts and unifies chat sessions from AI coding assistants like GitHub Copilot, Cursor, and more. Never lose your AI conversations again.
