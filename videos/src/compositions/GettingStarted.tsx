@@ -89,19 +89,11 @@ export const GettingStarted: React.FC = () => {
 
       {/* Section 2: Install */}
       <Sequence from={10 * VIDEO_FPS} durationInFrames={6 * VIDEO_FPS}>
-        <AbsoluteFill
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 36,
-          }}
-        >
-          <SectionBadge number={2} label="Installation" />
+        <AbsoluteFill>
           <Terminal
-            title="bash — Install Chasm"
+            title="2. Installation — Install Chasm"
             startFrame={10}
+            fullScreen
             lines={[
               { prompt: true, text: "cargo install chasm-cli", delay: 0 },
               {
@@ -128,19 +120,11 @@ export const GettingStarted: React.FC = () => {
 
       {/* Section 3: First commands */}
       <Sequence from={16 * VIDEO_FPS} durationInFrames={8 * VIDEO_FPS}>
-        <AbsoluteFill
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 36,
-          }}
-        >
-          <SectionBadge number={3} label="First Commands" />
+        <AbsoluteFill>
           <Terminal
-            title="bash — Discover your sessions"
+            title="3. First Commands — Discover your sessions"
             startFrame={10}
+            fullScreen
             lines={[
               { prompt: true, text: "chasm list workspaces", delay: 0 },
               {
@@ -178,19 +162,11 @@ export const GettingStarted: React.FC = () => {
 
       {/* Section 4: Search */}
       <Sequence from={24 * VIDEO_FPS} durationInFrames={6 * VIDEO_FPS}>
-        <AbsoluteFill
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 36,
-          }}
-        >
-          <SectionBadge number={4} label="Search Everything" />
+        <AbsoluteFill>
           <Terminal
-            title="bash — Full-text search"
+            title="4. Search Everything — Full-text search"
             startFrame={10}
+            fullScreen
             lines={[
               {
                 prompt: true,

@@ -200,7 +200,8 @@ export const Terminal: React.FC<{
   }>;
   title?: string;
   startFrame?: number;
-}> = ({ lines, title = "Terminal", startFrame = 0 }) => {
+  fullScreen?: boolean;
+}> = ({ lines, title = "Terminal", startFrame = 0, fullScreen = false }) => {
   const frame = useCurrentFrame();
   const f = frame - startFrame;
 
@@ -213,13 +214,15 @@ export const Terminal: React.FC<{
   return (
     <div
       style={{
-        width: "85%",
-        maxWidth: 1400,
+        ...(fullScreen
+          ? { width: "100%", height: "100%" }
+          : { width: "85%", maxWidth: 1400, borderRadius: 12 }),
         opacity: containerOp,
-        borderRadius: 12,
         overflow: "hidden",
-        border: `1px solid ${COLORS.border}`,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+        border: fullScreen ? "none" : `1px solid ${COLORS.border}`,
+        boxShadow: fullScreen ? "none" : "0 20px 60px rgba(0,0,0,0.5)",
+        display: "flex",
+        flexDirection: "column" as const,
       }}
     >
       {/* Title bar */}
@@ -272,11 +275,11 @@ export const Terminal: React.FC<{
       <div
         style={{
           background: COLORS.bgTerminal,
-          padding: "20px 24px",
+          padding: fullScreen ? "32px 40px" : "20px 24px",
           fontFamily: FONTS.code,
-          fontSize: 20,
+          fontSize: fullScreen ? 24 : 20,
           lineHeight: 1.6,
-          minHeight: 300,
+          ...(fullScreen ? { flex: 1 } : { minHeight: 300 }),
         }}
       >
         {lines.map((line, i) => {
