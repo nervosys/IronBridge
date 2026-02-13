@@ -480,6 +480,10 @@ pub enum ShowCommands {
         /// Project path (default: current directory)
         #[arg(long)]
         path: Option<String>,
+
+        /// Show indexes for all workspaces that have chat sessions
+        #[arg(long, short)]
+        all: bool,
     },
 
     /// Show chat history timeline for a project path
@@ -1322,6 +1326,10 @@ pub enum RegisterCommands {
         /// Project path (default: current directory)
         #[arg(long)]
         path: Option<String>,
+
+        /// Repair all workspaces that have chat sessions
+        #[arg(long, short)]
+        all: bool,
 
         /// Force even if VS Code is running
         #[arg(long, short)]

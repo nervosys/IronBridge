@@ -2364,7 +2364,11 @@ pub fn show_timeline(
 }
 
 /// Show the VS Code session index (state.vscdb) for a workspace
-pub fn show_index(project_path: Option<&str>) -> Result<()> {
+pub fn show_index(project_path: Option<&str>, all: bool) -> Result<()> {
+    if all {
+        return show_index_all();
+    }
+
     use colored::Colorize;
     use tabled::{settings::Style as TableStyle, Table, Tabled};
 
@@ -2500,6 +2504,156 @@ pub fn show_index(project_path: Option<&str>) -> Result<()> {
         if orphaned.is_empty() && stale.is_empty() {
             println!("\n{} Index is in sync with files on disk.", "[OK]".green());
         }
+    }
+
+    Ok(())
+}
+
+/// Show index summary for all workspaces with chat sessions
+fn show_index_all() -> Result<()> {
+    use colored::Colorize;
+
+    println!(
+        "{} Scanning all workspace indexes...\n",
+        "[CSM]".cyan().bold(),
+    );
+
+    let workspaces = crate::workspace::discover_workspaces()?;
+    let ws_with_sessions: Vec<_> = workspaces
+        .iter()
+        .filter(|w| w.has_chat_sessions && w.chat_session_count > 0)
+        .collect();
+
+    if ws_with_sessions.is_empty() {
+        println!("{} No workspaces with chat sessions found.", "[!]".yellow());
+        return Ok(());
+    }
+
+    let mut total_entries = 0usize;
+    let mut total_non_empty = 0usize;
+    let mut total_orphaned = 0usize;
+    let mut total_stale = 0usize;
+    let mut _sync_ok = 0usize;
+    let mut sync_issues = 0usize;
+
+    for (i, ws) in ws_with_sessions.iter().enumerate() {
+        let display_name = ws
+            .project_path
+            .as_deref()
+            .unwrap_or(&ws.hash);
+
+        let db_path = match crate::storage::get_workspace_storage_db(&ws.hash) {
+            Ok(p) => p,
+            Err(_) => {
+                println!(
+                    "[{}/{}] {} {} — {} no state.vscdb",
+                    i + 1,
+                    ws_with_sessions.len(),
+                    display_name.cyan(),
+                    "".dimmed(),
+                    "[!]".yellow()
+                );
+                continue;
+            }
+        };
+
+        let index = match crate::storage::read_chat_session_index(&db_path) {
+            Ok(idx) => idx,
+            Err(_) => {
+                println!(
+                    "[{}/{}] {} — {} no index in state.vscdb",
+                    i + 1,
+                    ws_with_sessions.len(),
+                    display_name.cyan(),
+                    "[!]".yellow()
+                );
+                continue;
+            }
+        };
+
+        let non_empty = index.entries.values().filter(|e| !e.is_empty).count();
+        total_entries += index.entries.len();
+        total_non_empty += non_empty;
+
+        // Check sync status
+        let chat_dir = ws.workspace_path.join("chatSessions");
+        let mut orphaned = 0usize;
+        let mut stale = 0usize;
+        if chat_dir.exists() {
+            let mut disk_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+            if let Ok(entries) = std::fs::read_dir(&chat_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.extension()
+                        .map(crate::storage::is_session_file_extension)
+                        .unwrap_or(false)
+                    {
+                        if let Some(stem) = p.file_stem() {
+                            disk_ids.insert(stem.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+            let indexed_ids: std::collections::HashSet<String> =
+                index.entries.keys().cloned().collect();
+            orphaned = disk_ids.difference(&indexed_ids).count();
+            stale = indexed_ids.difference(&disk_ids).count();
+        }
+        total_orphaned += orphaned;
+        total_stale += stale;
+
+        let status = if orphaned == 0 && stale == 0 {
+            _sync_ok += 1;
+            "[OK]".green().to_string()
+        } else {
+            sync_issues += 1;
+            format!(
+                "{}{}",
+                if orphaned > 0 {
+                    format!("{} orphaned ", orphaned).yellow().to_string()
+                } else {
+                    String::new()
+                },
+                if stale > 0 {
+                    format!("{} stale", stale).yellow().to_string()
+                } else {
+                    String::new()
+                }
+            )
+        };
+
+        println!(
+            "[{:>3}/{}] {} — {} entries ({} with content) {}",
+            i + 1,
+            ws_with_sessions.len(),
+            display_name.cyan(),
+            index.entries.len(),
+            non_empty.to_string().green(),
+            status
+        );
+    }
+
+    println!(
+        "\n{} {} workspaces, {} index entries ({} with content)",
+        "[OK]".green().bold(),
+        ws_with_sessions.len().to_string().cyan(),
+        total_entries.to_string().cyan(),
+        total_non_empty.to_string().green()
+    );
+    if sync_issues > 0 {
+        println!(
+            "   {} {}/{} workspaces have sync issues ({} orphaned, {} stale)",
+            "[!]".yellow(),
+            sync_issues,
+            ws_with_sessions.len(),
+            total_orphaned,
+            total_stale
+        );
+    } else {
+        println!(
+            "   {} All indexes in sync with files on disk.",
+            "[OK]".green()
+        );
     }
 
     Ok(())

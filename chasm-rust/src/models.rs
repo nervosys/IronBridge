@@ -277,14 +277,15 @@ impl Default for ChatSessionIndex {
 #[serde(rename_all = "camelCase")]
 pub struct ChatSessionTiming {
     /// When the session was created (ms since epoch)
+    #[serde(default)]
     pub created: i64,
 
     /// When the most recent request started (ms since epoch)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_request_started: Option<i64>,
 
     /// When the most recent request completed (ms since epoch)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_request_ended: Option<i64>,
 }
 

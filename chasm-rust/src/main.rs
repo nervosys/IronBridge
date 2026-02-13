@@ -152,7 +152,7 @@ fn main() -> Result<()> {
                 session_id,
                 project_path,
             }) => commands::show_agent_session(&session_id, project_path.as_deref()),
-            Some(ShowCommands::Index { path }) => commands::show_index(path.as_deref()),
+            Some(ShowCommands::Index { path, all }) => commands::show_index(path.as_deref(), all),
             Some(ShowCommands::Path { project_path }) => {
                 commands::history_show(project_path.as_deref())
             }
@@ -786,10 +786,11 @@ fn main() -> Result<()> {
             } => commands::register_recursive(path.as_deref(), depth, force, dry_run, &exclude),
             cli::RegisterCommands::Repair {
                 path,
+                all,
                 force,
                 close_vscode,
                 reopen,
-            } => commands::register_repair(path.as_deref(), force, close_vscode, reopen),
+            } => commands::register_repair(path.as_deref(), all, force, close_vscode, reopen),
         },
 
         // ====================================================================

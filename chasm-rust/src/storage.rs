@@ -378,9 +378,8 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                         {
                             session.requests = reqs;
                             // Compute last_message_date from the latest request timestamp
-                            if let Some(latest_ts) = session.requests.iter()
-                                .filter_map(|r| r.timestamp)
-                                .max()
+                            if let Some(latest_ts) =
+                                session.requests.iter().filter_map(|r| r.timestamp).max()
                             {
                                 session.last_message_date = latest_ts;
                             }
@@ -1112,20 +1111,32 @@ pub fn count_empty_window_sessions() -> Result<usize> {
 /// This works at the raw JSON level, preserving all fields VS Code expects.
 /// Returns the path to the compacted file.
 pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| CsmError::InvalidSessionFormat(format!("Failed to read {}: {}", path.display(), e)))?;
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        CsmError::InvalidSessionFormat(format!("Failed to read {}: {}", path.display(), e))
+    })?;
 
     let mut lines = content.lines();
 
     // First line must be kind:0 (initial snapshot)
-    let first_line = lines.next().ok_or_else(|| {
-        CsmError::InvalidSessionFormat("Empty JSONL file".to_string())
-    })?;
+    let first_line = lines
+        .next()
+        .ok_or_else(|| CsmError::InvalidSessionFormat("Empty JSONL file".to_string()))?;
 
-    let first_entry: serde_json::Value = serde_json::from_str(first_line.trim())
-        .map_err(|e| CsmError::InvalidSessionFormat(format!("Invalid JSON on line 1: {}", e)))?;
+    let first_entry: serde_json::Value = match serde_json::from_str(first_line.trim()) {
+        Ok(v) => v,
+        Err(_) => {
+            // Try sanitizing Unicode (lone surrogates, etc.)
+            let sanitized = sanitize_json_unicode(first_line.trim());
+            serde_json::from_str(&sanitized).map_err(|e| {
+                CsmError::InvalidSessionFormat(format!("Invalid JSON on line 1: {}", e))
+            })?
+        }
+    };
 
-    let kind = first_entry.get("kind").and_then(|k| k.as_u64()).unwrap_or(99);
+    let kind = first_entry
+        .get("kind")
+        .and_then(|k| k.as_u64())
+        .unwrap_or(99);
     if kind != 0 {
         return Err(CsmError::InvalidSessionFormat(
             "First JSONL line must be kind:0".to_string(),
@@ -1230,7 +1241,11 @@ fn apply_delta(root: &mut serde_json::Value, keys: &[serde_json::Value], value: 
 }
 
 /// Apply an array append operation (kind:2) to a JSON value at the given key path.
-fn apply_append(root: &mut serde_json::Value, keys: &[serde_json::Value], items: serde_json::Value) {
+fn apply_append(
+    root: &mut serde_json::Value,
+    keys: &[serde_json::Value],
+    items: serde_json::Value,
+) {
     if keys.is_empty() {
         return;
     }
@@ -1299,13 +1314,13 @@ pub fn repair_workspace_sessions(
                 let line_count = content.lines().count();
 
                 if line_count > 1 {
-                    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string())
+                    let stem = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
                         .unwrap_or_default();
                     println!(
                         "   Compacting {} ({} lines, {}MB)...",
-                        stem,
-                        line_count,
-                        size_mb
+                        stem, line_count, size_mb
                     );
 
                     match compact_session_jsonl(&path) {
@@ -1317,7 +1332,10 @@ pub fn repair_workspace_sessions(
                                 "   [OK] Compacted: {}MB -> {}MB (backup: {})",
                                 size_mb,
                                 new_size,
-                                backup_path.file_name().unwrap_or_default().to_string_lossy()
+                                backup_path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
                             );
                             compacted += 1;
                         }

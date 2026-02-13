@@ -9,6 +9,7 @@
 use anyhow::Result;
 use colored::*;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::CsmError;
@@ -20,6 +21,24 @@ use crate::storage::{
     repair_workspace_sessions,
 };
 use crate::workspace::{discover_workspaces, find_workspace_by_path, normalize_path};
+
+/// Prompt the user to confirm closing VS Code. Returns true if confirmed, false if declined.
+/// When `force` is true, skips the prompt and returns true immediately.
+fn confirm_close_vscode(force: bool) -> bool {
+    if force {
+        return true;
+    }
+    print!(
+        "{} VS Code will be closed. Continue? [y/N] ",
+        "[?]".yellow()
+    );
+    std::io::stdout().flush().ok();
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_err() {
+        return false;
+    }
+    matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
+}
 
 /// Resolve a path option to an absolute PathBuf, handling "." and relative paths
 pub fn resolve_path(path: Option<&str>) -> PathBuf {
@@ -87,6 +106,10 @@ pub fn register_all(
     let vscode_was_running = is_vscode_running();
     if vscode_was_running {
         if should_close {
+            if !confirm_close_vscode(force) {
+                println!("{} Aborted.", "[!]".yellow());
+                return Ok(());
+            }
             println!("   {} Closing VS Code (saving state)...", "[*]".yellow());
             close_vscode_and_wait(30)?;
             println!("   {} VS Code closed.", "[OK]".green());
@@ -898,10 +921,15 @@ fn count_orphaned_sessions(
 /// Repair sessions: compact JSONL files and rebuild the index with correct metadata
 pub fn register_repair(
     project_path: Option<&str>,
+    all: bool,
     force: bool,
     close_vscode: bool,
     reopen: bool,
 ) -> Result<()> {
+    if all {
+        return register_repair_all(force, close_vscode, reopen);
+    }
+
     let path = resolve_path(project_path);
     let should_close = close_vscode || reopen;
 
@@ -931,6 +959,10 @@ pub fn register_repair(
     let vscode_was_running = is_vscode_running();
     if vscode_was_running {
         if should_close {
+            if !confirm_close_vscode(force) {
+                println!("{} Aborted.", "[!]".yellow());
+                return Ok(());
+            }
             println!("   {} Closing VS Code (saving state)...", "[*]".yellow());
             close_vscode_and_wait(30)?;
             println!("   {} VS Code closed.", "[OK]".green());
@@ -1018,6 +1050,167 @@ pub fn register_repair(
             "[!]".yellow()
         );
         println!("   Run: {}", format!("code {}", path.display()).cyan());
+    }
+
+    Ok(())
+}
+
+/// Repair all workspaces that have chat sessions
+fn register_repair_all(force: bool, close_vscode: bool, reopen: bool) -> Result<()> {
+    let should_close = close_vscode || reopen;
+
+    println!(
+        "{} Repairing all workspaces with chat sessions...\n",
+        "[CSM]".cyan().bold(),
+    );
+
+    // Handle VS Code lifecycle once for all workspaces
+    let vscode_was_running = is_vscode_running();
+    if vscode_was_running {
+        if should_close {
+            if !confirm_close_vscode(force) {
+                println!("{} Aborted.", "[!]".yellow());
+                return Ok(());
+            }
+            println!("   {} Closing VS Code (saving state)...", "[*]".yellow());
+            close_vscode_and_wait(30)?;
+            println!("   {} VS Code closed.\n", "[OK]".green());
+        } else if !force {
+            println!(
+                "{} VS Code is running. Its in-memory cache will overwrite index changes.",
+                "[!]".yellow()
+            );
+            println!(
+                "   Use {} to close VS Code first, or {} to force.",
+                "--reopen".cyan(),
+                "--force".cyan()
+            );
+            return Err(CsmError::VSCodeRunning.into());
+        }
+    }
+
+    let workspaces = discover_workspaces()?;
+    let ws_with_sessions: Vec<_> = workspaces
+        .iter()
+        .filter(|w| w.has_chat_sessions && w.chat_session_count > 0)
+        .collect();
+
+    if ws_with_sessions.is_empty() {
+        println!("{} No workspaces with chat sessions found.", "[!]".yellow());
+        return Ok(());
+    }
+
+    println!(
+        "   Found {} workspaces with chat sessions\n",
+        ws_with_sessions.len().to_string().cyan()
+    );
+
+    let mut total_compacted = 0usize;
+    let mut total_synced = 0usize;
+    let mut succeeded = 0usize;
+    let mut failed = 0usize;
+
+    for (i, ws) in ws_with_sessions.iter().enumerate() {
+        let display_name = ws
+            .project_path
+            .as_deref()
+            .unwrap_or(&ws.hash);
+        println!(
+            "[{}/{}] {} {}",
+            i + 1,
+            ws_with_sessions.len(),
+            "===".dimmed(),
+            display_name.cyan()
+        );
+
+        let chat_sessions_dir = ws.workspace_path.join("chatSessions");
+        if !chat_sessions_dir.exists() {
+            println!("   {} No chatSessions directory, skipping.\n", "[!]".yellow());
+            continue;
+        }
+
+        match repair_workspace_sessions(&ws.hash, &chat_sessions_dir, true) {
+            Ok((compacted, index_fixed)) => {
+                // Delete stale .json files when a .jsonl exists for the same session
+                let mut deleted_json = 0;
+                let mut jsonl_sessions: HashSet<String> = HashSet::new();
+                for entry in std::fs::read_dir(&chat_sessions_dir)? {
+                    let entry = entry?;
+                    let p = entry.path();
+                    if p.extension().is_some_and(|e| e == "jsonl") {
+                        if let Some(stem) = p.file_stem() {
+                            jsonl_sessions.insert(stem.to_string_lossy().to_string());
+                        }
+                    }
+                }
+                for entry in std::fs::read_dir(&chat_sessions_dir)? {
+                    let entry = entry?;
+                    let p = entry.path();
+                    if p.extension().is_some_and(|e| e == "json") {
+                        if let Some(stem) = p.file_stem() {
+                            if jsonl_sessions.contains(&stem.to_string_lossy().to_string()) {
+                                let bak = p.with_extension("json.bak");
+                                std::fs::rename(&p, &bak)?;
+                                deleted_json += 1;
+                            }
+                        }
+                    }
+                }
+                if deleted_json > 0 {
+                    repair_workspace_sessions(&ws.hash, &chat_sessions_dir, true)?;
+                }
+
+                total_compacted += compacted;
+                total_synced += index_fixed;
+                succeeded += 1;
+                println!(
+                    "   {} {} compacted, {} synced{}\n",
+                    "[OK]".green(),
+                    compacted,
+                    index_fixed,
+                    if deleted_json > 0 {
+                        format!(", {} stale .json backed up", deleted_json)
+                    } else {
+                        String::new()
+                    }
+                );
+            }
+            Err(e) => {
+                failed += 1;
+                println!("   {} {}\n", "[ERR]".red(), e);
+            }
+        }
+    }
+
+    println!(
+        "{} Repair complete: {}/{} workspaces, {} compacted, {} index entries synced",
+        "[OK]".green().bold(),
+        succeeded.to_string().green(),
+        ws_with_sessions.len(),
+        total_compacted.to_string().cyan(),
+        total_synced.to_string().cyan()
+    );
+    if failed > 0 {
+        println!(
+            "   {} {} workspace(s) had errors",
+            "[!]".yellow(),
+            failed.to_string().red()
+        );
+    }
+
+    // Reopen VS Code if requested
+    if reopen && vscode_was_running {
+        println!("   {} Reopening VS Code...", "[*]".yellow());
+        reopen_vscode(None)?;
+        println!(
+            "   {} VS Code launched. Sessions should now load correctly.",
+            "[OK]".green()
+        );
+    } else if should_close && vscode_was_running {
+        println!(
+            "\n{} VS Code was closed. Reopen it to see the repaired sessions.",
+            "[!]".yellow()
+        );
     }
 
     Ok(())
