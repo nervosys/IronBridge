@@ -14,14 +14,15 @@ use std::path::{Path, PathBuf};
 use crate::error::CsmError;
 use crate::models::ChatSession;
 use crate::storage::{
-    add_session_to_index, close_vscode_and_wait, get_workspace_storage_db, is_vscode_running,
-    parse_session_json, read_chat_session_index, register_all_sessions_from_directory,
-    repair_workspace_sessions, reopen_vscode,
+    add_session_to_index, close_vscode_and_wait, get_workspace_storage_db,
+    is_session_file_extension, is_vscode_running, parse_session_file, parse_session_json,
+    read_chat_session_index, register_all_sessions_from_directory, reopen_vscode,
+    repair_workspace_sessions,
 };
 use crate::workspace::{discover_workspaces, find_workspace_by_path, normalize_path};
 
 /// Resolve a path option to an absolute PathBuf, handling "." and relative paths
-fn resolve_path(path: Option<&str>) -> PathBuf {
+pub fn resolve_path(path: Option<&str>) -> PathBuf {
     match path {
         Some(p) => {
             let path = PathBuf::from(p);
@@ -337,25 +338,39 @@ pub fn list_orphaned(project_path: Option<&str>) -> Result<()> {
     // Find sessions on disk
     let mut orphaned_sessions = Vec::new();
 
+    // Collect files, preferring .jsonl over .json for the same session ID
+    let mut session_files: std::collections::HashMap<String, PathBuf> =
+        std::collections::HashMap::new();
     for entry in std::fs::read_dir(&chat_sessions_dir)? {
         let entry = entry?;
         let path = entry.path();
-
-        if path.extension().map(|e| e == "json").unwrap_or(false) {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(session) = parse_session_json(&content) {
-                    let session_id = session.session_id.clone().unwrap_or_else(|| {
-                        path.file_stem()
-                            .map(|s| s.to_string_lossy().to_string())
-                            .unwrap_or_default()
-                    });
-
-                    if !indexed_ids.contains(&session_id) {
-                        let title = session.title();
-                        let msg_count = session.requests.len();
-                        orphaned_sessions.push((session_id, title, msg_count, path.clone()));
-                    }
+        if path
+            .extension()
+            .map(is_session_file_extension)
+            .unwrap_or(false)
+        {
+            if let Some(stem) = path.file_stem() {
+                let stem_str = stem.to_string_lossy().to_string();
+                let is_jsonl = path.extension().is_some_and(|e| e == "jsonl");
+                if !session_files.contains_key(&stem_str) || is_jsonl {
+                    session_files.insert(stem_str, path);
                 }
+            }
+        }
+    }
+
+    for (_, path) in &session_files {
+        if let Ok(session) = parse_session_file(path) {
+            let session_id = session.session_id.clone().unwrap_or_else(|| {
+                path.file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            });
+
+            if !indexed_ids.contains(&session_id) {
+                let title = session.title();
+                let msg_count = session.requests.len();
+                orphaned_sessions.push((session_id, title, msg_count, path.clone()));
             }
         }
     }
@@ -396,52 +411,71 @@ pub fn list_orphaned(project_path: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// Count session files in a directory
+/// Count session files in a directory (counts unique session IDs, preferring .jsonl)
 fn count_sessions_in_directory(dir: &PathBuf) -> Result<usize> {
-    let mut count = 0;
+    let mut session_ids: HashSet<String> = HashSet::new();
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
-        if entry
-            .path()
+        let path = entry.path();
+        if path
             .extension()
-            .map(|e| e == "json")
+            .map(is_session_file_extension)
             .unwrap_or(false)
         {
-            count += 1;
+            if let Some(stem) = path.file_stem() {
+                session_ids.insert(stem.to_string_lossy().to_string());
+            }
         }
     }
-    Ok(count)
+    Ok(session_ids.len())
 }
 
-/// Find a session file by ID (supports partial matches)
+/// Find a session file by ID (supports partial matches, prefers .jsonl over .json)
 fn find_session_file(chat_sessions_dir: &PathBuf, session_id: &str) -> Result<PathBuf> {
-    // First try exact match
-    let exact_path = chat_sessions_dir.join(format!("{}.json", session_id));
-    if exact_path.exists() {
-        return Ok(exact_path);
+    // First try exact match (.jsonl preferred)
+    let exact_jsonl = chat_sessions_dir.join(format!("{}.jsonl", session_id));
+    if exact_jsonl.exists() {
+        return Ok(exact_jsonl);
+    }
+    let exact_json = chat_sessions_dir.join(format!("{}.json", session_id));
+    if exact_json.exists() {
+        return Ok(exact_json);
     }
 
-    // Try partial match (prefix)
+    // Try partial match (prefix), preferring .jsonl
+    let mut best_match: Option<PathBuf> = None;
     for entry in std::fs::read_dir(chat_sessions_dir)? {
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().map(|e| e == "json").unwrap_or(false) {
+        if path
+            .extension()
+            .map(is_session_file_extension)
+            .unwrap_or(false)
+        {
             let filename = path
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
 
             if filename.starts_with(session_id) {
-                return Ok(path);
+                let is_jsonl = path.extension().is_some_and(|e| e == "jsonl");
+                if best_match.is_none() || is_jsonl {
+                    best_match = Some(path.clone());
+                    if is_jsonl {
+                        return Ok(path);
+                    }
+                }
+                continue;
             }
 
             // Also check session_id inside the file
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(session) = parse_session_json(&content) {
-                    if let Some(ref sid) = session.session_id {
-                        if sid.starts_with(session_id) || sid == session_id {
-                            return Ok(path);
+            if let Ok(session) = parse_session_file(&path) {
+                if let Some(ref sid) = session.session_id {
+                    if sid.starts_with(session_id) || sid == session_id {
+                        let is_jsonl = path.extension().is_some_and(|e| e == "jsonl");
+                        if best_match.is_none() || is_jsonl {
+                            best_match = Some(path.clone());
                         }
                     }
                 }
@@ -449,7 +483,7 @@ fn find_session_file(chat_sessions_dir: &PathBuf, session_id: &str) -> Result<Pa
         }
     }
 
-    Err(CsmError::SessionNotFound(session_id.to_string()).into())
+    best_match.ok_or_else(|| CsmError::SessionNotFound(session_id.to_string()).into())
 }
 
 /// Find sessions by title (case-insensitive partial match)
@@ -460,21 +494,35 @@ fn find_sessions_by_titles(
     let mut matches = Vec::new();
     let title_patterns: Vec<String> = titles.iter().map(|t| t.to_lowercase()).collect();
 
+    // Collect files, preferring .jsonl over .json for the same session ID
+    let mut session_files: std::collections::HashMap<String, PathBuf> =
+        std::collections::HashMap::new();
     for entry in std::fs::read_dir(chat_sessions_dir)? {
         let entry = entry?;
         let path = entry.path();
+        if path
+            .extension()
+            .map(is_session_file_extension)
+            .unwrap_or(false)
+        {
+            if let Some(stem) = path.file_stem() {
+                let stem_str = stem.to_string_lossy().to_string();
+                let is_jsonl = path.extension().is_some_and(|e| e == "jsonl");
+                if !session_files.contains_key(&stem_str) || is_jsonl {
+                    session_files.insert(stem_str, path);
+                }
+            }
+        }
+    }
 
-        if path.extension().map(|e| e == "json").unwrap_or(false) {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(session) = parse_session_json(&content) {
-                    let session_title = session.title().to_lowercase();
+    for (_, path) in &session_files {
+        if let Ok(session) = parse_session_file(path) {
+            let session_title = session.title().to_lowercase();
 
-                    for pattern in &title_patterns {
-                        if session_title.contains(pattern) {
-                            matches.push((session, path.clone()));
-                            break;
-                        }
-                    }
+            for pattern in &title_patterns {
+                if session_title.contains(pattern) {
+                    matches.push((session, path.clone()));
+                    break;
                 }
             }
         }
@@ -820,28 +868,29 @@ fn count_orphaned_sessions(
     let indexed_sessions = read_chat_session_index(&db_path)?;
     let indexed_ids: HashSet<String> = indexed_sessions.entries.keys().cloned().collect();
 
-    // Count sessions on disk
-    let mut on_disk = 0;
-    let mut orphaned = 0;
+    // Count unique sessions on disk (preferring .jsonl over .json)
+    let mut disk_sessions: HashSet<String> = HashSet::new();
 
     for entry in std::fs::read_dir(chat_sessions_dir)? {
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().map(|e| e == "json").unwrap_or(false) {
-            on_disk += 1;
-
-            // Check if it's in the index
-            let filename = path
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
-
-            if !indexed_ids.contains(&filename) {
-                orphaned += 1;
+        if path
+            .extension()
+            .map(is_session_file_extension)
+            .unwrap_or(false)
+        {
+            if let Some(stem) = path.file_stem() {
+                disk_sessions.insert(stem.to_string_lossy().to_string());
             }
         }
     }
+
+    let on_disk = disk_sessions.len();
+    let orphaned = disk_sessions
+        .iter()
+        .filter(|id| !indexed_ids.contains(*id))
+        .count();
 
     Ok((on_disk, indexed_ids.len(), orphaned))
 }
@@ -901,8 +950,7 @@ pub fn register_repair(
 
     // Run the repair
     println!("   {} Pass 1: Compacting JSONL files...", "[*]".cyan());
-    let (compacted, index_fixed) =
-        repair_workspace_sessions(&ws_id, &chat_sessions_dir, true)?;
+    let (compacted, index_fixed) = repair_workspace_sessions(&ws_id, &chat_sessions_dir, true)?;
 
     println!("   {} Pass 2: Index rebuilt.", "[*]".cyan());
     println!(

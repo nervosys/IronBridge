@@ -474,6 +474,14 @@ pub enum ShowCommands {
         project_path: Option<String>,
     },
 
+    /// Show the VS Code session index (state.vscdb) for a workspace
+    #[command(visible_alias = "idx")]
+    Index {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+    },
+
     /// Show chat history timeline for a project path
     Path {
         /// Path to the project (default: current directory)

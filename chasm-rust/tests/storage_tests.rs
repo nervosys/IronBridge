@@ -120,7 +120,8 @@ mod read_chat_session_index_tests {
                     session_id: format!("session-{}", i),
                     title: format!("Session {}", i),
                     last_message_date: 1700000000000 + i,
-                    is_imported: i % 2 == 0,
+                    timing: None,
+                    last_response_state: 1,
                     initial_location: "panel".to_string(),
                     is_empty: false,
                 },
@@ -196,7 +197,8 @@ mod write_chat_session_index_tests {
                 session_id: "test-session".to_string(),
                 title: "Test".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: true,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "editor".to_string(),
                 is_empty: false,
             },
@@ -228,7 +230,8 @@ mod write_chat_session_index_tests {
                 session_id: "session-1".to_string(),
                 title: "First".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: false,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
             },
@@ -251,7 +254,8 @@ mod write_chat_session_index_tests {
                 session_id: "session-2".to_string(),
                 title: "Second".to_string(),
                 last_message_date: 1700000001000,
-                is_imported: true,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "terminal".to_string(),
                 is_empty: false,
             },
@@ -287,7 +291,8 @@ mod write_chat_session_index_tests {
                     session_id: format!("sess-{}", i),
                     title: format!("Title {}", i),
                     last_message_date: 1700000000000 + i * 1000,
-                    is_imported: i % 2 == 0,
+                    timing: None,
+                    last_response_state: 1,
                     initial_location: ["panel", "editor", "terminal", "notebook", "inline"]
                         [i as usize % 5]
                         .to_string(),
@@ -309,7 +314,7 @@ mod write_chat_session_index_tests {
         for (key, entry) in &restored.entries {
             let orig_entry = original.entries.get(key).unwrap();
             assert_eq!(entry.title, orig_entry.title);
-            assert_eq!(entry.is_imported, orig_entry.is_imported);
+            assert_eq!(entry.is_empty, orig_entry.is_empty);
         }
     }
 }
@@ -345,7 +350,7 @@ mod add_session_to_index_tests {
 
         let entry = index.entries.get("new-session-123").unwrap();
         assert_eq!(entry.title, "New Session");
-        assert!(!entry.is_imported);
+        assert!(!entry.is_empty);
     }
 
     #[test]
@@ -419,7 +424,6 @@ mod add_session_to_index_tests {
 
         let entry = index.entries.get("session-1").unwrap();
         assert_eq!(entry.title, "Updated Title");
-        assert!(entry.is_imported);
         assert!(entry.is_empty);
     }
 
@@ -442,7 +446,6 @@ mod add_session_to_index_tests {
 
         let index = read_chat_session_index(&db_path).unwrap();
         let entry = index.entries.get("imported-123").unwrap();
-        assert!(entry.is_imported);
         assert_eq!(entry.initial_location, "imported");
     }
 
@@ -787,7 +790,8 @@ mod index_serialization_tests {
                 session_id: "test-id".to_string(),
                 title: "Test Title".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: true,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "terminal".to_string(),
                 is_empty: false,
             },
@@ -804,7 +808,7 @@ mod index_serialization_tests {
         assert!(json.contains("\"entries\""));
         assert!(json.contains("\"sessionId\""));
         assert!(json.contains("\"lastMessageDate\""));
-        assert!(json.contains("\"isImported\": true"));
+        assert!(json.contains("\"isEmpty\": false"));
     }
 
     #[test]
@@ -816,7 +820,8 @@ mod index_serialization_tests {
                 session_id: "special-chars".to_string(),
                 title: "Title with \"quotes\" and \\backslashes\\".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: false,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
             },
@@ -843,7 +848,8 @@ mod index_serialization_tests {
                 session_id: "unicode".to_string(),
                 title: "Test Title".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: false,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
             },
@@ -870,7 +876,8 @@ mod index_serialization_tests {
                 session_id: "empty-title".to_string(),
                 title: "".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: false,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: true,
             },

@@ -104,7 +104,12 @@ fn format_file_size(bytes: u64) -> String {
 }
 
 /// List all chat sessions
-pub fn list_sessions(project_path: Option<&str>, show_size: bool, provider: Option<&str>, all_providers: bool) -> Result<()> {
+pub fn list_sessions(
+    project_path: Option<&str>,
+    show_size: bool,
+    provider: Option<&str>,
+    all_providers: bool,
+) -> Result<()> {
     // If provider filtering is requested, use the multi-provider approach
     if provider.is_some() || all_providers {
         return list_sessions_multi_provider(project_path, show_size, provider, all_providers);
@@ -383,7 +388,7 @@ fn list_sessions_multi_provider(
                 if !session_path.is_file() {
                     continue;
                 }
-                
+
                 let ext = session_path.extension().and_then(|e| e.to_str());
                 if ext != Some("json") && ext != Some("jsonl") {
                     continue;
@@ -869,8 +874,8 @@ pub fn find_sessions_filtered(
                     Some(h) => h,
                     None => return None,
                 };
-                let title = extract_title_from_content(&header)
-                    .unwrap_or_else(|| "Untitled".to_string());
+                let title =
+                    extract_title_from_content(&header).unwrap_or_else(|| "Untitled".to_string());
                 (title, None)
             } else {
                 // Full read path: need content for search
@@ -881,10 +886,8 @@ pub fn find_sessions_filtered(
 
                 // Check for internal message timestamps if --date filter is used
                 if let Some(target) = target_date {
-                    let has_matching_timestamp = content
-                        .split("\"timestamp\":")
-                        .skip(1)
-                        .any(|part| {
+                    let has_matching_timestamp =
+                        content.split("\"timestamp\":").skip(1).any(|part| {
                             let num_str: String = part
                                 .chars()
                                 .skip_while(|c| c.is_whitespace())
@@ -904,8 +907,8 @@ pub fn find_sessions_filtered(
                     }
                 }
 
-                let title = extract_title_from_content(&content)
-                    .unwrap_or_else(|| "Untitled".to_string());
+                let title =
+                    extract_title_from_content(&content).unwrap_or_else(|| "Untitled".to_string());
                 (title, Some(content))
             };
 
@@ -965,10 +968,13 @@ pub fn find_sessions_filtered(
                 content.matches("\"message\":").count()
             } else {
                 // Estimate from file size (avoid reading full file just for count)
-                path.metadata().ok().map(|m| {
-                    // Rough estimate: ~500 bytes per message on average
-                    (m.len() / 500).max(1) as usize
-                }).unwrap_or(0)
+                path.metadata()
+                    .ok()
+                    .map(|m| {
+                        // Rough estimate: ~500 bytes per message on average
+                        (m.len() / 500).max(1) as usize
+                    })
+                    .unwrap_or(0)
             };
 
             // Get modification time
@@ -1847,8 +1853,6 @@ pub fn list_agents_sessions(
     show_size: bool,
     provider: Option<&str>,
 ) -> Result<()> {
-    
-
     // Get storage paths based on provider filter
     let storage_paths = get_agent_storage_paths(provider)?;
 
@@ -2354,6 +2358,148 @@ pub fn show_timeline(
             "█".bright_green(),
             "▓".bright_magenta()
         );
+    }
+
+    Ok(())
+}
+
+/// Show the VS Code session index (state.vscdb) for a workspace
+pub fn show_index(project_path: Option<&str>) -> Result<()> {
+    use colored::Colorize;
+    use tabled::{settings::Style as TableStyle, Table, Tabled};
+
+    let path = crate::commands::register::resolve_path(project_path);
+    let path_str = path.to_string_lossy().to_string();
+
+    println!(
+        "{} Session index for: {}",
+        "[CSM]".cyan().bold(),
+        path.display()
+    );
+
+    let (ws_id, ws_path, _folder) = crate::workspace::find_workspace_by_path(&path_str)?
+        .ok_or_else(|| crate::error::CsmError::WorkspaceNotFound(path.display().to_string()))?;
+
+    let db_path = crate::storage::get_workspace_storage_db(&ws_id)?;
+    let index = crate::storage::read_chat_session_index(&db_path)?;
+
+    println!(
+        "   Workspace: {} ({})",
+        ws_id.bright_yellow(),
+        ws_path.display()
+    );
+    println!(
+        "   Index version: {}, entries: {}\n",
+        index.version,
+        index.entries.len()
+    );
+
+    #[derive(Tabled)]
+    struct IndexRow {
+        #[tabled(rename = "Session ID")]
+        session_id: String,
+        #[tabled(rename = "Title")]
+        title: String,
+        #[tabled(rename = "isEmpty")]
+        is_empty: String,
+        #[tabled(rename = "Last Message")]
+        last_message: String,
+        #[tabled(rename = "ResponseState")]
+        response_state: String,
+        #[tabled(rename = "Location")]
+        location: String,
+    }
+
+    let mut rows: Vec<IndexRow> = Vec::new();
+    for (_, entry) in &index.entries {
+        let last_msg = if entry.last_message_date > 0 {
+            let secs = entry.last_message_date / 1000;
+            chrono::DateTime::from_timestamp(secs, 0)
+                .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                .unwrap_or_else(|| entry.last_message_date.to_string())
+        } else {
+            "0".to_string()
+        };
+
+        let state = match entry.last_response_state {
+            0 => "Pending",
+            1 => "Complete",
+            2 => "Cancelled",
+            3 => "Failed",
+            4 => "NeedsInput",
+            _ => "Unknown",
+        };
+
+        rows.push(IndexRow {
+            session_id: entry.session_id[..12.min(entry.session_id.len())].to_string(),
+            title: if entry.title.len() > 40 {
+                format!("{}...", &entry.title[..37])
+            } else {
+                entry.title.clone()
+            },
+            is_empty: if entry.is_empty {
+                "true".red().to_string()
+            } else {
+                "false".green().to_string()
+            },
+            last_message: last_msg,
+            response_state: state.to_string(),
+            location: entry.initial_location.clone(),
+        });
+    }
+
+    // Sort by last message date descending
+    rows.sort_by(|a, b| b.last_message.cmp(&a.last_message));
+
+    let table = Table::new(&rows)
+        .with(TableStyle::ascii_rounded())
+        .to_string();
+    println!("{}", table);
+
+    // Also check for files on disk not in index
+    let chat_dir = ws_path.join("chatSessions");
+    if chat_dir.exists() {
+        let mut disk_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for entry in std::fs::read_dir(&chat_dir)? {
+            let entry = entry?;
+            let p = entry.path();
+            if p.extension()
+                .map(crate::storage::is_session_file_extension)
+                .unwrap_or(false)
+            {
+                if let Some(stem) = p.file_stem() {
+                    disk_ids.insert(stem.to_string_lossy().to_string());
+                }
+            }
+        }
+        let indexed_ids: std::collections::HashSet<String> =
+            index.entries.keys().cloned().collect();
+        let orphaned: Vec<_> = disk_ids.difference(&indexed_ids).collect();
+        let stale: Vec<_> = indexed_ids.difference(&disk_ids).collect();
+
+        if !orphaned.is_empty() {
+            println!(
+                "\n{} {} session(s) on disk but NOT in index (orphaned):",
+                "[!]".yellow(),
+                orphaned.len()
+            );
+            for id in &orphaned {
+                println!("   {}", id.red());
+            }
+        }
+        if !stale.is_empty() {
+            println!(
+                "\n{} {} index entries with NO file on disk (stale):",
+                "[!]".yellow(),
+                stale.len()
+            );
+            for id in &stale {
+                println!("   {}", id.red());
+            }
+        }
+        if orphaned.is_empty() && stale.is_empty() {
+            println!("\n{} Index is in sync with files on disk.", "[OK]".green());
+        }
     }
 
     Ok(())

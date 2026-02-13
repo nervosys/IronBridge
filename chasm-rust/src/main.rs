@@ -152,6 +152,7 @@ fn main() -> Result<()> {
                 session_id,
                 project_path,
             }) => commands::show_agent_session(&session_id, project_path.as_deref()),
+            Some(ShowCommands::Index { path }) => commands::show_index(path.as_deref()),
             Some(ShowCommands::Path { project_path }) => {
                 commands::history_show(project_path.as_deref())
             }

@@ -565,7 +565,8 @@ mod chat_session_index_tests {
                 session_id: "session-1".to_string(),
                 title: "First Session".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: false,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
             },
@@ -589,7 +590,8 @@ mod chat_session_index_tests {
                 session_id: "sess-abc".to_string(),
                 title: "Test".to_string(),
                 last_message_date: 1700000000000,
-                is_imported: false,
+                timing: None,
+                last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
             },
@@ -628,7 +630,7 @@ mod chat_session_index_tests {
 
         let entry = index.entries.get("session-xyz").unwrap();
         assert_eq!(entry.title, "Test Session");
-        assert!(entry.is_imported);
+        assert!(!entry.is_empty);
     }
 }
 
@@ -645,7 +647,8 @@ mod chat_session_index_entry_tests {
             session_id: "test-id".to_string(),
             title: "Test Title".to_string(),
             last_message_date: 1700000000000,
-            is_imported: false,
+            timing: None,
+            last_response_state: 1,
             initial_location: "panel".to_string(),
             is_empty: false,
         };
@@ -660,7 +663,8 @@ mod chat_session_index_entry_tests {
             session_id: "entry-1".to_string(),
             title: "Entry Title".to_string(),
             last_message_date: 1700000000000,
-            is_imported: true,
+            timing: None,
+            last_response_state: 1,
             initial_location: "editor".to_string(),
             is_empty: true,
         };
@@ -668,7 +672,7 @@ mod chat_session_index_entry_tests {
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"sessionId\":\"entry-1\""));
         assert!(json.contains("\"lastMessageDate\""));
-        assert!(json.contains("\"isImported\":true"));
+        assert!(json.contains("\"lastResponseState\":1"));
         assert!(json.contains("\"isEmpty\":true"));
     }
 
@@ -682,7 +686,7 @@ mod chat_session_index_entry_tests {
         }"#;
 
         let entry: ChatSessionIndexEntry = serde_json::from_str(json).unwrap();
-        assert!(!entry.is_imported); // default
+        assert_eq!(entry.last_response_state, 1); // default (Complete)
         assert_eq!(entry.initial_location, "panel"); // default
         assert!(!entry.is_empty); // default
     }
@@ -693,14 +697,15 @@ mod chat_session_index_entry_tests {
             session_id: "clone-test".to_string(),
             title: "Clone".to_string(),
             last_message_date: 1700000000000,
-            is_imported: true,
+            timing: None,
+            last_response_state: 1,
             initial_location: "terminal".to_string(),
             is_empty: false,
         };
 
         let cloned = entry.clone();
         assert_eq!(cloned.session_id, entry.session_id);
-        assert_eq!(cloned.is_imported, entry.is_imported);
+        assert_eq!(cloned.is_empty, entry.is_empty);
     }
 }
 
