@@ -1,0 +1,16 @@
+{
+    "identifier": "default",
+    "description": "Default capabilities for the Chasm desktop app",
+    "windows": ["main"],
+    "permissions": [
+        "core:default",
+        "shell:allow-open",
+        "dialog:default",
+        "fs:default",
+        "clipboard-manager:default",
+        "notification:default",
+        "os:default",
+        "process:default",
+        "opener:default"
+    ]
+}

@@ -6,7 +6,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Manager, WindowEvent,
 };
 
 mod commands;
@@ -74,6 +74,13 @@ fn main() {
             commands::minimize_to_tray,
             commands::check_api_health,
         ])
+        .on_window_event(|window, event| {
+            // Intercept window close → hide to tray instead of quitting
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

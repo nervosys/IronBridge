@@ -787,10 +787,24 @@ fn main() -> Result<()> {
             cli::RegisterCommands::Repair {
                 path,
                 all,
+                recursive,
+                depth,
+                exclude,
+                dry_run,
                 force,
                 close_vscode,
                 reopen,
-            } => commands::register_repair(path.as_deref(), all, force, close_vscode, reopen),
+            } => commands::register_repair(
+                path.as_deref(),
+                all,
+                recursive,
+                depth,
+                &exclude,
+                dry_run,
+                force,
+                close_vscode,
+                reopen,
+            ),
         },
 
         // ====================================================================

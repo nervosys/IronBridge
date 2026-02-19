@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
+import '../styles/shortcuts.css';
 import type {
     KeyboardShortcut,
     ShortcutAction,

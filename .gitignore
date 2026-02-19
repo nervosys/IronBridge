@@ -79,3 +79,6 @@ config.local.json
 **/*_log.txt
 **/*_out.txt
 **/*_err.txt
+
+# Large sample/scratch files
+jsonl_sample_raw.txt

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, useReducer } from 'react';
+import '../styles/batch.css';
 import type {
     BatchOperationType,
     BatchOperationRequest,

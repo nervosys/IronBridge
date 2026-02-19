@@ -1331,6 +1331,22 @@ pub enum RegisterCommands {
         #[arg(long, short)]
         all: bool,
 
+        /// Recursively scan a directory tree for workspaces and repair all discovered sessions
+        #[arg(long, short)]
+        recursive: bool,
+
+        /// Maximum directory depth when using --recursive (default: unlimited)
+        #[arg(long, short)]
+        depth: Option<usize>,
+
+        /// Skip directories matching these patterns when using --recursive
+        #[arg(long, short = 'x')]
+        exclude: Vec<String>,
+
+        /// Only show what would be repaired without making changes
+        #[arg(long)]
+        dry_run: bool,
+
         /// Force even if VS Code is running
         #[arg(long, short)]
         force: bool,

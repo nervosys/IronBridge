@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
+import '../styles/annotations.css';
 import type {
     SessionTag,
     SessionNote,

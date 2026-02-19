@@ -33,8 +33,10 @@ import type {
     SweContextInjection,
 } from '@csm/shared';
 
-// API base URL
-const API_BASE = 'http://localhost:8787/api/v1';
+import { config } from '../config';
+
+// API base URL from environment config
+const API_BASE = `${config.apiBaseUrl}/api/v1`;
 
 // Memory category display info
 const MEMORY_CATEGORIES: { value: SweMemoryCategory; label: string; icon: typeof Brain; color: string }[] = [

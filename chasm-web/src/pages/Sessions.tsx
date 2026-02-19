@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Search, MessageSquare, Calendar, Bot, Filter, AlertCircle, Loader2, FileText } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { Search, MessageSquare, Calendar, Bot, Filter, AlertCircle, Loader2, FileText, GitCompare, Download, Tag, CheckSquare, SlidersHorizontal } from 'lucide-react';
 import {
     LineChart,
     Line,
@@ -11,6 +11,9 @@ import {
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
 import { formatDate } from '@csm/shared';
+import ExportModal from '../components/ExportModal';
+import SessionDiff from '../components/SessionDiff';
+import AdvancedSearch, { createDefaultFilters, type SearchFilters } from '../components/AdvancedSearch';
 
 // Get today's activity data from sessions
 function getTodayActivityData(sessions: { updatedAt: number }[]) {
@@ -44,6 +47,13 @@ export default function Sessions() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedProvider, setSelectedProvider] = useState('All');
     const [selectedSession, setSelectedSession] = useState<string | null>(null);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportSessionId, setExportSessionId] = useState<string | null>(null);
+    const [showDiffView, setShowDiffView] = useState(false);
+    const [diffSessionA, setDiffSessionA] = useState<string | null>(null);
+    const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+    const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>(createDefaultFilters());
+    const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
 
     // Get unique providers from sessions
     const availableProviders = useMemo(() => {
@@ -76,6 +86,18 @@ export default function Sessions() {
 
     // Get timeline data
     const timelineData = useMemo(() => getTodayActivityData(sessions), [sessions]);
+
+    const toggleSessionSelection = useCallback((sessionId: string) => {
+        setSelectedSessions(prev => {
+            const next = new Set(prev);
+            if (next.has(sessionId)) {
+                next.delete(sessionId);
+            } else {
+                next.add(sessionId);
+            }
+            return next;
+        });
+    }, []);
 
     const filteredSessions = sessionsData.filter((session) => {
         const matchesSearch =
@@ -173,8 +195,72 @@ export default function Sessions() {
                             </option>
                         ))}
                     </select>
+                    <button
+                        onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+                        className={`p-2 rounded-lg border transition-colors ${showAdvancedSearch ? 'bg-[hsl(var(--primary))] text-white' : 'hover:bg-[hsl(var(--muted))]'}`}
+                        title="Advanced filters"
+                    >
+                        <SlidersHorizontal size={18} />
+                    </button>
+                    <button
+                        onClick={() => setShowDiffView(!showDiffView)}
+                        className={`p-2 rounded-lg border transition-colors ${showDiffView ? 'bg-[hsl(var(--primary))] text-white' : 'hover:bg-[hsl(var(--muted))]'}`}
+                        title="Compare sessions"
+                    >
+                        <GitCompare size={18} />
+                    </button>
                 </div>
             </div>
+
+            {/* Advanced Search Panel */}
+            {showAdvancedSearch && (
+                <AdvancedSearch
+                    filters={advancedFilters}
+                    onFiltersChange={setAdvancedFilters}
+                    availableProviders={availableProviders.filter(p => p !== 'All')}
+                    availableWorkspaces={workspaces.map(ws => ({ id: ws.id, name: ws.name || ws.path || ws.id }))}
+                    availableModels={[...new Set(sessions.map(s => s.model).filter(Boolean) as string[])]}
+                    resultCount={filteredSessions.length}
+                />
+            )}
+
+            {/* Session Diff View */}
+            {showDiffView && (
+                <SessionDiff
+                    sessionA={sessions.find(s => s.id === (diffSessionA || filteredSessions[0]?.id)) as any}
+                    sessionB={sessions.find(s => s.id === (selectedSession || filteredSessions[1]?.id)) as any}
+                    onSelectSession={(side: 'A' | 'B') => {
+                        // When user picks a side to swap, open selection UI
+                        if (side === 'A') setDiffSessionA(null);
+                        else setSelectedSession(null);
+                    }}
+                    availableSessions={sessions as any[]}
+                />
+            )}
+
+            {/* Batch Operations Bar */}
+            {selectedSessions.size > 0 && (
+                <div className="bg-[hsl(var(--primary))] text-white rounded-xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <CheckSquare size={20} />
+                        <span className="font-medium">{selectedSessions.size} session(s) selected</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button className="px-3 py-1.5 text-sm rounded-lg bg-white/20 hover:bg-white/30 transition-colors flex items-center gap-1.5">
+                            <Tag size={14} /> Tag
+                        </button>
+                        <button className="px-3 py-1.5 text-sm rounded-lg bg-white/20 hover:bg-white/30 transition-colors flex items-center gap-1.5">
+                            <Download size={14} /> Export
+                        </button>
+                        <button
+                            onClick={() => setSelectedSessions(new Set())}
+                            className="px-3 py-1.5 text-sm rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Sessions List */}
             <div className="space-y-3">
@@ -189,7 +275,15 @@ export default function Sessions() {
                                 }`}
                         >
                             <div className="flex items-start justify-between mb-3">
-                                <div className="flex-1">
+                                <div className="flex items-start gap-3 flex-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSessions.has(session.id)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={() => toggleSessionSelection(session.id)}
+                                        className="mt-1.5 h-4 w-4 rounded border-gray-300 text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                    />
+                                    <div className="flex-1">
                                     <h3 className="font-semibold mb-1">{session.title}</h3>
                                     <div className="flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
                                         <span className="flex items-center gap-1">
@@ -205,6 +299,7 @@ export default function Sessions() {
                                             {session.lastModified}
                                         </span>
                                     </div>
+                                    </div>
                                 </div>
                                 <span className="text-xs px-2 py-1 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
                                     {session.workspace}
@@ -217,13 +312,22 @@ export default function Sessions() {
                                 </p>
                             )}
 
-                            {selectedSession === session.id && (
+            {selectedSession === session.id && (
                                 <div className="mt-4 pt-4 border-t flex gap-2">
                                     <button className="px-4 py-2 text-sm rounded-lg bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.9)] transition-colors">
                                         Open Session
                                     </button>
-                                    <button className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
-                                        Export
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setExportSessionId(session.id); setShowExportModal(true); }}
+                                        className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors flex items-center gap-1.5"
+                                    >
+                                        <Download size={14} /> Export
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setDiffSessionA(session.id); setShowDiffView(true); }}
+                                        className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors flex items-center gap-1.5"
+                                    >
+                                        <GitCompare size={14} /> Compare
                                     </button>
                                     <button className="px-4 py-2 text-sm rounded-lg border hover:bg-[hsl(var(--muted))] transition-colors">
                                         Merge
@@ -249,6 +353,15 @@ export default function Sessions() {
             <div className="text-sm text-[hsl(var(--muted-foreground))]">
                 Showing {filteredSessions.length} of {sessionsData.length} sessions
             </div>
+
+            {/* Export Modal */}
+            {showExportModal && exportSessionId && (
+                <ExportModal
+                    session={sessions.find(s => s.id === exportSessionId) as any}
+                    isOpen={showExportModal}
+                    onClose={() => { setShowExportModal(false); setExportSessionId(null); }}
+                />
+            )}
         </div>
     );
 }

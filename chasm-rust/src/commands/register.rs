@@ -15,10 +15,10 @@ use std::path::{Path, PathBuf};
 use crate::error::CsmError;
 use crate::models::ChatSession;
 use crate::storage::{
-    add_session_to_index, close_vscode_and_wait, get_workspace_storage_db,
-    is_session_file_extension, is_vscode_running, parse_session_file, parse_session_json,
-    read_chat_session_index, register_all_sessions_from_directory, reopen_vscode,
-    repair_workspace_sessions,
+    add_session_to_index, close_vscode_and_wait, diagnose_workspace_sessions,
+    get_workspace_storage_db, is_session_file_extension, is_vscode_running, parse_session_file,
+    parse_session_json, read_chat_session_index, register_all_sessions_from_directory,
+    reopen_vscode, repair_workspace_sessions,
 };
 use crate::workspace::{discover_workspaces, find_workspace_by_path, normalize_path};
 
@@ -922,12 +922,28 @@ fn count_orphaned_sessions(
 pub fn register_repair(
     project_path: Option<&str>,
     all: bool,
+    recursive: bool,
+    max_depth: Option<usize>,
+    exclude_patterns: &[String],
+    dry_run: bool,
     force: bool,
     close_vscode: bool,
     reopen: bool,
 ) -> Result<()> {
     if all {
         return register_repair_all(force, close_vscode, reopen);
+    }
+
+    if recursive {
+        return register_repair_recursive(
+            project_path,
+            max_depth,
+            exclude_patterns,
+            dry_run,
+            force,
+            close_vscode,
+            reopen,
+        );
     }
 
     let path = resolve_path(project_path);
@@ -1050,6 +1066,444 @@ pub fn register_repair(
             "[!]".yellow()
         );
         println!("   Run: {}", format!("code {}", path.display()).cyan());
+    }
+
+    Ok(())
+}
+
+/// Recursively scan a directory tree for workspaces and repair all discovered sessions
+fn register_repair_recursive(
+    root_path: Option<&str>,
+    max_depth: Option<usize>,
+    exclude_patterns: &[String],
+    dry_run: bool,
+    force: bool,
+    close_vscode: bool,
+    reopen: bool,
+) -> Result<()> {
+    let root = resolve_path(root_path);
+    let should_close = close_vscode || reopen;
+
+    println!(
+        "{} Recursively scanning for workspaces to repair from: {}",
+        "[CSM]".cyan().bold(),
+        root.display()
+    );
+
+    if dry_run {
+        println!("{} Dry run mode — no changes will be made", "[!]".yellow());
+    }
+
+    // Handle VS Code lifecycle
+    let vscode_was_running = is_vscode_running();
+    if vscode_was_running && !dry_run {
+        if should_close {
+            if !confirm_close_vscode(force) {
+                println!("{} Aborted.", "[!]".yellow());
+                return Ok(());
+            }
+            println!("   {} Closing VS Code (saving state)...", "[*]".yellow());
+            close_vscode_and_wait(30)?;
+            println!("   {} VS Code closed.\n", "[OK]".green());
+        } else if !force {
+            println!(
+                "{} VS Code is running. Its in-memory cache will overwrite index changes.",
+                "[!]".yellow()
+            );
+            println!(
+                "   Use {} to close VS Code first, or {} to force.",
+                "--reopen".cyan(),
+                "--force".cyan()
+            );
+            return Err(CsmError::VSCodeRunning.into());
+        }
+    }
+
+    // Get all VS Code workspaces
+    let workspaces = discover_workspaces()?;
+    println!(
+        "   Found {} VS Code workspaces to check",
+        workspaces.len().to_string().cyan()
+    );
+
+    // Build a map of normalized project paths to workspace info
+    let mut workspace_map: std::collections::HashMap<String, Vec<&crate::models::Workspace>> =
+        std::collections::HashMap::new();
+    for ws in &workspaces {
+        if let Some(ref project_path) = ws.project_path {
+            let normalized = normalize_path(project_path);
+            workspace_map.entry(normalized).or_default().push(ws);
+        }
+    }
+
+    // Compile exclude patterns
+    let exclude_matchers: Vec<glob::Pattern> = exclude_patterns
+        .iter()
+        .filter_map(|p| glob::Pattern::new(p).ok())
+        .collect();
+
+    let default_excludes = [
+        "node_modules",
+        ".git",
+        "target",
+        "build",
+        "dist",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".cache",
+        "vendor",
+        ".cargo",
+    ];
+
+    let mut total_dirs_scanned = 0usize;
+    let mut workspaces_found = 0usize;
+    let mut total_compacted = 0usize;
+    let mut total_synced = 0usize;
+    let mut total_issues_found = 0usize;
+    let mut total_issues_fixed = 0usize;
+    let mut repair_results: Vec<(String, usize, bool, String)> = Vec::new(); // (path, issues, success, detail)
+
+    // Walk the directory tree looking for known workspaces
+    fn walk_for_repair(
+        dir: &Path,
+        root: &Path,
+        current_depth: usize,
+        max_depth: Option<usize>,
+        workspace_map: &std::collections::HashMap<String, Vec<&crate::models::Workspace>>,
+        exclude_matchers: &[glob::Pattern],
+        default_excludes: &[&str],
+        dry_run: bool,
+        force: bool,
+        total_dirs_scanned: &mut usize,
+        workspaces_found: &mut usize,
+        total_compacted: &mut usize,
+        total_synced: &mut usize,
+        total_issues_found: &mut usize,
+        total_issues_fixed: &mut usize,
+        repair_results: &mut Vec<(String, usize, bool, String)>,
+    ) -> Result<()> {
+        if let Some(max) = max_depth {
+            if current_depth > max {
+                return Ok(());
+            }
+        }
+
+        *total_dirs_scanned += 1;
+
+        // Check if this directory is a known workspace
+        let normalized = normalize_path(&dir.to_string_lossy());
+        if let Some(ws_list) = workspace_map.get(&normalized) {
+            for ws in ws_list {
+                if ws.has_chat_sessions && ws.chat_session_count > 0 {
+                    *workspaces_found += 1;
+
+                    let display_name = ws
+                        .project_path
+                        .as_deref()
+                        .unwrap_or(&ws.hash);
+
+                    // Diagnose first
+                    let chat_dir = ws.workspace_path.join("chatSessions");
+                    match crate::storage::diagnose_workspace_sessions(&ws.hash, &chat_dir) {
+                        Ok(diag) => {
+                            let issue_count = diag.issues.len();
+                            *total_issues_found += issue_count;
+
+                            if issue_count == 0 {
+                                println!(
+                                    "   {} {} — {} sessions, healthy",
+                                    "[OK]".green(),
+                                    display_name.cyan(),
+                                    ws.chat_session_count
+                                );
+                                repair_results.push((
+                                    display_name.to_string(),
+                                    0,
+                                    true,
+                                    "healthy".to_string(),
+                                ));
+                            } else {
+                                let issue_kinds: Vec<String> = {
+                                    let mut kinds: Vec<String> = Vec::new();
+                                    for issue in &diag.issues {
+                                        let s = format!("{}", issue.kind);
+                                        if !kinds.contains(&s) {
+                                            kinds.push(s);
+                                        }
+                                    }
+                                    kinds
+                                };
+
+                                println!(
+                                    "   {} {} — {} sessions, {} issue(s): {}",
+                                    "[!]".yellow(),
+                                    display_name.cyan(),
+                                    ws.chat_session_count,
+                                    issue_count,
+                                    issue_kinds.join(", ")
+                                );
+
+                                if !dry_run {
+                                    match repair_workspace_sessions(
+                                        &ws.hash, &chat_dir, force || true,
+                                    ) {
+                                        Ok((compacted, synced)) => {
+                                            *total_compacted += compacted;
+                                            *total_synced += synced;
+                                            *total_issues_fixed += issue_count;
+
+                                            // Also handle stale .json cleanup
+                                            let mut deleted_json = 0;
+                                            let mut jsonl_sessions: HashSet<String> =
+                                                HashSet::new();
+                                            if let Ok(entries) = std::fs::read_dir(&chat_dir) {
+                                                for entry in entries.flatten() {
+                                                    let p = entry.path();
+                                                    if p.extension()
+                                                        .is_some_and(|e| e == "jsonl")
+                                                    {
+                                                        if let Some(stem) = p.file_stem() {
+                                                            jsonl_sessions.insert(
+                                                                stem.to_string_lossy().to_string(),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if let Ok(entries) = std::fs::read_dir(&chat_dir) {
+                                                for entry in entries.flatten() {
+                                                    let p = entry.path();
+                                                    if p.extension().is_some_and(|e| e == "json")
+                                                    {
+                                                        if let Some(stem) = p.file_stem() {
+                                                            if jsonl_sessions.contains(
+                                                                &stem.to_string_lossy().to_string(),
+                                                            ) {
+                                                                let bak =
+                                                                    p.with_extension("json.bak");
+                                                                let _ = std::fs::rename(&p, &bak);
+                                                                deleted_json += 1;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if deleted_json > 0 {
+                                                let _ = repair_workspace_sessions(
+                                                    &ws.hash,
+                                                    &chat_dir,
+                                                    true,
+                                                );
+                                            }
+
+                                            let detail = format!(
+                                                "{} compacted, {} synced{}",
+                                                compacted,
+                                                synced,
+                                                if deleted_json > 0 {
+                                                    format!(
+                                                        ", {} stale .json backed up",
+                                                        deleted_json
+                                                    )
+                                                } else {
+                                                    String::new()
+                                                }
+                                            );
+                                            println!(
+                                                "      {} Fixed: {}",
+                                                "[OK]".green(),
+                                                detail
+                                            );
+                                            repair_results.push((
+                                                display_name.to_string(),
+                                                issue_count,
+                                                true,
+                                                detail,
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            println!(
+                                                "      {} Failed: {}",
+                                                "[ERR]".red(),
+                                                e
+                                            );
+                                            repair_results.push((
+                                                display_name.to_string(),
+                                                issue_count,
+                                                false,
+                                                e.to_string(),
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    // Dry run: just list the issues
+                                    for issue in &diag.issues {
+                                        println!(
+                                            "      {} {} — {}",
+                                            "→".bright_black(),
+                                            issue.session_id[..8.min(issue.session_id.len())]
+                                                .to_string(),
+                                            issue.kind
+                                        );
+                                    }
+                                    repair_results.push((
+                                        display_name.to_string(),
+                                        issue_count,
+                                        true,
+                                        "dry run".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!(
+                                "   {} {} — scan failed: {}",
+                                "[ERR]".red(),
+                                display_name,
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Recurse into subdirectories
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return Ok(()),
+        };
+
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+
+            // Skip hidden directories
+            if dir_name.starts_with('.') {
+                continue;
+            }
+
+            // Skip default excludes
+            if default_excludes.iter().any(|e| dir_name == *e) {
+                continue;
+            }
+
+            // Skip user-specified excludes
+            if exclude_matchers
+                .iter()
+                .any(|p| p.matches(&dir_name))
+            {
+                continue;
+            }
+
+            walk_for_repair(
+                &path,
+                root,
+                current_depth + 1,
+                max_depth,
+                workspace_map,
+                exclude_matchers,
+                default_excludes,
+                dry_run,
+                force,
+                total_dirs_scanned,
+                workspaces_found,
+                total_compacted,
+                total_synced,
+                total_issues_found,
+                total_issues_fixed,
+                repair_results,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    walk_for_repair(
+        &root,
+        &root,
+        0,
+        max_depth,
+        &workspace_map,
+        &exclude_matchers,
+        &default_excludes,
+        dry_run,
+        force,
+        &mut total_dirs_scanned,
+        &mut workspaces_found,
+        &mut total_compacted,
+        &mut total_synced,
+        &mut total_issues_found,
+        &mut total_issues_fixed,
+        &mut repair_results,
+    )?;
+
+    // Print summary
+    println!("\n{}", "═".repeat(60).cyan());
+    println!("{} Recursive repair scan complete", "[OK]".green().bold());
+    println!("{}", "═".repeat(60).cyan());
+    println!(
+        "   Directories scanned:    {}",
+        total_dirs_scanned.to_string().cyan()
+    );
+    println!(
+        "   Workspaces found:       {}",
+        workspaces_found.to_string().cyan()
+    );
+    println!(
+        "   Issues detected:        {}",
+        if total_issues_found > 0 {
+            total_issues_found.to_string().yellow()
+        } else {
+            total_issues_found.to_string().green()
+        }
+    );
+    if !dry_run {
+        println!(
+            "   Issues fixed:           {}",
+            total_issues_fixed.to_string().green()
+        );
+        println!(
+            "   Files compacted:        {}",
+            total_compacted.to_string().cyan()
+        );
+        println!(
+            "   Index entries synced:   {}",
+            total_synced.to_string().cyan()
+        );
+    }
+
+    let failed_count = repair_results.iter().filter(|(_, _, ok, _)| !ok).count();
+    if failed_count > 0 {
+        println!(
+            "\n   {} {} workspace(s) had repair errors",
+            "[!]".yellow(),
+            failed_count.to_string().red()
+        );
+    }
+
+    // Reopen VS Code if requested
+    if reopen && vscode_was_running {
+        println!("   {} Reopening VS Code...", "[*]".yellow());
+        reopen_vscode(None)?;
+        println!(
+            "   {} VS Code launched. Sessions should now load correctly.",
+            "[OK]".green()
+        );
+    } else if should_close && vscode_was_running {
+        println!(
+            "\n{} VS Code was closed. Reopen it to see the repaired sessions.",
+            "[!]".yellow()
+        );
     }
 
     Ok(())

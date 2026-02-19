@@ -10,8 +10,243 @@ use crate::workspace::{get_empty_window_sessions_path, get_workspace_storage_pat
 use once_cell::sync::Lazy;
 use regex::Regex;
 use rusqlite::Connection;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use sysinfo::System;
+
+/// A single issue detected during workspace session diagnostics
+#[derive(Debug, Clone)]
+pub struct SessionIssue {
+    /// The session file stem (UUID)
+    pub session_id: String,
+    /// Category of issue
+    pub kind: SessionIssueKind,
+    /// Human-readable description
+    pub detail: String,
+}
+
+/// Categories of session issues that can be detected and auto-fixed
+#[derive(Debug, Clone, PartialEq)]
+pub enum SessionIssueKind {
+    /// JSONL file has multiple lines (operations not compacted)
+    MultiLineJsonl,
+    /// JSONL first line contains concatenated JSON objects (missing newlines)
+    ConcatenatedJsonl,
+    /// Index entry has lastResponseState = 2 (Cancelled), blocks VS Code loading
+    CancelledState,
+    /// File exists on disk but is not in the VS Code index
+    OrphanedSession,
+    /// Index entry references a file that no longer exists on disk
+    StaleIndexEntry,
+    /// Session is missing required VS Code compat fields
+    MissingCompatFields,
+    /// Both .json and .jsonl exist for the same session ID
+    DuplicateFormat,
+}
+
+impl std::fmt::Display for SessionIssueKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SessionIssueKind::MultiLineJsonl => write!(f, "multi-line JSONL"),
+            SessionIssueKind::ConcatenatedJsonl => write!(f, "concatenated JSONL"),
+            SessionIssueKind::CancelledState => write!(f, "cancelled state"),
+            SessionIssueKind::OrphanedSession => write!(f, "orphaned session"),
+            SessionIssueKind::StaleIndexEntry => write!(f, "stale index entry"),
+            SessionIssueKind::MissingCompatFields => write!(f, "missing compat fields"),
+            SessionIssueKind::DuplicateFormat => write!(f, "duplicate .json/.jsonl"),
+        }
+    }
+}
+
+/// Summary of issues found in a single workspace
+#[derive(Debug, Clone, Default)]
+pub struct WorkspaceDiagnosis {
+    /// Project path (if known)
+    pub project_path: Option<String>,
+    /// Workspace hash
+    pub workspace_hash: String,
+    /// Total sessions on disk
+    pub sessions_on_disk: usize,
+    /// Total sessions in index
+    pub sessions_in_index: usize,
+    /// All detected issues
+    pub issues: Vec<SessionIssue>,
+}
+
+impl WorkspaceDiagnosis {
+    pub fn is_healthy(&self) -> bool {
+        self.issues.is_empty()
+    }
+
+    pub fn issue_count_by_kind(&self, kind: &SessionIssueKind) -> usize {
+        self.issues.iter().filter(|i| &i.kind == kind).count()
+    }
+}
+
+/// Diagnose a workspace for session issues without modifying anything.
+/// Returns a structured report of all detected problems.
+pub fn diagnose_workspace_sessions(
+    workspace_id: &str,
+    chat_sessions_dir: &Path,
+) -> Result<WorkspaceDiagnosis> {
+    let mut diagnosis = WorkspaceDiagnosis {
+        workspace_hash: workspace_id.to_string(),
+        ..Default::default()
+    };
+
+    if !chat_sessions_dir.exists() {
+        return Ok(diagnosis);
+    }
+
+    // Collect session files on disk
+    let mut jsonl_sessions: HashSet<String> = HashSet::new();
+    let mut json_sessions: HashSet<String> = HashSet::new();
+    let mut all_session_ids: HashSet<String> = HashSet::new();
+
+    for entry in std::fs::read_dir(chat_sessions_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        match ext {
+            "jsonl" => {
+                jsonl_sessions.insert(stem.clone());
+                all_session_ids.insert(stem);
+            }
+            "json" if !path.to_string_lossy().ends_with(".bak") => {
+                json_sessions.insert(stem.clone());
+                all_session_ids.insert(stem);
+            }
+            _ => {}
+        }
+    }
+    diagnosis.sessions_on_disk = all_session_ids.len();
+
+    // Check for duplicate .json/.jsonl files
+    for id in &jsonl_sessions {
+        if json_sessions.contains(id) {
+            diagnosis.issues.push(SessionIssue {
+                session_id: id.clone(),
+                kind: SessionIssueKind::DuplicateFormat,
+                detail: format!("Both {id}.json and {id}.jsonl exist"),
+            });
+        }
+    }
+
+    // Check JSONL files for content issues
+    for id in &jsonl_sessions {
+        let path = chat_sessions_dir.join(format!("{id}.jsonl"));
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let line_count = content.lines().count();
+
+            if line_count > 1 {
+                let size_mb = content.len() / (1024 * 1024);
+                diagnosis.issues.push(SessionIssue {
+                    session_id: id.clone(),
+                    kind: SessionIssueKind::MultiLineJsonl,
+                    detail: format!("{line_count} lines, ~{size_mb} MB — needs compaction"),
+                });
+            }
+
+            // Check first line for concatenation
+            if let Some(first_line) = content.lines().next() {
+                if first_line.contains("}{\"kind\":") {
+                    diagnosis.issues.push(SessionIssue {
+                        session_id: id.clone(),
+                        kind: SessionIssueKind::ConcatenatedJsonl,
+                        detail: "First line has concatenated JSON objects".to_string(),
+                    });
+                }
+            }
+
+            // Check for missing compat fields (only single-line files worth checking)
+            if line_count == 1 {
+                if let Some(first_line) = content.lines().next() {
+                    if let Ok(obj) = serde_json::from_str::<serde_json::Value>(first_line) {
+                        let is_kind_0 = obj
+                            .get("kind")
+                            .and_then(|k| k.as_u64())
+                            .map(|k| k == 0)
+                            .unwrap_or(false);
+
+                        if is_kind_0 {
+                            if let Some(v) = obj.get("v") {
+                                let missing_fields: Vec<&str> = [
+                                    "hasPendingEdits",
+                                    "pendingRequests",
+                                    "inputState",
+                                    "sessionId",
+                                    "version",
+                                ]
+                                .iter()
+                                .filter(|f| v.get(**f).is_none())
+                                .copied()
+                                .collect();
+
+                                if !missing_fields.is_empty() {
+                                    diagnosis.issues.push(SessionIssue {
+                                        session_id: id.clone(),
+                                        kind: SessionIssueKind::MissingCompatFields,
+                                        detail: format!("Missing: {}", missing_fields.join(", ")),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Check index for stale entries, orphans, and cancelled state
+    let db_path = get_workspace_storage_db(workspace_id)?;
+    if db_path.exists() {
+        if let Ok(index) = read_chat_session_index(&db_path) {
+            diagnosis.sessions_in_index = index.entries.len();
+
+            // Stale index entries (in index but no file on disk)
+            for (id, _entry) in &index.entries {
+                if !all_session_ids.contains(id) {
+                    diagnosis.issues.push(SessionIssue {
+                        session_id: id.clone(),
+                        kind: SessionIssueKind::StaleIndexEntry,
+                        detail: "In index but no file on disk".to_string(),
+                    });
+                }
+            }
+
+            // Cancelled state entries
+            for (id, entry) in &index.entries {
+                if entry.last_response_state == 2 {
+                    diagnosis.issues.push(SessionIssue {
+                        session_id: id.clone(),
+                        kind: SessionIssueKind::CancelledState,
+                        detail: "lastResponseState=2 (Cancelled) — blocks VS Code loading"
+                            .to_string(),
+                    });
+                }
+            }
+
+            // Orphaned sessions (on disk but not in index)
+            let indexed_ids: HashSet<&String> = index.entries.keys().collect();
+            for id in &all_session_ids {
+                if !indexed_ids.contains(id) {
+                    diagnosis.issues.push(SessionIssue {
+                        session_id: id.clone(),
+                        kind: SessionIssueKind::OrphanedSession,
+                        detail: "File on disk but not in VS Code index".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(diagnosis)
+}
 
 /// Regex to match any Unicode escape sequence (valid or not)
 static UNICODE_ESCAPE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\\u[0-9a-fA-F]{4}").unwrap());
@@ -1355,10 +1590,7 @@ pub fn ensure_vscode_compat_fields(state: &mut serde_json::Value, session_id: Op
 
         // pendingRequests — always empty for recovered/compacted sessions
         if !obj.contains_key("pendingRequests") {
-            obj.insert(
-                "pendingRequests".to_string(),
-                serde_json::json!([]),
-            );
+            obj.insert("pendingRequests".to_string(), serde_json::json!([]));
         }
 
         // inputState — VS Code expects this to exist with at least mode + attachments
@@ -1483,10 +1715,7 @@ pub fn repair_workspace_sessions(
                                             .file_stem()
                                             .map(|s| s.to_string_lossy().to_string())
                                             .unwrap_or_default();
-                                        println!(
-                                            "   [OK] Fixed missing VS Code fields: {}",
-                                            stem
-                                        );
+                                        println!("   [OK] Fixed missing VS Code fields: {}", stem);
                                         fields_fixed += 1;
                                     }
                                 }

@@ -6,6 +6,11 @@ use anyhow::Result;
 use colored::Colorize;
 use std::path::PathBuf;
 
+use crate::storage::{
+    diagnose_workspace_sessions, repair_workspace_sessions, SessionIssueKind, WorkspaceDiagnosis,
+};
+use crate::workspace::discover_workspaces;
+
 /// Status of a single health check
 #[derive(Debug, Clone)]
 enum CheckStatus {
@@ -58,7 +63,7 @@ impl CheckResult {
 }
 
 /// Run all diagnostic checks
-pub fn doctor(full: bool, format: &str, _fix: bool) -> Result<()> {
+pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
     let mut results: Vec<CheckResult> = Vec::new();
 
     // ── System checks ──────────────────────────────────────────────
@@ -87,6 +92,9 @@ pub fn doctor(full: bool, format: &str, _fix: bool) -> Result<()> {
         results.push(check_api_server());
     }
 
+    // ── Session health checks (always run) ─────────────────────────
+    let diagnoses = check_all_workspace_sessions(&mut results);
+
     // ── Output ─────────────────────────────────────────────────────
     match format {
         "json" => print_json(&results),
@@ -94,9 +102,18 @@ pub fn doctor(full: bool, format: &str, _fix: bool) -> Result<()> {
     }
 
     // Summary
-    let pass_count = results.iter().filter(|r| matches!(r.status, CheckStatus::Pass)).count();
-    let warn_count = results.iter().filter(|r| matches!(r.status, CheckStatus::Warn(_))).count();
-    let fail_count = results.iter().filter(|r| matches!(r.status, CheckStatus::Fail(_))).count();
+    let pass_count = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Pass))
+        .count();
+    let warn_count = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Warn(_)))
+        .count();
+    let fail_count = results
+        .iter()
+        .filter(|r| matches!(r.status, CheckStatus::Fail(_)))
+        .count();
 
     if format != "json" {
         println!();
@@ -117,28 +134,257 @@ pub fn doctor(full: bool, format: &str, _fix: bool) -> Result<()> {
         }
     }
 
+    // ── Auto-fix with --fix ────────────────────────────────────────
+    if fix {
+        let unhealthy: Vec<&WorkspaceDiagnosis> =
+            diagnoses.iter().filter(|d| !d.is_healthy()).collect();
+
+        if unhealthy.is_empty() {
+            if format != "json" {
+                println!(
+                    "\n  {} All workspaces are healthy — nothing to fix.",
+                    "✓".green()
+                );
+            }
+        } else {
+            if format != "json" {
+                println!(
+                    "\n  {} Auto-fixing {} workspace(s) with issues...\n",
+                    "[FIX]".cyan().bold(),
+                    unhealthy.len()
+                );
+            }
+
+            let mut total_compacted = 0usize;
+            let mut total_synced = 0usize;
+            let mut succeeded = 0usize;
+            let mut failed = 0usize;
+
+            for diag in &unhealthy {
+                let display_name = diag.project_path.as_deref().unwrap_or(&diag.workspace_hash);
+
+                if format != "json" {
+                    let issue_kinds: Vec<String> = {
+                        let mut kinds: Vec<String> = Vec::new();
+                        for issue in &diag.issues {
+                            let s = format!("{}", issue.kind);
+                            if !kinds.contains(&s) {
+                                kinds.push(s);
+                            }
+                        }
+                        kinds
+                    };
+                    println!(
+                        "  {} {} ({} issue{}): {}",
+                        "[*]".yellow(),
+                        display_name.cyan(),
+                        diag.issues.len(),
+                        if diag.issues.len() == 1 { "" } else { "s" },
+                        issue_kinds.join(", ")
+                    );
+                }
+
+                let chat_sessions_dir = PathBuf::from(
+                    get_vscode_storage_path()
+                        .unwrap_or_default()
+                        .join(&diag.workspace_hash)
+                        .join("chatSessions"),
+                );
+
+                match repair_workspace_sessions(&diag.workspace_hash, &chat_sessions_dir, true) {
+                    Ok((compacted, synced)) => {
+                        total_compacted += compacted;
+                        total_synced += synced;
+                        succeeded += 1;
+                        if format != "json" {
+                            println!(
+                                "      {} {} compacted, {} index entries synced",
+                                "[OK]".green(),
+                                compacted,
+                                synced
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        failed += 1;
+                        if format != "json" {
+                            println!("      {} {}", "[ERR]".red(), e);
+                        }
+                    }
+                }
+            }
+
+            if format != "json" {
+                println!(
+                    "\n  {} Auto-fix complete: {}/{} workspaces repaired, {} compacted, {} synced",
+                    "[OK]".green().bold(),
+                    succeeded.to_string().green(),
+                    unhealthy.len(),
+                    total_compacted.to_string().cyan(),
+                    total_synced.to_string().cyan()
+                );
+                if failed > 0 {
+                    println!(
+                        "  {} {} workspace(s) had errors",
+                        "[!]".yellow(),
+                        failed.to_string().red()
+                    );
+                }
+            }
+        }
+    } else if diagnoses.iter().any(|d| !d.is_healthy()) && format != "json" {
+        let total_issues: usize = diagnoses.iter().map(|d| d.issues.len()).sum();
+        println!(
+            "  {} Run {} to automatically fix {} issue(s)",
+            "Tip:".bright_black(),
+            "chasm doctor --fix".cyan(),
+            total_issues.to_string().yellow(),
+        );
+    }
+
     Ok(())
+}
+
+// ─── Session health check ──────────────────────────────────────────
+
+/// Scan all VS Code workspaces for session issues and add results to the check list.
+/// Returns the full diagnosis list for use by --fix.
+fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<WorkspaceDiagnosis> {
+    let workspaces = match discover_workspaces() {
+        Ok(ws) => ws,
+        Err(e) => {
+            results.push(CheckResult::fail(
+                "sessions",
+                "Workspace scan",
+                &format!("Failed to discover workspaces: {}", e),
+            ));
+            return Vec::new();
+        }
+    };
+
+    let ws_with_sessions: Vec<_> = workspaces
+        .iter()
+        .filter(|w| w.has_chat_sessions && w.chat_session_count > 0)
+        .collect();
+
+    if ws_with_sessions.is_empty() {
+        results.push(
+            CheckResult::pass("sessions", "Session health")
+                .with_detail("No workspaces with chat sessions found"),
+        );
+        return Vec::new();
+    }
+
+    let mut diagnoses = Vec::new();
+    let mut total_issues = 0usize;
+    let mut workspaces_with_issues = 0usize;
+    let mut issue_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+
+    for ws in &ws_with_sessions {
+        let chat_dir = ws.workspace_path.join("chatSessions");
+        match diagnose_workspace_sessions(&ws.hash, &chat_dir) {
+            Ok(mut diag) => {
+                diag.project_path = ws.project_path.clone();
+                if !diag.is_healthy() {
+                    workspaces_with_issues += 1;
+                    for issue in &diag.issues {
+                        total_issues += 1;
+                        *issue_counts.entry(format!("{}", issue.kind)).or_default() += 1;
+                    }
+                }
+                diagnoses.push(diag);
+            }
+            Err(e) => {
+                let display = ws.project_path.as_deref().unwrap_or(&ws.hash);
+                results.push(CheckResult::warn(
+                    "sessions",
+                    &format!("Scan: {}", display),
+                    &format!("Failed: {}", e),
+                ));
+            }
+        }
+    }
+
+    if total_issues == 0 {
+        results.push(
+            CheckResult::pass("sessions", "Session health").with_detail(&format!(
+                "All {} workspace(s) with sessions are healthy",
+                ws_with_sessions.len()
+            )),
+        );
+    } else {
+        // Add one summary result
+        let breakdown: Vec<String> = issue_counts
+            .iter()
+            .map(|(kind, count)| format!("{count} {kind}"))
+            .collect();
+
+        results.push(CheckResult::fail(
+            "sessions",
+            "Session health",
+            &format!(
+                "{} issue(s) in {}/{} workspace(s): {}",
+                total_issues,
+                workspaces_with_issues,
+                ws_with_sessions.len(),
+                breakdown.join(", ")
+            ),
+        ));
+
+        // Add per-workspace detail results for unhealthy workspaces
+        for diag in &diagnoses {
+            if !diag.is_healthy() {
+                let display = diag.project_path.as_deref().unwrap_or(&diag.workspace_hash);
+                let issue_summary: Vec<String> = diag
+                    .issues
+                    .iter()
+                    .map(|i| {
+                        format!(
+                            "{}: {}",
+                            i.session_id[..8.min(i.session_id.len())].to_string(),
+                            i.kind
+                        )
+                    })
+                    .collect();
+
+                results.push(CheckResult::warn(
+                    "sessions",
+                    &format!("  {}", truncate_path(display, 45)),
+                    &format!("{}", issue_summary.join("; ")),
+                ));
+            }
+        }
+    }
+
+    diagnoses
+}
+
+/// Truncate a path for display, keeping the last N characters
+fn truncate_path(path: &str, max_len: usize) -> String {
+    if path.len() <= max_len {
+        path.to_string()
+    } else {
+        format!("...{}", &path[path.len() - max_len + 3..])
+    }
 }
 
 // ─── Check implementations ─────────────────────────────────────────
 
 fn check_version() -> CheckResult {
     let version = env!("CARGO_PKG_VERSION");
-    CheckResult::pass("system", "Chasm version")
-        .with_detail(&format!("v{version}"))
+    CheckResult::pass("system", "Chasm version").with_detail(&format!("v{version}"))
 }
 
 fn check_rust_version() -> CheckResult {
     let msrv = "1.75";
-    CheckResult::pass("system", "Minimum Rust version")
-        .with_detail(&format!("MSRV {msrv}"))
+    CheckResult::pass("system", "Minimum Rust version").with_detail(&format!("MSRV {msrv}"))
 }
 
 fn check_os() -> CheckResult {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
-    CheckResult::pass("system", "Operating system")
-        .with_detail(&format!("{os}/{arch}"))
+    CheckResult::pass("system", "Operating system").with_detail(&format!("{os}/{arch}"))
 }
 
 fn check_vscode_storage() -> CheckResult {
@@ -146,15 +392,22 @@ fn check_vscode_storage() -> CheckResult {
     match path {
         Some(p) if p.exists() => {
             let count = count_workspaces(&p);
-            CheckResult::pass("storage", "VS Code workspace storage")
-                .with_detail(&format!("{} workspaces found at {}", count, p.display()))
+            CheckResult::pass("storage", "VS Code workspace storage").with_detail(&format!(
+                "{} workspaces found at {}",
+                count,
+                p.display()
+            ))
         }
         Some(p) => CheckResult::warn(
             "storage",
             "VS Code workspace storage",
             &format!("Path not found: {}", p.display()),
         ),
-        None => CheckResult::warn("storage", "VS Code workspace storage", "Could not determine default path"),
+        None => CheckResult::warn(
+            "storage",
+            "VS Code workspace storage",
+            "Could not determine default path",
+        ),
     }
 }
 
@@ -163,13 +416,17 @@ fn check_cursor_storage() -> CheckResult {
     match path {
         Some(p) if p.exists() => {
             let count = count_workspaces(&p);
-            CheckResult::pass("storage", "Cursor workspace storage")
-                .with_detail(&format!("{} workspaces found at {}", count, p.display()))
+            CheckResult::pass("storage", "Cursor workspace storage").with_detail(&format!(
+                "{} workspaces found at {}",
+                count,
+                p.display()
+            ))
         }
         Some(p) => CheckResult::pass("storage", "Cursor workspace storage")
             .with_detail(&format!("Not installed ({})", p.display())),
-        None => CheckResult::pass("storage", "Cursor workspace storage")
-            .with_detail("Not installed"),
+        None => {
+            CheckResult::pass("storage", "Cursor workspace storage").with_detail("Not installed")
+        }
     }
 }
 
@@ -180,13 +437,19 @@ fn check_harvest_db() -> CheckResult {
             let size = std::fs::metadata(&p)
                 .map(|m| format_bytes(m.len()))
                 .unwrap_or_else(|_| "unknown size".to_string());
-            CheckResult::pass("storage", "Harvest database")
-                .with_detail(&format!("{} at {}", size, p.display()))
+            CheckResult::pass("storage", "Harvest database").with_detail(&format!(
+                "{} at {}",
+                size,
+                p.display()
+            ))
         }
         Some(p) => CheckResult::warn(
             "storage",
             "Harvest database",
-            &format!("Not found at {}. Run `chasm harvest run` to create it.", p.display()),
+            &format!(
+                "Not found at {}. Run `chasm harvest run` to create it.",
+                p.display()
+            ),
         ),
         None => CheckResult::warn("storage", "Harvest database", "Could not determine path"),
     }
@@ -201,11 +464,14 @@ fn check_claude_code() -> CheckResult {
                 CheckResult::pass("provider", "Claude Code")
                     .with_detail(&format!("Detected at {}", claude_dir.display()))
             } else {
-                CheckResult::pass("provider", "Claude Code")
-                    .with_detail("Not installed")
+                CheckResult::pass("provider", "Claude Code").with_detail("Not installed")
             }
         }
-        None => CheckResult::warn("provider", "Claude Code", "Could not determine home directory"),
+        None => CheckResult::warn(
+            "provider",
+            "Claude Code",
+            "Could not determine home directory",
+        ),
     }
 }
 
@@ -218,11 +484,14 @@ fn check_codex_cli() -> CheckResult {
                 CheckResult::pass("provider", "Codex CLI")
                     .with_detail(&format!("Detected at {}", codex_dir.display()))
             } else {
-                CheckResult::pass("provider", "Codex CLI")
-                    .with_detail("Not installed")
+                CheckResult::pass("provider", "Codex CLI").with_detail("Not installed")
             }
         }
-        None => CheckResult::warn("provider", "Codex CLI", "Could not determine home directory"),
+        None => CheckResult::warn(
+            "provider",
+            "Codex CLI",
+            "Could not determine home directory",
+        ),
     }
 }
 
@@ -235,11 +504,14 @@ fn check_gemini_cli() -> CheckResult {
                 CheckResult::pass("provider", "Gemini CLI")
                     .with_detail(&format!("Detected at {}", gemini_dir.display()))
             } else {
-                CheckResult::pass("provider", "Gemini CLI")
-                    .with_detail("Not installed")
+                CheckResult::pass("provider", "Gemini CLI").with_detail("Not installed")
             }
         }
-        None => CheckResult::warn("provider", "Gemini CLI", "Could not determine home directory"),
+        None => CheckResult::warn(
+            "provider",
+            "Gemini CLI",
+            "Could not determine home directory",
+        ),
     }
 }
 
@@ -249,19 +521,21 @@ fn check_git() -> CheckResult {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             CheckResult::pass("tools", "Git").with_detail(&version)
         }
-        _ => CheckResult::warn("tools", "Git", "Not found in PATH (optional, needed for `chasm git`)"),
+        _ => CheckResult::warn(
+            "tools",
+            "Git",
+            "Not found in PATH (optional, needed for `chasm git`)",
+        ),
     }
 }
 
 fn check_sqlite() -> CheckResult {
     // We use bundled rusqlite, so this always passes
-    CheckResult::pass("tools", "SQLite (bundled)")
-        .with_detail("rusqlite with bundled SQLite")
+    CheckResult::pass("tools", "SQLite (bundled)").with_detail("rusqlite with bundled SQLite")
 }
 
 fn check_ollama() -> CheckResult {
-    let url = std::env::var("OLLAMA_HOST")
-        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let url = std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
 
     match reqwest::blocking::Client::new()
         .get(format!("{url}/api/tags"))
@@ -276,14 +550,15 @@ fn check_ollama() -> CheckResult {
             "Ollama",
             &format!("Responded with status {} at {url}", resp.status()),
         ),
-        Err(_) => CheckResult::pass("network", "Ollama")
-            .with_detail(&format!("Not running at {url}")),
+        Err(_) => {
+            CheckResult::pass("network", "Ollama").with_detail(&format!("Not running at {url}"))
+        }
     }
 }
 
 fn check_lm_studio() -> CheckResult {
-    let url = std::env::var("LM_STUDIO_URL")
-        .unwrap_or_else(|_| "http://localhost:1234".to_string());
+    let url =
+        std::env::var("LM_STUDIO_URL").unwrap_or_else(|_| "http://localhost:1234".to_string());
 
     match reqwest::blocking::Client::new()
         .get(format!("{url}/v1/models"))
@@ -293,8 +568,9 @@ fn check_lm_studio() -> CheckResult {
         Ok(resp) if resp.status().is_success() => {
             CheckResult::pass("network", "LM Studio").with_detail(&format!("Running at {url}"))
         }
-        _ => CheckResult::pass("network", "LM Studio")
-            .with_detail(&format!("Not running at {url}")),
+        _ => {
+            CheckResult::pass("network", "LM Studio").with_detail(&format!("Not running at {url}"))
+        }
     }
 }
 
@@ -304,10 +580,8 @@ fn check_api_server() -> CheckResult {
         .timeout(std::time::Duration::from_secs(3))
         .send()
     {
-        Ok(resp) if resp.status().is_success() => {
-            CheckResult::pass("network", "Chasm API server")
-                .with_detail("Running at http://localhost:8787")
-        }
+        Ok(resp) if resp.status().is_success() => CheckResult::pass("network", "Chasm API server")
+            .with_detail("Running at http://localhost:8787"),
         _ => CheckResult::pass("network", "Chasm API server")
             .with_detail("Not running (start with `chasm api serve`)"),
     }
@@ -326,7 +600,11 @@ fn print_text(results: &[CheckResult]) {
         if result.category != current_category {
             current_category = result.category.clone();
             println!();
-            println!("  {} {}", "▸".bright_black(), current_category.to_uppercase().bold());
+            println!(
+                "  {} {}",
+                "▸".bright_black(),
+                current_category.to_uppercase().bold()
+            );
         }
 
         let (icon, msg) = match &result.status {
@@ -364,7 +642,10 @@ fn print_json(results: &[CheckResult]) {
         })
         .collect();
 
-    println!("{}", serde_json::to_string_pretty(&json_results).unwrap_or_default());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json_results).unwrap_or_default()
+    );
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -417,7 +698,12 @@ fn get_harvest_db_path() -> Option<PathBuf> {
 
 fn count_workspaces(path: &PathBuf) -> usize {
     std::fs::read_dir(path)
-        .map(|entries| entries.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).count())
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .count()
+        })
         .unwrap_or(0)
 }
 
