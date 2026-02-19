@@ -1,21 +1,29 @@
 {
-    "name": "chat-session-manager",
-    "displayName": "Chat System Manager",
-    "description": "GUI interface for managing chat sessions across workspaces",
-    "version": "0.1.0",
+    "name": "chasm",
+    "displayName": "Chasm",
+    "description": "Universal AI chat session manager — harvest, repair, merge, and search across VS Code, Cursor, Claude Code, and 30+ providers",
+    "version": "1.0.0",
     "publisher": "nervosys",
     "icon": "resources/icon.png",
     "engines": {
         "vscode": "^1.85.0"
     },
     "categories": [
+        "Machine Learning",
+        "Data Science",
         "Other"
     ],
     "keywords": [
+        "chasm",
         "chat",
         "session",
-        "manager",
-        "csm"
+        "ai",
+        "copilot",
+        "cursor",
+        "claude",
+        "harvest",
+        "merge",
+        "search"
     ],
     "activationEvents": [
         "onStartupFinished"
@@ -23,375 +31,611 @@
     "main": "./out/extension.js",
     "contributes": {
         "configuration": {
-            "title": "Chat System Manager",
+            "title": "Chasm",
             "properties": {
-                "csm.binaryPath": {
+                "chasm.binaryPath": {
                     "type": "string",
-                    "default": "csm",
-                    "description": "Path to csm binary (or just 'csm' if in PATH)"
+                    "default": "chasm",
+                    "description": "Path to chasm binary (or just 'chasm' if in PATH)",
+                    "scope": "machine"
                 },
-                "csm.showNotifications": {
+                "chasm.showNotifications": {
                     "type": "boolean",
                     "default": true,
                     "description": "Show notifications for operations"
                 },
-                "csm.api.baseUrl": {
+                "chasm.api.baseUrl": {
                     "type": "string",
                     "default": "http://localhost:3000",
-                    "description": "Base URL for CSM API server (for real-time recording)"
+                    "description": "Base URL for Chasm API server"
                 },
-                "csm.recording.enabled": {
+                "chasm.api.autoStart": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Automatically start API server when extension activates"
+                },
+                "chasm.recording.enabled": {
                     "type": "boolean",
                     "default": false,
                     "description": "Enable real-time session recording to prevent data loss"
                 },
-                "csm.recording.providers": {
+                "chasm.recording.providers": {
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": ["vscode", "cursor", "continuedev", "claude-code", "opencode", "openclaw", "antigravity", "windsurf", "zed", "codespaces"]
+                        "enum": [
+                            "vscode",
+                            "cursor",
+                            "continuedev",
+                            "claude-code",
+                            "opencode",
+                            "openclaw",
+                            "antigravity",
+                            "windsurf",
+                            "zed",
+                            "codespaces",
+                            "codex-cli",
+                            "droid-cli",
+                            "gemini-cli"
+                        ]
                     },
-                    "default": ["vscode", "cursor"],
+                    "default": [
+                        "vscode",
+                        "cursor"
+                    ],
                     "description": "AI chat providers to record sessions from"
+                },
+                "chasm.doctor.runOnStartup": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run health check on startup and show issues in status bar"
+                },
+                "chasm.statusBar.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show Chasm status in the status bar"
                 }
             }
         },
         "commands": [
             {
-                "command": "csm.openChat",
-                "title": "CSM: Open Chat",
-                "icon": "$(comment-discussion)"
+                "command": "chasm.openChat",
+                "title": "Chasm: Open Chat",
+                "icon": "$(comment-discussion)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.showWorkspaces",
-                "title": "CSM: Show All Workspaces",
-                "icon": "$(list-tree)"
+                "command": "chasm.showWorkspaces",
+                "title": "Chasm: Show All Workspaces",
+                "icon": "$(list-tree)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.showSessions",
-                "title": "CSM: Show Sessions for Current Workspace",
-                "icon": "$(comment-discussion)"
+                "command": "chasm.showSessions",
+                "title": "Chasm: Show Sessions for Current Workspace",
+                "icon": "$(comment-discussion)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.showHistory",
-                "title": "CSM: Show Chat History",
-                "icon": "$(history)"
+                "command": "chasm.showHistory",
+                "title": "Chasm: Show Chat History",
+                "icon": "$(history)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.findWorkspace",
-                "title": "CSM: Find Workspace",
-                "icon": "$(search)"
+                "command": "chasm.findWorkspace",
+                "title": "Chasm: Find Workspace",
+                "icon": "$(search)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.exportSessions",
-                "title": "CSM: Export Sessions",
-                "icon": "$(export)"
+                "command": "chasm.exportSessions",
+                "title": "Chasm: Export Sessions",
+                "icon": "$(export)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.importSessions",
-                "title": "CSM: Import Sessions",
-                "icon": "$(import)"
+                "command": "chasm.importSessions",
+                "title": "Chasm: Import Sessions",
+                "icon": "$(import)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.fetchHistory",
-                "title": "CSM: Fetch History from Other Workspaces",
-                "icon": "$(cloud-download)"
+                "command": "chasm.fetchHistory",
+                "title": "Chasm: Fetch History from Other Workspaces",
+                "icon": "$(cloud-download)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.mergeHistory",
-                "title": "CSM: Merge All Sessions",
-                "icon": "$(git-merge)"
+                "command": "chasm.mergeHistory",
+                "title": "Chasm: Merge All Sessions",
+                "icon": "$(git-merge)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.refresh",
-                "title": "CSM: Refresh",
-                "icon": "$(refresh)"
+                "command": "chasm.refresh",
+                "title": "Chasm: Refresh",
+                "icon": "$(refresh)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.reloadAndShowChats",
-                "title": "CSM: Reload Window and Show Chats",
-                "icon": "$(refresh)"
+                "command": "chasm.reloadAndShowChats",
+                "title": "Chasm: Reload Window and Show Chats",
+                "icon": "$(refresh)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.launchTui",
-                "title": "CSM: Launch TUI",
-                "icon": "$(terminal)"
+                "command": "chasm.launchTui",
+                "title": "Chasm: Launch TUI",
+                "icon": "$(terminal)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.moveSessions",
-                "title": "CSM: Move Sessions to Another Workspace",
-                "icon": "$(move)"
+                "command": "chasm.moveSessions",
+                "title": "Chasm: Move Sessions to Another Workspace",
+                "icon": "$(move)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.gitInit",
-                "title": "CSM: Initialize Git Versioning",
-                "icon": "$(git-branch-create)"
+                "command": "chasm.doctor",
+                "title": "Chasm: Run Health Check",
+                "icon": "$(heart)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.gitAdd",
-                "title": "CSM: Stage & Commit Sessions",
-                "icon": "$(git-commit)"
+                "command": "chasm.doctorFix",
+                "title": "Chasm: Fix All Session Issues",
+                "icon": "$(wrench)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.gitStatus",
-                "title": "CSM: Show Git Status",
-                "icon": "$(git-compare)"
+                "command": "chasm.doctorDryRun",
+                "title": "Chasm: Preview Repairs (Dry Run)",
+                "icon": "$(eye)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.gitSnapshot",
-                "title": "CSM: Create Git Snapshot",
-                "icon": "$(tag)"
+                "command": "chasm.registerRepair",
+                "title": "Chasm: Repair All Sessions",
+                "icon": "$(tools)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.createMigration",
-                "title": "CSM: Create Migration Package",
-                "icon": "$(package)"
+                "command": "chasm.registerRepairRecursive",
+                "title": "Chasm: Repair Sessions (Recursive Scan)",
+                "icon": "$(folder-library)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.restoreMigration",
-                "title": "CSM: Restore Migration Package",
-                "icon": "$(folder-opened)"
+                "command": "chasm.startServer",
+                "title": "Chasm: Start API Server",
+                "icon": "$(server-process)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.showVersion",
-                "title": "CSM: Show Version",
-                "icon": "$(info)"
+                "command": "chasm.stopServer",
+                "title": "Chasm: Stop API Server",
+                "icon": "$(stop)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.loadSession",
+                "command": "chasm.recoverScan",
+                "title": "Chasm: Scan for Recoverable Sessions",
+                "icon": "$(search)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.recoverOrphans",
+                "title": "Chasm: List Orphaned Sessions",
+                "icon": "$(warning)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.syncPull",
+                "title": "Chasm: Sync Pull (Backup to Database)",
+                "icon": "$(cloud-download)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.syncPush",
+                "title": "Chasm: Sync Push (Restore from Database)",
+                "icon": "$(cloud-upload)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.upgradeFormat",
+                "title": "Chasm: Upgrade Session Format",
+                "icon": "$(arrow-up)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.gitInit",
+                "title": "Chasm: Initialize Git Versioning",
+                "icon": "$(git-branch-create)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.gitAdd",
+                "title": "Chasm: Stage & Commit Sessions",
+                "icon": "$(git-commit)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.gitStatus",
+                "title": "Chasm: Show Git Status",
+                "icon": "$(git-compare)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.gitSnapshot",
+                "title": "Chasm: Create Git Snapshot",
+                "icon": "$(tag)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.createMigration",
+                "title": "Chasm: Create Migration Package",
+                "icon": "$(package)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.restoreMigration",
+                "title": "Chasm: Restore Migration Package",
+                "icon": "$(folder-opened)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.showVersion",
+                "title": "Chasm: Show Version",
+                "icon": "$(info)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.loadSession",
                 "title": "View Session",
                 "icon": "$(open-preview)"
             },
             {
-                "command": "csm.mergeSessionsForWorkspace",
+                "command": "chasm.mergeSessionsForWorkspace",
                 "title": "Merge All Sessions",
                 "icon": "$(git-merge)"
             },
             {
-                "command": "csm.fetchSessionsForWorkspace",
+                "command": "chasm.fetchSessionsForWorkspace",
                 "title": "Fetch from Other Workspaces",
                 "icon": "$(cloud-download)"
             },
             {
-                "command": "csm.copySessionId",
+                "command": "chasm.copySessionId",
                 "title": "Copy Session ID",
                 "icon": "$(clippy)"
             },
             {
-                "command": "csm.viewSessionDetails",
+                "command": "chasm.viewSessionDetails",
                 "title": "View Session Details",
                 "icon": "$(info)"
             },
             {
-                "command": "csm.harvest",
-                "title": "CSM: Harvest Sessions",
-                "icon": "$(cloud-download)"
+                "command": "chasm.harvest",
+                "title": "Chasm: Harvest Sessions",
+                "icon": "$(cloud-download)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.harvestScan",
-                "title": "CSM: Scan for Providers",
-                "icon": "$(search)"
+                "command": "chasm.harvestScan",
+                "title": "Chasm: Scan for Providers",
+                "icon": "$(search)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.searchSessions",
-                "title": "CSM: Quick Session Search",
-                "icon": "$(search)"
+                "command": "chasm.harvestSearch",
+                "title": "Chasm: Full-Text Search (Harvest DB)",
+                "icon": "$(search)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.recoverOrphaned",
-                "title": "CSM: Recover Orphaned Sessions",
-                "icon": "$(debug-restart)"
+                "command": "chasm.searchSessions",
+                "title": "Chasm: Quick Session Search",
+                "icon": "$(search)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.previewSession",
-                "title": "CSM: Preview Session",
-                "icon": "$(open-preview)"
+                "command": "chasm.recoverOrphaned",
+                "title": "Chasm: Recover Orphaned Sessions",
+                "icon": "$(debug-restart)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.toggleRecording",
-                "title": "CSM: Toggle Real-Time Recording",
-                "icon": "$(record)"
+                "command": "chasm.previewSession",
+                "title": "Chasm: Preview Session",
+                "icon": "$(open-preview)",
+                "category": "Chasm"
             },
             {
-                "command": "csm.recordingStatus",
-                "title": "CSM: Recording Status",
-                "icon": "$(pulse)"
+                "command": "chasm.toggleRecording",
+                "title": "Chasm: Toggle Real-Time Recording",
+                "icon": "$(record)",
+                "category": "Chasm"
+            },
+            {
+                "command": "chasm.recordingStatus",
+                "title": "Chasm: Recording Status",
+                "icon": "$(pulse)",
+                "category": "Chasm"
             }
         ],
         "viewsContainers": {
             "activitybar": [
                 {
-                    "id": "csm",
-                    "title": "Chat System Manager",
+                    "id": "chasm",
+                    "title": "Chasm",
                     "icon": "$(comment-discussion)"
                 }
             ]
         },
         "views": {
-            "csm": [
+            "chasm": [
                 {
-                    "id": "csm.chatQuickAccess",
+                    "id": "chasm.chatQuickAccess",
                     "name": "Chat",
                     "icon": "$(comment-discussion)"
                 },
                 {
-                    "id": "csm.workspaces",
+                    "id": "chasm.workspaces",
                     "name": "Workspaces",
                     "icon": "$(folder)"
                 },
                 {
-                    "id": "csm.sessions",
+                    "id": "chasm.sessions",
                     "name": "Sessions",
                     "icon": "$(comment)"
+                },
+                {
+                    "id": "chasm.health",
+                    "name": "Health",
+                    "icon": "$(heart)",
+                    "visibility": "collapsed"
                 }
             ]
         },
         "viewsWelcome": [
             {
-                "view": "csm.chatQuickAccess",
-                "contents": "Start a new conversation or continue an existing one.\n[Open CSM Chat](command:csm.openChat)"
+                "view": "chasm.chatQuickAccess",
+                "contents": "Start a new conversation or continue an existing one.\n[Open Chasm Chat](command:chasm.openChat)\n[Run Health Check](command:chasm.doctor)"
             },
             {
-                "view": "csm.workspaces",
-                "contents": "No workspaces found.\n[Refresh](command:csm.refresh)"
+                "view": "chasm.workspaces",
+                "contents": "No workspaces found.\n[Refresh](command:chasm.refresh)\n[Harvest Sessions](command:chasm.harvest)"
             },
             {
-                "view": "csm.sessions",
-                "contents": "Open a workspace to view sessions.\n[Show All Workspaces](command:csm.showWorkspaces)"
+                "view": "chasm.sessions",
+                "contents": "Open a workspace to view sessions.\n[Show All Workspaces](command:chasm.showWorkspaces)"
+            },
+            {
+                "view": "chasm.health",
+                "contents": "Run a health check to scan for session issues.\n[Run Health Check](command:chasm.doctor)\n[Fix All Issues](command:chasm.doctorFix)"
             }
         ],
         "menus": {
             "view/title": [
                 {
-                    "command": "csm.refresh",
-                    "when": "view == csm.workspaces || view == csm.sessions",
+                    "command": "chasm.refresh",
+                    "when": "view == chasm.workspaces || view == chasm.sessions",
                     "group": "navigation"
                 },
                 {
-                    "command": "csm.findWorkspace",
-                    "when": "view == csm.workspaces",
+                    "command": "chasm.findWorkspace",
+                    "when": "view == chasm.workspaces",
                     "group": "navigation"
                 },
                 {
-                    "command": "csm.launchTui",
-                    "when": "view == csm.workspaces || view == csm.sessions",
+                    "command": "chasm.launchTui",
+                    "when": "view == chasm.workspaces || view == chasm.sessions",
+                    "group": "navigation"
+                },
+                {
+                    "command": "chasm.doctor",
+                    "when": "view == chasm.health",
+                    "group": "navigation"
+                },
+                {
+                    "command": "chasm.doctorFix",
+                    "when": "view == chasm.health",
                     "group": "navigation"
                 }
             ],
             "view/item/context": [
                 {
-                    "command": "csm.showSessions",
-                    "when": "view == csm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "command": "chasm.showSessions",
+                    "when": "view == chasm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
                     "group": "inline"
                 },
                 {
-                    "command": "csm.mergeSessionsForWorkspace",
-                    "when": "view == csm.workspaces && viewItem == workspaceWithChats",
+                    "command": "chasm.mergeSessionsForWorkspace",
+                    "when": "view == chasm.workspaces && viewItem == workspaceWithChats",
                     "group": "1_sessions"
                 },
                 {
-                    "command": "csm.fetchSessionsForWorkspace",
-                    "when": "view == csm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "command": "chasm.fetchSessionsForWorkspace",
+                    "when": "view == chasm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
                     "group": "1_sessions"
                 },
                 {
-                    "command": "csm.exportSessions",
-                    "when": "view == csm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "command": "chasm.exportSessions",
+                    "when": "view == chasm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
                     "group": "2_export"
                 },
                 {
-                    "command": "csm.moveSessions",
-                    "when": "view == csm.workspaces && viewItem == workspaceWithChats",
+                    "command": "chasm.moveSessions",
+                    "when": "view == chasm.workspaces && viewItem == workspaceWithChats",
                     "group": "2_export"
                 },
                 {
-                    "command": "csm.loadSession",
-                    "when": "view == csm.sessions && viewItem == session",
+                    "command": "chasm.loadSession",
+                    "when": "view == chasm.sessions && viewItem == session",
                     "group": "inline"
                 },
                 {
-                    "command": "csm.mergeSessionsForWorkspace",
-                    "when": "view == csm.sessions && viewItem == session",
+                    "command": "chasm.mergeSessionsForWorkspace",
+                    "when": "view == chasm.sessions && viewItem == session",
                     "group": "1_actions"
                 },
                 {
-                    "command": "csm.fetchSessionsForWorkspace",
-                    "when": "view == csm.sessions && viewItem == session",
+                    "command": "chasm.fetchSessionsForWorkspace",
+                    "when": "view == chasm.sessions && viewItem == session",
                     "group": "1_actions"
                 },
                 {
-                    "command": "csm.copySessionId",
-                    "when": "view == csm.sessions && viewItem == session",
+                    "command": "chasm.copySessionId",
+                    "when": "view == chasm.sessions && viewItem == session",
                     "group": "2_info"
                 },
                 {
-                    "command": "csm.viewSessionDetails",
-                    "when": "view == csm.sessions && viewItem == session",
+                    "command": "chasm.viewSessionDetails",
+                    "when": "view == chasm.sessions && viewItem == session",
                     "group": "2_info"
                 }
             ],
             "commandPalette": [
                 {
-                    "command": "csm.openChat"
+                    "command": "chasm.openChat"
                 },
                 {
-                    "command": "csm.showWorkspaces"
+                    "command": "chasm.showWorkspaces"
                 },
                 {
-                    "command": "csm.showSessions"
+                    "command": "chasm.showSessions"
                 },
                 {
-                    "command": "csm.showHistory"
+                    "command": "chasm.showHistory"
                 },
                 {
-                    "command": "csm.findWorkspace"
+                    "command": "chasm.findWorkspace"
                 },
                 {
-                    "command": "csm.exportSessions"
+                    "command": "chasm.exportSessions"
                 },
                 {
-                    "command": "csm.importSessions"
+                    "command": "chasm.importSessions"
                 },
                 {
-                    "command": "csm.fetchHistory"
+                    "command": "chasm.fetchHistory"
                 },
                 {
-                    "command": "csm.mergeHistory"
+                    "command": "chasm.mergeHistory"
                 },
                 {
-                    "command": "csm.launchTui"
+                    "command": "chasm.launchTui"
                 },
                 {
-                    "command": "csm.moveSessions"
+                    "command": "chasm.moveSessions"
                 },
                 {
-                    "command": "csm.gitInit"
+                    "command": "chasm.doctor"
                 },
                 {
-                    "command": "csm.gitAdd"
+                    "command": "chasm.doctorFix"
                 },
                 {
-                    "command": "csm.gitStatus"
+                    "command": "chasm.doctorDryRun"
                 },
                 {
-                    "command": "csm.gitSnapshot"
+                    "command": "chasm.registerRepair"
                 },
                 {
-                    "command": "csm.createMigration"
+                    "command": "chasm.registerRepairRecursive"
                 },
                 {
-                    "command": "csm.restoreMigration"
+                    "command": "chasm.startServer"
                 },
                 {
-                    "command": "csm.showVersion"
+                    "command": "chasm.stopServer"
+                },
+                {
+                    "command": "chasm.recoverScan"
+                },
+                {
+                    "command": "chasm.recoverOrphans"
+                },
+                {
+                    "command": "chasm.syncPull"
+                },
+                {
+                    "command": "chasm.syncPush"
+                },
+                {
+                    "command": "chasm.upgradeFormat"
+                },
+                {
+                    "command": "chasm.harvest"
+                },
+                {
+                    "command": "chasm.harvestScan"
+                },
+                {
+                    "command": "chasm.harvestSearch"
+                },
+                {
+                    "command": "chasm.searchSessions"
+                },
+                {
+                    "command": "chasm.recoverOrphaned"
+                },
+                {
+                    "command": "chasm.gitInit"
+                },
+                {
+                    "command": "chasm.gitAdd"
+                },
+                {
+                    "command": "chasm.gitStatus"
+                },
+                {
+                    "command": "chasm.gitSnapshot"
+                },
+                {
+                    "command": "chasm.createMigration"
+                },
+                {
+                    "command": "chasm.restoreMigration"
+                },
+                {
+                    "command": "chasm.showVersion"
+                },
+                {
+                    "command": "chasm.toggleRecording"
+                },
+                {
+                    "command": "chasm.recordingStatus"
                 }
             ]
         },
         "keybindings": [
             {
-                "command": "csm.openChat",
+                "command": "chasm.openChat",
                 "key": "ctrl+shift+;",
                 "mac": "cmd+shift+;"
+            },
+            {
+                "command": "chasm.doctor",
+                "key": "ctrl+shift+h",
+                "mac": "cmd+shift+h"
+            },
+            {
+                "command": "chasm.searchSessions",
+                "key": "ctrl+shift+/",
+                "mac": "cmd+shift+/"
+            },
+            {
+                "command": "chasm.harvest",
+                "key": "ctrl+shift+\\",
+                "mac": "cmd+shift+\\"
+            },
+            {
+                "command": "chasm.refresh",
+                "key": "ctrl+shift+r",
+                "mac": "cmd+shift+r",
+                "when": "view == chasm.workspaces || view == chasm.sessions"
             }
         ]
     },

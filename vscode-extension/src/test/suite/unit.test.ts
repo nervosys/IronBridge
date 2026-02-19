@@ -229,28 +229,28 @@ suite('Parsing Logic Unit Tests', () => {
         }
 
         test('builds simple command', () => {
-            const cmd = buildCommand('csm', ['ls']);
-            assert.strictEqual(cmd, '"csm" ls');
+            const cmd = buildCommand('chasm', ['ls']);
+            assert.strictEqual(cmd, '"chasm" ls');
         });
 
         test('builds command with quoted path', () => {
-            const cmd = buildCommand('csm', ['find', '"my project"']);
-            assert.strictEqual(cmd, '"csm" find "my project"');
+            const cmd = buildCommand('chasm', ['find', '"my project"']);
+            assert.strictEqual(cmd, '"chasm" find "my project"');
         });
 
         test('builds complex command', () => {
-            const cmd = buildCommand('csm', ['history', 'merge', '"/path/to/project"', '--force']);
-            assert.strictEqual(cmd, '"csm" history merge "/path/to/project" --force');
+            const cmd = buildCommand('chasm', ['history', 'merge', '"/path/to/project"', '--force']);
+            assert.strictEqual(cmd, '"chasm" history merge "/path/to/project" --force');
         });
 
         test('handles empty args', () => {
-            const cmd = buildCommand('csm', []);
-            assert.strictEqual(cmd, '"csm" ');
+            const cmd = buildCommand('chasm', []);
+            assert.strictEqual(cmd, '"chasm" ');
         });
 
         test('handles path with spaces', () => {
-            const cmd = buildCommand('C:\\Program Files\\csm\\csm.exe', ['ls']);
-            assert.strictEqual(cmd, '"C:\\Program Files\\csm\\csm.exe" ls');
+            const cmd = buildCommand('C:\\Program Files\\chasm\\chasm.exe', ['ls']);
+            assert.strictEqual(cmd, '"C:\\Program Files\\chasm\\chasm.exe" ls');
         });
     });
 });

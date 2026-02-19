@@ -1,21 +1,23 @@
-// CSM VS Code Extension - Main Entry Point
-// GUI interface for Chat System Manager
+// Chasm VS Code Extension - Main Entry Point
+// Universal AI chat session manager
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CsmExecutor } from './csmExecutor';
+import { ChasmExecutor } from './chasmExecutor';
 import { WorkspaceProvider, WorkspaceItem } from './workspaceProvider';
 import { SessionProvider } from './sessionProvider';
-import { CsmChatPanel } from './chatPanel';
+import { ChasmChatPanel } from './chatPanel';
 import { SessionRecorder } from './sessionRecorder';
 import { createApiClient } from './apiClient';
 
-let executor: CsmExecutor;
+let executor: ChasmExecutor;
 let workspaceProvider: WorkspaceProvider;
 let sessionProvider: SessionProvider;
 let sessionRecorder: SessionRecorder | undefined;
 let outputChannel: vscode.OutputChannel;
+let statusBarItem: vscode.StatusBarItem;
+let serverTerminal: vscode.Terminal | undefined;
 
 /**
  * Extract text content from a chat message (handles various formats)
@@ -134,7 +136,7 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
         },
         {
             label: '$(output) Show in Output',
-            description: 'Display conversation in CSM Output panel',
+            description: 'Display conversation in Chasm Output panel',
             detail: 'Quick view without opening new editor'
         }
     ];
@@ -203,13 +205,13 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
 
 export function activate(context: vscode.ExtensionContext) {
     // Create output channel
-    outputChannel = vscode.window.createOutputChannel('CSM');
-    outputChannel.appendLine('Chat System Manager activated');
+    outputChannel = vscode.window.createOutputChannel('Chasm');
+    outputChannel.appendLine('Chasm activated');
 
-    // Check if we should show chats after reload (triggered by csm.reloadAndShowChats)
-    const showChatsAfterReload = context.globalState.get<boolean>('csm.showChatsAfterReload', false);
+    // Check if we should show chats after reload (triggered by chasm.reloadAndShowChats)
+    const showChatsAfterReload = context.globalState.get<boolean>('chasm.showChatsAfterReload', false);
     if (showChatsAfterReload) {
-        context.globalState.update('csm.showChatsAfterReload', false);
+        context.globalState.update('chasm.showChatsAfterReload', false);
         // Give VS Code a moment to fully initialize, then open chat history
         setTimeout(async () => {
             try {
@@ -225,15 +227,15 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Initialize executor with extension path for bundled binary lookup
-    executor = new CsmExecutor(outputChannel, context.extensionPath);
+    executor = new ChasmExecutor(outputChannel, context.extensionPath);
 
     // Initialize tree providers
     workspaceProvider = new WorkspaceProvider(executor);
     sessionProvider = new SessionProvider(executor, outputChannel);
 
     // Initialize real-time session recorder
-    const recordingEnabled = vscode.workspace.getConfiguration('csm').get<boolean>('recording.enabled', false);
-    const apiBaseUrl = vscode.workspace.getConfiguration('csm').get<string>('api.baseUrl', 'http://localhost:3000');
+    const recordingEnabled = vscode.workspace.getConfiguration('chasm').get<boolean>('recording.enabled', false);
+    const apiBaseUrl = vscode.workspace.getConfiguration('chasm').get<string>('api.baseUrl', 'http://localhost:3000');
 
     if (recordingEnabled) {
         const apiClient = createApiClient({ baseUrl: apiBaseUrl }, outputChannel);
@@ -247,39 +249,62 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Register tree views
-    const workspaceTreeView = vscode.window.createTreeView('csm.workspaces', {
+    const workspaceTreeView = vscode.window.createTreeView('chasm.workspaces', {
         treeDataProvider: workspaceProvider,
         showCollapseAll: true
     });
 
-    const sessionTreeView = vscode.window.createTreeView('csm.sessions', {
+    const sessionTreeView = vscode.window.createTreeView('chasm.sessions', {
         treeDataProvider: sessionProvider,
         showCollapseAll: true
     });
 
     context.subscriptions.push(workspaceTreeView, sessionTreeView);
 
+    // ── Status Bar ─────────────────────────────────────────────────────
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+    statusBarItem.command = 'chasm.doctor';
+    statusBarItem.text = '$(heart) Chasm';
+    statusBarItem.tooltip = 'Chasm — Click to run health check';
+    const statusBarEnabled = vscode.workspace.getConfiguration('chasm').get<boolean>('statusBar.enabled', true);
+    if (statusBarEnabled) {
+        statusBarItem.show();
+    }
+    context.subscriptions.push(statusBarItem);
+
+    // Run startup health check if enabled
+    const runDoctorOnStartup = vscode.workspace.getConfiguration('chasm').get<boolean>('doctor.runOnStartup', false);
+    if (runDoctorOnStartup) {
+        updateStatusBarWithHealth();
+    }
+
+    // Auto-start API server if configured
+    const autoStartServer = vscode.workspace.getConfiguration('chasm').get<boolean>('api.autoStart', false);
+    if (autoStartServer) {
+        startApiServer();
+    }
+
     // Register commands
     context.subscriptions.push(
-        // Open CSM Chat Panel - unified chat interface
-        vscode.commands.registerCommand('csm.openChat', () => {
-            CsmChatPanel.createOrShow(context.extensionUri, executor, outputChannel);
+        // Open Chasm Chat Panel - unified chat interface
+        vscode.commands.registerCommand('chasm.openChat', () => {
+            ChasmChatPanel.createOrShow(context.extensionUri, executor, outputChannel);
         }),
 
-        vscode.commands.registerCommand('csm.refresh', () => {
+        vscode.commands.registerCommand('chasm.refresh', () => {
             workspaceProvider.refresh();
             sessionProvider.refresh();
         }),
 
-        // Reload window and open chat history picker (for use after csm register)
-        vscode.commands.registerCommand('csm.reloadAndShowChats', async () => {
+        // Reload window and open chat history picker (for use after chasm register)
+        vscode.commands.registerCommand('chasm.reloadAndShowChats', async () => {
             // Store intent to show chats after reload
-            await context.globalState.update('csm.showChatsAfterReload', true);
+            await context.globalState.update('chasm.showChatsAfterReload', true);
             await vscode.commands.executeCommand('workbench.action.reloadWindow');
         }),
 
         // Click handler for workspace items - single click shows sessions
-        vscode.commands.registerCommand('csm.selectWorkspace', async (item: WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.selectWorkspace', async (item: WorkspaceItem) => {
             if (!item || !item.projectPath) {
                 return;
             }
@@ -288,7 +313,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Click handler for session items - show dropdown menu
-        vscode.commands.registerCommand('csm.selectSession', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('chasm.selectSession', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -403,7 +428,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Load session in Chat
-        vscode.commands.registerCommand('csm.loadSession', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('chasm.loadSession', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -411,7 +436,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Merge sessions
-        vscode.commands.registerCommand('csm.mergeSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.mergeSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
             let projectPath: string | undefined;
 
             if (item && 'sessionInfo' in item) {
@@ -450,7 +475,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Fetch sessions from other workspaces
-        vscode.commands.registerCommand('csm.fetchSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.fetchSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
             let projectPath: string | undefined;
 
             if (item && 'sessionInfo' in item) {
@@ -489,7 +514,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Copy session ID
-        vscode.commands.registerCommand('csm.copySessionId', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('chasm.copySessionId', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -498,7 +523,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: View session details
-        vscode.commands.registerCommand('csm.viewSessionDetails', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('chasm.viewSessionDetails', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -511,11 +536,11 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`Messages: ${item.sessionInfo.messages}`);
         }),
 
-        vscode.commands.registerCommand('csm.showWorkspaces', async () => {
+        vscode.commands.registerCommand('chasm.showWorkspaces', async () => {
             await showWorkspacesWebview(context);
         }),
 
-        vscode.commands.registerCommand('csm.showSessions', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.showSessions', async (item?: WorkspaceItem) => {
             const path = item?.projectPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (path) {
                 sessionProvider.setWorkspacePath(path);
@@ -525,7 +550,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.showHistory', async () => {
+        vscode.commands.registerCommand('chasm.showHistory', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (path) {
                 await showHistoryWebview(context, path);
@@ -534,7 +559,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.findWorkspace', async () => {
+        vscode.commands.registerCommand('chasm.findWorkspace', async () => {
             const pattern = await vscode.window.showInputBox({
                 prompt: 'Enter search pattern',
                 placeHolder: 'e.g., my_project'
@@ -544,7 +569,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.exportSessions', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.exportSessions', async (item?: WorkspaceItem) => {
             const path = item?.projectPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace selected');
@@ -567,7 +592,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.importSessions', async () => {
+        vscode.commands.registerCommand('chasm.importSessions', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -593,7 +618,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.fetchHistory', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.fetchHistory', async (item?: WorkspaceItem) => {
             const path = item?.projectPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace selected');
@@ -616,7 +641,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.mergeHistory', async () => {
+        vscode.commands.registerCommand('chasm.mergeHistory', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -646,17 +671,17 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.launchTui', async () => {
+        vscode.commands.registerCommand('chasm.launchTui', async () => {
             const terminal = vscode.window.createTerminal({
-                name: 'CSM TUI',
+                name: 'Chasm TUI',
                 cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
             });
-            const binaryPath = vscode.workspace.getConfiguration('csm').get('binaryPath', 'csm');
+            const binaryPath = vscode.workspace.getConfiguration('chasm').get('binaryPath', 'Chasm');
             terminal.sendText(`"${binaryPath}" tui`);
             terminal.show();
         }),
 
-        vscode.commands.registerCommand('csm.moveSessions', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('chasm.moveSessions', async (item?: WorkspaceItem) => {
             let sourceHash: string | undefined;
 
             if (item) {
@@ -698,7 +723,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.gitInit', async () => {
+        vscode.commands.registerCommand('chasm.gitInit', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -713,7 +738,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.gitAdd', async () => {
+        vscode.commands.registerCommand('chasm.gitAdd', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -733,7 +758,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.gitStatus', async () => {
+        vscode.commands.registerCommand('chasm.gitStatus', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -750,7 +775,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.gitSnapshot', async () => {
+        vscode.commands.registerCommand('chasm.gitSnapshot', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -770,7 +795,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.createMigration', async () => {
+        vscode.commands.registerCommand('chasm.createMigration', async () => {
             const dest = await vscode.window.showSaveDialog({
                 title: 'Create Migration Package',
                 defaultUri: vscode.Uri.file('csm_migration'),
@@ -794,7 +819,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.restoreMigration', async () => {
+        vscode.commands.registerCommand('chasm.restoreMigration', async () => {
             const src = await vscode.window.showOpenDialog({
                 title: 'Select Migration Package',
                 canSelectFolders: true,
@@ -821,17 +846,17 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('csm.showVersion', async () => {
+        vscode.commands.registerCommand('chasm.showVersion', async () => {
             const result = await executor.getVersion();
             if (result.success) {
-                vscode.window.showInformationMessage(`CSM: ${result.output.trim()}`);
+                vscode.window.showInformationMessage(`Chasm: ${result.output.trim()}`);
             } else {
                 vscode.window.showErrorMessage(`Failed to get version: ${result.error}`);
             }
         }),
 
         // One-click harvest from workspace
-        vscode.commands.registerCommand('csm.harvest', async () => {
+        vscode.commands.registerCommand('chasm.harvest', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
             const result = await vscode.window.withProgress({
@@ -858,7 +883,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Harvest scan - show available providers
-        vscode.commands.registerCommand('csm.harvestScan', async () => {
+        vscode.commands.registerCommand('chasm.harvestScan', async () => {
             const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: 'Scanning for chat providers...',
@@ -877,7 +902,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Quick session search
-        vscode.commands.registerCommand('csm.searchSessions', async () => {
+        vscode.commands.registerCommand('chasm.searchSessions', async () => {
             const query = await vscode.window.showInputBox({
                 prompt: 'Search sessions',
                 placeHolder: 'Enter search query (title, content, or ID)',
@@ -928,7 +953,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Recover orphaned sessions
-        vscode.commands.registerCommand('csm.recoverOrphaned', async () => {
+        vscode.commands.registerCommand('chasm.recoverOrphaned', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -975,14 +1000,14 @@ export function activate(context: vscode.ExtensionContext) {
 
                 if (recoverResult.success) {
                     // Now register them
-                    const registerResult = await executor.registerSessions(path, true);
+                    const registerResult = await executor.registerAll(path, true);
                     if (registerResult.success) {
                         const reload = await vscode.window.showInformationMessage(
                             'Sessions recovered and registered! Reload VS Code to see them.',
                             'Reload Window'
                         );
                         if (reload === 'Reload Window') {
-                            await vscode.commands.executeCommand('csm.reloadAndShowChats');
+                            await vscode.commands.executeCommand('chasm.reloadAndShowChats');
                         }
                     }
                     sessionProvider.refresh();
@@ -993,7 +1018,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Inline session preview
-        vscode.commands.registerCommand('csm.previewSession', async (item?: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('chasm.previewSession', async (item?: import('./sessionProvider').SessionItem) => {
             let sessionId: string | undefined;
 
             if (item?.sessionInfo) {
@@ -1014,8 +1039,8 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Toggle real-time session recording
-        vscode.commands.registerCommand('csm.toggleRecording', async () => {
-            const config = vscode.workspace.getConfiguration('csm');
+        vscode.commands.registerCommand('chasm.toggleRecording', async () => {
+            const config = vscode.workspace.getConfiguration('chasm');
             const currentState = config.get<boolean>('recording.enabled', false);
 
             if (currentState) {
@@ -1043,7 +1068,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Show recording status
-        vscode.commands.registerCommand('csm.recordingStatus', async () => {
+        vscode.commands.registerCommand('chasm.recordingStatus', async () => {
             if (!sessionRecorder) {
                 vscode.window.showInformationMessage('Session recording is not active');
                 return;
@@ -1060,6 +1085,411 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`Watched paths: ${watchedPaths.length}`);
             for (const p of watchedPaths) {
                 outputChannel.appendLine(`  - ${p}`);
+            }
+        }),
+
+        // ── Doctor / Health Check commands ─────────────────────────────
+
+        // Run health check
+        vscode.commands.registerCommand('chasm.doctor', async () => {
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Running health check...',
+                cancellable: false
+            }, async () => {
+                return await executor.doctor(true);
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Chasm Health Check ===');
+                outputChannel.appendLine(result.output);
+
+                // Check if issues were found
+                const hasIssues = result.output.includes('issues') || result.output.includes('WARN') || result.output.includes('ERROR');
+                if (hasIssues) {
+                    const fix = await vscode.window.showWarningMessage(
+                        'Health check found issues. Would you like to auto-fix them?',
+                        'Fix All', 'Preview Repairs', 'Dismiss'
+                    );
+                    if (fix === 'Fix All') {
+                        await vscode.commands.executeCommand('chasm.doctorFix');
+                    } else if (fix === 'Preview Repairs') {
+                        await vscode.commands.executeCommand('chasm.doctorDryRun');
+                    }
+                } else {
+                    vscode.window.showInformationMessage('Health check passed — no issues found!');
+                }
+                updateStatusBarWithHealth();
+            } else {
+                vscode.window.showErrorMessage(`Health check failed: ${result.error}`);
+            }
+        }),
+
+        // Fix all session issues
+        vscode.commands.registerCommand('chasm.doctorFix', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'This will auto-fix all detected session issues (compact JSONL, inject compat fields, rebuild indexes). Continue?',
+                'Fix All', 'Cancel'
+            );
+            if (confirm !== 'Fix All') {
+                return;
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Fixing session issues...',
+                cancellable: false
+            }, async () => {
+                return await executor.doctorFix();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Auto-Fix Results ===');
+                outputChannel.appendLine(result.output);
+
+                const reload = await vscode.window.showInformationMessage(
+                    'Session issues fixed! Reload VS Code to see updates.',
+                    'Reload Window', 'Later'
+                );
+                if (reload === 'Reload Window') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+                updateStatusBarWithHealth();
+            } else {
+                vscode.window.showErrorMessage(`Fix failed: ${result.error}`);
+            }
+        }),
+
+        // Preview repairs (dry run)
+        vscode.commands.registerCommand('chasm.doctorDryRun', async () => {
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Scanning for repairable issues...',
+                cancellable: false
+            }, async () => {
+                return await executor.registerRepairDryRun();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Repair Preview (Dry Run) ===');
+                outputChannel.appendLine(result.output);
+                vscode.window.showInformationMessage('Preview complete — see Output panel for details');
+            } else {
+                vscode.window.showErrorMessage(`Preview failed: ${result.error}`);
+            }
+        }),
+
+        // ── Register / Repair commands ─────────────────────────────────
+
+        // Repair all sessions
+        vscode.commands.registerCommand('chasm.registerRepair', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'Repair all sessions across all workspaces? This will compact JSONL files and rebuild indexes.',
+                'Repair All', 'Cancel'
+            );
+            if (confirm !== 'Repair All') {
+                return;
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Repairing sessions...',
+                cancellable: false
+            }, async () => {
+                return await executor.registerRepair(true, true);
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Repair Results ===');
+                outputChannel.appendLine(result.output);
+
+                const reload = await vscode.window.showInformationMessage(
+                    'Sessions repaired! Reload VS Code to see updates.',
+                    'Reload Window', 'Later'
+                );
+                if (reload === 'Reload Window') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+                workspaceProvider.refresh();
+                sessionProvider.refresh();
+            } else {
+                vscode.window.showErrorMessage(`Repair failed: ${result.error}`);
+            }
+        }),
+
+        // Recursive repair
+        vscode.commands.registerCommand('chasm.registerRepairRecursive', async () => {
+            const scanPath = await vscode.window.showInputBox({
+                prompt: 'Enter root directory to recursively scan for workspaces',
+                placeHolder: 'e.g., C:\\Users\\you\\dev',
+                value: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
+            });
+            if (!scanPath) {
+                return;
+            }
+
+            const depthStr = await vscode.window.showInputBox({
+                prompt: 'Max directory depth (leave empty for unlimited)',
+                placeHolder: 'e.g., 3'
+            });
+            const depth = depthStr ? parseInt(depthStr, 10) : undefined;
+
+            // First do a dry run
+            const preview = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Scanning for workspaces...',
+                cancellable: false
+            }, async () => {
+                return await executor.registerRepairRecursive(scanPath, depth, true);
+            });
+
+            if (!preview.success) {
+                vscode.window.showErrorMessage(`Scan failed: ${preview.error}`);
+                return;
+            }
+
+            outputChannel.show();
+            outputChannel.appendLine('');
+            outputChannel.appendLine('=== Recursive Scan Preview ===');
+            outputChannel.appendLine(preview.output);
+
+            const proceed = await vscode.window.showWarningMessage(
+                'Scan complete — see Output panel for details. Proceed with repairs?',
+                'Repair All', 'Cancel'
+            );
+            if (proceed !== 'Repair All') {
+                return;
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Repairing sessions recursively...',
+                cancellable: false
+            }, async () => {
+                return await executor.registerRepairRecursive(scanPath, depth, false, true);
+            });
+
+            if (result.success) {
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Recursive Repair Results ===');
+                outputChannel.appendLine(result.output);
+                vscode.window.showInformationMessage('Recursive repair complete — see Output panel');
+                workspaceProvider.refresh();
+            } else {
+                vscode.window.showErrorMessage(`Recursive repair failed: ${result.error}`);
+            }
+        }),
+
+        // ── API Server commands ────────────────────────────────────────
+
+        // Start API server
+        vscode.commands.registerCommand('chasm.startServer', async () => {
+            startApiServer();
+        }),
+
+        // Stop API server
+        vscode.commands.registerCommand('chasm.stopServer', async () => {
+            stopApiServer();
+        }),
+
+        // ── Recover commands ───────────────────────────────────────────
+
+        // Scan for recoverable sessions
+        vscode.commands.registerCommand('chasm.recoverScan', async () => {
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Scanning for recoverable sessions...',
+                cancellable: false
+            }, async () => {
+                return await executor.recoverScan();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Recoverable Sessions ===');
+                outputChannel.appendLine(result.output);
+            } else {
+                vscode.window.showErrorMessage(`Scan failed: ${result.error}`);
+            }
+        }),
+
+        // List orphaned sessions
+        vscode.commands.registerCommand('chasm.recoverOrphans', async () => {
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Listing orphaned sessions...',
+                cancellable: false
+            }, async () => {
+                return await executor.recoverOrphans();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Orphaned Sessions ===');
+                outputChannel.appendLine(result.output);
+            } else {
+                vscode.window.showErrorMessage(`Failed: ${result.error}`);
+            }
+        }),
+
+        // ── Sync commands ──────────────────────────────────────────────
+
+        // Sync pull (backup to database)
+        vscode.commands.registerCommand('chasm.syncPull', async () => {
+            const dryRunFirst = await vscode.window.showWarningMessage(
+                'Pull sessions from provider workspaces into the harvest database (backup)?',
+                'Preview First', 'Pull Now', 'Cancel'
+            );
+            if (dryRunFirst === 'Cancel' || !dryRunFirst) {
+                return;
+            }
+
+            if (dryRunFirst === 'Preview First') {
+                const preview = await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Previewing sync pull...',
+                    cancellable: false
+                }, async () => {
+                    return await executor.syncPull(undefined, undefined, true);
+                });
+
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Sync Pull Preview ===');
+                outputChannel.appendLine(preview.output);
+
+                const proceed = await vscode.window.showInformationMessage(
+                    'See Output panel for preview. Proceed?',
+                    'Pull Now', 'Cancel'
+                );
+                if (proceed !== 'Pull Now') {
+                    return;
+                }
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Syncing sessions (pull)...',
+                cancellable: false
+            }, async () => {
+                return await executor.syncPull();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Sync Pull Results ===');
+                outputChannel.appendLine(result.output);
+                vscode.window.showInformationMessage('Sync pull complete');
+            } else {
+                vscode.window.showErrorMessage(`Sync pull failed: ${result.error}`);
+            }
+        }),
+
+        // Sync push (restore from database)
+        vscode.commands.registerCommand('chasm.syncPush', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'Push sessions from the harvest database to provider workspaces (restore)? This may overwrite existing session files.',
+                'Push', 'Cancel'
+            );
+            if (confirm !== 'Push') {
+                return;
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Syncing sessions (push)...',
+                cancellable: false
+            }, async () => {
+                return await executor.syncPush();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Sync Push Results ===');
+                outputChannel.appendLine(result.output);
+
+                const reload = await vscode.window.showInformationMessage(
+                    'Sync push complete! Reload VS Code to see restored sessions.',
+                    'Reload Window', 'Later'
+                );
+                if (reload === 'Reload Window') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            } else {
+                vscode.window.showErrorMessage(`Sync push failed: ${result.error}`);
+            }
+        }),
+
+        // ── Upgrade format ─────────────────────────────────────────────
+
+        vscode.commands.registerCommand('chasm.upgradeFormat', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'Upgrade session files to the current provider format (JSON → JSONL for VS Code 1.109+)?',
+                'Upgrade', 'Cancel'
+            );
+            if (confirm !== 'Upgrade') {
+                return;
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Upgrading session format...',
+                cancellable: false
+            }, async () => {
+                return await executor.recoverUpgrade();
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine('=== Format Upgrade Results ===');
+                outputChannel.appendLine(result.output);
+                vscode.window.showInformationMessage('Session format upgrade complete');
+            } else {
+                vscode.window.showErrorMessage(`Upgrade failed: ${result.error}`);
+            }
+        }),
+
+        // ── Harvest DB search ──────────────────────────────────────────
+
+        vscode.commands.registerCommand('chasm.harvestSearch', async () => {
+            const query = await vscode.window.showInputBox({
+                prompt: 'Full-text search across all harvested sessions',
+                placeHolder: 'Enter search query',
+                title: 'Harvest Database Search'
+            });
+
+            if (!query) {
+                return;
+            }
+
+            const result = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Searching harvest DB for "${query}"...`,
+                cancellable: false
+            }, async () => {
+                return await executor.harvestSearch(query);
+            });
+
+            if (result.success) {
+                outputChannel.show();
+                outputChannel.appendLine('');
+                outputChannel.appendLine(`=== Harvest Search: "${query}" ===`);
+                outputChannel.appendLine(result.output);
+            } else {
+                vscode.window.showErrorMessage(`Search failed: ${result.error}`);
             }
         })
     );
@@ -1082,8 +1512,8 @@ async function showWorkspacesWebview(_context: vscode.ExtensionContext) {
     const result = await executor.listWorkspaces();
 
     const panel = vscode.window.createWebviewPanel(
-        'csmWorkspaces',
-        'CSM: All Workspaces',
+        'chasmWorkspaces',
+        'Chasm: All Workspaces',
         vscode.ViewColumn.One,
         { enableScripts: true }
     );
@@ -1095,8 +1525,8 @@ async function showSessionsWebview(_context: vscode.ExtensionContext, path: stri
     const result = await executor.listSessions(path);
 
     const panel = vscode.window.createWebviewPanel(
-        'csmSessions',
-        `CSM: Sessions`,
+        'chasmSessions',
+        'Chasm: Sessions',
         vscode.ViewColumn.One,
         { enableScripts: true }
     );
@@ -1108,8 +1538,8 @@ async function showHistoryWebview(_context: vscode.ExtensionContext, path: strin
     const result = await executor.showHistory(path);
 
     const panel = vscode.window.createWebviewPanel(
-        'csmHistory',
-        'CSM: Chat History',
+        'chasmHistory',
+        'Chasm: Chat History',
         vscode.ViewColumn.One,
         { enableScripts: true }
     );
@@ -1241,6 +1671,81 @@ function escapeHtml(text: string): string {
         .replace(/'/g, '&#039;');
 }
 
+// ── Status Bar Helper ──────────────────────────────────────────────
+
+async function updateStatusBarWithHealth(): Promise<void> {
+    try {
+        const result = await executor.doctor();
+        if (result.success) {
+            // Parse output for issue count
+            const issueMatch = result.output.match(/(\d+)\s+issues?\s+in\s+(\d+)/i);
+            if (issueMatch) {
+                const issues = parseInt(issueMatch[1], 10);
+                const workspaces = parseInt(issueMatch[2], 10);
+                statusBarItem.text = `$(warning) Chasm: ${issues} issues`;
+                statusBarItem.tooltip = `${issues} session issues in ${workspaces} workspaces — click to run health check`;
+                statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            } else {
+                statusBarItem.text = '$(heart) Chasm';
+                statusBarItem.tooltip = 'All sessions healthy — click to run health check';
+                statusBarItem.backgroundColor = undefined;
+            }
+        }
+    } catch {
+        // Silently fail — status bar will show default
+    }
+}
+
+// ── Server Management ──────────────────────────────────────────────
+
+function startApiServer(): void {
+    if (serverTerminal) {
+        vscode.window.showInformationMessage('Chasm API server is already running');
+        serverTerminal.show();
+        return;
+    }
+
+    const binaryPath = vscode.workspace.getConfiguration('chasm').get('binaryPath', 'chasm');
+    serverTerminal = vscode.window.createTerminal({
+        name: 'Chasm API Server',
+        hideFromUser: false
+    });
+    serverTerminal.sendText(`"${binaryPath}" api serve`);
+    serverTerminal.show(true);
+
+    // Listen for terminal close
+    vscode.window.onDidCloseTerminal((terminal) => {
+        if (terminal === serverTerminal) {
+            serverTerminal = undefined;
+            statusBarItem.text = '$(heart) Chasm';
+            outputChannel.appendLine('Chasm API server stopped');
+        }
+    });
+
+    statusBarItem.text = '$(server-process) Chasm';
+    statusBarItem.tooltip = 'API server running — click to run health check';
+    outputChannel.appendLine('Chasm API server started');
+    vscode.window.showInformationMessage('Chasm API server started');
+}
+
+function stopApiServer(): void {
+    if (!serverTerminal) {
+        vscode.window.showInformationMessage('No API server is running');
+        return;
+    }
+
+    serverTerminal.dispose();
+    serverTerminal = undefined;
+    statusBarItem.text = '$(heart) Chasm';
+    outputChannel.appendLine('Chasm API server stopped');
+    vscode.window.showInformationMessage('Chasm API server stopped');
+}
+
 export function deactivate() {
     outputChannel?.dispose();
+    statusBarItem?.dispose();
+    if (serverTerminal) {
+        serverTerminal.dispose();
+        serverTerminal = undefined;
+    }
 }

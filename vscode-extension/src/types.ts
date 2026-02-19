@@ -1,15 +1,15 @@
 // =============================================================================
-// CSM VS Code Extension Types
+// Chasm VS Code Extension Types
 // =============================================================================
-// Type definitions aligned with csm-shared and csm-rust Agency
-// These types ensure consistency across the entire CSM ecosystem
+// Type definitions aligned with chasm-shared and chasm-rust Agency
+// These types ensure consistency across the entire Chasm ecosystem
 
 // =============================================================================
-// Core Session Types (aligned with csm-shared/types)
+// Core Session Types (aligned with chasm-shared/types)
 // =============================================================================
 
 /**
- * Message role - matches csm-rust Agency MessageRole
+ * Message role - matches chasm-rust Agency MessageRole
  */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -19,46 +19,46 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 export type ToolStatus = 'pending' | 'running' | 'complete' | 'error';
 
 /**
- * Agent status - matches csm-shared AgentStatus
+ * Agent status - matches chasm-shared AgentStatus
  */
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
 
 /**
- * Agent role - matches csm-shared AgentRole
+ * Agent role - matches chasm-shared AgentRole
  */
 export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'custom';
 
 /**
- * Task status - matches csm-shared TaskStatus
+ * Task status - matches chasm-shared TaskStatus
  */
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * Swarm status - matches csm-shared SwarmStatus
+ * Swarm status - matches chasm-shared SwarmStatus
  */
 export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 
 /**
- * Orchestration type - matches csm-rust Agency OrchestrationType
+ * Orchestration type - matches chasm-rust Agency OrchestrationType
  */
 export type OrchestrationType = 'single' | 'sequential' | 'parallel' | 'loop' | 'hierarchical' | 'swarm' | 'debate';
 
 /**
- * Provider type - matches csm-shared ProviderType
+ * Provider type - matches chasm-shared ProviderType
  */
 export type ProviderType = 'local' | 'cloud';
 
 /**
- * Provider status - matches csm-shared ProviderStatus
+ * Provider status - matches chasm-shared ProviderStatus
  */
 export type ProviderStatus = 'connected' | 'disconnected' | 'error' | 'unknown';
 
 // =============================================================================
-// Message Types (aligned with csm-rust Agency models)
+// Message Types (aligned with chasm-rust Agency models)
 // =============================================================================
 
 /**
- * Tool call request - matches csm-rust Agency ToolCall
+ * Tool call request - matches chasm-rust Agency ToolCall
  */
 export interface ToolCall {
     id: string;
@@ -68,7 +68,7 @@ export interface ToolCall {
 }
 
 /**
- * Tool execution result - matches csm-rust Agency ToolResult
+ * Tool execution result - matches chasm-rust Agency ToolResult
  */
 export interface ToolResult {
     callId: string;
@@ -80,7 +80,7 @@ export interface ToolResult {
 }
 
 /**
- * Tool invocation - matches csm-shared ToolInvocation
+ * Tool invocation - matches chasm-shared ToolInvocation
  */
 export interface ToolInvocation {
     toolName: string;
@@ -98,7 +98,7 @@ export interface ToolInvocation {
 }
 
 /**
- * File change from tool invocation - matches csm-shared FileChange
+ * File change from tool invocation - matches chasm-shared FileChange
  */
 export interface FileChange {
     type: 'file_edit' | 'file_create' | 'file_delete' | 'terminal_command' | 'notebook_edit' | string;
@@ -117,7 +117,7 @@ export interface FileChange {
 }
 
 /**
- * Token usage - matches csm-shared TokenUsage
+ * Token usage - matches chasm-shared TokenUsage
  */
 export interface TokenUsage {
     prompt?: number;
@@ -129,7 +129,7 @@ export interface TokenUsage {
 }
 
 /**
- * Chat message - aligned with csm-shared Message and csm-rust AgencyMessage
+ * Chat message - aligned with chasm-shared Message and chasm-rust AgencyMessage
  */
 export interface ChatMessage {
     id: string;
@@ -154,11 +154,11 @@ export interface ChatMessage {
 }
 
 // =============================================================================
-// Session Types (aligned with csm-shared Session)
+// Session Types (aligned with chasm-shared Session)
 // =============================================================================
 
 /**
- * Chat session - matches csm-shared Session
+ * Chat session - matches chasm-shared Session
  */
 export interface ChatSession {
     id: string;
@@ -179,7 +179,7 @@ export interface ChatSession {
 }
 
 /**
- * Session filter - matches csm-shared SessionFilter
+ * Session filter - matches chasm-shared SessionFilter
  */
 export interface SessionFilter {
     workspaceId?: string;
@@ -196,7 +196,7 @@ export interface SessionFilter {
 }
 
 // =============================================================================
-// Agent Types (aligned with csm-shared Agent and csm-rust Agency Agent)
+// Agent Types (aligned with chasm-shared Agent and chasm-rust Agency Agent)
 // =============================================================================
 
 /**
@@ -209,7 +209,7 @@ export interface AgentCapability {
 }
 
 /**
- * Agent configuration - aligned with csm-shared Agent and csm-rust Agency Agent
+ * Agent configuration - aligned with chasm-shared Agent and chasm-rust Agency Agent
  */
 export interface AgentConfig {
     id?: string;
@@ -235,7 +235,7 @@ export interface AgentConfig {
 }
 
 /**
- * Agent task - matches csm-shared AgentTask
+ * Agent task - matches chasm-shared AgentTask
  */
 export interface AgentTask {
     id: string;
@@ -254,7 +254,7 @@ export interface AgentTask {
 }
 
 /**
- * Agent message for inter-agent communication - matches csm-shared AgentMessage
+ * Agent message for inter-agent communication - matches chasm-shared AgentMessage
  */
 export interface AgentMessage {
     id: string;
@@ -297,11 +297,11 @@ export interface AgentReflection {
 }
 
 // =============================================================================
-// Swarm Types (aligned with csm-shared Swarm and csm-rust Agency Swarm)
+// Swarm Types (aligned with chasm-shared Swarm and chasm-rust Agency Swarm)
 // =============================================================================
 
 /**
- * Swarm agent assignment - matches csm-shared SwarmAgent
+ * Swarm agent assignment - matches chasm-shared SwarmAgent
  */
 export interface SwarmAgent {
     agentId: string;
@@ -310,7 +310,7 @@ export interface SwarmAgent {
 }
 
 /**
- * Workflow node - matches csm-shared WorkflowNode
+ * Workflow node - matches chasm-shared WorkflowNode
  */
 export interface WorkflowNode {
     id: string;
@@ -321,7 +321,7 @@ export interface WorkflowNode {
 }
 
 /**
- * Workflow edge - matches csm-shared WorkflowEdge
+ * Workflow edge - matches chasm-shared WorkflowEdge
  */
 export interface WorkflowEdge {
     id: string;
@@ -331,7 +331,7 @@ export interface WorkflowEdge {
 }
 
 /**
- * Swarm workflow - matches csm-shared SwarmWorkflow
+ * Swarm workflow - matches chasm-shared SwarmWorkflow
  */
 export interface SwarmWorkflow {
     nodes: WorkflowNode[];
@@ -339,7 +339,7 @@ export interface SwarmWorkflow {
 }
 
 /**
- * Multi-agent swarm - matches csm-shared Swarm and csm-rust Agency Swarm
+ * Multi-agent swarm - matches chasm-shared Swarm and chasm-rust Agency Swarm
  */
 export interface Swarm {
     id: string;
@@ -360,7 +360,7 @@ export interface Swarm {
 }
 
 /**
- * Agent run - matches csm-shared AgentRun
+ * Agent run - matches chasm-shared AgentRun
  */
 export interface AgentRun {
     id: string;
@@ -379,11 +379,11 @@ export interface AgentRun {
 }
 
 // =============================================================================
-// Provider Types (aligned with csm-shared Provider)
+// Provider Types (aligned with chasm-shared Provider)
 // =============================================================================
 
 /**
- * Provider settings - matches csm-shared ProviderSettings
+ * Provider settings - matches chasm-shared ProviderSettings
  */
 export interface ProviderSettings {
     enabled: boolean;
@@ -394,7 +394,7 @@ export interface ProviderSettings {
 }
 
 /**
- * Provider configuration - matches csm-shared Provider
+ * Provider configuration - matches chasm-shared Provider
  */
 export interface ProviderConfig {
     id?: string;
@@ -412,7 +412,7 @@ export interface ProviderConfig {
 }
 
 /**
- * Provider health check - matches csm-shared ProviderHealth
+ * Provider health check - matches chasm-shared ProviderHealth
  */
 export interface ProviderHealth {
     providerId: string;
@@ -441,11 +441,11 @@ export interface ToolDefinition {
     description: string;
     parameters: Record<string, unknown>;
     category: ToolCategory;
-    source?: 'vscode' | 'mcp' | 'csm' | 'custom';
+    source?: 'vscode' | 'mcp' | 'Chasm' | 'custom';
 }
 
 /**
- * MCP Tool - matches csm-shared McpTool
+ * MCP Tool - matches chasm-shared McpTool
  */
 export interface McpTool {
     name: string;
@@ -454,7 +454,7 @@ export interface McpTool {
 }
 
 /**
- * MCP Tool Call - matches csm-shared McpToolCall
+ * MCP Tool Call - matches chasm-shared McpToolCall
  */
 export interface McpToolCall {
     name: string;
@@ -462,7 +462,7 @@ export interface McpToolCall {
 }
 
 /**
- * MCP Tool Result - matches csm-shared McpToolResult
+ * MCP Tool Result - matches chasm-shared McpToolResult
  */
 export interface McpToolResult {
     tool: string;
@@ -473,11 +473,11 @@ export interface McpToolResult {
 }
 
 // =============================================================================
-// Event Types (aligned with csm-rust Agency events)
+// Event Types (aligned with chasm-rust Agency events)
 // =============================================================================
 
 /**
- * Event type - matches csm-rust Agency EventType
+ * Event type - matches chasm-rust Agency EventType
  */
 export type EventType =
     | 'agent_started'
@@ -494,7 +494,7 @@ export type EventType =
     | 'reflection_complete';
 
 /**
- * Agency Event - aligned with csm-rust Agency AgencyEvent
+ * Agency Event - aligned with chasm-rust Agency AgencyEvent
  */
 export interface AgencyEvent {
     eventType: EventType;
@@ -504,11 +504,11 @@ export interface AgencyEvent {
 }
 
 // =============================================================================
-// Chat Completion Types (aligned with csm-shared)
+// Chat Completion Types (aligned with chasm-shared)
 // =============================================================================
 
 /**
- * Chat completion request - matches csm-shared ChatCompletionRequest
+ * Chat completion request - matches chasm-shared ChatCompletionRequest
  */
 export interface ChatCompletionRequest {
     provider: string;
@@ -523,7 +523,7 @@ export interface ChatCompletionRequest {
 }
 
 /**
- * Chat completion response - matches csm-shared ChatCompletionResponse
+ * Chat completion response - matches chasm-shared ChatCompletionResponse
  */
 export interface ChatCompletionResponse {
     id: string;
@@ -537,7 +537,7 @@ export interface ChatCompletionResponse {
 }
 
 /**
- * Stream chunk - matches csm-shared StreamChunk
+ * Stream chunk - matches chasm-shared StreamChunk
  */
 export interface StreamChunk {
     id: string;
@@ -546,11 +546,11 @@ export interface StreamChunk {
 }
 
 // =============================================================================
-// API Types (aligned with csm-shared)
+// API Types (aligned with chasm-shared)
 // =============================================================================
 
 /**
- * API error - matches csm-shared ApiError
+ * API error - matches chasm-shared ApiError
  */
 export interface ApiError {
     code: string;
@@ -559,7 +559,7 @@ export interface ApiError {
 }
 
 /**
- * API response - matches csm-shared ApiResponse
+ * API response - matches chasm-shared ApiResponse
  */
 export interface ApiResponse<T> {
     success: boolean;
@@ -568,7 +568,7 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Paginated response - matches csm-shared PaginatedResponse
+ * Paginated response - matches chasm-shared PaginatedResponse
  */
 export interface PaginatedResponse<T> {
     items: T[];
@@ -579,11 +579,11 @@ export interface PaginatedResponse<T> {
 }
 
 // =============================================================================
-// Search Types (aligned with csm-shared)
+// Search Types (aligned with chasm-shared)
 // =============================================================================
 
 /**
- * Search result - matches csm-shared SearchResult
+ * Search result - matches chasm-shared SearchResult
  */
 export interface SearchResult {
     type: 'session' | 'message' | 'workspace';
@@ -599,7 +599,7 @@ export interface SearchResult {
 }
 
 // =============================================================================
-// Export Types (aligned with csm-shared)
+// Export Types (aligned with chasm-shared)
 // =============================================================================
 
 /**
@@ -608,7 +608,7 @@ export interface SearchResult {
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'csv';
 
 /**
- * Export options - matches csm-shared ExportOptions
+ * Export options - matches chasm-shared ExportOptions
  */
 export interface ExportOptions {
     format: ExportFormat;
@@ -620,11 +620,11 @@ export interface ExportOptions {
 }
 
 // =============================================================================
-// Git Types (aligned with csm-shared)
+// Git Types (aligned with chasm-shared)
 // =============================================================================
 
 /**
- * Git commit - matches csm-shared GitCommit
+ * Git commit - matches chasm-shared GitCommit
  */
 export interface GitCommit {
     hash: string;
@@ -639,7 +639,7 @@ export interface GitCommit {
 }
 
 /**
- * Git repository - matches csm-shared GitRepository
+ * Git repository - matches chasm-shared GitRepository
  */
 export interface GitRepository {
     path: string;
@@ -651,11 +651,11 @@ export interface GitRepository {
 }
 
 // =============================================================================
-// Checkpoint Types (aligned with csm-shared)
+// Checkpoint Types (aligned with chasm-shared)
 // =============================================================================
 
 /**
- * Session checkpoint - matches csm-shared Checkpoint
+ * Session checkpoint - matches chasm-shared Checkpoint
  */
 export interface Checkpoint {
     id: string;
@@ -730,11 +730,11 @@ export interface WebviewMessage {
 }
 
 // =============================================================================
-// Backend API Types (for csm-rust API communication)
+// Backend API Types (for chasm-rust API communication)
 // =============================================================================
 
 /**
- * Workspace - matches csm-shared Workspace (for API)
+ * Workspace - matches chasm-shared Workspace (for API)
  */
 export interface Workspace {
     id: string;
@@ -749,7 +749,7 @@ export interface Workspace {
 }
 
 /**
- * Session - matches csm-shared Session (for API, without messages array)
+ * Session - matches chasm-shared Session (for API, without messages array)
  */
 export interface Session {
     id: string;
@@ -768,7 +768,7 @@ export interface Session {
 }
 
 /**
- * Agent - matches csm-shared Agent (for API)
+ * Agent - matches chasm-shared Agent (for API)
  */
 export interface Agent {
     id: string;
@@ -791,7 +791,7 @@ export interface Agent {
 }
 
 /**
- * Provider - matches csm-shared Provider (for API)
+ * Provider - matches chasm-shared Provider (for API)
  */
 export interface Provider {
     id: string;
@@ -807,7 +807,7 @@ export interface Provider {
 }
 
 /**
- * Statistics - matches csm-shared Statistics
+ * Statistics - matches chasm-shared Statistics
  */
 export interface Statistics {
     totalSessions: number;
@@ -822,3 +822,4 @@ export interface Statistics {
     messagesByDay?: Array<{ date: string; sessions: number; messages?: number }>;
     topWorkspaces?: Array<{ id: string; name: string; sessionCount: number; messageCount?: number; lastActive?: number }>;
 }
+

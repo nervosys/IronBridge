@@ -1,8 +1,8 @@
-// CSM Session Tree View Provider
+// Chasm Session Tree View Provider
 // Displays chat sessions for a selected workspace
 
 import * as vscode from 'vscode';
-import { CsmExecutor, SessionInfo } from './csmExecutor';
+import { ChasmExecutor, SessionInfo } from './chasmExecutor';
 
 export class SessionItem extends vscode.TreeItem {
     constructor(
@@ -27,7 +27,7 @@ export class SessionItem extends vscode.TreeItem {
 
         // Click handler - open session details
         this.command = {
-            command: 'csm.selectSession',
+            command: 'chasm.selectSession',
             title: 'Select Session',
             arguments: [this]
         };
@@ -42,7 +42,7 @@ export class SessionProvider implements vscode.TreeDataProvider<SessionItem> {
     private sessions: SessionInfo[] = [];
     private outputChannel?: vscode.OutputChannel;
 
-    constructor(private executor: CsmExecutor, outputChannel?: vscode.OutputChannel) {
+    constructor(private executor: ChasmExecutor, outputChannel?: vscode.OutputChannel) {
         this.outputChannel = outputChannel;
     }
 
@@ -110,3 +110,4 @@ export class SessionProvider implements vscode.TreeDataProvider<SessionItem> {
         return null;
     }
 }
+

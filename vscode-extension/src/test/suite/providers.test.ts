@@ -18,7 +18,7 @@ interface MockSessionInfo {
     messages: number;
 }
 
-interface MockCsmResult {
+interface MockChasmResult {
     success: boolean;
     output: string;
     error?: string;
@@ -122,7 +122,7 @@ suite('Provider Mock Tests', () => {
     });
 
     suite('Error Handling Logic', () => {
-        function handleResult(result: MockCsmResult): { data: string | null; error: string | null } {
+        function handleResult(result: MockChasmResult): { data: string | null; error: string | null } {
             if (result.success) {
                 return { data: result.output, error: null };
             } else {
@@ -131,21 +131,21 @@ suite('Provider Mock Tests', () => {
         }
 
         test('handles successful result', () => {
-            const result: MockCsmResult = { success: true, output: 'test output' };
+            const result: MockChasmResult = { success: true, output: 'test output' };
             const handled = handleResult(result);
             assert.strictEqual(handled.data, 'test output');
             assert.strictEqual(handled.error, null);
         });
 
         test('handles failed result with error message', () => {
-            const result: MockCsmResult = { success: false, output: '', error: 'Command failed' };
+            const result: MockChasmResult = { success: false, output: '', error: 'Command failed' };
             const handled = handleResult(result);
             assert.strictEqual(handled.data, null);
             assert.strictEqual(handled.error, 'Command failed');
         });
 
         test('handles failed result without error message', () => {
-            const result: MockCsmResult = { success: false, output: '' };
+            const result: MockChasmResult = { success: false, output: '' };
             const handled = handleResult(result);
             assert.strictEqual(handled.data, null);
             assert.strictEqual(handled.error, 'Unknown error');

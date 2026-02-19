@@ -1,7 +1,7 @@
-// CSM Executor Unit Tests
+// Chasm Executor Unit Tests
 
 import * as assert from 'assert';
-import { CsmExecutor, WorkspaceInfo, SessionInfo } from '../../csmExecutor';
+import { ChasmExecutor, WorkspaceInfo, SessionInfo } from '../../chasmExecutor';
 
 // Mock VS Code OutputChannel
 class MockOutputChannel {
@@ -33,15 +33,15 @@ const mockVscode = {
 // Replace vscode module with mock for testing
 (global as any).vscode = mockVscode;
 
-suite('CsmExecutor Test Suite', () => {
+suite('ChasmExecutor Test Suite', () => {
 
     suite('parseWorkspaceList', () => {
-        let executor: CsmExecutor;
+        let executor: ChasmExecutor;
         let mockChannel: MockOutputChannel;
 
         setup(() => {
             mockChannel = new MockOutputChannel();
-            executor = new CsmExecutor(mockChannel as any);
+            executor = new ChasmExecutor(mockChannel as any);
         });
 
         test('parses empty output', () => {
@@ -109,12 +109,12 @@ suite('CsmExecutor Test Suite', () => {
     });
 
     suite('parseSessionList', () => {
-        let executor: CsmExecutor;
+        let executor: ChasmExecutor;
         let mockChannel: MockOutputChannel;
 
         setup(() => {
             mockChannel = new MockOutputChannel();
-            executor = new CsmExecutor(mockChannel as any);
+            executor = new ChasmExecutor(mockChannel as any);
         });
 
         test('parses empty output', () => {

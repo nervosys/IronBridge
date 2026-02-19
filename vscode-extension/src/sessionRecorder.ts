@@ -1,14 +1,14 @@
 // =============================================================================
-// CSM Session Recorder
+// Chasm Session Recorder
 // =============================================================================
 // Real-time session recording to prevent data loss from crashes
 // Watches chat sessions from multiple providers (VS Code, Cursor, Continue.dev, etc.)
-// and sends events to csm-rust backend
+// and sends events to chasm-rust backend
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CsmApiClient, RecordingEventPayload, RecordedMessagePayload } from './apiClient';
+import { ChasmApiClient, RecordingEventPayload, RecordedMessagePayload } from './apiClient';
 
 // =============================================================================
 // Provider Configuration
@@ -198,7 +198,7 @@ export const DEFAULT_PROVIDER_CONFIGS: ProviderConfig[] = [
 /* eslint-disable @typescript-eslint/naming-convention */
 
 /**
- * Recording event types (must match csm-rust/src/api/recording.rs)
+ * Recording event types (must match chasm-rust/src/api/recording.rs)
  */
 export interface RecordingEvent {
     type: RecordingEventType;
@@ -443,10 +443,10 @@ interface SessionChangeEvent {
 // =============================================================================
 
 /**
- * Records VS Code chat sessions in real-time to csm-rust backend
+ * Records VS Code chat sessions in real-time to chasm-rust backend
  */
 export class SessionRecorder {
-    private _apiClient: CsmApiClient;
+    private _apiClient: ChasmApiClient;
     private _watchers: Map<string, SessionFileWatcher> = new Map();
     private _eventBuffer: RecordingEvent[] = [];
     private _flushTimer?: NodeJS.Timeout;
@@ -463,7 +463,7 @@ export class SessionRecorder {
         autoStart: true,
     };
 
-    constructor(apiClient: CsmApiClient, outputChannel: vscode.OutputChannel) {
+    constructor(apiClient: ChasmApiClient, outputChannel: vscode.OutputChannel) {
         this._apiClient = apiClient;
         this._outputChannel = outputChannel;
     }
@@ -543,7 +543,7 @@ export class SessionRecorder {
      * Watch session paths for all enabled providers
      */
     private async watchDefaultPaths(): Promise<void> {
-        const config = vscode.workspace.getConfiguration('csm');
+        const config = vscode.workspace.getConfiguration('chasm');
         const enabledProviders = config.get<string[]>('recording.providers', ['vscode', 'cursor']);
 
         for (const providerConfig of DEFAULT_PROVIDER_CONFIGS) {
@@ -1048,3 +1048,5 @@ interface ParsedMessage {
     model?: string;
     timestamp?: number;
 }
+
+

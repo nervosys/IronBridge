@@ -1,8 +1,8 @@
 // =============================================================================
-// CSM Shared Constants
+// Chasm Shared Constants
 // =============================================================================
-// Constants shared across csm-rust, csm-web, csm-app, and vscode-extension
-// These should be kept in sync with csm-shared/src/constants.ts
+// Constants shared across chasm-rust, chasm-web, chasm-app, and vscode-extension
+// These should be kept in sync with chasm-shared/src/constants.ts
 
 /**
  * Provider configuration type
@@ -383,3 +383,4 @@ export const LIMITS = {
     maxIterations: 50,
     maxConcurrentAgents: 5,
 } as const;
+

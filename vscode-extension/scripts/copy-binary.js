@@ -1,9 +1,9 @@
-// Script to copy CSM binary to extension bin folder
+// Script to copy Chasm binary to extension bin folder
 const fs = require('fs');
 const path = require('path');
 
 const binDir = path.join(__dirname, '..', 'bin');
-const rustTargetDir = path.join(__dirname, '..', '..', 'csm-rust', 'target', 'release');
+const rustTargetDir = path.join(__dirname, '..', '..', 'chasm-rust', 'target', 'release');
 
 // Create bin directory if it doesn't exist
 if (!fs.existsSync(binDir)) {
@@ -16,16 +16,16 @@ let sourceName, destName;
 
 switch (platform) {
     case 'win32':
-        sourceName = 'csm.exe';
-        destName = 'csm.exe';
+        sourceName = 'chasm.exe';
+        destName = 'chasm.exe';
         break;
     case 'darwin':
-        sourceName = 'csm';
-        destName = 'csm-darwin';
+        sourceName = 'chasm';
+        destName = 'chasm-darwin';
         break;
     default:
-        sourceName = 'csm';
-        destName = 'csm-linux';
+        sourceName = 'chasm';
+        destName = 'chasm-linux';
 }
 
 const sourcePath = path.join(rustTargetDir, sourceName);
@@ -41,5 +41,5 @@ if (fs.existsSync(sourcePath)) {
     }
 } else {
     console.warn(`Warning: Binary not found at ${sourcePath}`);
-    console.warn('Please build the Rust binary first: cd csm-rust && cargo build --release');
+    console.warn('Please build the Rust binary first: cd chasm-rust && cargo build --release');
 }

@@ -1,8 +1,8 @@
 // =============================================================================
-// CSM API Client
+// Chasm API Client
 // =============================================================================
-// HTTP client for communicating with csm-rust backend API
-// Aligned with csm-web/src/api/client.ts and csm-shared types
+// HTTP client for communicating with chasm-rust backend API
+// Aligned with chasm-web/src/api/client.ts and chasm-shared types
 
 import * as vscode from 'vscode';
 import {
@@ -23,16 +23,16 @@ import {
     ExportOptions,
 } from './types';
 
-// Re-export types that use different names in csm-shared
+// Re-export types that use different names in chasm-shared
 export type { Session as CsmSession };
 export type { Workspace as CsmWorkspace };
 export type { Agent as CsmAgent };
 export type { Swarm as CsmSwarm };
 
 /**
- * Configuration for the CSM API client
+ * Configuration for the Chasm API client
  */
-export interface CsmApiConfig {
+export interface ChasmApiConfig {
     baseUrl: string;
     timeout?: number;
     apiKey?: string;
@@ -41,22 +41,22 @@ export interface CsmApiConfig {
 /**
  * Default API configuration
  */
-const DEFAULT_CONFIG: CsmApiConfig = {
+const DEFAULT_CONFIG: ChasmApiConfig = {
     baseUrl: 'http://localhost:3000',
     timeout: 30000,
 };
 
 /**
- * CSM API Client for communicating with csm-rust backend
- * API structure mirrors csm-web/src/api/client.ts
+ * Chasm API Client for communicating with chasm-rust backend
+ * API structure mirrors chasm-web/src/api/client.ts
  */
-export class CsmApiClient {
-    private _config: CsmApiConfig;
+export class ChasmApiClient {
+    private _config: ChasmApiConfig;
     private _outputChannel: vscode.OutputChannel;
 
-    constructor(config?: Partial<CsmApiConfig>, outputChannel?: vscode.OutputChannel) {
+    constructor(config?: Partial<ChasmApiConfig>, outputChannel?: vscode.OutputChannel) {
         this._config = { ...DEFAULT_CONFIG, ...config };
-        this._outputChannel = outputChannel || vscode.window.createOutputChannel('CSM API');
+        this._outputChannel = outputChannel || vscode.window.createOutputChannel('Chasm API');
     }
 
     // =========================================================================
@@ -152,7 +152,7 @@ export class CsmApiClient {
     }
 
     // =========================================================================
-    // Workspaces API (mirrors csm-web/src/api/client.ts)
+    // Workspaces API (mirrors chasm-web/src/api/client.ts)
     // =========================================================================
 
     workspaces = {
@@ -182,7 +182,7 @@ export class CsmApiClient {
     };
 
     // =========================================================================
-    // Sessions API (mirrors csm-web/src/api/client.ts)
+    // Sessions API (mirrors chasm-web/src/api/client.ts)
     // =========================================================================
 
     sessions = {
@@ -234,7 +234,7 @@ export class CsmApiClient {
     };
 
     // =========================================================================
-    // Providers API (mirrors csm-web/src/api/client.ts)
+    // Providers API (mirrors chasm-web/src/api/client.ts)
     // =========================================================================
 
     providers = {
@@ -260,7 +260,7 @@ export class CsmApiClient {
     };
 
     // =========================================================================
-    // Agents API (mirrors csm-web/src/api/client.ts)
+    // Agents API (mirrors chasm-web/src/api/client.ts)
     // =========================================================================
 
     agents = {
@@ -290,7 +290,7 @@ export class CsmApiClient {
     };
 
     // =========================================================================
-    // Swarms API (mirrors csm-web/src/api/client.ts)
+    // Swarms API (mirrors chasm-web/src/api/client.ts)
     // =========================================================================
 
     swarms = {
@@ -363,7 +363,7 @@ export class CsmApiClient {
         },
 
         completionStream: async function* (
-            this: CsmApiClient,
+            this: ChasmApiClient,
             request: ChatCompletionRequest
         ): AsyncGenerator<string, void, unknown> {
             const url = `${this._config.baseUrl}/api/v1/chat/completions`;
@@ -580,14 +580,14 @@ export interface RecordingRecoveryResponse {
 /**
  * Singleton API client instance
  */
-let _apiClient: CsmApiClient | null = null;
+let _apiClient: ChasmApiClient | null = null;
 
 /**
  * Get the shared API client instance
  */
-export function getApiClient(config?: Partial<CsmApiConfig>): CsmApiClient {
+export function getApiClient(config?: Partial<ChasmApiConfig>): ChasmApiClient {
     if (!_apiClient || config) {
-        _apiClient = new CsmApiClient(config);
+        _apiClient = new ChasmApiClient(config);
     }
     return _apiClient;
 }
@@ -595,6 +595,8 @@ export function getApiClient(config?: Partial<CsmApiConfig>): CsmApiClient {
 /**
  * Create a new API client with custom configuration
  */
-export function createApiClient(config?: Partial<CsmApiConfig>, outputChannel?: vscode.OutputChannel): CsmApiClient {
-    return new CsmApiClient(config, outputChannel);
+export function createApiClient(config?: Partial<ChasmApiConfig>, outputChannel?: vscode.OutputChannel): ChasmApiClient {
+    return new ChasmApiClient(config, outputChannel);
 }
+
+

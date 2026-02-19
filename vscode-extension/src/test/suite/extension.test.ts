@@ -4,7 +4,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 suite('Extension Test Suite', () => {
-    vscode.window.showInformationMessage('Starting CSM extension tests');
+    vscode.window.showInformationMessage('Starting Chasm extension tests');
 
     test('Extension should be present', () => {
         const extension = vscode.extensions.getExtension('nervosys.chat-session-manager');
@@ -21,28 +21,28 @@ suite('Extension Test Suite', () => {
 
     suite('Commands Registration', () => {
         const expectedCommands = [
-            'csm.showWorkspaces',
-            'csm.showSessions',
-            'csm.showHistory',
-            'csm.findWorkspace',
-            'csm.exportSessions',
-            'csm.importSessions',
-            'csm.fetchHistory',
-            'csm.mergeHistory',
-            'csm.refresh',
-            'csm.launchTui',
-            'csm.moveSessions',
-            'csm.gitInit',
-            'csm.gitAdd',
-            'csm.gitStatus',
-            'csm.gitSnapshot',
-            'csm.createMigration',
-            'csm.restoreMigration',
-            'csm.showVersion',
-            'csm.loadSession'
+            'chasm.showWorkspaces',
+            'chasm.showSessions',
+            'chasm.showHistory',
+            'chasm.findWorkspace',
+            'chasm.exportSessions',
+            'chasm.importSessions',
+            'chasm.fetchHistory',
+            'chasm.mergeHistory',
+            'chasm.refresh',
+            'chasm.launchTui',
+            'chasm.moveSessions',
+            'chasm.gitInit',
+            'chasm.gitAdd',
+            'chasm.gitStatus',
+            'chasm.gitSnapshot',
+            'chasm.createMigration',
+            'chasm.restoreMigration',
+            'chasm.showVersion',
+            'chasm.loadSession'
         ];
 
-        test('All CSM commands should be registered', async () => {
+        test('All Chasm commands should be registered', async () => {
             const commands = await vscode.commands.getCommands(true);
 
             for (const cmd of expectedCommands) {
@@ -55,22 +55,22 @@ suite('Extension Test Suite', () => {
     });
 
     suite('Configuration', () => {
-        test('csm.binaryPath configuration should exist', () => {
-            const config = vscode.workspace.getConfiguration('csm');
+        test('chasm.binaryPath configuration should exist', () => {
+            const config = vscode.workspace.getConfiguration('chasm');
             const binaryPath = config.get<string>('binaryPath');
             assert.ok(binaryPath !== undefined, 'binaryPath should have a default value');
         });
 
-        test('csm.showNotifications configuration should exist', () => {
-            const config = vscode.workspace.getConfiguration('csm');
+        test('chasm.showNotifications configuration should exist', () => {
+            const config = vscode.workspace.getConfiguration('chasm');
             const showNotifications = config.get<boolean>('showNotifications');
             assert.ok(showNotifications !== undefined, 'showNotifications should have a default value');
         });
 
-        test('Default binary path should be csm', () => {
-            const config = vscode.workspace.getConfiguration('csm');
+        test('Default binary path should be chasm', () => {
+            const config = vscode.workspace.getConfiguration('chasm');
             const binaryPath = config.get<string>('binaryPath', 'default');
-            assert.strictEqual(binaryPath, 'csm', 'Default binary path should be csm');
+            assert.strictEqual(binaryPath, 'chasm', "Default binary path should be chasm");
         });
     });
 
