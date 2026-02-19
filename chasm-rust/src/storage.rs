@@ -306,6 +306,9 @@ enum JsonlKind {
 /// - kind 1: Delta update with 'k' (keys path) and 'v' (value)
 /// - kind 2: Full requests array update with 'k' and 'v'
 pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, serde_json::Error> {
+    // Pre-process: split concatenated JSON objects that lack newline separators
+    let content = split_concatenated_jsonl(content);
+
     let mut session = ChatSession {
         version: 3,
         session_id: None,
@@ -1110,10 +1113,19 @@ pub fn count_empty_window_sessions() -> Result<usize> {
 /// Compact a JSONL session file by replaying all operations into a single kind:0 snapshot.
 /// This works at the raw JSON level, preserving all fields VS Code expects.
 /// Returns the path to the compacted file.
+///
+/// Handles a common corruption pattern where VS Code appends delta operations
+/// to line 0 without newline separators (e.g., `}{"kind":1,...}{"kind":2,...}`).
 pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
     let content = std::fs::read_to_string(path).map_err(|e| {
         CsmError::InvalidSessionFormat(format!("Failed to read {}: {}", path.display(), e))
     })?;
+
+    // Pre-process: split concatenated JSON objects that lack newline separators.
+    // VS Code sometimes appends delta ops to line 0 without a \n, producing:
+    //   {"kind":0,"v":{...}}{"kind":1,...}{"kind":2,...}\n{"kind":1,...}\n...
+    // We fix this by inserting newlines at every `}{"kind":` boundary.
+    let content = split_concatenated_jsonl(&content);
 
     let mut lines = content.lines();
 
@@ -1184,6 +1196,13 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
         }
     }
 
+    // Inject any missing fields that VS Code's latest format requires
+    let session_id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
+    ensure_vscode_compat_fields(&mut state, session_id.as_deref());
+
     // Write the compacted file: single kind:0 line with the final state
     let compact_entry = serde_json::json!({"kind": 0, "v": state});
     let compact_content = serde_json::to_string(&compact_entry)
@@ -1197,6 +1216,24 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
     std::fs::write(path, &compact_content)?;
 
     Ok(backup_path)
+}
+
+/// Split concatenated JSON objects in JSONL content that lack newline separators.
+///
+/// VS Code sometimes appends delta operations (kind:1, kind:2) onto the end of
+/// a JSONL line without inserting a newline first. This produces invalid JSONL like:
+///   `{"kind":0,"v":{...}}{"kind":1,...}{"kind":2,...}`
+///
+/// This function inserts newlines at every `}{"kind":` boundary to restore valid JSONL.
+/// The pattern `}{"kind":` cannot appear inside JSON string values because `{"kind":`
+/// would need to be escaped as `{\"kind\":` within a JSON string.
+pub fn split_concatenated_jsonl(content: &str) -> String {
+    // Fast path: if content has no concatenated objects, return as-is
+    if !content.contains("}{\"kind\":") {
+        return content.to_string();
+    }
+
+    content.replace("}{\"kind\":", "}\n{\"kind\":")
 }
 
 /// Apply a delta update (kind:1) to a JSON value at the given key path.
@@ -1277,6 +1314,69 @@ fn apply_append(
     }
 }
 
+/// Ensure a JSONL `kind:0` snapshot's `v` object has all fields required by
+/// VS Code's latest session format (1.109.0+ / version 3). Missing fields are
+/// injected with sensible defaults so sessions load reliably after recovery,
+/// conversion, or compaction.
+///
+/// Required fields that VS Code now expects:
+/// - `version` (u32, default 3)
+/// - `sessionId` (string, extracted from filename or generated)
+/// - `responderUsername` (string, default "GitHub Copilot")
+/// - `hasPendingEdits` (bool, default false)
+/// - `pendingRequests` (array, default [])
+/// - `inputState` (object with mode, attachments, etc.)
+pub fn ensure_vscode_compat_fields(state: &mut serde_json::Value, session_id: Option<&str>) {
+    if let Some(obj) = state.as_object_mut() {
+        // version
+        if !obj.contains_key("version") {
+            obj.insert("version".to_string(), serde_json::json!(3));
+        }
+
+        // sessionId — use provided ID, or try to read from existing field
+        if !obj.contains_key("sessionId") {
+            if let Some(id) = session_id {
+                obj.insert("sessionId".to_string(), serde_json::json!(id));
+            }
+        }
+
+        // responderUsername
+        if !obj.contains_key("responderUsername") {
+            obj.insert(
+                "responderUsername".to_string(),
+                serde_json::json!("GitHub Copilot"),
+            );
+        }
+
+        // hasPendingEdits — always false for recovered/compacted sessions
+        if !obj.contains_key("hasPendingEdits") {
+            obj.insert("hasPendingEdits".to_string(), serde_json::json!(false));
+        }
+
+        // pendingRequests — always empty for recovered/compacted sessions
+        if !obj.contains_key("pendingRequests") {
+            obj.insert(
+                "pendingRequests".to_string(),
+                serde_json::json!([]),
+            );
+        }
+
+        // inputState — VS Code expects this to exist with at least mode + attachments
+        if !obj.contains_key("inputState") {
+            obj.insert(
+                "inputState".to_string(),
+                serde_json::json!({
+                    "attachments": [],
+                    "mode": { "id": "agent", "kind": "agent" },
+                    "inputText": "",
+                    "selections": [],
+                    "contrib": { "chatDynamicVariableModel": [] }
+                }),
+            );
+        }
+    }
+}
+
 /// Repair workspace sessions: compact large JSONL files and fix the index.
 /// Returns (compacted_count, index_fixed_count).
 pub fn repair_workspace_sessions(
@@ -1298,9 +1398,10 @@ pub fn repair_workspace_sessions(
     }
 
     let mut compacted = 0;
+    let mut fields_fixed = 0;
 
     if chat_sessions_dir.exists() {
-        // Pass 1: Compact large JSONL files
+        // Pass 1: Compact large JSONL files and fix missing fields
         for entry in std::fs::read_dir(chat_sessions_dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -1308,12 +1409,12 @@ pub fn repair_workspace_sessions(
                 let metadata = std::fs::metadata(&path)?;
                 let size_mb = metadata.len() / (1024 * 1024);
 
-                // Compact any JSONL file with multiple lines (has operations to replay)
                 let content = std::fs::read_to_string(&path)
                     .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
                 let line_count = content.lines().count();
 
                 if line_count > 1 {
+                    // Compact multi-line JSONL (has operations to replay)
                     let stem = path
                         .file_stem()
                         .map(|s| s.to_string_lossy().to_string())
@@ -1343,6 +1444,55 @@ pub fn repair_workspace_sessions(
                             println!("   [WARN] Failed to compact {}: {}", stem, e);
                         }
                     }
+                } else {
+                    // Single-line JSONL — check for missing VS Code fields
+                    if let Some(first_line) = content.lines().next() {
+                        if let Ok(mut obj) = serde_json::from_str::<serde_json::Value>(first_line) {
+                            let is_kind_0 = obj
+                                .get("kind")
+                                .and_then(|k| k.as_u64())
+                                .map(|k| k == 0)
+                                .unwrap_or(false);
+
+                            if is_kind_0 {
+                                if let Some(v) = obj.get("v") {
+                                    let missing = !v.get("hasPendingEdits").is_some()
+                                        || !v.get("pendingRequests").is_some()
+                                        || !v.get("inputState").is_some()
+                                        || !v.get("sessionId").is_some();
+
+                                    if missing {
+                                        let session_id = path
+                                            .file_stem()
+                                            .and_then(|s| s.to_str())
+                                            .map(|s| s.to_string());
+                                        if let Some(v_mut) = obj.get_mut("v") {
+                                            ensure_vscode_compat_fields(
+                                                v_mut,
+                                                session_id.as_deref(),
+                                            );
+                                        }
+                                        let patched = serde_json::to_string(&obj).map_err(|e| {
+                                            CsmError::InvalidSessionFormat(format!(
+                                                "Failed to serialize: {}",
+                                                e
+                                            ))
+                                        })?;
+                                        std::fs::write(&path, &patched)?;
+                                        let stem = path
+                                            .file_stem()
+                                            .map(|s| s.to_string_lossy().to_string())
+                                            .unwrap_or_default();
+                                        println!(
+                                            "   [OK] Fixed missing VS Code fields: {}",
+                                            stem
+                                        );
+                                        fields_fixed += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1350,6 +1500,13 @@ pub fn repair_workspace_sessions(
 
     // Pass 2: Rebuild the index with correct metadata
     let (index_fixed, _) = sync_session_index(workspace_id, chat_sessions_dir, force)?;
+
+    if fields_fixed > 0 {
+        println!(
+            "   [OK] Injected missing VS Code fields into {} session(s)",
+            fields_fixed
+        );
+    }
 
     Ok((compacted, index_fixed))
 }

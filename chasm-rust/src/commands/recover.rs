@@ -571,12 +571,50 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
             let file_path = entry.path();
             if file_path.extension().is_some_and(|e| e == "jsonl" || e == "json") {
                 if let Ok(content) = fs::read_to_string(file_path) {
-                    let needs_repair = content.lines().any(|line| {
+                    // Check for corrupted JSON lines
+                    let has_corrupt_lines = content.lines().any(|line| {
                         !line.is_empty() && serde_json::from_str::<serde_json::Value>(line).is_err()
                     });
 
+                    // Check for concatenated JSONL (}{"kind": pattern without newlines)
+                    let has_concatenated = content.contains("}{\"kind\":");
+
+                    // Check for missing VS Code-required fields in kind:0 lines
+                    let missing_fields = if file_path.extension().is_some_and(|e| e == "jsonl") {
+                        content
+                            .lines()
+                            .next()
+                            .and_then(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+                            .and_then(|obj| {
+                                if obj.get("kind")?.as_u64()? == 0 {
+                                    let v = obj.get("v")?;
+                                    let missing = !v.get("hasPendingEdits").is_some()
+                                        || !v.get("pendingRequests").is_some()
+                                        || !v.get("inputState").is_some()
+                                        || !v.get("sessionId").is_some();
+                                    Some(missing)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+
+                    let needs_repair = has_corrupt_lines || has_concatenated || missing_fields;
+
                     if needs_repair {
-                        println!("  [!] Needs repair: {}", file_path.display());
+                        let reasons: Vec<&str> = [
+                            if has_corrupt_lines { Some("corrupt JSON") } else { None },
+                            if has_concatenated { Some("concatenated lines") } else { None },
+                            if missing_fields { Some("missing VS Code fields") } else { None },
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .collect();
+
+                        println!("  [!] Needs repair: {} ({})", file_path.display(), reasons.join(", "));
                         if !dry_run {
                             repair_file(file_path, create_backup)?;
                             repaired += 1;
@@ -606,12 +644,26 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
 }
 
 fn repair_file(path: &Path, create_backup: bool) -> Result<()> {
+    use crate::storage::{ensure_vscode_compat_fields, split_concatenated_jsonl};
+
     if create_backup {
         let backup_path = path.with_extension("backup");
         fs::copy(path, &backup_path)?;
     }
 
     let content = fs::read_to_string(path)?;
+
+    // Pre-process: split concatenated JSON objects that lack newline separators
+    let content = if path.extension().is_some_and(|e| e == "jsonl") {
+        split_concatenated_jsonl(&content)
+    } else {
+        content
+    };
+
+    let session_id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
     let mut output = String::new();
 
     for line in content.lines() {
@@ -621,8 +673,22 @@ fn repair_file(path: &Path, create_backup: bool) -> Result<()> {
         }
 
         match serde_json::from_str::<serde_json::Value>(line) {
-            Ok(_) => {
-                output.push_str(line);
+            Ok(mut parsed) => {
+                // For kind:0 lines, ensure all VS Code-required fields are present
+                let is_kind_0 = parsed
+                    .get("kind")
+                    .and_then(|k| k.as_u64())
+                    .map(|k| k == 0)
+                    .unwrap_or(false);
+
+                if is_kind_0 {
+                    if let Some(v) = parsed.get_mut("v") {
+                        ensure_vscode_compat_fields(v, session_id.as_deref());
+                    }
+                    output.push_str(&serde_json::to_string(&parsed).unwrap_or_default());
+                } else {
+                    output.push_str(line);
+                }
                 output.push('\n');
             }
             Err(_) => {
@@ -847,10 +913,12 @@ pub fn recover_convert(
 
 /// Convert ChatSession to JSONL format (VS Code 1.109.0+)
 fn convert_to_jsonl(session: &crate::models::ChatSession) -> Result<String> {
+    use crate::storage::ensure_vscode_compat_fields;
+
     let mut lines = Vec::new();
 
-    // Line 1: kind 0 - Initial session state
-    let initial = serde_json::json!({
+    // Line 1: kind 0 - Initial session state with all VS Code-required fields
+    let mut initial = serde_json::json!({
         "kind": 0,
         "v": {
             "version": session.version,
@@ -861,6 +929,13 @@ fn convert_to_jsonl(session: &crate::models::ChatSession) -> Result<String> {
             "requests": session.requests
         }
     });
+
+    // Inject any missing fields that VS Code's latest format requires
+    // (hasPendingEdits, pendingRequests, inputState, etc.)
+    if let Some(v) = initial.get_mut("v") {
+        ensure_vscode_compat_fields(v, session.session_id.as_deref());
+    }
+
     lines.push(serde_json::to_string(&initial)?);
 
     // Line 2: kind 1 - lastMessageDate delta

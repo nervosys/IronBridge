@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-02-19
+
+### Added
+
+- **`ensure_vscode_compat_fields()`** - Shared function that injects missing fields required by VS Code's latest session format (version 3): `hasPendingEdits`, `pendingRequests`, `inputState`, `sessionId`, `responderUsername`
+- **Concatenated JSONL detection in `recover repair`** - Now detects and fixes `}{"kind":` concatenation alongside corrupt JSON and missing fields
+- **Field injection in `repair_workspace_sessions()`** - Single-line JSONL files with missing VS Code fields are automatically patched during `register repair`
+
+### Changed
+
+- `convert_to_jsonl()` now includes all VS Code-required fields (`hasPendingEdits`, `pendingRequests`, `inputState`) in the `kind:0` snapshot
+- `compact_session_jsonl()` now calls `ensure_vscode_compat_fields()` after replaying operations
+- `repair_file()` now splits concatenated JSONL, repairs corrupt JSON, and injects missing VS Code fields in a single pass
+- `recover_repair` scan reports specific failure reasons (corrupt JSON, concatenated lines, missing VS Code fields)
+- `split_concatenated_jsonl()` made public for reuse across recovery and repair paths
+
+### Fixed
+
+- Sessions converted from legacy `.json` to `.jsonl` now load correctly in VS Code 1.109.0+ without manual patching
+- Compacted sessions no longer silently drop required VS Code metadata fields
+
 ## [1.3.2] - 2026-02-04
 
 ### Added
