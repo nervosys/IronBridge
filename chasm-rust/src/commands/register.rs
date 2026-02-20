@@ -18,7 +18,7 @@ use crate::storage::{
     add_session_to_index, close_vscode_and_wait, diagnose_workspace_sessions,
     get_workspace_storage_db, is_session_file_extension, is_vscode_running, parse_session_file,
     parse_session_json, read_chat_session_index, register_all_sessions_from_directory,
-    reopen_vscode, repair_workspace_sessions,
+    reopen_vscode, repair_workspace_sessions, trim_session_jsonl,
 };
 use crate::workspace::{discover_workspaces, find_workspace_by_path, normalize_path};
 
@@ -1664,6 +1664,208 @@ fn register_repair_all(force: bool, close_vscode: bool, reopen: bool) -> Result<
         println!(
             "\n{} VS Code was closed. Reopen it to see the repaired sessions.",
             "[!]".yellow()
+        );
+    }
+
+    Ok(())
+}
+
+/// Trim oversized sessions by keeping only the most recent requests.
+///
+/// Very long chat sessions (100+ requests) can grow to 50-100+ MB, which causes
+/// VS Code to fail loading them. This command trims the requests array to keep
+/// only the most recent N entries, dramatically reducing file size. The full
+/// session is preserved as a `.jsonl.bak` backup.
+pub fn register_trim(
+    project_path: Option<&str>,
+    keep: usize,
+    session_id: Option<&str>,
+    all: bool,
+    threshold_mb: u64,
+    force: bool,
+) -> Result<()> {
+    let path = resolve_path(project_path);
+
+    println!(
+        "{} Trimming oversized sessions for: {}",
+        "[CSM]".cyan().bold(),
+        path.display()
+    );
+
+    // Find the workspace
+    let path_str = path.to_string_lossy().to_string();
+    let (ws_id, ws_path, _folder) = find_workspace_by_path(&path_str)?
+        .ok_or_else(|| CsmError::WorkspaceNotFound(path.display().to_string()))?;
+
+    let chat_sessions_dir = ws_path.join("chatSessions");
+
+    if !chat_sessions_dir.exists() {
+        println!(
+            "{} No chatSessions directory found at: {}",
+            "[!]".yellow(),
+            chat_sessions_dir.display()
+        );
+        return Ok(());
+    }
+
+    // Check VS Code
+    if !force && is_vscode_running() {
+        println!(
+            "{} VS Code is running. Use {} to force.",
+            "[!]".yellow(),
+            "--force".cyan()
+        );
+        return Err(CsmError::VSCodeRunning.into());
+    }
+
+    let mut trimmed_count = 0;
+
+    if let Some(sid) = session_id {
+        // Trim a specific session
+        let jsonl_path = chat_sessions_dir.join(format!("{}.jsonl", sid));
+        if !jsonl_path.exists() {
+            return Err(CsmError::InvalidSessionFormat(format!(
+                "Session not found: {}",
+                sid
+            ))
+            .into());
+        }
+
+        let size_mb = std::fs::metadata(&jsonl_path)?.len() / (1024 * 1024);
+        println!(
+            "   {} Trimming {} ({}MB, keeping last {} requests)...",
+            "[*]".cyan(),
+            sid,
+            size_mb,
+            keep
+        );
+
+        match trim_session_jsonl(&jsonl_path, keep) {
+            Ok((orig, kept, orig_mb, new_mb)) => {
+                println!(
+                    "   {} Trimmed: {} → {} requests, {:.1}MB → {:.1}MB",
+                    "[OK]".green(),
+                    orig,
+                    kept,
+                    orig_mb,
+                    new_mb
+                );
+                trimmed_count += 1;
+            }
+            Err(e) => {
+                println!("   {} Failed to trim {}: {}", "[ERR]".red(), sid, e);
+            }
+        }
+    } else if all {
+        // Trim all sessions over the threshold
+        for entry in std::fs::read_dir(&chat_sessions_dir)? {
+            let entry = entry?;
+            let p = entry.path();
+            if p.extension().is_some_and(|e| e == "jsonl") {
+                let size = std::fs::metadata(&p)?.len();
+                let size_mb_val = size / (1024 * 1024);
+
+                if size_mb_val >= threshold_mb {
+                    let stem = p
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    println!(
+                        "   {} Trimming {} ({}MB, keeping last {} requests)...",
+                        "[*]".cyan(),
+                        stem,
+                        size_mb_val,
+                        keep
+                    );
+
+                    match trim_session_jsonl(&p, keep) {
+                        Ok((orig, kept, orig_mb, new_mb)) => {
+                            println!(
+                                "   {} Trimmed: {} → {} requests, {:.1}MB → {:.1}MB",
+                                "[OK]".green(),
+                                orig,
+                                kept,
+                                orig_mb,
+                                new_mb
+                            );
+                            trimmed_count += 1;
+                        }
+                        Err(e) => {
+                            println!("   {} Failed to trim {}: {}", "[WARN]".yellow(), stem, e);
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Auto-detect: find the largest session over the threshold
+        let mut largest: Option<(PathBuf, u64)> = None;
+
+        for entry in std::fs::read_dir(&chat_sessions_dir)? {
+            let entry = entry?;
+            let p = entry.path();
+            if p.extension().is_some_and(|e| e == "jsonl") {
+                let size = std::fs::metadata(&p)?.len();
+                let size_mb_val = size / (1024 * 1024);
+
+                if size_mb_val >= threshold_mb {
+                    if largest.as_ref().map_or(true, |(_, s)| size > *s) {
+                        largest = Some((p, size));
+                    }
+                }
+            }
+        }
+
+        match largest {
+            Some((p, size)) => {
+                let stem = p
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let size_mb_val = size / (1024 * 1024);
+                println!(
+                    "   {} Trimming largest session: {} ({}MB, keeping last {} requests)...",
+                    "[*]".cyan(),
+                    stem,
+                    size_mb_val,
+                    keep
+                );
+
+                match trim_session_jsonl(&p, keep) {
+                    Ok((orig, kept, orig_mb, new_mb)) => {
+                        println!(
+                            "   {} Trimmed: {} → {} requests, {:.1}MB → {:.1}MB",
+                            "[OK]".green(),
+                            orig,
+                            kept,
+                            orig_mb,
+                            new_mb
+                        );
+                        trimmed_count += 1;
+                    }
+                    Err(e) => {
+                        println!("   {} Failed to trim: {}", "[ERR]".red(), e);
+                    }
+                }
+            }
+            None => {
+                println!(
+                    "   {} No sessions found over {}MB threshold. Use {} to lower the threshold.",
+                    "[*]".cyan(),
+                    threshold_mb,
+                    "--threshold-mb".cyan()
+                );
+            }
+        }
+    }
+
+    if trimmed_count > 0 {
+        // Re-sync the index
+        let _ = repair_workspace_sessions(&ws_id, &chat_sessions_dir, true);
+        println!(
+            "\n{} Trim complete: {} session(s) trimmed. Full history backed up as .jsonl.bak",
+            "[OK]".green().bold(),
+            trimmed_count.to_string().cyan()
         );
     }
 

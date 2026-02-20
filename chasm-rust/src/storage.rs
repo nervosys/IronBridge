@@ -1453,6 +1453,150 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
     Ok(backup_path)
 }
 
+/// Trim a session JSONL file by keeping only the last `keep` requests.
+///
+/// Very long chat sessions (100+ requests) can grow to 50-100+ MB, causing VS Code
+/// to fail loading them. This function compacts the session first (if needed), then
+/// removes old requests from the `requests` array, keeping only the most recent ones.
+///
+/// The full session is preserved as a `.jsonl.bak` backup. A trimmed summary is
+/// injected as the first request message so the user knows context was archived.
+///
+/// Returns `(original_count, kept_count, original_mb, new_mb)`.
+pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64, f64)> {
+    // Ensure the file is compacted first (single kind:0 line)
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        CsmError::InvalidSessionFormat(format!("Failed to read {}: {}", path.display(), e))
+    })?;
+
+    let line_count = content.lines().count();
+    let original_size = content.len() as f64 / (1024.0 * 1024.0);
+
+    // If multi-line, compact first
+    let content = if line_count > 1 {
+        compact_session_jsonl(path)?;
+        std::fs::read_to_string(path).map_err(|e| {
+            CsmError::InvalidSessionFormat(format!("Failed to read compacted file: {}", e))
+        })?
+    } else {
+        content
+    };
+
+    // Handle concatenated JSON objects
+    let content = split_concatenated_jsonl(&content);
+
+    let first_line = content
+        .lines()
+        .next()
+        .ok_or_else(|| CsmError::InvalidSessionFormat("Empty JSONL file".to_string()))?;
+
+    let mut entry: serde_json::Value = serde_json::from_str(first_line.trim())
+        .map_err(|_| {
+            let sanitized = sanitize_json_unicode(first_line.trim());
+            serde_json::from_str::<serde_json::Value>(&sanitized)
+                .map_err(|e| CsmError::InvalidSessionFormat(format!("Invalid JSON: {}", e)))
+        })
+        .unwrap_or_else(|e| e.unwrap());
+
+    let kind = entry.get("kind").and_then(|k| k.as_u64()).unwrap_or(99);
+    if kind != 0 {
+        return Err(
+            CsmError::InvalidSessionFormat("First JSONL line must be kind:0".to_string()).into(),
+        );
+    }
+
+    // Get the requests array
+    let requests = match entry
+        .get("v")
+        .and_then(|v| v.get("requests"))
+        .and_then(|r| r.as_array())
+    {
+        Some(r) => r.clone(),
+        None => {
+            return Err(CsmError::InvalidSessionFormat(
+                "Session has no requests array".to_string(),
+            )
+            .into());
+        }
+    };
+
+    let original_count = requests.len();
+
+    if original_count <= keep {
+        return Ok((original_count, original_count, original_size, original_size));
+    }
+
+    // Keep only the last `keep` requests
+    let trimmed_count = original_count - keep;
+    let kept_requests: Vec<serde_json::Value> = requests[trimmed_count..].to_vec();
+
+    // Build a summary message as the first request so user knows history was trimmed
+    let oldest_kept_ts = kept_requests
+        .first()
+        .and_then(|r| r.get("timestamp"))
+        .and_then(|t| t.as_u64())
+        .unwrap_or(0);
+
+    let summary_text = format!(
+        "[Chasm] This session was trimmed to improve loading performance. \
+         {} older request(s) were archived to the .jsonl.bak backup file. \
+         Showing the {} most recent requests.",
+        trimmed_count, keep
+    );
+
+    let summary_request = serde_json::json!({
+        "requestId": format!("chasm-trim-notice-{}", uuid::Uuid::new_v4()),
+        "timestamp": oldest_kept_ts.saturating_sub(1000),
+        "message": { "text": summary_text },
+        "agent": {
+            "id": "chasm",
+            "name": "Chasm",
+            "isDefault": false
+        },
+        "response": [{
+            "kind": "markdownContent",
+            "content": { "value": summary_text }
+        }],
+        "result": { "metadata": {} },
+        "isCompleteAddedRequest": true
+    });
+
+    let mut final_requests = vec![summary_request];
+    final_requests.extend(kept_requests);
+
+    // Replace the requests array in the entry
+    if let Some(v) = entry.get_mut("v") {
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert("requests".to_string(), serde_json::json!(final_requests));
+        }
+    }
+
+    // Ensure compat fields
+    let session_id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
+    if let Some(v) = entry.get_mut("v") {
+        ensure_vscode_compat_fields(v, session_id.as_deref());
+    }
+
+    let trimmed_content = serde_json::to_string(&entry)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Failed to serialize: {}", e)))?;
+
+    let new_size = trimmed_content.len() as f64 / (1024.0 * 1024.0);
+
+    // Backup original (if not already backed up by compact)
+    let backup_path = path.with_extension("jsonl.bak");
+    if !backup_path.exists() {
+        std::fs::copy(path, &backup_path)?;
+    }
+
+    // Write the trimmed file
+    std::fs::write(path, &trimmed_content)?;
+
+    Ok((original_count, keep + 1, original_size, new_size)) // +1 for the summary notice
+}
+
 /// Split concatenated JSON objects in JSONL content that lack newline separators.
 ///
 /// VS Code sometimes appends delta operations (kind:1, kind:2) onto the end of

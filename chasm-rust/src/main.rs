@@ -805,6 +805,21 @@ fn main() -> Result<()> {
                 close_vscode,
                 reopen,
             ),
+            cli::RegisterCommands::Trim {
+                path,
+                keep,
+                session,
+                all,
+                threshold_mb,
+                force,
+            } => commands::register_trim(
+                path.as_deref(),
+                keep,
+                session.as_deref(),
+                all,
+                threshold_mb,
+                force,
+            ),
         },
 
         // ====================================================================

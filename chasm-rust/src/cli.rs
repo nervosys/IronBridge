@@ -1359,6 +1359,34 @@ pub enum RegisterCommands {
         #[arg(long)]
         reopen: bool,
     },
+
+    /// Trim oversized sessions by keeping only the most recent requests
+    #[command(visible_alias = "t")]
+    Trim {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Number of recent requests to keep (default: 20)
+        #[arg(long, short, default_value = "20")]
+        keep: usize,
+
+        /// Session ID to trim (default: largest session)
+        #[arg(long, short)]
+        session: Option<String>,
+
+        /// Trim all sessions over the size threshold
+        #[arg(long, short)]
+        all: bool,
+
+        /// Only trim sessions larger than this size in MB (default: 10)
+        #[arg(long, default_value = "10")]
+        threshold_mb: u64,
+
+        /// Force even if VS Code is running
+        #[arg(long, short)]
+        force: bool,
+    },
 }
 
 // ============================================================================

@@ -87,7 +87,8 @@ pub use storage::{
     add_session_to_index, backup_workspace_sessions, close_vscode_and_wait, compact_session_jsonl,
     is_vscode_running, parse_session_auto, parse_session_file, parse_session_json,
     parse_session_jsonl, read_chat_session_index, register_all_sessions_from_directory,
-    reopen_vscode, repair_workspace_sessions, sync_session_index, write_chat_session_index,
+    reopen_vscode, repair_workspace_sessions, sync_session_index, trim_session_jsonl,
+    write_chat_session_index,
 };
 pub use workspace::{
     decode_workspace_folder, discover_workspaces, find_workspace_by_path,
