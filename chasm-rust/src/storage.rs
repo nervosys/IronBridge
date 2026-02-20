@@ -1464,16 +1464,20 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
 ///
 /// Returns `(original_count, kept_count, original_mb, new_mb)`.
 pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64, f64)> {
-    // Ensure the file is compacted first (single kind:0 line)
     let content = std::fs::read_to_string(path).map_err(|e| {
         CsmError::InvalidSessionFormat(format!("Failed to read {}: {}", path.display(), e))
     })?;
 
-    let line_count = content.lines().count();
     let original_size = content.len() as f64 / (1024.0 * 1024.0);
 
-    // If multi-line, compact first
+    // Always handle concatenated JSON objects first, then check line count
+    let content = split_concatenated_jsonl(&content);
+    let line_count = content.lines().filter(|l| !l.trim().is_empty()).count();
+
+    // If multi-line (concatenated objects or delta ops), compact first
     let content = if line_count > 1 {
+        // Write the split content so compact can process it
+        std::fs::write(path, &content)?;
         compact_session_jsonl(path)?;
         std::fs::read_to_string(path).map_err(|e| {
             CsmError::InvalidSessionFormat(format!("Failed to read compacted file: {}", e))
@@ -1481,9 +1485,6 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
     } else {
         content
     };
-
-    // Handle concatenated JSON objects
-    let content = split_concatenated_jsonl(&content);
 
     let first_line = content
         .lines()
@@ -1523,7 +1524,23 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
     let original_count = requests.len();
 
     if original_count <= keep {
-        return Ok((original_count, original_count, original_size, original_size));
+        // Still strip bloated content even if not reducing request count
+        strip_bloated_content(&mut entry);
+
+        let trimmed_content = serde_json::to_string(&entry)
+            .map_err(|e| CsmError::InvalidSessionFormat(format!("Failed to serialize: {}", e)))?;
+        let new_size = trimmed_content.len() as f64 / (1024.0 * 1024.0);
+
+        // Only rewrite if we actually reduced size
+        if new_size < original_size * 0.9 {
+            let backup_path = path.with_extension("jsonl.bak");
+            if !backup_path.exists() {
+                std::fs::copy(path, &backup_path)?;
+            }
+            std::fs::write(path, &trimmed_content)?;
+        }
+
+        return Ok((original_count, original_count, original_size, new_size));
     }
 
     // Keep only the last `keep` requests
@@ -1571,6 +1588,9 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
         }
     }
 
+    // Strip bloated metadata, tool invocations, textEditGroups, thinking tokens
+    strip_bloated_content(&mut entry);
+
     // Ensure compat fields
     let session_id = path
         .file_stem()
@@ -1595,6 +1615,173 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
     std::fs::write(path, &trimmed_content)?;
 
     Ok((original_count, keep + 1, original_size, new_size)) // +1 for the summary notice
+}
+
+/// Strip bloated content from a session entry to reduce file size.
+///
+/// VS Code sessions accumulate large metadata that isn't needed for session display:
+/// - `result.metadata`: Can be 100KB-1.5MB per request (Copilot internal state)
+/// - `editedFileEvents`: Redundant file edit tracking
+/// - `chatEdits`: File edit diffs
+/// - `textEditGroup` response items: 80-120KB each with full file diffs
+/// - `thinking` response items: Model thinking tokens (can be 400+ per request)
+/// - `toolInvocationSerialized`: Tool call metadata (usually already stripped by compact)
+/// - `toolSpecificData`: Duplicate data in tool invocations
+///
+/// This function strips or truncates all of these while preserving the conversation
+/// content (markdownContent responses and user messages).
+fn strip_bloated_content(entry: &mut serde_json::Value) {
+    let requests = match entry
+        .get_mut("v")
+        .and_then(|v| v.get_mut("requests"))
+        .and_then(|r| r.as_array_mut())
+    {
+        Some(r) => r,
+        None => return,
+    };
+
+    for req in requests.iter_mut() {
+        let obj = match req.as_object_mut() {
+            Some(o) => o,
+            None => continue,
+        };
+
+        // Strip result.metadata (100KB-1.5MB per request)
+        if let Some(result) = obj.get_mut("result") {
+            if let Some(result_obj) = result.as_object_mut() {
+                if let Some(meta) = result_obj.get("metadata") {
+                    let meta_str = serde_json::to_string(meta).unwrap_or_default();
+                    if meta_str.len() > 1000 {
+                        result_obj.insert(
+                            "metadata".to_string(),
+                            serde_json::Value::Object(serde_json::Map::new()),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Strip editedFileEvents
+        obj.remove("editedFileEvents");
+
+        // Strip chatEdits
+        obj.remove("chatEdits");
+
+        // Truncate contentReferences to max 3
+        if let Some(refs) = obj.get_mut("contentReferences") {
+            if let Some(arr) = refs.as_array_mut() {
+                if arr.len() > 3 {
+                    arr.truncate(3);
+                }
+            }
+        }
+
+        // Process response items
+        if let Some(response) = obj.get_mut("response") {
+            if let Some(resp_arr) = response.as_array_mut() {
+                // Remove non-essential response kinds
+                resp_arr.retain(|r| {
+                    let kind = r.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+                    !matches!(
+                        kind,
+                        "toolInvocationSerialized"
+                            | "progressMessage"
+                            | "confirmationWidget"
+                            | "codeblockUri"
+                            | "progressTaskSerialized"
+                            | "undoStop"
+                            | "mcpServersStarting"
+                            | "confirmation"
+                    )
+                });
+
+                // Truncate textEditGroup items (strip edit diffs, keep URI ref)
+                for r in resp_arr.iter_mut() {
+                    let kind = r
+                        .get("kind")
+                        .and_then(|k| k.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    if kind == "textEditGroup" {
+                        if let Some(edits) = r.get_mut("edits") {
+                            if let Some(arr) = edits.as_array_mut() {
+                                if serde_json::to_string(arr).unwrap_or_default().len() > 2000 {
+                                    arr.clear();
+                                }
+                            }
+                        }
+                    }
+
+                    // Truncate thinking tokens
+                    if kind == "thinking" {
+                        if let Some(val) = r.get_mut("value") {
+                            if let Some(s) = val.as_str() {
+                                if s.len() > 500 {
+                                    *val = serde_json::Value::String(
+                                        format!("{}... [truncated]", &s[..500]),
+                                    );
+                                }
+                            }
+                        }
+                        if let Some(thought) = r.get_mut("thought") {
+                            if let Some(thought_val) = thought.get_mut("value") {
+                                if let Some(s) = thought_val.as_str() {
+                                    if s.len() > 500 {
+                                        *thought_val = serde_json::Value::String(
+                                            format!("{}... [truncated]", &s[..500]),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Truncate large markdownContent
+                    if kind == "markdownContent" {
+                        if let Some(content) = r.get_mut("content") {
+                            if let Some(val) = content.get_mut("value") {
+                                if let Some(s) = val.as_str() {
+                                    if s.len() > 20000 {
+                                        *val = serde_json::Value::String(format!(
+                                            "{}\n\n---\n*[Chasm: Content truncated for loading performance]*",
+                                            &s[..20000]
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Limit thinking items to last 5 per request
+                let mut thinking_count = 0;
+                let mut indices_to_remove = Vec::new();
+                for (i, r) in resp_arr.iter().enumerate().rev() {
+                    let kind = r
+                        .get("kind")
+                        .and_then(|k| k.as_str())
+                        .unwrap_or("");
+                    if kind == "thinking" {
+                        thinking_count += 1;
+                        if thinking_count > 5 {
+                            indices_to_remove.push(i);
+                        }
+                    }
+                }
+                for idx in indices_to_remove {
+                    resp_arr.remove(idx);
+                }
+
+                // Strip toolSpecificData from any remaining tool invocations
+                for r in resp_arr.iter_mut() {
+                    if let Some(obj) = r.as_object_mut() {
+                        obj.remove("toolSpecificData");
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Split concatenated JSON objects in JSONL content that lack newline separators.
