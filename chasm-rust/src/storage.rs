@@ -1544,42 +1544,12 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
     }
 
     // Keep only the last `keep` requests
-    let trimmed_count = original_count - keep;
-    let kept_requests: Vec<serde_json::Value> = requests[trimmed_count..].to_vec();
+    let kept_requests: Vec<serde_json::Value> = requests[original_count - keep..].to_vec();
 
-    // Build a summary message as the first request so user knows history was trimmed
-    let oldest_kept_ts = kept_requests
-        .first()
-        .and_then(|r| r.get("timestamp"))
-        .and_then(|t| t.as_u64())
-        .unwrap_or(0);
-
-    let summary_text = format!(
-        "[Chasm] This session was trimmed to improve loading performance. \
-         {} older request(s) were archived to the .jsonl.bak backup file. \
-         Showing the {} most recent requests.",
-        trimmed_count, keep
-    );
-
-    let summary_request = serde_json::json!({
-        "requestId": format!("chasm-trim-notice-{}", uuid::Uuid::new_v4()),
-        "timestamp": oldest_kept_ts.saturating_sub(1000),
-        "message": { "text": summary_text },
-        "agent": {
-            "id": "chasm",
-            "name": "Chasm",
-            "isDefault": false
-        },
-        "response": [{
-            "kind": "markdownContent",
-            "content": { "value": summary_text }
-        }],
-        "result": { "metadata": {} },
-        "isCompleteAddedRequest": true
-    });
-
-    let mut final_requests = vec![summary_request];
-    final_requests.extend(kept_requests);
+    // Use only the kept requests — no injected trim notice.
+    // Injecting synthetic requests with non-standard agent/structure fields
+    // can cause VS Code's session deserializer to reject the entire session.
+    let final_requests = kept_requests;
 
     // Replace the requests array in the entry
     if let Some(v) = entry.get_mut("v") {
@@ -1614,7 +1584,7 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
     // Write the trimmed file
     std::fs::write(path, &trimmed_content)?;
 
-    Ok((original_count, keep + 1, original_size, new_size)) // +1 for the summary notice
+    Ok((original_count, keep, original_size, new_size))
 }
 
 /// Strip bloated content from a session entry to reduce file size.
@@ -1718,9 +1688,10 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                         if let Some(val) = r.get_mut("value") {
                             if let Some(s) = val.as_str() {
                                 if s.len() > 500 {
-                                    *val = serde_json::Value::String(
-                                        format!("{}... [truncated]", &s[..500]),
-                                    );
+                                    *val = serde_json::Value::String(format!(
+                                        "{}... [truncated]",
+                                        &s[..500]
+                                    ));
                                 }
                             }
                         }
@@ -1728,9 +1699,10 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                             if let Some(thought_val) = thought.get_mut("value") {
                                 if let Some(s) = thought_val.as_str() {
                                     if s.len() > 500 {
-                                        *thought_val = serde_json::Value::String(
-                                            format!("{}... [truncated]", &s[..500]),
-                                        );
+                                        *thought_val = serde_json::Value::String(format!(
+                                            "{}... [truncated]",
+                                            &s[..500]
+                                        ));
                                     }
                                 }
                             }
@@ -1758,10 +1730,7 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                 let mut thinking_count = 0;
                 let mut indices_to_remove = Vec::new();
                 for (i, r) in resp_arr.iter().enumerate().rev() {
-                    let kind = r
-                        .get("kind")
-                        .and_then(|k| k.as_str())
-                        .unwrap_or("");
+                    let kind = r.get("kind").and_then(|k| k.as_str()).unwrap_or("");
                     if kind == "thinking" {
                         thinking_count += 1;
                         if thinking_count > 5 {
@@ -1779,6 +1748,31 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                         obj.remove("toolSpecificData");
                     }
                 }
+
+                // Fix response items missing `kind` field — wrap raw MarkdownString
+                // objects as proper markdownContent response items.
+                // VS Code sometimes serializes MarkdownString directly instead of
+                // wrapping it in { kind: "markdownContent", content: MarkdownString }.
+                // Without the `kind` discriminator, VS Code's deserializer fails.
+                let fixed: Vec<serde_json::Value> = resp_arr
+                    .drain(..)
+                    .map(|item| {
+                        if item.get("kind").is_none() {
+                            // Check if it looks like a MarkdownString (has `value` or `supportHtml`)
+                            if item.get("value").is_some() || item.get("supportHtml").is_some() {
+                                serde_json::json!({
+                                    "kind": "markdownContent",
+                                    "content": item
+                                })
+                            } else {
+                                item
+                            }
+                        } else {
+                            item
+                        }
+                    })
+                    .collect();
+                *resp_arr = fixed;
             }
         }
     }
