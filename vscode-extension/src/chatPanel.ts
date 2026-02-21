@@ -175,7 +175,7 @@ export class ChasmChatPanel {
         try {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (workspaceFolder) {
-                const result = await this._executor.execute(['list', 'sessions', '--project_path', workspaceFolder.uri.fsPath]);
+                const result = await this._executor.execute(['list', 'sessions', '--project-path', workspaceFolder.uri.fsPath]);
                 if (result.success && result.output) {
                     // CLI outputs an ASCII table, parse it
                     const parsed = this._executor.parseSessionList(result.output);

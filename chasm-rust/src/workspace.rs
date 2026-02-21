@@ -362,7 +362,54 @@ pub fn get_chat_sessions_from_workspace(workspace_dir: &Path) -> Result<Vec<Sess
         }
     }
 
+    // Deduplicate by session_id: when a .jsonl has 0 requests but a .backup exists
+    // with real data, prefer the .backup. This handles VS Code migrations that left
+    // empty .jsonl files alongside .backup files with the actual session content.
+    deduplicate_sessions(&mut sessions);
+
     Ok(sessions)
+}
+
+/// Deduplicate sessions by session ID, keeping the version with more requests.
+/// This handles the case where VS Code created an empty .jsonl file during
+/// migration but the real data remains in a .backup file.
+fn deduplicate_sessions(sessions: &mut Vec<SessionWithPath>) {
+    use std::collections::HashMap;
+
+    if sessions.len() <= 1 {
+        return;
+    }
+
+    // Group by session_id
+    let mut best: HashMap<String, usize> = HashMap::new();
+    let mut to_remove = Vec::new();
+
+    for (i, swp) in sessions.iter().enumerate() {
+        let sid = swp.session.session_id.clone().unwrap_or_default();
+        if sid.is_empty() {
+            continue;
+        }
+
+        if let Some(&prev_idx) = best.get(&sid) {
+            let prev_count = sessions[prev_idx].session.request_count();
+            let curr_count = swp.session.request_count();
+            if curr_count > prev_count {
+                to_remove.push(prev_idx);
+                best.insert(sid, i);
+            } else {
+                to_remove.push(i);
+            }
+        } else {
+            best.insert(sid, i);
+        }
+    }
+
+    // Remove duplicates in reverse order to preserve indices
+    to_remove.sort_unstable();
+    to_remove.dedup();
+    for idx in to_remove.into_iter().rev() {
+        sessions.remove(idx);
+    }
 }
 
 use chrono::Utc;

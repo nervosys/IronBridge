@@ -415,7 +415,7 @@ export class ChasmExecutor {
     parseSessionList(output: string): SessionInfo[] {
         const sessions: SessionInfo[] = [];
         const cleanOutput = output.replace(/\r?\n/g, ' ');
-        const rowPattern = /\|\s*([^|]+?)\s*\|\s*([a-f0-9-]{36}\.jsonl?)\s*\|\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s*\|\s*(\d+)\s*\|/g;
+        const rowPattern = /\|\s*([^|]+?)\s*\|\s*([a-f0-9-]{36}\.(?:jsonl?|backup))\s*\|\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s*\|\s*(\d+)\s*\|/g;
         let match;
 
         while ((match = rowPattern.exec(cleanOutput)) !== null) {

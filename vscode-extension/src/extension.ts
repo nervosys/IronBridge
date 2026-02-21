@@ -152,8 +152,8 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
             const workspaceDirs = fs.readdirSync(workspaceStoragePath);
             for (const wsDir of workspaceDirs) {
                 const chatSessionsDir = path.join(workspaceStoragePath, wsDir, 'chatSessions');
-                // Try .jsonl first (VS Code 1.109+), then .json (legacy)
-                for (const ext of ['.jsonl', '.json']) {
+                // Try .jsonl first (VS Code 1.109+), then .json (legacy), then .backup (recovery)
+                for (const ext of ['.jsonl', '.json', '.backup']) {
                     const sessionFile = path.join(chatSessionsDir, `${pureSessionId}${ext}`);
                     if (fs.existsSync(sessionFile)) {
                         foundSessionPath = sessionFile;
@@ -161,12 +161,17 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
                         if (ext === '.jsonl') {
                             sessionData = parseJsonlSessionFile(content);
                         } else {
+                            // Both .json and .backup are V3 JSON format
                             sessionData = JSON.parse(content);
                         }
-                        break;
+                        // If we found a file but it has no requests, keep looking
+                        // (a .backup file may have the actual data)
+                        if (sessionData?.requests?.length > 0) {
+                            break;
+                        }
                     }
                 }
-                if (sessionData) {
+                if (sessionData?.requests?.length > 0) {
                     break;
                 }
             }

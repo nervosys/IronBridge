@@ -847,9 +847,9 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
     Ok(session)
 }
 
-/// Check if a file extension indicates a session file (.json or .jsonl)
+/// Check if a file extension indicates a session file (.json, .jsonl, or .backup)
 pub fn is_session_file_extension(ext: &std::ffi::OsStr) -> bool {
-    ext == "json" || ext == "jsonl"
+    ext == "json" || ext == "jsonl" || ext == "backup"
 }
 
 /// Detect session format and version from content
