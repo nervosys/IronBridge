@@ -557,6 +557,8 @@ pub fn recover_orphans(provider: &str, unindexed: bool, _verify: bool) -> Result
 
 /// Repair corrupted session files in place
 pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<()> {
+    use crate::storage::{is_skeleton_json, convert_skeleton_json_to_jsonl, fix_cancelled_model_state};
+
     let path = Path::new(path);
 
     if dry_run {
@@ -567,10 +569,34 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
         println!("[*] Scanning directory for repairable files: {}", path.display());
         
         let mut repaired = 0;
+        let mut skeletons_converted = 0;
+        let mut cancelled_fixed = 0;
+
         for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
             let file_path = entry.path();
             if file_path.extension().is_some_and(|e| e == "jsonl" || e == "json") {
                 if let Ok(content) = fs::read_to_string(file_path) {
+                    // Check for skeleton .json files (corrupted, only structural chars remain)
+                    if file_path.extension().is_some_and(|e| e == "json")
+                        && !file_path.to_string_lossy().ends_with(".bak")
+                        && !file_path.to_string_lossy().ends_with(".corrupt")
+                    {
+                        if is_skeleton_json(&content) {
+                            println!("  [!] Skeleton .json: {} — corrupt, only structural chars", file_path.display());
+                            if !dry_run {
+                                match convert_skeleton_json_to_jsonl(file_path, None, None) {
+                                    Ok(Some(_)) => {
+                                        println!("  [+] Converted to .jsonl, original renamed to .json.corrupt");
+                                        skeletons_converted += 1;
+                                    }
+                                    Ok(None) => {} // Skipped (e.g., .jsonl already exists)
+                                    Err(e) => println!("  [!] Failed to convert skeleton: {}", e),
+                                }
+                            }
+                            continue; // Don't try to repair skeleton content
+                        }
+                    }
+
                     // Check for corrupted JSON lines
                     let has_corrupt_lines = content.lines().any(|line| {
                         !line.is_empty() && serde_json::from_str::<serde_json::Value>(line).is_err()
@@ -620,6 +646,20 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
                             repaired += 1;
                         }
                     }
+
+                    // Check for cancelled modelState in JSONL files (after other repairs)
+                    if file_path.extension().is_some_and(|e| e == "jsonl") && !dry_run {
+                        match fix_cancelled_model_state(file_path) {
+                            Ok(true) => {
+                                println!("  [+] Fixed cancelled modelState: {}", file_path.display());
+                                cancelled_fixed += 1;
+                            }
+                            Ok(false) => {}
+                            Err(e) => {
+                                println!("  [!] Failed to fix modelState for {}: {}", file_path.display(), e);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -628,13 +668,57 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
         if dry_run {
             println!("[i] {} file(s) would be repaired", repaired);
         } else {
-            println!("[+] Repaired {} file(s)", repaired);
+            let mut parts = Vec::new();
+            if repaired > 0 {
+                parts.push(format!("{} repaired", repaired));
+            }
+            if skeletons_converted > 0 {
+                parts.push(format!("{} skeletons converted", skeletons_converted));
+            }
+            if cancelled_fixed > 0 {
+                parts.push(format!("{} cancelled states fixed", cancelled_fixed));
+            }
+            if parts.is_empty() {
+                println!("[+] No issues found");
+            } else {
+                println!("[+] {}", parts.join(", "));
+            }
         }
     } else {
         // Single file
         if !dry_run {
+            // Check for skeleton .json first
+            if path.extension().is_some_and(|e| e == "json")
+                && !path.to_string_lossy().ends_with(".bak")
+                && !path.to_string_lossy().ends_with(".corrupt")
+            {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if is_skeleton_json(&content) {
+                        match convert_skeleton_json_to_jsonl(path, None, None) {
+                            Ok(Some(jsonl_path)) => {
+                                println!("[+] Converted skeleton .json → {}", jsonl_path.display());
+                                println!("    Original renamed to .json.corrupt");
+                                return Ok(());
+                            }
+                            Ok(None) => println!("[i] Skeleton detected but .jsonl already exists"),
+                            Err(e) => println!("[!] Failed to convert skeleton: {}", e),
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+
             repair_file(path, create_backup)?;
             println!("[+] File repaired: {}", path.display());
+
+            // Fix cancelled modelState for JSONL files
+            if path.extension().is_some_and(|e| e == "jsonl") {
+                match fix_cancelled_model_state(path) {
+                    Ok(true) => println!("[+] Fixed cancelled modelState"),
+                    Ok(false) => {}
+                    Err(e) => println!("[!] Failed to fix modelState: {}", e),
+                }
+            }
         } else {
             println!("[i] Would repair: {}", path.display());
         }

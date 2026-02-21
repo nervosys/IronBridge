@@ -266,8 +266,7 @@ pub fn register_sessions(
         for session_id in ids {
             match find_session_file(&chat_sessions_dir, session_id) {
                 Ok(session_file) => {
-                    let content = std::fs::read_to_string(&session_file)?;
-                    let session: ChatSession = serde_json::from_str(&content)?;
+                    let session = parse_session_file(&session_file)?;
 
                     let title = session.title();
                     let actual_session_id = session
@@ -997,10 +996,18 @@ pub fn register_repair(
     }
 
     // Run the repair
-    println!("   {} Pass 1: Compacting JSONL files...", "[*]".cyan());
+    println!(
+        "   {} Pass 1: Compacting JSONL files & fixing compat fields...",
+        "[*]".cyan()
+    );
+    println!(
+        "   {} Pass 1.5: Converting skeleton .json files...",
+        "[*]".cyan()
+    );
+    println!("   {} Pass 2: Fixing cancelled modelState...", "[*]".cyan());
     let (compacted, index_fixed) = repair_workspace_sessions(&ws_id, &chat_sessions_dir, true)?;
 
-    println!("   {} Pass 2: Index rebuilt.", "[*]".cyan());
+    println!("   {} Pass 3: Index rebuilt.", "[*]".cyan());
     println!(
         "\n{} Repair complete: {} files compacted, {} index entries synced",
         "[OK]".green().bold(),
@@ -1198,10 +1205,7 @@ fn register_repair_recursive(
                 if ws.has_chat_sessions && ws.chat_session_count > 0 {
                     *workspaces_found += 1;
 
-                    let display_name = ws
-                        .project_path
-                        .as_deref()
-                        .unwrap_or(&ws.hash);
+                    let display_name = ws.project_path.as_deref().unwrap_or(&ws.hash);
 
                     // Diagnose first
                     let chat_dir = ws.workspace_path.join("chatSessions");
@@ -1246,7 +1250,9 @@ fn register_repair_recursive(
 
                                 if !dry_run {
                                     match repair_workspace_sessions(
-                                        &ws.hash, &chat_dir, force || true,
+                                        &ws.hash,
+                                        &chat_dir,
+                                        force || true,
                                     ) {
                                         Ok((compacted, synced)) => {
                                             *total_compacted += compacted;
@@ -1260,9 +1266,7 @@ fn register_repair_recursive(
                                             if let Ok(entries) = std::fs::read_dir(&chat_dir) {
                                                 for entry in entries.flatten() {
                                                     let p = entry.path();
-                                                    if p.extension()
-                                                        .is_some_and(|e| e == "jsonl")
-                                                    {
+                                                    if p.extension().is_some_and(|e| e == "jsonl") {
                                                         if let Some(stem) = p.file_stem() {
                                                             jsonl_sessions.insert(
                                                                 stem.to_string_lossy().to_string(),
@@ -1274,8 +1278,7 @@ fn register_repair_recursive(
                                             if let Ok(entries) = std::fs::read_dir(&chat_dir) {
                                                 for entry in entries.flatten() {
                                                     let p = entry.path();
-                                                    if p.extension().is_some_and(|e| e == "json")
-                                                    {
+                                                    if p.extension().is_some_and(|e| e == "json") {
                                                         if let Some(stem) = p.file_stem() {
                                                             if jsonl_sessions.contains(
                                                                 &stem.to_string_lossy().to_string(),
@@ -1291,9 +1294,7 @@ fn register_repair_recursive(
                                             }
                                             if deleted_json > 0 {
                                                 let _ = repair_workspace_sessions(
-                                                    &ws.hash,
-                                                    &chat_dir,
-                                                    true,
+                                                    &ws.hash, &chat_dir, true,
                                                 );
                                             }
 
@@ -1310,11 +1311,7 @@ fn register_repair_recursive(
                                                     String::new()
                                                 }
                                             );
-                                            println!(
-                                                "      {} Fixed: {}",
-                                                "[OK]".green(),
-                                                detail
-                                            );
+                                            println!("      {} Fixed: {}", "[OK]".green(), detail);
                                             repair_results.push((
                                                 display_name.to_string(),
                                                 issue_count,
@@ -1323,11 +1320,7 @@ fn register_repair_recursive(
                                             ));
                                         }
                                         Err(e) => {
-                                            println!(
-                                                "      {} Failed: {}",
-                                                "[ERR]".red(),
-                                                e
-                                            );
+                                            println!("      {} Failed: {}", "[ERR]".red(), e);
                                             repair_results.push((
                                                 display_name.to_string(),
                                                 issue_count,
@@ -1357,12 +1350,7 @@ fn register_repair_recursive(
                             }
                         }
                         Err(e) => {
-                            println!(
-                                "   {} {} — scan failed: {}",
-                                "[ERR]".red(),
-                                display_name,
-                                e
-                            );
+                            println!("   {} {} — scan failed: {}", "[ERR]".red(), display_name, e);
                         }
                     }
                 }
@@ -1398,10 +1386,7 @@ fn register_repair_recursive(
             }
 
             // Skip user-specified excludes
-            if exclude_matchers
-                .iter()
-                .any(|p| p.matches(&dir_name))
-            {
+            if exclude_matchers.iter().any(|p| p.matches(&dir_name)) {
                 continue;
             }
 
@@ -1565,10 +1550,7 @@ fn register_repair_all(force: bool, close_vscode: bool, reopen: bool) -> Result<
     let mut failed = 0usize;
 
     for (i, ws) in ws_with_sessions.iter().enumerate() {
-        let display_name = ws
-            .project_path
-            .as_deref()
-            .unwrap_or(&ws.hash);
+        let display_name = ws.project_path.as_deref().unwrap_or(&ws.hash);
         println!(
             "[{}/{}] {} {}",
             i + 1,
@@ -1579,7 +1561,10 @@ fn register_repair_all(force: bool, close_vscode: bool, reopen: bool) -> Result<
 
         let chat_sessions_dir = ws.workspace_path.join("chatSessions");
         if !chat_sessions_dir.exists() {
-            println!("   {} No chatSessions directory, skipping.\n", "[!]".yellow());
+            println!(
+                "   {} No chatSessions directory, skipping.\n",
+                "[!]".yellow()
+            );
             continue;
         }
 
@@ -1724,11 +1709,9 @@ pub fn register_trim(
         // Trim a specific session
         let jsonl_path = chat_sessions_dir.join(format!("{}.jsonl", sid));
         if !jsonl_path.exists() {
-            return Err(CsmError::InvalidSessionFormat(format!(
-                "Session not found: {}",
-                sid
-            ))
-            .into());
+            return Err(
+                CsmError::InvalidSessionFormat(format!("Session not found: {}", sid)).into(),
+            );
         }
 
         let size_mb = std::fs::metadata(&jsonl_path)?.len() / (1024 * 1024);

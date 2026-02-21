@@ -273,11 +273,13 @@ impl Default for ChatSessionIndex {
 }
 
 /// Session timing information (VS Code 1.109+)
+/// Supports both old format (startTime/endTime) and new format (created/lastRequestStarted/lastRequestEnded)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatSessionTiming {
     /// When the session was created (ms since epoch)
-    #[serde(default)]
+    /// Old format used "startTime", new format uses "created"
+    #[serde(default, alias = "startTime")]
     pub created: i64,
 
     /// When the most recent request started (ms since epoch)
@@ -285,7 +287,8 @@ pub struct ChatSessionTiming {
     pub last_request_started: Option<i64>,
 
     /// When the most recent request completed (ms since epoch)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Old format used "endTime", new format uses "lastRequestEnded"
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "endTime")]
     pub last_request_ended: Option<i64>,
 }
 
@@ -317,6 +320,18 @@ pub struct ChatSessionIndexEntry {
     /// Whether the session is empty
     #[serde(default)]
     pub is_empty: bool,
+
+    /// Whether the session was imported
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_imported: Option<bool>,
+
+    /// Whether the session has pending edits
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_pending_edits: Option<bool>,
+
+    /// Whether the session is from an external source
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_external: Option<bool>,
 }
 
 /// Session with its file path for internal processing

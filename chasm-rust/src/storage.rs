@@ -34,6 +34,8 @@ pub enum SessionIssueKind {
     ConcatenatedJsonl,
     /// Index entry has lastResponseState = 2 (Cancelled), blocks VS Code loading
     CancelledState,
+    /// Last request's modelState.value is 2 (Cancelled) or missing in file content
+    CancelledModelState,
     /// File exists on disk but is not in the VS Code index
     OrphanedSession,
     /// Index entry references a file that no longer exists on disk
@@ -42,6 +44,8 @@ pub enum SessionIssueKind {
     MissingCompatFields,
     /// Both .json and .jsonl exist for the same session ID
     DuplicateFormat,
+    /// Legacy .json file is corrupted — contains only structural chars ({}, whitespace)
+    SkeletonJson,
 }
 
 impl std::fmt::Display for SessionIssueKind {
@@ -50,10 +54,12 @@ impl std::fmt::Display for SessionIssueKind {
             SessionIssueKind::MultiLineJsonl => write!(f, "multi-line JSONL"),
             SessionIssueKind::ConcatenatedJsonl => write!(f, "concatenated JSONL"),
             SessionIssueKind::CancelledState => write!(f, "cancelled state"),
+            SessionIssueKind::CancelledModelState => write!(f, "cancelled modelState in file"),
             SessionIssueKind::OrphanedSession => write!(f, "orphaned session"),
             SessionIssueKind::StaleIndexEntry => write!(f, "stale index entry"),
             SessionIssueKind::MissingCompatFields => write!(f, "missing compat fields"),
             SessionIssueKind::DuplicateFormat => write!(f, "duplicate .json/.jsonl"),
+            SessionIssueKind::SkeletonJson => write!(f, "skeleton .json (corrupt)"),
         }
     }
 }
@@ -194,10 +200,59 @@ pub fn diagnose_workspace_sessions(
                                         detail: format!("Missing: {}", missing_fields.join(", ")),
                                     });
                                 }
+
+                                // Check for cancelled modelState in file content
+                                if let Some(requests) = v.get("requests").and_then(|r| r.as_array())
+                                {
+                                    if let Some(last_req) = requests.last() {
+                                        let model_state_value = last_req
+                                            .get("modelState")
+                                            .and_then(|ms| ms.get("value"))
+                                            .and_then(|v| v.as_u64());
+                                        match model_state_value {
+                                            Some(2) => {
+                                                diagnosis.issues.push(SessionIssue {
+                                                    session_id: id.clone(),
+                                                    kind: SessionIssueKind::CancelledModelState,
+                                                    detail: "Last request modelState.value=2 (Cancelled) in file content".to_string(),
+                                                });
+                                            }
+                                            None => {
+                                                diagnosis.issues.push(SessionIssue {
+                                                    session_id: id.clone(),
+                                                    kind: SessionIssueKind::CancelledModelState,
+                                                    detail: "Last request missing modelState in file content".to_string(),
+                                                });
+                                            }
+                                            _ => {} // Valid state
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // Check .json files for skeleton corruption
+    for id in &json_sessions {
+        // Skip if a .jsonl already exists (it takes precedence)
+        if jsonl_sessions.contains(id) {
+            continue;
+        }
+        let path = chat_sessions_dir.join(format!("{id}.json"));
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if is_skeleton_json(&content) {
+                diagnosis.issues.push(SessionIssue {
+                    session_id: id.clone(),
+                    kind: SessionIssueKind::SkeletonJson,
+                    detail: format!(
+                        "Legacy .json is corrupt — only structural chars remain ({} bytes)",
+                        content.len()
+                    ),
+                });
             }
         }
     }
@@ -258,7 +313,7 @@ pub enum VsCodeSessionFormat {
     /// Single JSON object with ChatSession structure
     LegacyJson,
     /// JSONL format (VS Code >= 1.109.0, January 2026+)
-    /// JSON Lines with event sourcing: kind 0 (initial), kind 1 (delta), kind 2 (requests)
+    /// JSON Lines with event sourcing: kind 0 (initial), kind 1 (delta), kind 2 (replace/splice)
     JsonLines,
 }
 
@@ -531,15 +586,16 @@ enum JsonlKind {
     Initial = 0,
     /// Delta update to specific keys (kind: 1)  
     Delta = 1,
-    /// Full requests array update (kind: 2)
-    RequestsUpdate = 2,
+    /// Array replace/splice operation (kind: 2)
+    /// Optional 'i' field specifies splice index (truncate at i, then extend)
+    ArraySplice = 2,
 }
 
 /// Parse a JSONL (JSON Lines) session file (VS Code 1.109.0+ format)
 /// Each line is a JSON object with 'kind' field indicating the type:
 /// - kind 0: Initial session metadata with 'v' containing ChatSession-like structure
 /// - kind 1: Delta update with 'k' (keys path) and 'v' (value)
-/// - kind 2: Full requests array update with 'k' and 'v'
+/// - kind 2: Array replace/splice with 'k' (path), 'v' (items), optional 'i' (splice index)
 pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, serde_json::Error> {
     // Pre-process: split concatenated JSON objects that lack newline separators
     let content = split_concatenated_jsonl(content);
@@ -697,13 +753,23 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                 }
             }
             2 => {
-                // Array append operation - 'k' is the key path, 'v' is array of items to append
+                // Array replace/splice operation - 'k' is the key path, 'v' is the new array contents
+                // Optional 'i' field is the splice index: replace from index i onward
+                // Without 'i', this is a full replacement of the array at the key path
                 if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
+                    let splice_index = entry.get("i").and_then(|i| i.as_u64()).map(|i| i as usize);
                     if let Some(keys_arr) = keys.as_array() {
-                        // Top-level requests append: k=["requests"], v=[new_request]
+                        // Top-level requests: k=["requests"], v=[requests_array]
                         if keys_arr.len() == 1 {
                             if let Some("requests") = keys_arr[0].as_str() {
                                 if let Some(items) = value.as_array() {
+                                    if let Some(idx) = splice_index {
+                                        // Splice: truncate at index i, then extend with new items
+                                        session.requests.truncate(idx);
+                                    } else {
+                                        // Full replacement: clear existing requests
+                                        session.requests.clear();
+                                    }
                                     for item in items {
                                         if let Ok(req) =
                                             serde_json::from_value::<ChatRequest>(item.clone())
@@ -720,9 +786,57 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                                 }
                             }
                         }
-                        // Nested array append: k=["requests", idx, "response"], v=[parts]
-                        // These are response streaming chunks - we can safely ignore them
-                        // since the final response is captured via kind:1 updates
+                        // Nested array replace/splice: k=["requests", idx, "response"], v=[parts]
+                        else if keys_arr.len() == 3 {
+                            if let (Some("requests"), Some(req_idx), Some(field)) = (
+                                keys_arr[0].as_str(),
+                                keys_arr[1].as_u64().map(|i| i as usize),
+                                keys_arr[2].as_str(),
+                            ) {
+                                if req_idx < session.requests.len() {
+                                    match field {
+                                        "response" => {
+                                            // Response is stored as a JSON Value (array)
+                                            if let Some(idx) = splice_index {
+                                                // Splice: keep items before index i, replace rest
+                                                if let Some(existing) =
+                                                    session.requests[req_idx].response.as_ref()
+                                                {
+                                                    if let Some(existing_arr) = existing.as_array()
+                                                    {
+                                                        let mut new_arr: Vec<serde_json::Value> =
+                                                            existing_arr
+                                                                [..idx.min(existing_arr.len())]
+                                                                .to_vec();
+                                                        if let Some(new_items) = value.as_array() {
+                                                            new_arr
+                                                                .extend(new_items.iter().cloned());
+                                                        }
+                                                        session.requests[req_idx].response =
+                                                            Some(serde_json::Value::Array(new_arr));
+                                                    } else {
+                                                        session.requests[req_idx].response =
+                                                            Some(value.clone());
+                                                    }
+                                                } else {
+                                                    session.requests[req_idx].response =
+                                                        Some(value.clone());
+                                                }
+                                            } else {
+                                                // Full replacement
+                                                session.requests[req_idx].response =
+                                                    Some(value.clone());
+                                            }
+                                        }
+                                        "contentReferences" => {
+                                            session.requests[req_idx].content_references =
+                                                serde_json::from_value(value.clone()).ok();
+                                        }
+                                        _ => {} // Ignore unknown fields
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -918,6 +1032,9 @@ pub fn add_session_to_index(
             last_response_state: 1, // ResponseModelState.Complete
             initial_location: initial_location.to_string(),
             is_empty,
+            is_imported: Some(_is_imported),
+            has_pending_edits: Some(false),
+            is_external: Some(false),
         },
     );
 
@@ -1041,6 +1158,9 @@ pub fn sync_session_index(
                     last_response_state: 1, // ResponseModelState.Complete
                     initial_location,
                     is_empty,
+                    is_imported: Some(false),
+                    has_pending_edits: Some(false),
+                    is_external: Some(false),
                 },
             );
             added += 1;
@@ -1420,10 +1540,11 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
                 }
             }
             2 => {
-                // Array append: k=["path","to","array"], v=[items]
+                // Array replace/splice: k=["path","to","array"], v=[items], i=splice_index
                 if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
+                    let splice_index = entry.get("i").and_then(|i| i.as_u64()).map(|i| i as usize);
                     if let Some(keys_arr) = keys.as_array() {
-                        apply_append(&mut state, keys_arr, value.clone());
+                        apply_splice(&mut state, keys_arr, value.clone(), splice_index);
                     }
                 }
             }
@@ -1837,11 +1958,14 @@ fn apply_delta(root: &mut serde_json::Value, keys: &[serde_json::Value], value: 
     }
 }
 
-/// Apply an array append operation (kind:2) to a JSON value at the given key path.
-fn apply_append(
+/// Apply an array replace/splice operation (kind:2) to a JSON value at the given key path.
+/// When `splice_index` is `Some(i)`, truncates the target array at index `i` before extending.
+/// When `splice_index` is `None`, replaces the entire array with the new items.
+fn apply_splice(
     root: &mut serde_json::Value,
     keys: &[serde_json::Value],
     items: serde_json::Value,
+    splice_index: Option<usize>,
 ) {
     if keys.is_empty() {
         return;
@@ -1868,9 +1992,18 @@ fn apply_append(
         }
     }
 
-    // Append items to the target array
-    if let (Some(target_arr), Some(new_items)) = (current.as_array_mut(), items.as_array()) {
-        target_arr.extend(new_items.iter().cloned());
+    // Splice or replace items in the target array
+    if let Some(target_arr) = current.as_array_mut() {
+        if let Some(idx) = splice_index {
+            // Splice: truncate at index, then extend with new items
+            target_arr.truncate(idx);
+        } else {
+            // Full replacement: clear the array
+            target_arr.clear();
+        }
+        if let Some(new_items) = items.as_array() {
+            target_arr.extend(new_items.iter().cloned());
+        }
     }
 }
 
@@ -1932,6 +2065,284 @@ pub fn ensure_vscode_compat_fields(state: &mut serde_json::Value, session_id: Op
             );
         }
     }
+}
+
+/// Detect whether a legacy .json file is a "skeleton" — corrupted to contain only
+/// structural characters ({}, [], commas, colons, whitespace) with all actual data stripped.
+/// These files parse as valid JSON but contain no useful session content.
+pub fn is_skeleton_json(content: &str) -> bool {
+    // Must be non-trivial size to be a skeleton (tiny files might just be empty sessions)
+    if content.len() < 100 {
+        return false;
+    }
+
+    // Count structural vs data characters
+    let structural_chars: usize = content
+        .chars()
+        .filter(|c| {
+            matches!(
+                c,
+                '{' | '}' | '[' | ']' | ',' | ':' | ' ' | '\n' | '\r' | '\t' | '"'
+            )
+        })
+        .count();
+
+    let total_chars = content.len();
+    let structural_ratio = structural_chars as f64 / total_chars as f64;
+
+    // A skeleton file is >80% structural characters. Normal sessions have lots of
+    // text content (messages, code, etc.) so the ratio is much lower.
+    if structural_ratio < 0.80 {
+        return false;
+    }
+
+    // Additionally verify: parse as JSON and check that requests array is empty or
+    // contains only empty objects
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(content) {
+        // Check if requests exist and are all empty
+        if let Some(requests) = parsed.get("requests").and_then(|r| r.as_array()) {
+            let all_empty = requests.iter().all(|req| {
+                // A skeleton request has no "message" text or empty message content
+                let msg = req
+                    .get("message")
+                    .and_then(|m| m.get("text"))
+                    .and_then(|t| t.as_str());
+                msg.map_or(true, |s| s.is_empty())
+            });
+            return all_empty;
+        }
+        // No requests array at all — also skeleton-like
+        return true;
+    }
+
+    // Couldn't parse but high structural ratio — still likely skeleton
+    structural_ratio > 0.85
+}
+
+/// Convert a skeleton .json file to a valid minimal .jsonl file.
+/// Preserves title and timestamp from the index entry if available.
+/// The original .json file is renamed to `.json.corrupt` (non-destructive).
+/// Returns the path to the new .jsonl file, or None if conversion was skipped.
+pub fn convert_skeleton_json_to_jsonl(
+    json_path: &Path,
+    title: Option<&str>,
+    last_message_date: Option<i64>,
+) -> Result<Option<PathBuf>> {
+    let content = std::fs::read_to_string(json_path)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+
+    if !is_skeleton_json(&content) {
+        return Ok(None);
+    }
+
+    let session_id = json_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let title = title.unwrap_or("Recovered Session");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+    let timestamp = last_message_date.unwrap_or(now);
+
+    // Build a valid minimal kind:0 JSONL entry
+    let jsonl_entry = serde_json::json!({
+        "kind": 0,
+        "v": {
+            "sessionId": session_id,
+            "title": title,
+            "lastMessageDate": timestamp,
+            "requests": [],
+            "version": 4,
+            "hasPendingEdits": false,
+            "pendingRequests": [],
+            "inputState": {
+                "attachments": [],
+                "mode": { "id": "agent", "kind": "agent" },
+                "inputText": "",
+                "selections": [],
+                "contrib": { "chatDynamicVariableModel": [] }
+            },
+            "responderUsername": "GitHub Copilot",
+            "isImported": false,
+            "initialLocation": "panel"
+        }
+    });
+
+    let jsonl_path = json_path.with_extension("jsonl");
+    let corrupt_path = json_path.with_extension("json.corrupt");
+
+    // Don't overwrite an existing .jsonl
+    if jsonl_path.exists() {
+        // Just rename the skeleton to .corrupt
+        std::fs::rename(json_path, &corrupt_path)?;
+        return Ok(None);
+    }
+
+    // Write the new .jsonl file
+    std::fs::write(
+        &jsonl_path,
+        serde_json::to_string(&jsonl_entry)
+            .map_err(|e| CsmError::InvalidSessionFormat(format!("Serialize error: {}", e)))?,
+    )?;
+
+    // Rename original to .json.corrupt (non-destructive)
+    std::fs::rename(json_path, &corrupt_path)?;
+
+    Ok(Some(jsonl_path))
+}
+
+/// Fix cancelled `modelState` values in a compacted (single-line) JSONL session file.
+///
+/// VS Code determines `lastResponseState` from the file content, not the index.
+/// If the last request's `modelState.value` is `2` (Cancelled) or missing entirely,
+/// VS Code refuses to load the session. This function:
+/// 1. Finds the last request in the `requests` array
+/// 2. If `modelState.value` is `2` (Cancelled), changes it to `1` (Complete)
+/// 3. If `modelState` is missing entirely, adds `{"value":1,"completedAt":<now>}`
+///
+/// Returns `true` if the file was modified.
+pub fn fix_cancelled_model_state(path: &Path) -> Result<bool> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+
+    let lines: Vec<&str> = content.lines().collect();
+
+    // For multi-line JSONL, we need to scan all lines to find the LAST modelState
+    // delta for the highest request index. For single-line (compacted), we modify
+    // the kind:0 snapshot directly.
+    if lines.len() == 1 {
+        // Compacted single-line JSONL: modify the kind:0 snapshot
+        let mut entry: serde_json::Value = serde_json::from_str(lines[0].trim())
+            .map_err(|e| CsmError::InvalidSessionFormat(format!("Invalid JSON: {}", e)))?;
+
+        let is_kind_0 = entry
+            .get("kind")
+            .and_then(|k| k.as_u64())
+            .map(|k| k == 0)
+            .unwrap_or(false);
+
+        if !is_kind_0 {
+            return Ok(false);
+        }
+
+        let requests = match entry
+            .get_mut("v")
+            .and_then(|v| v.get_mut("requests"))
+            .and_then(|r| r.as_array_mut())
+        {
+            Some(r) if !r.is_empty() => r,
+            _ => return Ok(false),
+        };
+
+        let last_req = requests.last_mut().unwrap();
+        let model_state = last_req.get("modelState");
+
+        let needs_fix = match model_state {
+            Some(ms) => ms.get("value").and_then(|v| v.as_u64()) == Some(2),
+            None => true, // Missing modelState = never completed
+        };
+
+        if !needs_fix {
+            return Ok(false);
+        }
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        last_req.as_object_mut().unwrap().insert(
+            "modelState".to_string(),
+            serde_json::json!({"value": 1, "completedAt": now}),
+        );
+
+        let patched = serde_json::to_string(&entry)
+            .map_err(|e| CsmError::InvalidSessionFormat(format!("Serialize error: {}", e)))?;
+        std::fs::write(path, patched)?;
+        return Ok(true);
+    }
+
+    // Multi-line JSONL: find the highest request index referenced across all lines,
+    // then check if the last modelState delta for that index has value=2 or is missing.
+    // If so, append a corrective delta.
+    let mut highest_req_idx: Option<usize> = None;
+    let mut last_model_state_value: Option<u64> = None;
+
+    // Check kind:0 snapshot for request count
+    if let Ok(first_entry) = serde_json::from_str::<serde_json::Value>(lines[0].trim()) {
+        if let Some(requests) = first_entry
+            .get("v")
+            .and_then(|v| v.get("requests"))
+            .and_then(|r| r.as_array())
+        {
+            if !requests.is_empty() {
+                let last_idx = requests.len() - 1;
+                highest_req_idx = Some(last_idx);
+                // Check modelState in the snapshot's last request
+                if let Some(ms) = requests[last_idx].get("modelState") {
+                    last_model_state_value = ms.get("value").and_then(|v| v.as_u64());
+                }
+            }
+        }
+    }
+
+    // Scan deltas for higher request indices and modelState updates
+    static REQ_IDX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#""k":\["requests",(\d+)"#).unwrap());
+
+    for line in &lines[1..] {
+        if let Some(caps) = REQ_IDX_RE.captures(line) {
+            if let Ok(idx) = caps[1].parse::<usize>() {
+                if highest_req_idx.is_none() || idx > highest_req_idx.unwrap() {
+                    highest_req_idx = Some(idx);
+                    last_model_state_value = None; // Reset for new highest
+                }
+                // Track modelState for the highest request index
+                if Some(idx) == highest_req_idx && line.contains("\"modelState\"") {
+                    if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                        last_model_state_value = entry
+                            .get("v")
+                            .and_then(|v| v.get("value"))
+                            .and_then(|v| v.as_u64());
+                    }
+                }
+            }
+        }
+    }
+
+    let req_idx = match highest_req_idx {
+        Some(idx) => idx,
+        None => return Ok(false),
+    };
+
+    let needs_fix = match last_model_state_value {
+        Some(2) => true, // Cancelled
+        None => true,    // Missing (never completed)
+        _ => false,      // Already complete or other valid state
+    };
+
+    if !needs_fix {
+        return Ok(false);
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    let fix_delta = format!(
+        "\n{{\"kind\":1,\"k\":[\"requests\",{},\"modelState\"],\"v\":{{\"value\":1,\"completedAt\":{}}}}}",
+        req_idx, now
+    );
+
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new().append(true).open(path)?;
+    file.write_all(fix_delta.as_bytes())?;
+
+    Ok(true)
 }
 
 /// Repair workspace sessions: compact large JSONL files and fix the index.
@@ -2052,13 +2463,130 @@ pub fn repair_workspace_sessions(
         }
     }
 
-    // Pass 2: Rebuild the index with correct metadata
+    // Pass 1.5: Convert skeleton .json files to valid .jsonl.
+    // Skeleton files are legacy .json files where all data has been stripped,
+    // leaving only structural characters ({}, [], whitespace). We convert them
+    // to valid minimal .jsonl, preserving title/timestamp from the index,
+    // and rename the original to .json.corrupt (non-destructive).
+    let mut skeletons_converted = 0;
+    if chat_sessions_dir.exists() {
+        // Read current index to get titles/timestamps for converted sessions
+        let index_entries: std::collections::HashMap<String, (String, Option<i64>)> =
+            if let Ok(index) = read_chat_session_index(&db_path) {
+                index
+                    .entries
+                    .iter()
+                    .map(|(id, e)| (id.clone(), (e.title.clone(), Some(e.last_message_date))))
+                    .collect()
+            } else {
+                std::collections::HashMap::new()
+            };
+
+        // Collect .json files that don't have a corresponding .jsonl
+        let mut jsonl_stems: HashSet<String> = HashSet::new();
+        for entry in std::fs::read_dir(chat_sessions_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "jsonl") {
+                if let Some(stem) = path.file_stem() {
+                    jsonl_stems.insert(stem.to_string_lossy().to_string());
+                }
+            }
+        }
+
+        for entry in std::fs::read_dir(chat_sessions_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "json")
+                && !path.to_string_lossy().ends_with(".bak")
+                && !path.to_string_lossy().ends_with(".corrupt")
+            {
+                let stem = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                // Skip if .jsonl already exists
+                if jsonl_stems.contains(&stem) {
+                    continue;
+                }
+
+                let (title, timestamp) = index_entries
+                    .get(&stem)
+                    .map(|(t, ts)| (t.as_str(), *ts))
+                    .unwrap_or(("Recovered Session", None));
+
+                match convert_skeleton_json_to_jsonl(&path, Some(title), timestamp) {
+                    Ok(Some(jsonl_path)) => {
+                        println!(
+                            "   [OK] Converted skeleton .json → .jsonl: {} (\"{}\")",
+                            stem, title
+                        );
+                        // Track the new .jsonl so subsequent passes process it
+                        jsonl_stems.insert(stem);
+                        skeletons_converted += 1;
+                        let _ = jsonl_path; // used implicitly via jsonl_stems
+                    }
+                    Ok(None) => {} // Not a skeleton or skipped
+                    Err(e) => {
+                        println!("   [WARN] Failed to convert skeleton {}: {}", stem, e);
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 2: Fix cancelled modelState in all JSONL files.
+    // VS Code reads modelState from file content (not the index) to determine
+    // lastResponseState. If the last request has modelState.value=2 (Cancelled)
+    // or is missing entirely, VS Code refuses to load the session.
+    let mut cancelled_fixed = 0;
+    if chat_sessions_dir.exists() {
+        for entry in std::fs::read_dir(chat_sessions_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "jsonl") {
+                match fix_cancelled_model_state(&path) {
+                    Ok(true) => {
+                        let stem = path
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        println!("   [OK] Fixed cancelled modelState: {}", stem);
+                        cancelled_fixed += 1;
+                    }
+                    Ok(false) => {} // No fix needed
+                    Err(e) => {
+                        let stem = path
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        println!("   [WARN] Failed to fix modelState for {}: {}", stem, e);
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 3: Rebuild the index with correct metadata
     let (index_fixed, _) = sync_session_index(workspace_id, chat_sessions_dir, force)?;
 
     if fields_fixed > 0 {
         println!(
             "   [OK] Injected missing VS Code fields into {} session(s)",
             fields_fixed
+        );
+    }
+    if skeletons_converted > 0 {
+        println!(
+            "   [OK] Converted {} skeleton .json file(s) to .jsonl",
+            skeletons_converted
+        );
+    }
+    if cancelled_fixed > 0 {
+        println!(
+            "   [OK] Fixed cancelled modelState in {} session(s)",
+            cancelled_fixed
         );
     }
 
