@@ -2211,6 +2211,10 @@ pub fn fix_cancelled_model_state(path: &Path) -> Result<bool> {
 
     let lines: Vec<&str> = content.lines().collect();
 
+    if lines.is_empty() {
+        return Ok(false);
+    }
+
     // For multi-line JSONL, we need to scan all lines to find the LAST modelState
     // delta for the highest request index. For single-line (compacted), we modify
     // the kind:0 snapshot directly.
