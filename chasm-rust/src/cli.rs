@@ -1609,6 +1609,18 @@ pub enum HarvestCommands {
         dry_run: bool,
     },
 
+    /// Compact the database by stripping session_json blobs (data preserved in messages_v2)
+    #[command(visible_alias = "gc")]
+    Compact {
+        /// Path to the harvest database
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Show what would be compacted without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Rebuild the full-text search index
     Rebuild {
         /// Path to the harvest database

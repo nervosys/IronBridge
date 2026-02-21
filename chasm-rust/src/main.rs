@@ -661,6 +661,9 @@ fn main() -> Result<()> {
                 force,
                 dry_run,
             ),
+            HarvestCommands::Compact { path, dry_run } => {
+                commands::harvest_compact(path.as_deref(), dry_run)
+            }
             HarvestCommands::Rebuild { path } => commands::harvest_rebuild_fts(path.as_deref()),
             HarvestCommands::Search {
                 query,

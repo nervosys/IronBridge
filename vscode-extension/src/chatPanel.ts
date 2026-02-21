@@ -171,14 +171,27 @@ export class ChasmChatPanel {
     }
 
     private async _loadSessions() {
-        // Load from workspace storage
+        // Load from workspace storage via CLI
         try {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (workspaceFolder) {
-                const result = await this._executor.execute(['list', 'sessions', '--json', '--path', workspaceFolder.uri.fsPath]);
+                const result = await this._executor.execute(['list', 'sessions', '--project_path', workspaceFolder.uri.fsPath]);
                 if (result.success && result.output) {
-                    const rawSessions = JSON.parse(result.output);
-                    this._sessions = rawSessions.map((s: any) => this._convertSession(s));
+                    // CLI outputs an ASCII table, parse it
+                    const parsed = this._executor.parseSessionList(result.output);
+                    if (parsed.length > 0) {
+                        this._sessions = parsed.map((s: any) => ({
+                            id: s.sessionFile.replace(/\.(json|jsonl)$/i, ''),
+                            title: s.sessionFile.replace(/\.(json|jsonl)$/i, '').substring(0, 8) + '...',
+                            messages: [],
+                            messageCount: s.messages || 0,
+                            createdAt: new Date(s.lastModified || Date.now()),
+                            updatedAt: new Date(s.lastModified || Date.now()),
+                            model: 'unknown',
+                            provider: 'copilot',
+                            metadata: {}
+                        }));
+                    }
                 }
             }
         } catch (e) {

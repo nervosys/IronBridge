@@ -402,9 +402,16 @@ pub async fn get_session(state: web::Data<AppState>, path: web::Path<String>) ->
             let tool_invocations = get_tool_invocations(&db.conn, &sid)?;
             let file_changes = get_file_changes(&db.conn, &sid)?;
 
+            // If session_json was compacted (no requests), fall back to messages_v2
+            let final_messages = if messages.is_empty() {
+                get_messages_v2(&db.conn, &sid)?
+            } else {
+                messages
+            };
+
             Ok::<_, rusqlite::Error>(Some(serde_json::json!({
                 "session": session,
-                "messages": messages,
+                "messages": final_messages,
                 "tool_invocations": tool_invocations,
                 "file_changes": file_changes,
             })))
@@ -723,6 +730,54 @@ pub async fn search_sessions(
 // =============================================================================
 // Helper functions for enhanced message data
 // =============================================================================
+
+/// Retrieve messages from the messages_v2 table for a given session.
+/// Used as a fallback when session_json has been compacted.
+fn get_messages_v2(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> Result<Vec<serde_json::Value>, rusqlite::Error> {
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='messages_v2'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !table_exists {
+        return Ok(Vec::new());
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT id, message_index, role, content_raw, content_markdown,
+                model_id, timestamp, is_canceled, metadata_json, request_id, response_id
+         FROM messages_v2
+         WHERE session_id = ?1
+         ORDER BY message_index",
+    )?;
+
+    let messages: Vec<serde_json::Value> = stmt
+        .query_map([session_id], |row| {
+            let metadata: Option<String> = row.get(8)?;
+            Ok(serde_json::json!({
+                "index": row.get::<_, i64>(1)?,
+                "role": row.get::<_, String>(2)?,
+                "content": row.get::<_, String>(3)?,
+                "content_raw": row.get::<_, String>(3)?,
+                "content_markdown": row.get::<_, Option<String>>(4)?,
+                "model_id": row.get::<_, Option<String>>(5)?,
+                "created_at": row.get::<_, Option<i64>>(6)?,
+                "is_canceled": row.get::<_, i64>(7)? > 0,
+                "metadata": metadata.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()),
+                "request_id": row.get::<_, Option<String>>(9)?,
+                "response_id": row.get::<_, Option<String>>(10)?,
+            }))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(messages)
+}
 
 fn get_tool_invocations(
     conn: &rusqlite::Connection,

@@ -80,12 +80,67 @@ function buildSessionMarkdown(sessionData: any, pureSessionId: string): string {
  * Since VS Code's chat session loading API is internal-only, we offer
  * various ways to interact with the session data.
  */
+/**
+ * Parse a JSONL event-sourced session file into a session data object.
+ * JSONL format uses kind: 0 (initial state), 1 (delta update), 2 (array splice).
+ */
+function parseJsonlSessionFile(content: string): any {
+    const lines = content.split('\n').filter(line => line.trim());
+    let sessionData: any = { requests: [], version: 3 };
+
+    for (const line of lines) {
+        try {
+            const event = JSON.parse(line);
+            const kind = event.kind ?? 0;
+
+            if (kind === 0 && event.v) {
+                // Initial state
+                sessionData = {
+                    ...event.v,
+                    requests: event.v.requests || [],
+                };
+            } else if (kind === 1 && event.k && event.v !== undefined) {
+                // Delta update - apply value at key path
+                const keys: (string | number)[] = event.k;
+                if (keys.length === 1 && keys[0] === 'customTitle') {
+                    sessionData.customTitle = event.v;
+                } else if (keys.length >= 2 && keys[0] === 'requests') {
+                    const idx = keys[1] as number;
+                    if (sessionData.requests[idx]) {
+                        let target = sessionData.requests[idx];
+                        for (let i = 2; i < keys.length - 1; i++) {
+                            target = target[keys[i]];
+                        }
+                        if (keys.length > 2) {
+                            target[keys[keys.length - 1]] = event.v;
+                        } else {
+                            // keys = ['requests', idx] — replace entire request
+                            sessionData.requests[idx] = event.v;
+                        }
+                    }
+                }
+            } else if (kind === 2 && event.k && Array.isArray(event.v)) {
+                // Array splice
+                const keys: (string | number)[] = event.k;
+                if (keys.length === 1 && keys[0] === 'requests') {
+                    const spliceIndex = event.i ?? sessionData.requests.length;
+                    sessionData.requests.splice(spliceIndex, 0, ...event.v);
+                }
+            }
+        } catch {
+            // Skip malformed lines
+        }
+    }
+
+    return sessionData;
+}
+
 async function openChatSession(sessionId: string, output: vscode.OutputChannel): Promise<void> {
-    // Strip .json extension if present
-    const pureSessionId = sessionId.replace(/\.json$/i, '');
+    // Strip .json or .jsonl extension if present
+    const pureSessionId = sessionId.replace(/\.(json|jsonl)$/i, '');
     const shortId = pureSessionId.substring(0, 8);
 
-    // Find the session file
+    // Find the session file (try .jsonl first since VS Code 1.109+ uses it, then .json)
     let sessionData: any = null;
     let foundSessionPath = '';
 
@@ -96,10 +151,22 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
         if (fs.existsSync(workspaceStoragePath)) {
             const workspaceDirs = fs.readdirSync(workspaceStoragePath);
             for (const wsDir of workspaceDirs) {
-                const sessionFile = path.join(workspaceStoragePath, wsDir, 'chatSessions', `${pureSessionId}.json`);
-                if (fs.existsSync(sessionFile)) {
-                    foundSessionPath = sessionFile;
-                    sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
+                const chatSessionsDir = path.join(workspaceStoragePath, wsDir, 'chatSessions');
+                // Try .jsonl first (VS Code 1.109+), then .json (legacy)
+                for (const ext of ['.jsonl', '.json']) {
+                    const sessionFile = path.join(chatSessionsDir, `${pureSessionId}${ext}`);
+                    if (fs.existsSync(sessionFile)) {
+                        foundSessionPath = sessionFile;
+                        const content = fs.readFileSync(sessionFile, 'utf-8');
+                        if (ext === '.jsonl') {
+                            sessionData = parseJsonlSessionFile(content);
+                        } else {
+                            sessionData = JSON.parse(content);
+                        }
+                        break;
+                    }
+                }
+                if (sessionData) {
                     break;
                 }
             }

@@ -631,6 +631,14 @@ pub fn harvest_run(
     }
 
     let conn = Connection::open(&db_path)?;
+
+    // Enable WAL mode and set pragmas for large databases
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA cache_size = -64000;",
+    )?;
+
     let mut stats = HarvestStats::default();
 
     // Get last harvest time for incremental updates
@@ -723,10 +731,10 @@ pub fn harvest_run(
                             pt.display_name(),
                             None,
                             None,
-                            None,           // provider_version
-                            3,              // schema_version (V3)
-                            "json",         // file_format
-                            None,           // workspace_path
+                            None,   // provider_version
+                            3,      // schema_version (V3)
+                            "json", // file_format
+                            None,   // workspace_path
                         ) {
                             Ok(updated) => {
                                 if updated {
@@ -1429,6 +1437,13 @@ fn get_db_path(path: Option<&str>) -> Result<PathBuf> {
 fn create_harvest_database(path: &Path) -> Result<()> {
     let conn = Connection::open(path)?;
 
+    // Use larger page size and WAL mode for better performance with large session data
+    conn.execute_batch(
+        "PRAGMA page_size = 8192;
+         PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;",
+    )?;
+
     conn.execute_batch(
         r#"
         -- Sessions table (original harvest format)
@@ -1602,16 +1617,18 @@ fn create_harvest_database(path: &Path) -> Result<()> {
         );
         
         -- Triggers to keep FTS index in sync with messages_v2
+        -- Note: messages_fts is a standalone FTS5 table, so use regular DELETE (not the
+        -- external-content 'delete' command which causes SQL logic errors on standalone tables)
         CREATE TRIGGER IF NOT EXISTS messages_v2_ai AFTER INSERT ON messages_v2 BEGIN
             INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
         END;
         
         CREATE TRIGGER IF NOT EXISTS messages_v2_ad AFTER DELETE ON messages_v2 BEGIN
-            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+            DELETE FROM messages_fts WHERE rowid = old.id;
         END;
         
         CREATE TRIGGER IF NOT EXISTS messages_v2_au AFTER UPDATE ON messages_v2 BEGIN
-            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+            DELETE FROM messages_fts WHERE rowid = old.id;
             INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
         END;
         "#,
@@ -3084,6 +3101,152 @@ pub fn harvest_restore_checkpoint(
 }
 
 // ============================================================================
+// Compact Command
+// ============================================================================
+
+/// Compact the harvest database by stripping session_json request blobs.
+///
+/// Sessions that have been expanded into messages_v2 have their data duplicated:
+/// once in the raw session_json TEXT blob and again in the normalized messages_v2,
+/// tool_invocations, and file_changes tables. This command replaces session_json
+/// with a minimal metadata stub (keeping session_id, title, dates, etc.) and then
+/// runs VACUUM to reclaim disk space.
+pub fn harvest_compact(db_path: Option<&str>, dry_run: bool) -> Result<()> {
+    let db_path = get_db_path(db_path)?;
+
+    if !db_path.exists() {
+        anyhow::bail!("Harvest database not found. Run 'csm harvest init' first.");
+    }
+
+    println!("\n{} Harvest Database Compact", "[H]".magenta().bold());
+    println!("{}", "=".repeat(60));
+
+    let file_size_before = std::fs::metadata(&db_path)?.len();
+    println!(
+        "{} Database: {} ({:.2} MB)",
+        "[*]".blue(),
+        db_path.display(),
+        file_size_before as f64 / 1_048_576.0
+    );
+
+    let conn = Connection::open(&db_path)?;
+
+    // Count sessions that have been expanded into messages_v2
+    let expanded_count: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT s.id) FROM sessions s
+         INNER JOIN messages_v2 m ON m.session_id = s.id",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let total_sessions: i64 =
+        conn.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
+
+    // Measure current session_json size
+    let json_size: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(LENGTH(session_json)), 0) FROM sessions",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Measure expanded session_json size (those with messages_v2 data)
+    let expanded_json_size: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(LENGTH(s.session_json)), 0) FROM sessions s
+             WHERE s.id IN (SELECT DISTINCT session_id FROM messages_v2)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    println!(
+        "{} Total sessions: {}",
+        "[*]".blue(),
+        total_sessions.to_string().truecolor(252, 152, 103)
+    );
+    println!(
+        "{} Sessions with messages_v2 data: {}",
+        "[*]".blue(),
+        expanded_count.to_string().truecolor(252, 152, 103)
+    );
+    println!(
+        "{} Current session_json size: {:.2} MB",
+        "[*]".blue(),
+        json_size as f64 / 1_048_576.0
+    );
+    println!(
+        "{} Compactable session_json size: {:.2} MB",
+        "[*]".blue(),
+        expanded_json_size as f64 / 1_048_576.0
+    );
+
+    if expanded_count == 0 {
+        println!(
+            "\n{} Nothing to compact — no sessions have messages_v2 data.",
+            "[i]".dimmed()
+        );
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "\n{} Dry run — would compact {} sessions, freeing ~{:.2} MB of JSON blobs.",
+            "[i]".yellow(),
+            expanded_count,
+            expanded_json_size as f64 / 1_048_576.0
+        );
+        return Ok(());
+    }
+
+    // Strip requests from session_json, keeping only metadata
+    println!("\n{} Compacting session_json blobs...", "[*]".blue());
+
+    let compacted = conn.execute(
+        r#"UPDATE sessions SET session_json = json_object(
+            'session_id', json_extract(session_json, '$.session_id'),
+            'version', json_extract(session_json, '$.version'),
+            'creation_date', json_extract(session_json, '$.creation_date'),
+            'last_message_date', json_extract(session_json, '$.last_message_date'),
+            'custom_title', json_extract(session_json, '$.custom_title'),
+            'initial_location', json_extract(session_json, '$.initial_location'),
+            'is_imported', json_extract(session_json, '$.is_imported'),
+            'requester_username', json_extract(session_json, '$.requester_username'),
+            'responder_username', json_extract(session_json, '$.responder_username'),
+            'request_count', message_count,
+            '_compacted', 1
+        ) WHERE id IN (SELECT DISTINCT session_id FROM messages_v2)"#,
+        [],
+    )?;
+
+    println!(
+        "   {} Compacted {} session JSON blobs",
+        "[+]".green(),
+        compacted
+    );
+
+    // VACUUM to reclaim space
+    println!("{} Running VACUUM to reclaim disk space...", "[*]".blue());
+    conn.execute_batch("VACUUM")?;
+
+    let file_size_after = std::fs::metadata(&db_path)?.len();
+    let saved = if file_size_before > file_size_after {
+        file_size_before - file_size_after
+    } else {
+        0
+    };
+
+    println!();
+    println!("{} Compact complete!", "[+]".green().bold());
+    println!("   Before: {:.2} MB", file_size_before as f64 / 1_048_576.0);
+    println!("   After:  {:.2} MB", file_size_after as f64 / 1_048_576.0);
+    println!("   Saved:  {:.2} MB", saved as f64 / 1_048_576.0);
+
+    Ok(())
+}
+
+// ============================================================================
 // Search Commands
 // ============================================================================
 
@@ -3309,9 +3472,7 @@ pub fn harvest_search(
         );
 
         // Display the snippet (already extracted by SQL or FTS5 snippet())
-        let clean_snippet = snippet
-            .replace('\n', " ")
-            .replace('\r', "");
+        let clean_snippet = snippet.replace('\n', " ").replace('\r', "");
         println!("   {}", clean_snippet.dimmed());
         println!();
     }
@@ -3477,11 +3638,11 @@ fn sync_push(
 
     let rows = stmt.query_map(params_refs.as_slice(), |row| {
         Ok((
-            row.get::<_, String>(0)?,      // id
-            row.get::<_, String>(1)?,      // provider
-            row.get::<_, String>(2)?,      // workspace_path
+            row.get::<_, String>(0)?,         // id
+            row.get::<_, String>(1)?,         // provider
+            row.get::<_, String>(2)?,         // workspace_path
             row.get::<_, Option<String>>(3)?, // workspace_name
-            row.get::<_, String>(4)?,      // session_json
+            row.get::<_, String>(4)?,         // session_json
             row.get::<_, Option<String>>(5)?, // file_format
         ))
     })?;
@@ -3493,7 +3654,14 @@ fn sync_push(
 
     for row_result in rows {
         match row_result {
-            Ok((session_id, provider_name, workspace_path, workspace_name, session_json, stored_format)) => {
+            Ok((
+                session_id,
+                provider_name,
+                workspace_path,
+                workspace_name,
+                session_json,
+                stored_format,
+            )) => {
                 // Determine target directory
                 let ws_path = PathBuf::from(&workspace_path);
                 let chat_dir = ws_path.join(".vscode").join("chat");
@@ -3657,11 +3825,9 @@ fn sync_pull(
 
                     // Check if session already exists
                     let exists: bool = conn
-                        .query_row(
-                            "SELECT 1 FROM sessions WHERE id = ?",
-                            [&session_id],
-                            |_| Ok(true),
-                        )
+                        .query_row("SELECT 1 FROM sessions WHERE id = ?", [&session_id], |_| {
+                            Ok(true)
+                        })
                         .unwrap_or(false);
 
                     if exists && !force {
@@ -3702,12 +3868,7 @@ fn sync_pull(
                                 pulled += 1;
                             }
                             Err(e) => {
-                                println!(
-                                    "   {} Error pulling {}: {}",
-                                    "[!]".red(),
-                                    session_id,
-                                    e
-                                );
+                                println!("   {} Error pulling {}: {}", "[!]".red(), session_id, e);
                                 errors += 1;
                             }
                         }
