@@ -296,6 +296,12 @@
                 "icon": "$(open-preview)"
             },
             {
+                "command": "chasm.repairSession",
+                "title": "Repair Oversized Session",
+                "icon": "$(wrench)",
+                "category": "Chasm"
+            },
+            {
                 "command": "chasm.mergeSessionsForWorkspace",
                 "title": "Merge All Sessions",
                 "icon": "$(git-merge)"
@@ -474,6 +480,11 @@
                     "command": "chasm.loadSession",
                     "when": "view == chasm.sessions && viewItem == session",
                     "group": "inline"
+                },
+                {
+                    "command": "chasm.repairSession",
+                    "when": "view == chasm.sessions && viewItem == session",
+                    "group": "1_actions"
                 },
                 {
                     "command": "chasm.mergeSessionsForWorkspace",

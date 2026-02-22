@@ -12,15 +12,21 @@ export class SessionItem extends vscode.TreeItem {
         super(sessionInfo.sessionFile, collapsibleState);
 
         this.tooltip = `Session: ${sessionInfo.sessionFile}\nLast Modified: ${sessionInfo.lastModified}\nMessages: ${sessionInfo.messages}`;
-        this.description = `${sessionInfo.messages} messages`;
 
-        // Set icon based on message count
-        if (sessionInfo.messages > 100) {
-            this.iconPath = new vscode.ThemeIcon('comment-discussion');
-        } else if (sessionInfo.messages > 10) {
-            this.iconPath = new vscode.ThemeIcon('comment');
+        if (sessionInfo.messages === 0) {
+            this.description = 'empty';
+            this.iconPath = new vscode.ThemeIcon('circle-slash');
         } else {
-            this.iconPath = new vscode.ThemeIcon('comment-draft');
+            this.description = `${sessionInfo.messages} messages`;
+
+            // Set icon based on message count
+            if (sessionInfo.messages > 100) {
+                this.iconPath = new vscode.ThemeIcon('comment-discussion');
+            } else if (sessionInfo.messages > 10) {
+                this.iconPath = new vscode.ThemeIcon('comment');
+            } else {
+                this.iconPath = new vscode.ThemeIcon('comment-draft');
+            }
         }
 
         this.contextValue = 'session';

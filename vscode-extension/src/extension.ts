@@ -140,48 +140,142 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
     const pureSessionId = sessionId.replace(/\.(json|jsonl)$/i, '');
     const shortId = pureSessionId.substring(0, 8);
 
-    // Find the session file (try .jsonl first since VS Code 1.109+ uses it, then .json)
     let sessionData: any = null;
     let foundSessionPath = '';
 
-    try {
-        const appDataPath = process.env.APPDATA || '';
-        const workspaceStoragePath = path.join(appDataPath, 'Code', 'User', 'workspaceStorage');
+    // Use progress indicator since large files can take time
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Loading session ${shortId}...`,
+        cancellable: false
+    }, async (progress) => {
+        try {
+            const appDataPath = process.env.APPDATA || '';
+            const workspaceStoragePath = path.join(appDataPath, 'Code', 'User', 'workspaceStorage');
 
-        if (fs.existsSync(workspaceStoragePath)) {
+            if (!fs.existsSync(workspaceStoragePath)) {
+                return;
+            }
+
             const workspaceDirs = fs.readdirSync(workspaceStoragePath);
+
+            // Phase 1: Collect ALL candidate files with sizes (no reading yet)
+            interface CandidateFile {
+                filePath: string;
+                ext: string;
+                size: number;
+            }
+            const candidates: CandidateFile[] = [];
+
+            progress.report({ message: 'Searching workspace storage...' });
+
             for (const wsDir of workspaceDirs) {
                 const chatSessionsDir = path.join(workspaceStoragePath, wsDir, 'chatSessions');
-                // Try .jsonl first (VS Code 1.109+), then .json (legacy), then .backup (recovery)
                 for (const ext of ['.jsonl', '.json', '.backup']) {
                     const sessionFile = path.join(chatSessionsDir, `${pureSessionId}${ext}`);
-                    if (fs.existsSync(sessionFile)) {
-                        foundSessionPath = sessionFile;
-                        const content = fs.readFileSync(sessionFile, 'utf-8');
-                        if (ext === '.jsonl') {
-                            sessionData = parseJsonlSessionFile(content);
-                        } else {
-                            // Both .json and .backup are V3 JSON format
-                            sessionData = JSON.parse(content);
-                        }
-                        // If we found a file but it has no requests, keep looking
-                        // (a .backup file may have the actual data)
-                        if (sessionData?.requests?.length > 0) {
-                            break;
+                    try {
+                        const stat = fs.statSync(sessionFile);
+                        candidates.push({ filePath: sessionFile, ext, size: stat.size });
+                    } catch {
+                        // File doesn't exist
+                    }
+                }
+            }
+
+            if (candidates.length === 0) {
+                return;
+            }
+
+            // Phase 2: Sort by size ascending — try smaller files first to avoid
+            // blocking on huge files (e.g. 185MB .jsonl) when a smaller alternative exists
+            candidates.sort((a, b) => a.size - b.size);
+
+            const MAX_AUTO_SIZE = 50 * 1024 * 1024; // 50MB auto-load threshold
+            output.appendLine(`[openChatSession] Found ${candidates.length} candidate files for ${shortId}`);
+            for (const c of candidates) {
+                output.appendLine(`  ${path.basename(c.filePath)} (${(c.size / 1024 / 1024).toFixed(1)}MB)`);
+            }
+
+            // Phase 3: Try reading candidates under the size threshold
+            for (const candidate of candidates) {
+                if (candidate.size > MAX_AUTO_SIZE) {
+                    output.appendLine(`[openChatSession] Deferring ${path.basename(candidate.filePath)} (${(candidate.size / 1024 / 1024).toFixed(0)}MB exceeds ${MAX_AUTO_SIZE / 1024 / 1024}MB auto-load limit)`);
+                    continue;
+                }
+
+                progress.report({ message: `Reading ${path.basename(candidate.filePath)} (${(candidate.size / 1024 / 1024).toFixed(1)}MB)...` });
+
+                try {
+                    const content = await fs.promises.readFile(candidate.filePath, 'utf-8');
+                    let parsed: any;
+                    if (candidate.ext === '.jsonl') {
+                        parsed = parseJsonlSessionFile(content);
+                    } else {
+                        parsed = JSON.parse(content);
+                    }
+
+                    if (parsed?.requests?.length > 0) {
+                        sessionData = parsed;
+                        foundSessionPath = candidate.filePath;
+                        output.appendLine(`[openChatSession] Loaded ${path.basename(candidate.filePath)} with ${parsed.requests.length} requests`);
+                        break;
+                    } else if (!sessionData) {
+                        // Keep first result even if empty, as fallback
+                        sessionData = parsed;
+                        foundSessionPath = candidate.filePath;
+                    }
+                } catch (e) {
+                    output.appendLine(`[openChatSession] Error reading ${path.basename(candidate.filePath)}: ${e}`);
+                }
+            }
+
+            // Phase 4: If no small file had content, offer to load large files
+            if (!sessionData?.requests?.length) {
+                const largeCandidates = candidates.filter(c => c.size > MAX_AUTO_SIZE);
+                if (largeCandidates.length > 0) {
+                    const sizes = largeCandidates.map(c =>
+                        `${path.basename(c.filePath)} (${(c.size / 1024 / 1024).toFixed(0)}MB)`
+                    ).join(', ');
+
+                    const choice = await vscode.window.showWarningMessage(
+                        `Session files are very large: ${sizes}. Loading may take a while. Proceed?`,
+                        'Load',
+                        'Cancel'
+                    );
+
+                    if (choice === 'Load') {
+                        // Pick largest file (most likely to have all content)
+                        const target = largeCandidates[largeCandidates.length - 1];
+                        progress.report({ message: `Reading large file (${(target.size / 1024 / 1024).toFixed(0)}MB)...` });
+
+                        try {
+                            const content = await fs.promises.readFile(target.filePath, 'utf-8');
+                            if (target.ext === '.jsonl') {
+                                sessionData = parseJsonlSessionFile(content);
+                            } else {
+                                sessionData = JSON.parse(content);
+                            }
+                            foundSessionPath = target.filePath;
+                            output.appendLine(`[openChatSession] Loaded large file ${path.basename(target.filePath)} with ${sessionData?.requests?.length || 0} requests`);
+                        } catch (e) {
+                            output.appendLine(`[openChatSession] Error reading large file: ${e}`);
+                            vscode.window.showErrorMessage(`Failed to load large session file: ${e}`);
                         }
                     }
                 }
-                if (sessionData?.requests?.length > 0) {
-                    break;
-                }
             }
+        } catch (e) {
+            output.appendLine(`[openChatSession] Error: ${e}`);
         }
-    } catch (e) {
-        output.appendLine(`Error finding session: ${e}`);
-    }
+    });
 
     if (!sessionData) {
         vscode.window.showErrorMessage(`Session not found: ${shortId}...`);
+        return;
+    }
+
+    if (!sessionData.requests?.length) {
+        vscode.window.showInformationMessage(`Session ${shortId}... is empty (0 messages).`);
         return;
     }
 
@@ -505,6 +599,141 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             await openChatSession(item.sessionInfo.sessionFile, outputChannel);
+        }),
+
+        // Repair oversized session files by compacting them
+        vscode.commands.registerCommand('chasm.repairSession', async (item?: import('./sessionProvider').SessionItem) => {
+            const sessionFile = item?.sessionInfo?.sessionFile;
+            if (!sessionFile) {
+                vscode.window.showWarningMessage('No session selected');
+                return;
+            }
+
+            const pureSessionId = sessionFile.replace(/\.(json|jsonl)$/i, '');
+            const shortId = pureSessionId.substring(0, 8);
+
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Repairing session ${shortId}...`,
+                cancellable: false
+            }, async (progress) => {
+                try {
+                    const appDataPath = process.env.APPDATA || '';
+                    const workspaceStoragePath = path.join(appDataPath, 'Code', 'User', 'workspaceStorage');
+                    if (!fs.existsSync(workspaceStoragePath)) {
+                        vscode.window.showErrorMessage('Workspace storage not found');
+                        return;
+                    }
+
+                    const workspaceDirs = fs.readdirSync(workspaceStoragePath);
+
+                    // Find all matching files with sizes
+                    interface FileInfo { filePath: string; ext: string; size: number; }
+                    const allFiles: FileInfo[] = [];
+
+                    for (const wsDir of workspaceDirs) {
+                        const chatSessionsDir = path.join(workspaceStoragePath, wsDir, 'chatSessions');
+                        for (const ext of ['.jsonl', '.json', '.backup']) {
+                            const fp = path.join(chatSessionsDir, `${pureSessionId}${ext}`);
+                            try {
+                                const stat = fs.statSync(fp);
+                                allFiles.push({ filePath: fp, ext, size: stat.size });
+                            } catch { /* not found */ }
+                        }
+                    }
+
+                    if (allFiles.length === 0) {
+                        vscode.window.showErrorMessage('No session files found');
+                        return;
+                    }
+
+                    // Find oversized .jsonl files that need repair
+                    const MAX_HEALTHY_SIZE = 20 * 1024 * 1024; // 20MB
+                    const oversized = allFiles.filter(f => f.ext === '.jsonl' && f.size > MAX_HEALTHY_SIZE);
+
+                    if (oversized.length === 0) {
+                        vscode.window.showInformationMessage(`Session ${shortId} files are already within healthy size limits.`);
+                        return;
+                    }
+
+                    // Find smallest file with content to use as source
+                    const sortedBySize = [...allFiles].sort((a, b) => a.size - b.size);
+                    let source: FileInfo | null = null;
+                    let sessionData: any = null;
+
+                    for (const fi of sortedBySize) {
+                        if (fi.size > 100 * 1024 * 1024) { break; } // skip > 100MB
+                        progress.report({ message: `Reading ${path.basename(fi.filePath)}...` });
+                        try {
+                            const content = await fs.promises.readFile(fi.filePath, 'utf-8');
+                            let parsed: any;
+                            if (fi.ext === '.jsonl') {
+                                parsed = parseJsonlSessionFile(content);
+                            } else {
+                                parsed = JSON.parse(content);
+                            }
+                            if (parsed?.requests?.length > 0) {
+                                source = fi;
+                                sessionData = parsed;
+                                break;
+                            }
+                        } catch (e) {
+                            outputChannel.appendLine(`[repairSession] Error reading ${path.basename(fi.filePath)}: ${e}`);
+                        }
+                    }
+
+                    if (!sessionData?.requests?.length) {
+                        vscode.window.showErrorMessage(`Could not find session data in any file under 100MB. Manual repair needed.`);
+                        return;
+                    }
+
+                    outputChannel.appendLine(`[repairSession] Using ${path.basename(source!.filePath)} as source (${sessionData.requests.length} requests)`);
+
+                    // Build a compact JSONL file: single kind:0 event with all session data
+                    const compactData = {
+                        version: sessionData.version || 3,
+                        requests: sessionData.requests,
+                        ...(sessionData.customTitle && { customTitle: sessionData.customTitle }),
+                        ...(sessionData.creationDate && { creationDate: sessionData.creationDate }),
+                        ...(sessionData.sessionId && { sessionId: sessionData.sessionId }),
+                    };
+                    const compactJsonl = JSON.stringify({ kind: 0, v: compactData }) + '\n';
+                    const compactSizeMB = (Buffer.byteLength(compactJsonl, 'utf-8') / 1024 / 1024).toFixed(1);
+
+                    // Replace each oversized .jsonl file
+                    let repaired = 0;
+                    for (const target of oversized) {
+                        const oldSizeMB = (target.size / 1024 / 1024).toFixed(0);
+                        progress.report({ message: `Compacting ${path.basename(target.filePath)} (${oldSizeMB}MB → ${compactSizeMB}MB)...` });
+
+                        // Backup original
+                        const backupPath = target.filePath + '.bloated';
+                        try {
+                            await fs.promises.rename(target.filePath, backupPath);
+                            await fs.promises.writeFile(target.filePath, compactJsonl, 'utf-8');
+                            outputChannel.appendLine(`[repairSession] Compacted ${path.basename(target.filePath)}: ${oldSizeMB}MB → ${compactSizeMB}MB (backup: ${path.basename(backupPath)})`);
+                            repaired++;
+                        } catch (e) {
+                            outputChannel.appendLine(`[repairSession] Failed to compact ${path.basename(target.filePath)}: ${e}`);
+                            // Try to restore backup if write failed
+                            try { await fs.promises.rename(backupPath, target.filePath); } catch { /* best effort */ }
+                        }
+                    }
+
+                    if (repaired > 0) {
+                        const reload = await vscode.window.showInformationMessage(
+                            `Repaired ${repaired} oversized session file(s). Reload VS Code to see the session in Chat history.`,
+                            'Reload Window'
+                        );
+                        if (reload === 'Reload Window') {
+                            await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                        }
+                    }
+                } catch (e) {
+                    outputChannel.appendLine(`[repairSession] Error: ${e}`);
+                    vscode.window.showErrorMessage(`Repair failed: ${e}`);
+                }
+            });
         }),
 
         // Context menu: Merge sessions
