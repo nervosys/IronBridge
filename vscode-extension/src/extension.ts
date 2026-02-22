@@ -4,6 +4,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import { spawnSync } from 'child_process';
 import { ChasmExecutor } from './chasmExecutor';
 import { WorkspaceProvider, WorkspaceItem } from './workspaceProvider';
 import { SessionProvider } from './sessionProvider';
@@ -83,6 +85,10 @@ function buildSessionMarkdown(sessionData: any, pureSessionId: string): string {
 /**
  * Parse a JSONL event-sourced session file into a session data object.
  * JSONL format uses kind: 0 (initial state), 1 (delta update), 2 (array splice).
+ *
+ * Handles corrupt files where multiple JSON objects are concatenated on a
+ * single line (VS Code bug observed in large sessions). In that case, the
+ * parser truncates at the first complete JSON boundary and re-parses.
  */
 function parseJsonlSessionFile(content: string): any {
     const lines = content.split('\n').filter(line => line.trim());
@@ -91,48 +97,94 @@ function parseJsonlSessionFile(content: string): any {
     for (const line of lines) {
         try {
             const event = JSON.parse(line);
-            const kind = event.kind ?? 0;
-
-            if (kind === 0 && event.v) {
-                // Initial state
-                sessionData = {
-                    ...event.v,
-                    requests: event.v.requests || [],
-                };
-            } else if (kind === 1 && event.k && event.v !== undefined) {
-                // Delta update - apply value at key path
-                const keys: (string | number)[] = event.k;
-                if (keys.length === 1 && keys[0] === 'customTitle') {
-                    sessionData.customTitle = event.v;
-                } else if (keys.length >= 2 && keys[0] === 'requests') {
-                    const idx = keys[1] as number;
-                    if (sessionData.requests[idx]) {
-                        let target = sessionData.requests[idx];
-                        for (let i = 2; i < keys.length - 1; i++) {
-                            target = target[keys[i]];
-                        }
-                        if (keys.length > 2) {
-                            target[keys[keys.length - 1]] = event.v;
-                        } else {
-                            // keys = ['requests', idx] — replace entire request
-                            sessionData.requests[idx] = event.v;
-                        }
-                    }
-                }
-            } else if (kind === 2 && event.k && Array.isArray(event.v)) {
-                // Array splice
-                const keys: (string | number)[] = event.k;
-                if (keys.length === 1 && keys[0] === 'requests') {
-                    const spliceIndex = event.i ?? sessionData.requests.length;
-                    sessionData.requests.splice(spliceIndex, 0, ...event.v);
+            applyJsonlEvent(event, sessionData);
+        } catch (e: any) {
+            // Attempt recovery: if parse fails partway through a line that is
+            // very large, the line may contain multiple concatenated JSON objects
+            // (a known VS Code JSONL corruption pattern). Try to parse just the
+            // first complete JSON object by finding the closing '}}' boundary.
+            if (line.length > 1000) {
+                const recovered = tryRecoverCorruptJsonlLine(line);
+                if (recovered) {
+                    applyJsonlEvent(recovered, sessionData);
                 }
             }
-        } catch {
-            // Skip malformed lines
         }
     }
 
     return sessionData;
+}
+
+/** Apply a parsed JSONL event (kind 0/1/2) to session data in-place. */
+function applyJsonlEvent(event: any, sessionData: any): void {
+    const kind = event.kind ?? 0;
+
+    if (kind === 0 && event.v) {
+        // Initial state — overwrite
+        Object.assign(sessionData, event.v, { requests: event.v.requests || [] });
+    } else if (kind === 1 && event.k && event.v !== undefined) {
+        // Delta update
+        const keys: (string | number)[] = event.k;
+        if (keys.length === 1 && keys[0] === 'customTitle') {
+            sessionData.customTitle = event.v;
+        } else if (keys.length >= 2 && keys[0] === 'requests') {
+            const idx = keys[1] as number;
+            if (sessionData.requests[idx]) {
+                let target = sessionData.requests[idx];
+                for (let i = 2; i < keys.length - 1; i++) {
+                    target = target[keys[i]];
+                }
+                if (keys.length > 2) {
+                    target[keys[keys.length - 1]] = event.v;
+                } else {
+                    sessionData.requests[idx] = event.v;
+                }
+            }
+        }
+    } else if (kind === 2 && event.k && Array.isArray(event.v)) {
+        // Array splice
+        const keys: (string | number)[] = event.k;
+        if (keys.length === 1 && keys[0] === 'requests') {
+            const spliceIndex = event.i ?? sessionData.requests.length;
+            sessionData.requests.splice(spliceIndex, 0, ...event.v);
+        } else if (keys.length >= 2 && keys[0] === 'requests') {
+            const reqIdx = keys[1] as number;
+            if (sessionData.requests[reqIdx]) {
+                let target = sessionData.requests[reqIdx];
+                for (let i = 2; i < keys.length; i++) {
+                    target = target[keys[i]];
+                }
+                if (Array.isArray(target)) {
+                    const spliceIdx = event.i ?? target.length;
+                    target.splice(spliceIdx, 0, ...event.v);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Try to recover a parseable JSON object from a corrupt JSONL line that has
+ * multiple JSON objects concatenated (e.g., `{"kind":0,...}{"kind":1,...}`).
+ *
+ * Strategy: find the boundary where `}{` appears (outside of a JSON string),
+ * and parse just the first object.  Falls back to trying `JSON.parse` on
+ * incrementally shorter substrings guided by `}{` positions.
+ */
+function tryRecoverCorruptJsonlLine(line: string): any | null {
+    // Quick scan from the end for `}{` which separates concatenated objects
+    // Search backward through last ~200 chars of the line
+    for (let scanPos = line.length - 2; scanPos > Math.max(0, line.length - 500); scanPos--) {
+        if (line[scanPos] === '}' && line[scanPos + 1] === '{') {
+            try {
+                const candidate = line.substring(0, scanPos + 1);
+                return JSON.parse(candidate);
+            } catch {
+                // Not the right boundary, keep looking
+            }
+        }
+    }
+    return null;
 }
 
 async function openChatSession(sessionId: string, output: vscode.OutputChannel): Promise<void> {
@@ -369,6 +421,329 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
     }
 }
 
+// ── Auto-sharding for oversized JSONL session files ──────────────────────────
+
+const SHARD_TARGET_SIZE = 10 * 1024 * 1024; // 10MB target per shard
+const OVERSIZED_THRESHOLD = 20 * 1024 * 1024; // Files above 20MB trigger sharding
+
+/**
+ * Scan all VS Code workspace storage directories for oversized session JSONL
+ * files and automatically shard them so VS Code can load them.
+ *
+ * Non-destructive: the original file is preserved as `.jsonl.oversized`.
+ * New shard files are created alongside with deterministic UUIDs, and
+ * VS Code's session index in state.vscdb is updated for each shard.
+ */
+async function autoShardOversizedSessions(output: vscode.OutputChannel): Promise<void> {
+    const appDataPath = process.env.APPDATA || '';
+    const workspaceStoragePath = path.join(appDataPath, 'Code', 'User', 'workspaceStorage');
+
+    if (!fs.existsSync(workspaceStoragePath)) {
+        return;
+    }
+
+    let workspaceDirs: string[];
+    try {
+        workspaceDirs = fs.readdirSync(workspaceStoragePath);
+    } catch {
+        return;
+    }
+
+    for (const wsDir of workspaceDirs) {
+        const chatSessionsDir = path.join(workspaceStoragePath, wsDir, 'chatSessions');
+        if (!fs.existsSync(chatSessionsDir)) {
+            continue;
+        }
+
+        let files: string[];
+        try {
+            files = fs.readdirSync(chatSessionsDir);
+        } catch {
+            continue;
+        }
+
+        for (const file of files) {
+            // Only process primary session JSONL files (UUID.jsonl)
+            if (!file.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.jsonl$/)) {
+                continue;
+            }
+
+            const filePath = path.join(chatSessionsDir, file);
+            let stat: fs.Stats;
+            try {
+                stat = fs.statSync(filePath);
+            } catch {
+                continue;
+            }
+
+            if (stat.size <= OVERSIZED_THRESHOLD) {
+                continue;
+            }
+
+            // Already sharded? (backup exists)
+            const backupPath = filePath + '.oversized';
+            if (fs.existsSync(backupPath)) {
+                continue;
+            }
+
+            output.appendLine(`[autoShard] Found oversized session: ${file} (${(stat.size / 1024 / 1024).toFixed(0)}MB)`);
+            try {
+                await shardSessionFile(filePath, wsDir, chatSessionsDir, output);
+            } catch (e) {
+                output.appendLine(`[autoShard] Error sharding ${file}: ${e}`);
+            }
+        }
+    }
+}
+
+/**
+ * Shard a single oversized JSONL session file into multiple smaller files.
+ *
+ * 1. Parses the JSONL events to reconstruct the full session
+ * 2. Splits the requests into size-bounded shards (target ~10MB each)
+ * 3. Writes each shard as a new JSONL file with a deterministic UUID
+ * 4. Copies the original to .jsonl.oversized (non-destructive backup)
+ * 5. Replaces the original with the last (most recent) shard
+ * 6. Updates VS Code's session index in state.vscdb
+ */
+async function shardSessionFile(
+    filePath: string,
+    workspaceHash: string,
+    chatSessionsDir: string,
+    output: vscode.OutputChannel
+): Promise<void> {
+    const fileName = path.basename(filePath);
+    const sessionId = fileName.replace('.jsonl', '');
+    const shortId = sessionId.substring(0, 8);
+
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Sharding oversized session ${shortId}...`,
+        cancellable: false
+    }, async (progress) => {
+        // Step 1: Read and parse the full JSONL
+        progress.report({ message: 'Reading session file (this may take a moment)...' });
+        let sessionData: any;
+        try {
+            const content = await fs.promises.readFile(filePath, 'utf-8');
+            sessionData = parseJsonlSessionFile(content);
+        } catch (e) {
+            output.appendLine(`[autoShard] Failed to read/parse ${fileName}: ${e}`);
+            return;
+        }
+
+        const requests = sessionData.requests || [];
+        if (requests.length === 0) {
+            output.appendLine(`[autoShard] ${fileName} has no requests, skipping`);
+            return;
+        }
+
+        output.appendLine(`[autoShard] Parsed ${requests.length} requests from ${fileName}`);
+
+        // Step 2: Split requests into size-bounded shards
+        const shards: { requests: any[]; startIdx: number; endIdx: number }[] = [];
+        let currentRequests: any[] = [];
+        let currentSize = 0;
+        let startIdx = 0;
+
+        for (let i = 0; i < requests.length; i++) {
+            const reqSize = Buffer.byteLength(JSON.stringify(requests[i]), 'utf-8');
+
+            // Start a new shard if adding this request would exceed the target
+            if (currentSize + reqSize > SHARD_TARGET_SIZE && currentRequests.length > 0) {
+                shards.push({ requests: currentRequests, startIdx, endIdx: i - 1 });
+                currentRequests = [];
+                currentSize = 0;
+                startIdx = i;
+            }
+
+            currentRequests.push(requests[i]);
+            currentSize += reqSize;
+        }
+        if (currentRequests.length > 0) {
+            shards.push({ requests: currentRequests, startIdx, endIdx: requests.length - 1 });
+        }
+
+        output.appendLine(`[autoShard] Splitting into ${shards.length} shards`);
+
+        // Step 3: Write shard files with deterministic UUIDs
+        const title = sessionData.customTitle || 'Untitled';
+        const shardMeta: { uuid: string; title: string; lastTimestamp: number; created: number }[] = [];
+
+        for (let i = 0; i < shards.length; i++) {
+            const shard = shards[i];
+
+            // Deterministic UUID from original session ID + shard index
+            const hash = crypto.createHash('md5').update(`${sessionId}-shard-${i}`).digest('hex');
+            const shardUuid = [
+                hash.substring(0, 8),
+                hash.substring(8, 12),
+                hash.substring(12, 16),
+                hash.substring(16, 20),
+                hash.substring(20, 32)
+            ].join('-');
+
+            const shardTitle = shards.length > 1
+                ? `${title} (Part ${i + 1}/${shards.length})`
+                : title;
+
+            const shardData = {
+                version: sessionData.version || 3,
+                sessionId: shardUuid,
+                creationDate: sessionData.creationDate || Date.now(),
+                customTitle: shardTitle,
+                initialLocation: 'panel',
+                requests: shard.requests,
+            };
+
+            const jsonlLine = JSON.stringify({ kind: 0, v: shardData }) + '\n';
+            const shardPath = path.join(chatSessionsDir, `${shardUuid}.jsonl`);
+
+            progress.report({ message: `Writing shard ${i + 1}/${shards.length}...` });
+            await fs.promises.writeFile(shardPath, jsonlLine, 'utf-8');
+
+            const lastReq = shard.requests[shard.requests.length - 1];
+            const firstReq = shard.requests[0];
+            shardMeta.push({
+                uuid: shardUuid,
+                title: shardTitle,
+                lastTimestamp: lastReq?.timestamp || Date.now(),
+                created: firstReq?.timestamp || sessionData.creationDate || Date.now(),
+            });
+
+            const sizeMB = (Buffer.byteLength(jsonlLine, 'utf-8') / 1024 / 1024).toFixed(1);
+            output.appendLine(`[autoShard]   Part ${i + 1}: ${shardUuid} — ${shard.requests.length} requests (${sizeMB}MB)`);
+        }
+
+        // Step 4: Non-destructive backup of the original
+        progress.report({ message: 'Backing up original...' });
+        const backupPath = filePath + '.oversized';
+        await fs.promises.copyFile(filePath, backupPath);
+        output.appendLine(`[autoShard] Backed up original → ${path.basename(backupPath)}`);
+
+        // Step 5: Replace original with last (most recent) shard so the
+        // original session entry in VS Code loads the newest messages
+        const lastShard = shards[shards.length - 1];
+        const latestData = {
+            version: sessionData.version || 3,
+            sessionId: sessionId,
+            creationDate: sessionData.creationDate || Date.now(),
+            customTitle: shards.length > 1 ? `${title} (Latest — Part ${shards.length}/${shards.length})` : title,
+            initialLocation: 'panel',
+            requests: lastShard.requests,
+        };
+        const latestJsonl = JSON.stringify({ kind: 0, v: latestData }) + '\n';
+        await fs.promises.writeFile(filePath, latestJsonl, 'utf-8');
+        const latestMB = (Buffer.byteLength(latestJsonl, 'utf-8') / 1024 / 1024).toFixed(1);
+        output.appendLine(`[autoShard] Replaced original with latest shard (${lastShard.requests.length} requests, ${latestMB}MB)`);
+
+        // Step 6: Update VS Code's session index to include the new shards
+        progress.report({ message: 'Updating session index...' });
+        try {
+            await updateSessionIndex(workspaceHash, sessionId, shardMeta, output);
+        } catch (e) {
+            output.appendLine(`[autoShard] Warning: could not update session index: ${e}`);
+            output.appendLine('[autoShard] Shard files were created; they will appear after manual index update.');
+        }
+
+        // Step 7: Notify user
+        const choice = await vscode.window.showInformationMessage(
+            `Sharded oversized session "${title}" into ${shards.length} loadable parts (original preserved as .oversized). Reload VS Code to see them.`,
+            'Reload Window'
+        );
+        if (choice === 'Reload Window') {
+            await vscode.commands.executeCommand('workbench.action.reloadWindow');
+        }
+    });
+}
+
+/**
+ * Update the VS Code Chat session index stored in state.vscdb so that
+ * newly-created shard files appear in the native Chat History picker.
+ *
+ * Uses the sqlite3 CLI via stdin to avoid shell-escaping issues with
+ * large JSON payloads.
+ */
+async function updateSessionIndex(
+    workspaceHash: string,
+    originalSessionId: string,
+    shardMeta: { uuid: string; title: string; lastTimestamp: number; created: number }[],
+    output: vscode.OutputChannel
+): Promise<void> {
+    const dbPath = path.join(
+        process.env.APPDATA || '',
+        'Code', 'User', 'workspaceStorage', workspaceHash, 'state.vscdb'
+    );
+
+    if (!fs.existsSync(dbPath)) {
+        output.appendLine(`[autoShard] state.vscdb not found: ${dbPath}`);
+        return;
+    }
+
+    // Read current index
+    const readResult = spawnSync('sqlite3', [dbPath, "SELECT value FROM ItemTable WHERE key = 'chat.ChatSessionStore.index';"], {
+        encoding: 'utf-8',
+        timeout: 15000,
+    });
+
+    if (readResult.status !== 0 || !readResult.stdout?.trim()) {
+        output.appendLine(`[autoShard] Could not read session index: ${readResult.stderr || 'empty result'}`);
+        return;
+    }
+
+    let index: any;
+    try {
+        index = JSON.parse(readResult.stdout.trim());
+    } catch (e) {
+        output.appendLine(`[autoShard] Could not parse session index: ${e}`);
+        return;
+    }
+
+    // Mark any broken .recovered entries as empty so they don't mislead users
+    const recoveredKey = `${originalSessionId}.recovered`;
+    if (index.entries[recoveredKey] && !index.entries[recoveredKey].isEmpty) {
+        index.entries[recoveredKey].isEmpty = true;
+        output.appendLine(`[autoShard] Marked broken recovered session as empty: ${recoveredKey}`);
+    }
+
+    // Add shard entries
+    for (const entry of shardMeta) {
+        index.entries[entry.uuid] = {
+            sessionId: entry.uuid,
+            title: entry.title,
+            lastMessageDate: entry.lastTimestamp,
+            timing: {
+                created: entry.created,
+                lastRequestStarted: entry.lastTimestamp,
+                lastRequestEnded: entry.lastTimestamp,
+            },
+            lastResponseState: 1,
+            initialLocation: 'panel',
+            isEmpty: false,
+            isImported: false,
+            hasPendingEdits: false,
+            isExternal: false,
+        };
+    }
+
+    // Write updated index via stdin to avoid shell-escaping issues
+    const updatedJson = JSON.stringify(index).replace(/'/g, "''");
+    const sql = `UPDATE ItemTable SET value = '${updatedJson}' WHERE key = 'chat.ChatSessionStore.index';\n`;
+
+    const writeResult = spawnSync('sqlite3', [dbPath], {
+        input: sql,
+        encoding: 'utf-8',
+        timeout: 15000,
+    });
+
+    if (writeResult.status !== 0) {
+        output.appendLine(`[autoShard] sqlite3 write error: ${writeResult.stderr}`);
+        throw new Error(`sqlite3 exit code ${writeResult.status}`);
+    }
+
+    output.appendLine(`[autoShard] Updated session index with ${shardMeta.length} shard entries`);
+}
+
 export function activate(context: vscode.ExtensionContext) {
     // Create output channel
     outputChannel = vscode.window.createOutputChannel('Chasm');
@@ -394,6 +769,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize executor with extension path for bundled binary lookup
     executor = new ChasmExecutor(outputChannel, context.extensionPath);
+
+    // Auto-shard oversized JSONL session files (deferred to avoid blocking startup)
+    setTimeout(() => {
+        autoShardOversizedSessions(outputChannel).catch(err => {
+            outputChannel.appendLine(`[autoShard] Unexpected error: ${err}`);
+        });
+    }, 3000);
 
     // Initialize tree providers
     workspaceProvider = new WorkspaceProvider(executor);
