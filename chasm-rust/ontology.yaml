@@ -13,9 +13,9 @@
 #   6. How to REASON about it (intents, workflows, constraints)
 #
 # Format: YAML (machine-parseable, human-readable)
-# Spec version: 1.0.0 (chasm ontology schema)
-# CLI version: 1.3.2
-# Updated: 2026-02-13
+# Spec version: 1.1.0 (chasm ontology schema)
+# CLI version: 1.5.3
+# Updated: 2025-07-14
 
 # =============================================================================
 # §1  IDENTITY
@@ -26,7 +26,7 @@ identity:
   full_name: "CHAt Session Manager"
   binary: chasm
   alt_binary: csm-mcp
-  version: 1.3.2
+  version: 1.5.3
   edition: rust-2021
   min_rust: "1.75"
   license: AGPL-3.0-only
@@ -788,17 +788,31 @@ capabilities:
             deltas into single snapshot) and rebuild the index with correct
             metadata (isEmpty, lastResponseState, timing).
           args:
-            --path:         { type: "string?" }
-            --all / -a:     { type: flag, description: "Repair all workspaces" }
-            --force / -f:   { type: flag }
-            --close-vscode: { type: flag }
-            --reopen:       { type: flag }
+            --path:          { type: "string?" }
+            --all / -a:      { type: flag, description: "Repair all workspaces" }
+            --recursive / -r: { type: flag, description: "Recursively scan directory tree for workspaces" }
+            --depth / -d:    { type: "integer?", description: "Max depth for --recursive" }
+            --exclude / -x:  { type: "string[]", description: "Skip directories matching patterns (for --recursive)" }
+            --dry-run:       { type: flag }
+            --force / -f:    { type: flag }
+            --close-vscode:  { type: flag }
+            --reopen:        { type: flag }
           fixes:
             - "Compacts multi-line JSONL into single kind:0 snapshot"
             - "Splits concatenated JSON objects that lack newline separators"
             - "Sets lastResponseState to 1 (Complete)"
             - "Recomputes isEmpty from actual request count"
             - "Backs up originals as .jsonl.bak"
+        trim:
+          aliases: [t]
+          description: "Trim oversized sessions by keeping only the most recent requests"
+          args:
+            --path:          { type: "string?" }
+            --keep / -k:     { type: integer, default: 20, description: "Number of recent requests to keep" }
+            --session / -s:  { type: "string?", description: "Session ID (default: largest session)" }
+            --all / -a:      { type: flag, description: "Trim all sessions over threshold" }
+            --threshold-mb:  { type: integer, default: 10, description: "Only trim sessions larger than N MB" }
+            --force / -f:    { type: flag }
 
     # -----------------------------------------------------------------------
     # sync
@@ -904,6 +918,12 @@ capabilities:
             --format:    { type: string, default: auto }
             --force:     { type: flag }
             --dry-run:   { type: flag }
+        compact:
+          aliases: [gc]
+          description: "Compact the database by stripping session_json blobs (data preserved in messages_v2)"
+          args:
+            --path:    { type: "string?" }
+            --dry-run: { type: flag, description: "Show what would be compacted without changes" }
         rebuild:
           description: "Rebuild the FTS5 full-text search index"
           args:
@@ -1137,6 +1157,54 @@ capabilities:
       args:
         shell: { type: enum, required: true, values: [bash, zsh, fish, powershell, elvish] }
 
+    # -----------------------------------------------------------------------
+    # shard
+    # -----------------------------------------------------------------------
+    shard:
+      description: "Split oversized sessions into linked shards (by request count or file size)"
+      subcommands:
+        session:
+          description: "Shard a single session file into linked parts"
+          args:
+            file:              { type: string, positional: true, required: true, description: "Path to .json or .jsonl session file" }
+            --max-requests / -n: { type: "integer?", default: 50, description: "Max requests per shard (mutually exclusive with --max-size)" }
+            --max-size / -s:   { type: "string?", description: "Max file size per shard, e.g. '10MB', '500KB' (mutually exclusive with --max-requests)" }
+            --output / -o:     { type: "string?", description: "Output directory (default: same as input)" }
+            --update-index:    { type: flag, description: "Update VS Code session index after sharding" }
+            --workspace / -w:  { type: "string?", description: "Workspace hash or project path (for --update-index)" }
+            --dry-run:         { type: flag }
+            --no-backup:       { type: flag, description: "Skip creating .oversized backup of original" }
+          mutually_exclusive: [--max-requests, --max-size]
+          output: "Linked shard files with _shardInfo metadata (prev/next pointers, deterministic UUIDs)"
+        workspace:
+          description: "Shard all oversized sessions in a workspace"
+          args:
+            --workspace / -w:    { type: "string?", description: "Workspace hash or project path (default: cwd)" }
+            --max-requests / -n: { type: "integer?", default: 50 }
+            --max-size / -s:     { type: "string?" }
+            --dry-run:           { type: flag }
+            --no-backup:         { type: flag }
+          mutually_exclusive: [--max-requests, --max-size]
+        info:
+          description: "Show shard metadata for a session file (linked-list pointers, part number)"
+          args:
+            file: { type: string, positional: true, required: true }
+      shard_metadata:
+        description: >
+          Each shard file contains a _shardInfo object with linked-list
+          pointers enabling agents to navigate between parts.
+        fields:
+          originalSessionId: { type: string, description: "UUID of the original unsplit session" }
+          shardIndex:        { type: integer, description: "0-based part number" }
+          totalShards:       { type: integer, description: "Total number of parts" }
+          prevShardId:       { type: "string?", description: "UUID of previous shard (null for first)" }
+          nextShardId:       { type: "string?", description: "UUID of next shard (null for last)" }
+          prevShardFile:     { type: "string?", description: "Filename of previous shard" }
+          nextShardFile:     { type: "string?", description: "Filename of next shard" }
+          requestRange:      { type: "[start, end]", description: "0-based request index range in this shard" }
+          strategy:          { type: string, values: [by_requests, by_size] }
+        uuid_generation: "Deterministic UUIDs derived from MD5(originalSessionId + shardIndex)"
+
 # =============================================================================
 # §4  INTERFACES — How Agents Can Interact
 # =============================================================================
@@ -1342,6 +1410,28 @@ workflows:
       - { command: "chasm doctor --full", purpose: "Full system check" }
       - { command: "chasm doctor --fix", purpose: "Auto-fix detected issues" }
 
+  shard_oversized_session:
+    description: "Split a session that's too large for VS Code to load into linked shards"
+    intent_triggers:
+      - "Session is too large"
+      - "Blank session"
+      - "Session won't load"
+      - "Split oversized session"
+      - "Shard session"
+    steps:
+      - { command: "chasm list sessions -s --project-path <project>", purpose: "Identify oversized files" }
+      - { command: "chasm shard session <file> --dry-run", purpose: "Preview shard plan (default: 50 requests/shard)" }
+      - { command: "chasm shard session <file> --update-index", purpose: "Execute sharding and update VS Code index" }
+      - { command: "chasm shard info <shard-file>", purpose: "Verify linked-list metadata" }
+    alternatives:
+      by_size: "chasm shard session <file> --max-size 10MB"
+      by_requests: "chasm shard session <file> --max-requests 25"
+      whole_workspace: "chasm shard workspace --workspace <path>"
+    constraints:
+      - "Original file is backed up as .oversized unless --no-backup is set"
+      - "Shard UUIDs are deterministic (MD5 of original ID + index)"
+      - "VS Code must be closed for --update-index to persist"
+
 # =============================================================================
 # §6  OBSERVABILITY — Diagnostics, Telemetry, and Health
 # =============================================================================
@@ -1431,14 +1521,29 @@ constraints:
       VS Code's JSON parser struggles with session files over ~50MB. Sessions
       that grow very large (100+ messages with rich context) may become
       unloadable in the editor even if the file is valid JSON.
-    implication: "Monitor file sizes with `chasm list sessions -s` and archive old sessions."
+    implication: >
+      Monitor file sizes with `chasm list sessions -s`. Use `chasm shard session <file>`
+      to split oversized sessions into linked shards (default: 50 requests per shard).
+      Alternatively, use `chasm register trim` to keep only recent requests.
 
   backup_convention:
-    description: "Chasm creates .bak files before destructive operations."
+    description: "Chasm creates backup files before destructive operations."
     files:
       - "*.jsonl.bak — original before JSONL compaction"
       - "*.json.bak — original before format conversion"
+      - "*.oversized — original before session sharding"
       - ".chasm_recovery/ — project-level recovery backups"
+
+  shard_linked_list:
+    description: >
+      Shard files form a doubly-linked list via _shardInfo.prevShardId and
+      nextShardId. Agents navigating shards should follow these pointers
+      rather than relying on filename patterns. UUIDs are deterministic
+      (MD5 of original session ID + shard index), ensuring idempotent
+      re-sharding produces identical output.
+    implication: >
+      Never delete individual shard files without updating the linked list.
+      Use `chasm shard info <file>` to inspect shard metadata.
 
 # =============================================================================
 # §8  SKILLS — Agent-Specific Task Knowledge
