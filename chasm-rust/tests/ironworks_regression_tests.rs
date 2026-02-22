@@ -290,6 +290,9 @@ mod index_format_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -338,6 +341,9 @@ mod index_format_tests {
                 last_response_state: 1,
                 initial_location: session.initial_location.clone(),
                 is_empty: session.is_empty(),
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -380,6 +386,9 @@ mod index_format_tests {
                 last_response_state: 1,
                 initial_location: session.initial_location.clone(),
                 is_empty: session.is_empty(),
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -502,6 +511,9 @@ mod sync_index_tests {
                         last_response_state: 1,
                         initial_location: session.initial_location.clone(),
                         is_empty,
+                        is_imported: None,
+                        has_pending_edits: None,
+                        is_external: None,
                     },
                 );
             }
@@ -560,6 +572,9 @@ mod sync_index_tests {
                 last_response_state: 1,
                 initial_location: session.initial_location.clone(),
                 is_empty: session.is_empty(),
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -711,6 +726,9 @@ mod ironworks_regression {
             last_response_state: 1,
             initial_location: session.initial_location.clone(),
             is_empty: session.is_empty(),
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
         };
 
         // THE CRITICAL ASSERTION
@@ -773,6 +791,9 @@ mod ironworks_regression {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 

@@ -753,9 +753,9 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                 }
             }
             2 => {
-                // Array replace/splice operation - 'k' is the key path, 'v' is the new array contents
-                // Optional 'i' field is the splice index: replace from index i onward
-                // Without 'i', this is a full replacement of the array at the key path
+                // Array splice operation - 'k' is the key path, 'v' is the new array items
+                // Optional 'i' field is the splice start index (truncate at i, then extend)
+                // Without 'i', items are appended to the end of the array
                 if let (Some(keys), Some(value)) = (entry.get("k"), entry.get("v")) {
                     let splice_index = entry.get("i").and_then(|i| i.as_u64()).map(|i| i as usize);
                     if let Some(keys_arr) = keys.as_array() {
@@ -766,10 +766,8 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                                     if let Some(idx) = splice_index {
                                         // Splice: truncate at index i, then extend with new items
                                         session.requests.truncate(idx);
-                                    } else {
-                                        // Full replacement: clear existing requests
-                                        session.requests.clear();
                                     }
+                                    // Without 'i': append to end (no truncation)
                                     for item in items {
                                         if let Ok(req) =
                                             serde_json::from_value::<ChatRequest>(item.clone())
@@ -823,9 +821,27 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                                                         Some(value.clone());
                                                 }
                                             } else {
-                                                // Full replacement
-                                                session.requests[req_idx].response =
-                                                    Some(value.clone());
+                                                // No splice index: append to existing response array
+                                                if let Some(existing) =
+                                                    session.requests[req_idx].response.as_ref()
+                                                {
+                                                    if let Some(existing_arr) = existing.as_array()
+                                                    {
+                                                        let mut new_arr = existing_arr.clone();
+                                                        if let Some(new_items) = value.as_array() {
+                                                            new_arr
+                                                                .extend(new_items.iter().cloned());
+                                                        }
+                                                        session.requests[req_idx].response =
+                                                            Some(serde_json::Value::Array(new_arr));
+                                                    } else {
+                                                        session.requests[req_idx].response =
+                                                            Some(value.clone());
+                                                    }
+                                                } else {
+                                                    session.requests[req_idx].response =
+                                                        Some(value.clone());
+                                                }
                                             }
                                         }
                                         "contentReferences" => {

@@ -124,6 +124,9 @@ mod read_chat_session_index_tests {
                     last_response_state: 1,
                     initial_location: "panel".to_string(),
                     is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
                 },
             );
         }
@@ -201,6 +204,9 @@ mod write_chat_session_index_tests {
                 last_response_state: 1,
                 initial_location: "editor".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -234,6 +240,9 @@ mod write_chat_session_index_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -258,6 +267,9 @@ mod write_chat_session_index_tests {
                 last_response_state: 1,
                 initial_location: "terminal".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -297,6 +309,9 @@ mod write_chat_session_index_tests {
                         [i as usize % 5]
                         .to_string(),
                     is_empty: i == 0,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
                 },
             );
         }
@@ -794,6 +809,9 @@ mod index_serialization_tests {
                 last_response_state: 1,
                 initial_location: "terminal".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -824,6 +842,9 @@ mod index_serialization_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -852,6 +873,9 @@ mod index_serialization_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -880,6 +904,9 @@ mod index_serialization_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: true,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 

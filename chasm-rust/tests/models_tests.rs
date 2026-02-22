@@ -569,6 +569,9 @@ mod chat_session_index_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -594,6 +597,9 @@ mod chat_session_index_tests {
                 last_response_state: 1,
                 initial_location: "panel".to_string(),
                 is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
             },
         );
 
@@ -651,6 +657,9 @@ mod chat_session_index_entry_tests {
             last_response_state: 1,
             initial_location: "panel".to_string(),
             is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
         };
 
         assert_eq!(entry.session_id, "test-id");
@@ -667,6 +676,9 @@ mod chat_session_index_entry_tests {
             last_response_state: 1,
             initial_location: "editor".to_string(),
             is_empty: true,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -701,6 +713,9 @@ mod chat_session_index_entry_tests {
             last_response_state: 1,
             initial_location: "terminal".to_string(),
             is_empty: false,
+                is_imported: None,
+                has_pending_edits: None,
+                is_external: None,
         };
 
         let cloned = entry.clone();
