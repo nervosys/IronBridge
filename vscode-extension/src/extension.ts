@@ -423,8 +423,104 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
 
 // ── Auto-sharding for oversized JSONL session files ──────────────────────────
 
-const SHARD_TARGET_SIZE = 10 * 1024 * 1024; // 10MB target per shard
+const SHARD_MAX_REQUESTS = 50; // Maximum requests per shard
 const OVERSIZED_THRESHOLD = 20 * 1024 * 1024; // Files above 20MB trigger sharding
+
+/**
+ * Search all workspace storage directories for duplicate copies of the same
+ * session (by session ID). This happens when VS Code re-hashes a workspace
+ * folder (e.g., path rename) and copies sessions to a new location.
+ *
+ * If a duplicate with more requests is found, merges those requests into the
+ * provided array (in-place, deduplicating by requestId).
+ */
+async function findAndMergeDuplicateSessions(
+    sessionId: string,
+    requests: any[],
+    currentDir: string,
+    output: vscode.OutputChannel
+): Promise<void> {
+    const appDataPath = process.env.APPDATA || '';
+    const workspaceStoragePath = path.join(appDataPath, 'Code', 'User', 'workspaceStorage');
+
+    if (!fs.existsSync(workspaceStoragePath)) {
+        return;
+    }
+
+    let workspaceDirs: string[];
+    try {
+        workspaceDirs = fs.readdirSync(workspaceStoragePath);
+    } catch {
+        return;
+    }
+
+    for (const wsDir of workspaceDirs) {
+        const chatSessionsDir = path.join(workspaceStoragePath, wsDir, 'chatSessions');
+        if (chatSessionsDir === currentDir || !fs.existsSync(chatSessionsDir)) {
+            continue;
+        }
+
+        // Check for .json and .jsonl variants of the same session ID
+        for (const ext of ['.json', '.jsonl', '.jsonl.bak', '.jsonl.bak2', '.json.bak']) {
+            const candidatePath = path.join(chatSessionsDir, sessionId + ext);
+            if (!fs.existsSync(candidatePath)) {
+                continue;
+            }
+
+            const stat = fs.statSync(candidatePath);
+            if (stat.size < 1000) {
+                continue; // Skip empty/tiny files
+            }
+
+            try {
+                const content = await fs.promises.readFile(candidatePath, 'utf-8');
+                let candidateData: any;
+
+                if (ext === '.json' || ext === '.json.bak') {
+                    candidateData = JSON.parse(content);
+                } else {
+                    candidateData = parseJsonlSessionFile(content);
+                }
+
+                const candidateReqs = candidateData?.requests || [];
+                if (candidateReqs.length > requests.length) {
+                    output.appendLine(`[autoShard] Found better copy in ${wsDir}${ext} with ${candidateReqs.length} requests (vs ${requests.length})`);
+
+                    // Build set of existing request IDs for dedup
+                    const existingIds = new Set(
+                        requests
+                            .map((r: any) => r.requestId || r.request_id)
+                            .filter(Boolean)
+                    );
+
+                    // Merge in any requests we don't already have
+                    let merged = 0;
+                    for (const req of candidateReqs) {
+                        const reqId = req.requestId || req.request_id;
+                        if (reqId && !existingIds.has(reqId)) {
+                            requests.push(req);
+                            existingIds.add(reqId);
+                            merged++;
+                        }
+                    }
+
+                    // If the candidate has many more, just replace entirely
+                    if (merged === 0 && candidateReqs.length > requests.length) {
+                        requests.length = 0;
+                        requests.push(...candidateReqs);
+                        output.appendLine(`[autoShard] Replaced with ${candidateReqs.length} requests from duplicate`);
+                    } else if (merged > 0) {
+                        // Sort by timestamp to maintain chronological order
+                        requests.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+                        output.appendLine(`[autoShard] Merged ${merged} additional requests (total: ${requests.length})`);
+                    }
+                }
+            } catch {
+                // Skip unparseable duplicates
+            }
+        }
+    }
+}
 
 /**
  * Scan all VS Code workspace storage directories for oversized session JSONL
@@ -463,8 +559,8 @@ async function autoShardOversizedSessions(output: vscode.OutputChannel): Promise
         }
 
         for (const file of files) {
-            // Only process primary session JSONL files (UUID.jsonl)
-            if (!file.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.jsonl$/)) {
+            // Process primary session files: UUID.jsonl or UUID.json (legacy)
+            if (!file.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.(jsonl|json)$/)) {
                 continue;
             }
 
@@ -480,9 +576,10 @@ async function autoShardOversizedSessions(output: vscode.OutputChannel): Promise
                 continue;
             }
 
-            // Already sharded? (backup exists)
-            const backupPath = filePath + '.oversized';
-            if (fs.existsSync(backupPath)) {
+            // Already sharded? (backup exists for either extension)
+            const backupJsonl = filePath.replace(/\.(json|jsonl)$/, '.jsonl.oversized');
+            const backupJson = filePath.replace(/\.(json|jsonl)$/, '.json.oversized');
+            if (fs.existsSync(backupJsonl) || fs.existsSync(backupJson)) {
                 continue;
             }
 
@@ -502,9 +599,10 @@ async function autoShardOversizedSessions(output: vscode.OutputChannel): Promise
  * 1. Parses the JSONL events to reconstruct the full session
  * 2. Splits the requests into size-bounded shards (target ~10MB each)
  * 3. Writes each shard as a new JSONL file with a deterministic UUID
- * 4. Copies the original to .jsonl.oversized (non-destructive backup)
- * 5. Replaces the original with the last (most recent) shard
- * 6. Updates VS Code's session index in state.vscdb
+ * 4. Links shards in a linked-list: each shard stores _nextShardId/_prevShardId
+ * 5. Copies the original to .oversized (non-destructive backup)
+ * 6. Replaces the original with the last (most recent) shard
+ * 7. Updates VS Code's session index in state.vscdb
  */
 async function shardSessionFile(
     filePath: string,
@@ -513,7 +611,8 @@ async function shardSessionFile(
     output: vscode.OutputChannel
 ): Promise<void> {
     const fileName = path.basename(filePath);
-    const sessionId = fileName.replace('.jsonl', '');
+    const isLegacyJson = fileName.endsWith('.json');
+    const sessionId = fileName.replace(/\.(jsonl|json)$/, '');
     const shortId = sessionId.substring(0, 8);
 
     await vscode.window.withProgress({
@@ -521,12 +620,17 @@ async function shardSessionFile(
         title: `Sharding oversized session ${shortId}...`,
         cancellable: false
     }, async (progress) => {
-        // Step 1: Read and parse the full JSONL
+        // Step 1: Read and parse the session file (JSONL or legacy JSON)
         progress.report({ message: 'Reading session file (this may take a moment)...' });
         let sessionData: any;
         try {
             const content = await fs.promises.readFile(filePath, 'utf-8');
-            sessionData = parseJsonlSessionFile(content);
+            if (isLegacyJson) {
+                // Legacy V3 JSON — the top-level object IS the session data
+                sessionData = JSON.parse(content);
+            } else {
+                sessionData = parseJsonlSessionFile(content);
+            }
         } catch (e) {
             output.appendLine(`[autoShard] Failed to read/parse ${fileName}: ${e}`);
             return;
@@ -540,60 +644,76 @@ async function shardSessionFile(
 
         output.appendLine(`[autoShard] Parsed ${requests.length} requests from ${fileName}`);
 
-        // Step 2: Split requests into size-bounded shards
+        // Also check for the same session in other workspace hashes (migration duplicates)
+        // and prefer the one with the most requests
+        await findAndMergeDuplicateSessions(sessionId, requests, chatSessionsDir, output);
+
+        // Step 2: Split requests into shards of up to SHARD_MAX_REQUESTS each
         const shards: { requests: any[]; startIdx: number; endIdx: number }[] = [];
         let currentRequests: any[] = [];
-        let currentSize = 0;
         let startIdx = 0;
 
         for (let i = 0; i < requests.length; i++) {
-            const reqSize = Buffer.byteLength(JSON.stringify(requests[i]), 'utf-8');
-
-            // Start a new shard if adding this request would exceed the target
-            if (currentSize + reqSize > SHARD_TARGET_SIZE && currentRequests.length > 0) {
-                shards.push({ requests: currentRequests, startIdx, endIdx: i - 1 });
-                currentRequests = [];
-                currentSize = 0;
-                startIdx = i;
-            }
-
             currentRequests.push(requests[i]);
-            currentSize += reqSize;
+
+            // Start a new shard when we hit the max request count
+            if (currentRequests.length >= SHARD_MAX_REQUESTS && i < requests.length - 1) {
+                shards.push({ requests: currentRequests, startIdx, endIdx: i });
+                currentRequests = [];
+                startIdx = i + 1;
+            }
         }
         if (currentRequests.length > 0) {
             shards.push({ requests: currentRequests, startIdx, endIdx: requests.length - 1 });
         }
 
-        output.appendLine(`[autoShard] Splitting into ${shards.length} shards`);
+        output.appendLine(`[autoShard] Splitting into ${shards.length} shards (max ${SHARD_MAX_REQUESTS} requests each)`);
 
-        // Step 3: Write shard files with deterministic UUIDs
+        // Step 3: Compute deterministic shard UUIDs upfront for linked-list linking
         const title = sessionData.customTitle || 'Untitled';
-        const shardMeta: { uuid: string; title: string; lastTimestamp: number; created: number }[] = [];
-
-        for (let i = 0; i < shards.length; i++) {
-            const shard = shards[i];
-
-            // Deterministic UUID from original session ID + shard index
+        const shardUuids: string[] = shards.map((_, i) => {
             const hash = crypto.createHash('md5').update(`${sessionId}-shard-${i}`).digest('hex');
-            const shardUuid = [
+            return [
                 hash.substring(0, 8),
                 hash.substring(8, 12),
                 hash.substring(12, 16),
                 hash.substring(16, 20),
                 hash.substring(20, 32)
             ].join('-');
+        });
+
+        const shardMeta: { uuid: string; title: string; lastTimestamp: number; created: number }[] = [];
+
+        // Step 4: Write shard files with linked-list pointers
+        for (let i = 0; i < shards.length; i++) {
+            const shard = shards[i];
+            const shardUuid = shardUuids[i];
 
             const shardTitle = shards.length > 1
                 ? `${title} (Part ${i + 1}/${shards.length})`
                 : title;
 
-            const shardData = {
+            // Build linked-list metadata
+            const prevShardId = i > 0 ? shardUuids[i - 1] : null;
+            const nextShardId = i < shards.length - 1 ? shardUuids[i + 1] : null;
+
+            const shardData: any = {
                 version: sessionData.version || 3,
                 sessionId: shardUuid,
                 creationDate: sessionData.creationDate || Date.now(),
                 customTitle: shardTitle,
                 initialLocation: 'panel',
                 requests: shard.requests,
+                // Linked-list shard chain — agents can follow these to traverse
+                // the full session history across all shards
+                _shardInfo: {
+                    originalSessionId: sessionId,
+                    shardIndex: i,
+                    totalShards: shards.length,
+                    prevShardId,
+                    nextShardId,
+                    requestRange: { start: shard.startIdx, end: shard.endIdx },
+                },
             };
 
             const jsonlLine = JSON.stringify({ kind: 0, v: shardData }) + '\n';
@@ -615,29 +735,40 @@ async function shardSessionFile(
             output.appendLine(`[autoShard]   Part ${i + 1}: ${shardUuid} — ${shard.requests.length} requests (${sizeMB}MB)`);
         }
 
-        // Step 4: Non-destructive backup of the original
+        // Step 5: Non-destructive backup of the original
         progress.report({ message: 'Backing up original...' });
         const backupPath = filePath + '.oversized';
         await fs.promises.copyFile(filePath, backupPath);
         output.appendLine(`[autoShard] Backed up original → ${path.basename(backupPath)}`);
 
-        // Step 5: Replace original with last (most recent) shard so the
-        // original session entry in VS Code loads the newest messages
+        // Step 6: Replace original file with the last (most recent) shard so the
+        // original session entry in VS Code loads the newest messages.
+        // Write as JSONL regardless of original format.
         const lastShard = shards[shards.length - 1];
-        const latestData = {
+        const latestData: any = {
             version: sessionData.version || 3,
             sessionId: sessionId,
             creationDate: sessionData.creationDate || Date.now(),
             customTitle: shards.length > 1 ? `${title} (Latest — Part ${shards.length}/${shards.length})` : title,
             initialLocation: 'panel',
             requests: lastShard.requests,
+            _shardInfo: {
+                originalSessionId: sessionId,
+                shardIndex: shards.length - 1,
+                totalShards: shards.length,
+                prevShardId: shards.length > 1 ? shardUuids[shards.length - 2] : null,
+                nextShardId: null,
+                requestRange: { start: lastShard.startIdx, end: lastShard.endIdx },
+            },
         };
+        // Write as .jsonl (the modern format VS Code expects)
+        const targetPath = isLegacyJson ? filePath.replace(/\.json$/, '.jsonl') : filePath;
         const latestJsonl = JSON.stringify({ kind: 0, v: latestData }) + '\n';
-        await fs.promises.writeFile(filePath, latestJsonl, 'utf-8');
+        await fs.promises.writeFile(targetPath, latestJsonl, 'utf-8');
         const latestMB = (Buffer.byteLength(latestJsonl, 'utf-8') / 1024 / 1024).toFixed(1);
         output.appendLine(`[autoShard] Replaced original with latest shard (${lastShard.requests.length} requests, ${latestMB}MB)`);
 
-        // Step 6: Update VS Code's session index to include the new shards
+        // Step 7: Update VS Code's session index to include the new shards
         progress.report({ message: 'Updating session index...' });
         try {
             await updateSessionIndex(workspaceHash, sessionId, shardMeta, output);
@@ -646,9 +777,9 @@ async function shardSessionFile(
             output.appendLine('[autoShard] Shard files were created; they will appear after manual index update.');
         }
 
-        // Step 7: Notify user
+        // Step 8: Notify user
         const choice = await vscode.window.showInformationMessage(
-            `Sharded oversized session "${title}" into ${shards.length} loadable parts (original preserved as .oversized). Reload VS Code to see them.`,
+            `Sharded oversized session "${title}" into ${shards.length} loadable parts (${SHARD_MAX_REQUESTS} chats each, original preserved as .oversized). Reload VS Code to see them.`,
             'Reload Window'
         );
         if (choice === 'Reload Window') {
