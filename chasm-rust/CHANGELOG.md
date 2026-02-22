@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-02-21
+
+### Added
+
+- **`chasm shard` command** — Split oversized sessions into linked shard files
+  - `chasm shard session <file>` — Shard a single session file
+  - `chasm shard workspace` — Shard all oversized sessions in a workspace
+  - `chasm shard info <file>` — Show linked-list shard metadata
+  - `--max-requests N` — Split by request count (default: 50)
+  - `--max-size <size>` — Split by file size (e.g. `10MB`, `500KB`)
+  - `--dry-run` — Preview sharding without writing files
+  - `--update-index` — Update VS Code's session index after sharding
+  - `--no-backup` — Skip creating `.oversized` backup of original
+  - Deterministic shard UUIDs (md5 of `sessionId-shard-N`)
+  - Linked-list `_shardInfo` metadata with `prevShardId`/`nextShardId` pointers for agent traversal
+  - Supports both legacy `.json` and modern `.jsonl` input formats
+
 ## [1.5.2] - 2026-02-21
 
 ### Added
