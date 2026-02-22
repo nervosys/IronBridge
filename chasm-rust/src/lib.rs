@@ -72,7 +72,7 @@ pub mod workspace;
 pub use cli::{
     Cli, Commands, ExportCommands, FetchCommands, FindCommands, GitCommands, ImportCommands,
     ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands,
-    ShowCommands,
+    ShardCommands, ShowCommands,
 };
 pub use database::{ChatDatabase, ShareLinkInfo, ShareLinkParser, ShareLinkProvider};
 pub use error::CsmError;

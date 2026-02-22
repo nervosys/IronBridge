@@ -30,7 +30,7 @@ use cli::{
     AgencyCommands, ApiCommands, Cli, Commands, CompletionShell, DetectCommands, ExportCommands,
     FetchCommands, FindCommands, GitCommands, HarvestCommands, HarvestGitCommands, ImportCommands,
     ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands,
-    ShowCommands, TelemetryCommands,
+    ShardCommands, ShowCommands, TelemetryCommands,
 };
 
 /// Get the current directory name as a default pattern
@@ -968,6 +968,45 @@ fn main() -> Result<()> {
                 commands::telemetry_sync(limit, clear_after)
             }
             Some(TelemetryCommands::Test) => commands::telemetry_test(),
+        },
+
+        // ====================================================================
+        // Shard Commands
+        // ====================================================================
+        Commands::Shard { command } => match command {
+            cli::ShardCommands::Session {
+                file,
+                max_requests,
+                max_size,
+                output,
+                update_index,
+                workspace,
+                dry_run,
+                no_backup,
+            } => commands::shard_session(
+                &file,
+                max_requests,
+                max_size,
+                output.as_deref(),
+                update_index,
+                workspace.as_deref(),
+                dry_run,
+                no_backup,
+            ),
+            cli::ShardCommands::Workspace {
+                workspace,
+                max_requests,
+                max_size,
+                dry_run,
+                no_backup,
+            } => commands::shard_workspace(
+                workspace.as_deref(),
+                max_requests,
+                max_size,
+                dry_run,
+                no_backup,
+            ),
+            cli::ShardCommands::Info { file } => commands::shard_info(&file),
         },
 
         // ====================================================================

@@ -278,6 +278,15 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Shard Commands
+    // ============================================================================
+    /// Split oversized sessions into linked shards (by request count or file size)
+    Shard {
+        #[command(subcommand)]
+        command: ShardCommands,
+    },
+
+    // ============================================================================
     // Doctor Command
     // ============================================================================
     /// Check system environment, providers, and configuration health
@@ -1885,6 +1894,76 @@ pub enum RecoverCommands {
         /// Dry run - show what would be upgraded without making changes
         #[arg(long)]
         dry_run: bool,
+    },
+}
+
+// ============================================================================
+// Shard Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum ShardCommands {
+    /// Shard a single session file into linked parts
+    Session {
+        /// Path to the session file (.json or .jsonl)
+        file: String,
+
+        /// Maximum requests per shard (default: 50). Mutually exclusive with --max-size
+        #[arg(long, short = 'n')]
+        max_requests: Option<usize>,
+
+        /// Maximum file size per shard (e.g. "10MB", "500KB"). Mutually exclusive with --max-requests
+        #[arg(long, short = 's')]
+        max_size: Option<String>,
+
+        /// Output directory for shard files (default: same directory as input)
+        #[arg(long, short = 'o')]
+        output: Option<String>,
+
+        /// Update the VS Code session index after sharding
+        #[arg(long)]
+        update_index: bool,
+
+        /// Workspace hash or project path (for --update-index; auto-detected from file path if omitted)
+        #[arg(long, short = 'w')]
+        workspace: Option<String>,
+
+        /// Show what would be done without writing any files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip creating a .oversized backup of the original file
+        #[arg(long)]
+        no_backup: bool,
+    },
+
+    /// Shard all oversized sessions in a workspace
+    Workspace {
+        /// Workspace hash or project path (default: current directory)
+        #[arg(long, short = 'w')]
+        workspace: Option<String>,
+
+        /// Maximum requests per shard (default: 50). Mutually exclusive with --max-size
+        #[arg(long, short = 'n')]
+        max_requests: Option<usize>,
+
+        /// Maximum file size per shard (e.g. "10MB", "500KB"). Mutually exclusive with --max-requests
+        #[arg(long, short = 's')]
+        max_size: Option<String>,
+
+        /// Show what would be done without writing any files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip creating .oversized backups of original files
+        #[arg(long)]
+        no_backup: bool,
+    },
+
+    /// Show shard metadata for a session file
+    Info {
+        /// Path to the session file (.json or .jsonl)
+        file: String,
     },
 }
 
