@@ -228,6 +228,20 @@ pub fn diagnose_workspace_sessions(
                                         }
                                     }
                                 }
+
+                                // Check hasPendingEdits — true blocks session loading
+                                if v.get("hasPendingEdits")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false)
+                                    == true
+                                {
+                                    diagnosis.issues.push(SessionIssue {
+                                        session_id: id.clone(),
+                                        kind: SessionIssueKind::MissingCompatFields,
+                                        detail: "hasPendingEdits is true (blocks session loading)"
+                                            .to_string(),
+                                    });
+                                }
                             }
                         }
                     }
@@ -2058,15 +2072,15 @@ pub fn ensure_vscode_compat_fields(state: &mut serde_json::Value, session_id: Op
             );
         }
 
-        // hasPendingEdits — always false for recovered/compacted sessions
-        if !obj.contains_key("hasPendingEdits") {
-            obj.insert("hasPendingEdits".to_string(), serde_json::json!(false));
-        }
+        // hasPendingEdits — ALWAYS force to false for recovered/compacted sessions.
+        // Sessions with hasPendingEdits:true cause VS Code to attempt restoring
+        // stale file edits on load, which fails if files have changed since the
+        // original session, preventing the session from loading entirely.
+        obj.insert("hasPendingEdits".to_string(), serde_json::json!(false));
 
-        // pendingRequests — always empty for recovered/compacted sessions
-        if !obj.contains_key("pendingRequests") {
-            obj.insert("pendingRequests".to_string(), serde_json::json!([]));
-        }
+        // pendingRequests — ALWAYS force to empty for recovered/compacted sessions.
+        // Stale pending requests can also block session loading.
+        obj.insert("pendingRequests".to_string(), serde_json::json!([]));
 
         // inputState — VS Code expects this to exist with at least mode + attachments
         if !obj.contains_key("inputState") {
@@ -2463,12 +2477,21 @@ pub fn repair_workspace_sessions(
 
                             if is_kind_0 {
                                 if let Some(v) = obj.get("v") {
-                                    let missing = !v.get("hasPendingEdits").is_some()
-                                        || !v.get("pendingRequests").is_some()
-                                        || !v.get("inputState").is_some()
-                                        || !v.get("sessionId").is_some();
+                                    // Check if fields are missing OR have wrong values.
+                                    // hasPendingEdits must be false — true prevents session loading
+                                    // because VS Code tries to restore stale file edits that fail.
+                                    let needs_fix = !v.get("inputState").is_some()
+                                        || !v.get("sessionId").is_some()
+                                        || v.get("hasPendingEdits")
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(true)
+                                            != false
+                                        || v.get("pendingRequests")
+                                            .and_then(|v| v.as_array())
+                                            .map(|a| !a.is_empty())
+                                            .unwrap_or(true);
 
-                                    if missing {
+                                    if needs_fix {
                                         let session_id = path
                                             .file_stem()
                                             .and_then(|s| s.to_str())
@@ -2491,10 +2514,10 @@ pub fn repair_workspace_sessions(
                                             .file_stem()
                                             .map(|s| s.to_string_lossy().to_string())
                                             .unwrap_or_default();
-                                        println!("   [OK] Fixed missing VS Code fields: {}", stem);
+                                        println!("   [OK] Fixed VS Code compat fields: {}", stem);
                                         fields_fixed += 1;
                                     } else if !content.ends_with('\n') {
-                                        // All compat fields present but missing trailing newline
+                                        // All compat fields correct but missing trailing newline
                                         std::fs::write(&path, format!("{}\n", first_line))?;
                                         let stem = path
                                             .file_stem()
