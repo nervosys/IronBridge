@@ -20,7 +20,10 @@ use crate::storage::{
     parse_session_json, read_chat_session_index, register_all_sessions_from_directory,
     reopen_vscode, repair_workspace_sessions, trim_session_jsonl,
 };
-use crate::workspace::{discover_workspaces, find_workspace_by_path, normalize_path};
+use crate::workspace::{
+    discover_workspaces, find_workspace_by_path, normalize_path,
+    recover_orphaned_sessions_from_old_hashes,
+};
 
 /// Prompt the user to confirm closing VS Code. Returns true if confirmed, false if declined.
 /// When `force` is true, skips the prompt and returns true immediately.
@@ -995,6 +998,29 @@ pub fn register_repair(
         }
     }
 
+    // Pass 0: Recover orphaned sessions from old workspace hashes
+    println!(
+        "   {} Pass 0: Recovering orphaned sessions from old workspace hashes...",
+        "[*]".cyan()
+    );
+    match recover_orphaned_sessions_from_old_hashes(&path_str) {
+        Ok(0) => {}
+        Ok(n) => {
+            println!(
+                "   {} Recovered {} orphaned session(s) from old workspace hashes",
+                "[OK]".green(),
+                n.to_string().cyan()
+            );
+        }
+        Err(e) => {
+            println!(
+                "   {} Failed to recover orphaned sessions: {}",
+                "[WARN]".yellow(),
+                e
+            );
+        }
+    }
+
     // Run the repair
     println!(
         "   {} Pass 1: Compacting JSONL files & fixing compat fields...",
@@ -1249,6 +1275,21 @@ fn register_repair_recursive(
                                 );
 
                                 if !dry_run {
+                                    // Recover orphaned sessions from old workspace hashes first
+                                    if let Some(ref project_path) = ws.project_path {
+                                        match crate::workspace::recover_orphaned_sessions_from_old_hashes(project_path) {
+                                            Ok(0) => {}
+                                            Ok(n) => {
+                                                println!(
+                                                    "      {} Recovered {} orphaned session(s) from old hashes",
+                                                    "[OK]".green(),
+                                                    n
+                                                );
+                                            }
+                                            Err(_) => {} // Non-fatal
+                                        }
+                                    }
+
                                     match repair_workspace_sessions(
                                         &ws.hash,
                                         &chat_dir,

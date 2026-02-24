@@ -412,4 +412,136 @@ fn deduplicate_sessions(sessions: &mut Vec<SessionWithPath>) {
     }
 }
 
+/// Recover orphaned sessions from old workspace hashes into the active workspace.
+///
+/// When a project folder is opened multiple times in VS Code (or when the path
+/// changes slightly), multiple workspace hashes can accumulate. Sessions in
+/// older hashes become invisible. This function:
+/// 1. Finds ALL workspace hashes whose `workspace.json` folder matches `project_path`
+/// 2. Identifies the most-recently-modified hash as "active"
+/// 3. Copies `.json`, `.jsonl`, and `.backup` session files from orphaned hashes
+///    to the active hash's `chatSessions/` directory (skipping duplicates)
+///
+/// Returns the number of session files recovered.
+pub fn recover_orphaned_sessions_from_old_hashes(project_path: &str) -> Result<usize> {
+    let storage_path = get_workspace_storage_path()?;
+    if !storage_path.exists() {
+        return Ok(0);
+    }
+
+    let target_path = normalize_path(project_path);
+
+    // Find all workspace hashes that match this path (exact normalized match)
+    let mut all_matches: Vec<(String, PathBuf, std::time::SystemTime)> = Vec::new();
+
+    for entry in std::fs::read_dir(&storage_path)? {
+        let entry = entry?;
+        let workspace_dir = entry.path();
+        if !workspace_dir.is_dir() {
+            continue;
+        }
+
+        let ws_json_path = workspace_dir.join("workspace.json");
+        if !ws_json_path.exists() {
+            continue;
+        }
+
+        if let Ok(content) = std::fs::read_to_string(&ws_json_path) {
+            if let Ok(ws_json) = serde_json::from_str::<WorkspaceJson>(&content) {
+                if let Some(folder) = &ws_json.folder {
+                    let folder_path = decode_workspace_folder(folder);
+                    if normalize_path(&folder_path) == target_path {
+                        let chat_dir = workspace_dir.join("chatSessions");
+                        let last_modified = if chat_dir.exists() {
+                            std::fs::read_dir(&chat_dir)
+                                .ok()
+                                .and_then(|entries| {
+                                    entries
+                                        .filter_map(|e| e.ok())
+                                        .filter_map(|e| e.metadata().ok())
+                                        .filter_map(|m| m.modified().ok())
+                                        .max()
+                                })
+                                .unwrap_or(std::time::UNIX_EPOCH)
+                        } else {
+                            std::time::UNIX_EPOCH
+                        };
+
+                        all_matches.push((
+                            entry.file_name().to_string_lossy().to_string(),
+                            workspace_dir,
+                            last_modified,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    if all_matches.len() <= 1 {
+        return Ok(0); // No orphaned hashes
+    }
+
+    // Sort by last modified (newest first); first = active
+    all_matches.sort_by(|a, b| b.2.cmp(&a.2));
+
+    let active_dir = all_matches[0].1.join("chatSessions");
+    if !active_dir.exists() {
+        std::fs::create_dir_all(&active_dir)?;
+    }
+
+    // Collect existing session stems in the active workspace
+    let mut existing_stems: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Ok(entries) = std::fs::read_dir(&active_dir) {
+        for entry in entries.flatten() {
+            if let Some(stem) = entry.path().file_stem() {
+                existing_stems.insert(stem.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    let mut recovered = 0;
+
+    // Copy from orphaned hashes (index 1..n)
+    for (_hash, orphan_dir, _) in &all_matches[1..] {
+        let orphan_sessions = orphan_dir.join("chatSessions");
+        if !orphan_sessions.exists() {
+            continue;
+        }
+
+        if let Ok(entries) = std::fs::read_dir(&orphan_sessions) {
+            for entry in entries.flatten() {
+                let src = entry.path();
+                let ext_match = src
+                    .extension()
+                    .map(|e| e == "json" || e == "jsonl" || e == "backup")
+                    .unwrap_or(false);
+                // Skip backup copies (.bak, .corrupt)
+                let is_bak = src.to_string_lossy().ends_with(".bak")
+                    || src.to_string_lossy().ends_with(".corrupt");
+
+                if ext_match && !is_bak {
+                    let stem = src
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+
+                    // Only copy if this session doesn't already exist in the active workspace
+                    if !existing_stems.contains(&stem) {
+                        let filename = src.file_name().unwrap();
+                        let dest = active_dir.join(filename);
+                        if !dest.exists() {
+                            std::fs::copy(&src, &dest)?;
+                            existing_stems.insert(stem);
+                            recovered += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(recovered)
+}
+
 use chrono::Utc;

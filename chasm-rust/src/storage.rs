@@ -210,11 +210,12 @@ pub fn diagnose_workspace_sessions(
                                             .and_then(|ms| ms.get("value"))
                                             .and_then(|v| v.as_u64());
                                         match model_state_value {
-                                            Some(2) => {
+                                            Some(1) => {} // Complete — valid
+                                            Some(v) => {
                                                 diagnosis.issues.push(SessionIssue {
                                                     session_id: id.clone(),
                                                     kind: SessionIssueKind::CancelledModelState,
-                                                    detail: "Last request modelState.value=2 (Cancelled) in file content".to_string(),
+                                                    detail: format!("Last request modelState.value={} (not Complete) in file content", v),
                                                 });
                                             }
                                             None => {
@@ -224,7 +225,6 @@ pub fn diagnose_workspace_sessions(
                                                     detail: "Last request missing modelState in file content".to_string(),
                                                 });
                                             }
-                                            _ => {} // Valid state
                                         }
                                     }
                                 }
@@ -1584,8 +1584,9 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
     let backup_path = path.with_extension("jsonl.bak");
     std::fs::rename(path, &backup_path)?;
 
-    // Write the compacted file
-    std::fs::write(path, &compact_content)?;
+    // Write the compacted file (trailing newline prevents concatenation
+    // if VS Code later appends delta operations)
+    std::fs::write(path, format!("{}\n", compact_content))?;
 
     Ok(backup_path)
 }
@@ -1674,7 +1675,7 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
             if !backup_path.exists() {
                 std::fs::copy(path, &backup_path)?;
             }
-            std::fs::write(path, &trimmed_content)?;
+            std::fs::write(path, format!("{}\n", trimmed_content))?;
         }
 
         return Ok((original_count, original_count, original_size, new_size));
@@ -1718,8 +1719,8 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
         std::fs::copy(path, &backup_path)?;
     }
 
-    // Write the trimmed file
-    std::fs::write(path, &trimmed_content)?;
+    // Write the trimmed file (trailing newline prevents concatenation)
+    std::fs::write(path, format!("{}\n", trimmed_content))?;
 
     Ok((original_count, keep, original_size, new_size))
 }
@@ -2262,7 +2263,11 @@ pub fn fix_cancelled_model_state(path: &Path) -> Result<bool> {
         let model_state = last_req.get("modelState");
 
         let needs_fix = match model_state {
-            Some(ms) => ms.get("value").and_then(|v| v.as_u64()) == Some(2),
+            Some(ms) => {
+                // Any value other than 1 (Complete) needs repair:
+                // 0 = NotStarted/Unknown, 2 = Cancelled, 4 = InProgress
+                ms.get("value").and_then(|v| v.as_u64()) != Some(1)
+            }
             None => true, // Missing modelState = never completed
         };
 
@@ -2282,7 +2287,8 @@ pub fn fix_cancelled_model_state(path: &Path) -> Result<bool> {
 
         let patched = serde_json::to_string(&entry)
             .map_err(|e| CsmError::InvalidSessionFormat(format!("Serialize error: {}", e)))?;
-        std::fs::write(path, patched)?;
+        // Trailing newline prevents concatenation if VS Code appends deltas
+        std::fs::write(path, format!("{}\n", patched))?;
         return Ok(true);
     }
 
@@ -2339,9 +2345,8 @@ pub fn fix_cancelled_model_state(path: &Path) -> Result<bool> {
     };
 
     let needs_fix = match last_model_state_value {
-        Some(2) => true, // Cancelled
-        None => true,    // Missing (never completed)
-        _ => false,      // Already complete or other valid state
+        Some(1) => false, // Already complete
+        _ => true,        // 0=NotStarted, 2=Cancelled, 4=InProgress, None=missing
     };
 
     if !needs_fix {
@@ -2397,8 +2402,22 @@ pub fn repair_workspace_sessions(
                 let metadata = std::fs::metadata(&path)?;
                 let size_mb = metadata.len() / (1024 * 1024);
 
-                let content = std::fs::read_to_string(&path)
+                let raw_content = std::fs::read_to_string(&path)
                     .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+
+                // Pre-process: split concatenated JSON objects that lack newline
+                // separators. VS Code sometimes appends delta ops to line 0 without
+                // a \n, producing: {"kind":0,...}{"kind":1,...}
+                // If splitting changes the content, rewrite the file first.
+                let content = split_concatenated_jsonl(&raw_content);
+                if content != raw_content {
+                    std::fs::write(&path, content.as_bytes())?;
+                    let stem = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    println!("   [OK] Fixed concatenated JSONL objects: {}", stem);
+                }
                 let line_count = content.lines().count();
 
                 if line_count > 1 {
@@ -2466,13 +2485,25 @@ pub fn repair_workspace_sessions(
                                                 e
                                             ))
                                         })?;
-                                        std::fs::write(&path, &patched)?;
+                                        // Trailing newline prevents concatenation
+                                        std::fs::write(&path, format!("{}\n", patched))?;
                                         let stem = path
                                             .file_stem()
                                             .map(|s| s.to_string_lossy().to_string())
                                             .unwrap_or_default();
                                         println!("   [OK] Fixed missing VS Code fields: {}", stem);
                                         fields_fixed += 1;
+                                    } else if !content.ends_with('\n') {
+                                        // All compat fields present but missing trailing newline
+                                        std::fs::write(&path, format!("{}\n", first_line))?;
+                                        let stem = path
+                                            .file_stem()
+                                            .map(|s| s.to_string_lossy().to_string())
+                                            .unwrap_or_default();
+                                        println!(
+                                            "   [OK] Fixed missing trailing newline: {}",
+                                            stem
+                                        );
                                     }
                                 }
                             }

@@ -107,7 +107,7 @@ pub fn recover_scan(provider: &str, verbose: bool, _include_old: bool) -> Result
                         // Look for session files
                         let sessions_dir = path.join("state.vscdb");
                         let history_dir = path.join("history");
-                        
+
                         if sessions_dir.exists() || history_dir.exists() {
                             count += 1;
                             if verbose {
@@ -134,14 +134,19 @@ pub fn recover_scan(provider: &str, verbose: bool, _include_old: bool) -> Result
                             let mut errors = 0;
                             for line in &lines {
                                 if !line.is_empty()
-                                    && serde_json::from_str::<serde_json::Value>(line).is_err() {
-                                        errors += 1;
-                                    }
+                                    && serde_json::from_str::<serde_json::Value>(line).is_err()
+                                {
+                                    errors += 1;
+                                }
                             }
                             if errors > 0 {
                                 corrupted_count += 1;
                                 if verbose {
-                                    println!("    [!] Corrupted JSONL: {} ({} bad lines)", path.display(), errors);
+                                    println!(
+                                        "    [!] Corrupted JSONL: {} ({} bad lines)",
+                                        path.display(),
+                                        errors
+                                    );
                                 }
                             }
                         }
@@ -149,7 +154,10 @@ pub fn recover_scan(provider: &str, verbose: bool, _include_old: bool) -> Result
                 }
             }
             if corrupted_count > 0 {
-                println!("    Found {} potentially corrupted JSONL files", corrupted_count);
+                println!(
+                    "    Found {} potentially corrupted JSONL files",
+                    corrupted_count
+                );
                 total_corrupted += corrupted_count;
             }
         }
@@ -159,8 +167,14 @@ pub fn recover_scan(provider: &str, verbose: bool, _include_old: bool) -> Result
     println!("╔═══════════════════════════════════════════════════════════════════╗");
     println!("║                       Recovery Summary                            ║");
     println!("╠═══════════════════════════════════════════════════════════════════╣");
-    println!("║  Workspace directories found: {:>5}                              ║", total_recoverable);
-    println!("║  Corrupted files:             {:>5}                              ║", total_corrupted);
+    println!(
+        "║  Workspace directories found: {:>5}                              ║",
+        total_recoverable
+    );
+    println!(
+        "║  Corrupted files:             {:>5}                              ║",
+        total_corrupted
+    );
     println!("╚═══════════════════════════════════════════════════════════════════╝");
 
     if total_corrupted > 0 {
@@ -172,7 +186,11 @@ pub fn recover_scan(provider: &str, verbose: bool, _include_old: bool) -> Result
 }
 
 /// Recover sessions from the recording API server
-pub fn recover_from_recording(server: &str, session_id: Option<&str>, output: Option<&str>) -> Result<()> {
+pub fn recover_from_recording(
+    server: &str,
+    session_id: Option<&str>,
+    output: Option<&str>,
+) -> Result<()> {
     println!("[*] Connecting to recording server: {}", server);
 
     // Build the recovery URL
@@ -186,8 +204,9 @@ pub fn recover_from_recording(server: &str, session_id: Option<&str>, output: Op
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
-    
-    let response = client.get(&url)
+
+    let response = client
+        .get(&url)
         .send()
         .context("Failed to connect to recording server")?;
 
@@ -196,7 +215,7 @@ pub fn recover_from_recording(server: &str, session_id: Option<&str>, output: Op
     }
 
     let body = response.text()?;
-    
+
     if let Some(sid) = session_id {
         // Single session recovery
         let output_path = output
@@ -208,35 +227,51 @@ pub fn recover_from_recording(server: &str, session_id: Option<&str>, output: Op
     } else {
         // List all sessions
         let sessions: serde_json::Value = serde_json::from_str(&body)?;
-        
+
         if let Some(arr) = sessions.get("active_sessions").and_then(|v| v.as_array()) {
             println!();
             println!("╔═══════════════════════════════════════════════════════════════════╗");
             println!("║                    Active Recording Sessions                      ║");
             println!("╠═══════════════════════════════════════════════════════════════════╣");
-            
+
             for session in arr {
-                let id = session.get("session_id").and_then(|v| v.as_str()).unwrap_or("?");
-                let provider = session.get("provider").and_then(|v| v.as_str()).unwrap_or("?");
-                let msgs = session.get("message_count").and_then(|v| v.as_i64()).unwrap_or(0);
-                let title = session.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
-                
-                println!("║ {:36} {:10} {:>4} msgs  ║", 
+                let id = session
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                let provider = session
+                    .get("provider")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                let msgs = session
+                    .get("message_count")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let title = session
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Untitled");
+
+                println!(
+                    "║ {:36} {:10} {:>4} msgs  ║",
                     &id[..id.len().min(36)],
                     provider,
                     msgs
                 );
                 if title != "Untitled" {
-                    println!("║   └─ {}{}║", 
+                    println!(
+                        "║   └─ {}{}║",
                         &title[..title.len().min(55)],
                         " ".repeat(55 - title.len().min(55))
                     );
                 }
             }
-            
+
             println!("╚═══════════════════════════════════════════════════════════════════╝");
             println!();
-            println!("[i] Use 'chasm recover recording --session <ID>' to recover a specific session");
+            println!(
+                "[i] Use 'chasm recover recording --session <ID>' to recover a specific session"
+            );
         } else {
             println!("[!] No active sessions found on recording server");
         }
@@ -246,7 +281,12 @@ pub fn recover_from_recording(server: &str, session_id: Option<&str>, output: Op
 }
 
 /// Recover sessions from a SQLite database backup
-pub fn recover_from_database(backup_path: &str, session_id: Option<&str>, output: Option<&str>, format: &str) -> Result<()> {
+pub fn recover_from_database(
+    backup_path: &str,
+    session_id: Option<&str>,
+    output: Option<&str>,
+    format: &str,
+) -> Result<()> {
     println!("[*] Opening database backup: {}", backup_path);
 
     let conn = rusqlite::Connection::open(backup_path)?;
@@ -269,13 +309,16 @@ pub fn recover_from_database(backup_path: &str, session_id: Option<&str>, output
         if state_format {
             return recover_from_vscdb(&conn, session_id, output, format);
         }
-        
+
         anyhow::bail!("Database does not contain recognized session tables");
     }
 
     // Query sessions
     let query = if let Some(sid) = session_id {
-        format!("SELECT id, title, provider, created_at, data FROM sessions WHERE id = '{}'", sid)
+        format!(
+            "SELECT id, title, provider, created_at, data FROM sessions WHERE id = '{}'",
+            sid
+        )
     } else {
         "SELECT id, title, provider, created_at, data FROM sessions ORDER BY created_at DESC LIMIT 50".to_string()
     };
@@ -319,37 +362,47 @@ pub fn recover_from_database(backup_path: &str, session_id: Option<&str>, output
         println!("╔═══════════════════════════════════════════════════════════════════╗");
         println!("║                    Sessions in Database Backup                    ║");
         println!("╠═══════════════════════════════════════════════════════════════════╣");
-        
+
         for (id, title, provider, created, _) in &sessions {
             let title_display = if title.is_empty() { "Untitled" } else { title };
-            println!("║ {:36} {:10} {:16}  ║",
+            println!(
+                "║ {:36} {:10} {:16}  ║",
                 &id[..id.len().min(36)],
                 &provider[..provider.len().min(10)],
                 &created[..created.len().min(16)]
             );
             if !title.is_empty() {
-                println!("║   └─ {}{}║",
+                println!(
+                    "║   └─ {}{}║",
                     &title_display[..title_display.len().min(55)],
                     " ".repeat(55 - title_display.len().min(55))
                 );
             }
         }
-        
+
         println!("╚═══════════════════════════════════════════════════════════════════╝");
         println!();
-        println!("[i] Use 'chasm recover database {} --session <ID>' to export a session", backup_path);
+        println!(
+            "[i] Use 'chasm recover database {} --session <ID>' to export a session",
+            backup_path
+        );
     }
 
     Ok(())
 }
 
 /// Recover from VS Code state.vscdb format
-fn recover_from_vscdb(conn: &rusqlite::Connection, _session_id: Option<&str>, output: Option<&str>, _format: &str) -> Result<()> {
+fn recover_from_vscdb(
+    conn: &rusqlite::Connection,
+    _session_id: Option<&str>,
+    output: Option<&str>,
+    _format: &str,
+) -> Result<()> {
     println!("[*] Detected VS Code state.vscdb format");
 
     // Query for chat history keys
     let mut stmt = conn.prepare(
-        "SELECT key, value FROM ItemTable WHERE key LIKE '%chat%' OR key LIKE '%copilot%'"
+        "SELECT key, value FROM ItemTable WHERE key LIKE '%chat%' OR key LIKE '%copilot%'",
     )?;
 
     let items: Vec<(String, Vec<u8>)> = stmt
@@ -363,7 +416,9 @@ fn recover_from_vscdb(conn: &rusqlite::Connection, _session_id: Option<&str>, ou
 
     println!("[+] Found {} chat-related entries", items.len());
 
-    let output_dir = output.map(PathBuf::from).unwrap_or_else(|| PathBuf::from("recovered_vscdb"));
+    let output_dir = output
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("recovered_vscdb"));
     fs::create_dir_all(&output_dir)?;
 
     for (key, value) in &items {
@@ -429,9 +484,18 @@ pub fn recover_jsonl(file_path: &str, output: Option<&str>, aggressive: bool) ->
     println!("╔═══════════════════════════════════════════════════════════════════╗");
     println!("║                    JSONL Recovery Summary                         ║");
     println!("╠═══════════════════════════════════════════════════════════════════╣");
-    println!("║  Total lines:     {:>5}                                          ║", lines.len());
-    println!("║  Recovered:       {:>5}                                          ║", recovered);
-    println!("║  Errors:          {:>5}                                          ║", errors);
+    println!(
+        "║  Total lines:     {:>5}                                          ║",
+        lines.len()
+    );
+    println!(
+        "║  Recovered:       {:>5}                                          ║",
+        recovered
+    );
+    println!(
+        "║  Errors:          {:>5}                                          ║",
+        errors
+    );
     println!("╚═══════════════════════════════════════════════════════════════════╝");
 
     if recovered > 0 {
@@ -460,7 +524,7 @@ fn attempt_json_repair(line: &str) -> String {
 
     // Fix unescaped quotes
     // This is a simple heuristic - real repair would need more sophisticated parsing
-    
+
     // Fix trailing commas
     fixed = fixed.replace(",}", "}").replace(",]", "]");
 
@@ -500,7 +564,9 @@ pub fn recover_orphans(provider: &str, unindexed: bool, _verify: bool) -> Result
             let indexed_workspaces: std::collections::HashSet<String> = if unindexed {
                 if let Some(db_path) = get_provider_state_db(prov) {
                     if let Ok(conn) = rusqlite::Connection::open(&db_path) {
-                        if let Ok(mut stmt) = conn.prepare("SELECT key FROM ItemTable WHERE key LIKE 'workspaceStorage/%'") {
+                        if let Ok(mut stmt) = conn.prepare(
+                            "SELECT key FROM ItemTable WHERE key LIKE 'workspaceStorage/%'",
+                        ) {
                             stmt.query_map([], |row| row.get::<_, String>(0))
                                 .ok()
                                 .map(|iter| iter.flatten().collect())
@@ -522,18 +588,22 @@ pub fn recover_orphans(provider: &str, unindexed: bool, _verify: bool) -> Result
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_dir() {
-                        let dir_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                        
+                        let dir_name = path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+
                         // Check if this workspace has session data
-                        let has_sessions = path.join("state.vscdb").exists() 
-                            || path.join("history").exists();
+                        let has_sessions =
+                            path.join("state.vscdb").exists() || path.join("history").exists();
 
                         if !has_sessions {
                             continue;
                         }
 
                         let is_indexed = !unindexed || indexed_workspaces.contains(&dir_name);
-                        
+
                         if !is_indexed {
                             total_orphans += 1;
                             println!("  [?] Unindexed: {}", dir_name);
@@ -546,7 +616,10 @@ pub fn recover_orphans(provider: &str, unindexed: bool, _verify: bool) -> Result
 
     println!();
     if total_orphans > 0 {
-        println!("[i] Found {} potentially orphaned workspace(s)", total_orphans);
+        println!(
+            "[i] Found {} potentially orphaned workspace(s)",
+            total_orphans
+        );
         println!("[i] Use 'chasm register all' to re-index these workspaces");
     } else {
         println!("[+] No orphaned sessions found");
@@ -557,7 +630,9 @@ pub fn recover_orphans(provider: &str, unindexed: bool, _verify: bool) -> Result
 
 /// Repair corrupted session files in place
 pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<()> {
-    use crate::storage::{is_skeleton_json, convert_skeleton_json_to_jsonl, fix_cancelled_model_state};
+    use crate::storage::{
+        convert_skeleton_json_to_jsonl, fix_cancelled_model_state, is_skeleton_json,
+    };
 
     let path = Path::new(path);
 
@@ -566,15 +641,21 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
     }
 
     if path.is_dir() {
-        println!("[*] Scanning directory for repairable files: {}", path.display());
-        
+        println!(
+            "[*] Scanning directory for repairable files: {}",
+            path.display()
+        );
+
         let mut repaired = 0;
         let mut skeletons_converted = 0;
         let mut cancelled_fixed = 0;
 
         for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
             let file_path = entry.path();
-            if file_path.extension().is_some_and(|e| e == "jsonl" || e == "json") {
+            if file_path
+                .extension()
+                .is_some_and(|e| e == "jsonl" || e == "json")
+            {
                 if let Ok(content) = fs::read_to_string(file_path) {
                     // Check for skeleton .json files (corrupted, only structural chars remain)
                     if file_path.extension().is_some_and(|e| e == "json")
@@ -582,7 +663,10 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
                         && !file_path.to_string_lossy().ends_with(".corrupt")
                     {
                         if is_skeleton_json(&content) {
-                            println!("  [!] Skeleton .json: {} — corrupt, only structural chars", file_path.display());
+                            println!(
+                                "  [!] Skeleton .json: {} — corrupt, only structural chars",
+                                file_path.display()
+                            );
                             if !dry_run {
                                 match convert_skeleton_json_to_jsonl(file_path, None, None) {
                                     Ok(Some(_)) => {
@@ -632,15 +716,31 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
 
                     if needs_repair {
                         let reasons: Vec<&str> = [
-                            if has_corrupt_lines { Some("corrupt JSON") } else { None },
-                            if has_concatenated { Some("concatenated lines") } else { None },
-                            if missing_fields { Some("missing VS Code fields") } else { None },
+                            if has_corrupt_lines {
+                                Some("corrupt JSON")
+                            } else {
+                                None
+                            },
+                            if has_concatenated {
+                                Some("concatenated lines")
+                            } else {
+                                None
+                            },
+                            if missing_fields {
+                                Some("missing VS Code fields")
+                            } else {
+                                None
+                            },
                         ]
                         .into_iter()
                         .flatten()
                         .collect();
 
-                        println!("  [!] Needs repair: {} ({})", file_path.display(), reasons.join(", "));
+                        println!(
+                            "  [!] Needs repair: {} ({})",
+                            file_path.display(),
+                            reasons.join(", ")
+                        );
                         if !dry_run {
                             repair_file(file_path, create_backup)?;
                             repaired += 1;
@@ -651,12 +751,19 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
                     if file_path.extension().is_some_and(|e| e == "jsonl") && !dry_run {
                         match fix_cancelled_model_state(file_path) {
                             Ok(true) => {
-                                println!("  [+] Fixed cancelled modelState: {}", file_path.display());
+                                println!(
+                                    "  [+] Fixed cancelled modelState: {}",
+                                    file_path.display()
+                                );
                                 cancelled_fixed += 1;
                             }
                             Ok(false) => {}
                             Err(e) => {
-                                println!("  [!] Failed to fix modelState for {}: {}", file_path.display(), e);
+                                println!(
+                                    "  [!] Failed to fix modelState for {}: {}",
+                                    file_path.display(),
+                                    e
+                                );
                             }
                         }
                     }
@@ -808,14 +915,20 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
         // Check state database
         if let Some(db_path) = get_provider_state_db(name) {
             let size = fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
-            println!("    Database: {} ({:.1} MB)", db_path.display(), size as f64 / 1024.0 / 1024.0);
-            
+            println!(
+                "    Database: {} ({:.1} MB)",
+                db_path.display(),
+                size as f64 / 1024.0 / 1024.0
+            );
+
             // Check if database is accessible
             match rusqlite::Connection::open(&db_path) {
                 Ok(conn) => {
-                    if let Ok(count) = conn.query_row::<i64, _, _>(
-                        "SELECT COUNT(*) FROM ItemTable", [], |r| r.get(0)
-                    ) {
+                    if let Ok(count) =
+                        conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM ItemTable", [], |r| {
+                            r.get(0)
+                        })
+                    {
                         println!("    Items in database: {}", count);
                     }
                 }
@@ -829,16 +942,21 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
 
         // Check workspace storage
         if let Some(storage_path) = get_provider_storage_path(name) {
-            let count = fs::read_dir(&storage_path)
-                .map(|r| r.count())
-                .unwrap_or(0);
+            let count = fs::read_dir(&storage_path).map(|r| r.count()).unwrap_or(0);
             println!("    Workspace folders: {}", count);
         }
 
         // Check copilot history
         if let Some(history_path) = get_copilot_history_path(name) {
             let count = fs::read_dir(&history_path)
-                .map(|r| r.filter(|e| e.as_ref().map(|e| e.path().extension().is_some_and(|ext| ext == "jsonl")).unwrap_or(false)).count())
+                .map(|r| {
+                    r.filter(|e| {
+                        e.as_ref()
+                            .map(|e| e.path().extension().is_some_and(|ext| ext == "jsonl"))
+                            .unwrap_or(false)
+                    })
+                    .count()
+                })
                 .unwrap_or(0);
             println!("    JSONL session files: {}", count);
         }
@@ -848,7 +966,7 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
 
     if check_system {
         println!("[*] System Status:");
-        
+
         // Get available disk space
         #[cfg(windows)]
         {
@@ -858,17 +976,17 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
                 .output()
             {
                 if let Ok(text) = String::from_utf8(output.stdout) {
-                    println!("    Disk space: {}", text.lines().nth(1).unwrap_or("Unknown"));
+                    println!(
+                        "    Disk space: {}",
+                        text.lines().nth(1).unwrap_or("Unknown")
+                    );
                 }
             }
         }
 
         #[cfg(not(windows))]
         {
-            if let Ok(output) = std::process::Command::new("df")
-                .args(["-h", "/"])
-                .output()
-            {
+            if let Ok(output) = std::process::Command::new("df").args(["-h", "/"]).output() {
                 if let Ok(text) = String::from_utf8(output.stdout) {
                     if let Some(line) = text.lines().nth(1) {
                         println!("    Disk space: {}", line);
@@ -897,8 +1015,7 @@ pub fn recover_convert(
     format: Option<&str>,
     compat: &str,
 ) -> Result<()> {
-    use crate::storage::{parse_session_auto, detect_session_format, VsCodeSessionFormat};
-    
+    use crate::storage::{detect_session_format, parse_session_auto, VsCodeSessionFormat};
 
     let input_path = Path::new(input);
     if !input_path.exists() {
@@ -911,7 +1028,7 @@ pub fn recover_convert(
 
     // Auto-detect format from content (not just extension)
     let format_info = detect_session_format(&content);
-    
+
     // Determine output format
     let output_format = if let Some(fmt) = format {
         fmt.to_lowercase()
@@ -937,7 +1054,8 @@ pub fn recover_convert(
     let output_path = if let Some(out) = output {
         PathBuf::from(out)
     } else {
-        let stem = input_path.file_stem()
+        let stem = input_path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("converted");
         input_path.with_file_name(format!("{}.{}", stem, output_format))
@@ -945,44 +1063,58 @@ pub fn recover_convert(
 
     println!("[*] Session Format Converter");
     println!("    Input:  {}", input);
-    println!("    Output: {} ({})", output_path.display(), output_format.to_uppercase());
+    println!(
+        "    Output: {} ({})",
+        output_path.display(),
+        output_format.to_uppercase()
+    );
     println!("    Compat: {}", compat);
     println!();
     println!("[*] Auto-detected source format:");
-    println!("    Format:     {} ({})", format_info.format.short_name(), format_info.format);
+    println!(
+        "    Format:     {} ({})",
+        format_info.format.short_name(),
+        format_info.format
+    );
     println!("    Schema:     {}", format_info.schema_version);
     println!("    Confidence: {:.0}%", format_info.confidence * 100.0);
     println!("    Method:     {}", format_info.detection_method);
     println!();
 
     // Parse using auto-detection
-    let (session, _) = parse_session_auto(&content)
-        .with_context(|| "Failed to parse session")?;
+    let (session, _) = parse_session_auto(&content).with_context(|| "Failed to parse session")?;
 
     println!("[+] Parsed session:");
-    println!("    Session ID: {}", session.session_id.as_deref().unwrap_or("none"));
+    println!(
+        "    Session ID: {}",
+        session.session_id.as_deref().unwrap_or("none")
+    );
     println!("    Version:    {}", session.version);
     println!("    Requests:   {}", session.requests.len());
-    println!("    Created:    {}", format_timestamp(session.creation_date));
+    println!(
+        "    Created:    {}",
+        format_timestamp(session.creation_date)
+    );
     println!();
 
     // Convert to output format
     let output_content = match output_format.as_str() {
         "json" => {
             // Convert to legacy JSON format (VS Code < 1.109.0)
-            serde_json::to_string_pretty(&session)
-                .with_context(|| "Failed to serialize to JSON")?
+            serde_json::to_string_pretty(&session).with_context(|| "Failed to serialize to JSON")?
         }
         "jsonl" => {
             // Convert to JSONL format (VS Code >= 1.109.0)
-            convert_to_jsonl(&session)
-                .with_context(|| "Failed to serialize to JSONL")?
+            convert_to_jsonl(&session).with_context(|| "Failed to serialize to JSONL")?
         }
         "md" | "markdown" => {
             // Convert to readable markdown
             convert_to_markdown(&session)
         }
-        _ => anyhow::bail!("Unknown output format: {}. Use json, jsonl, or md", output_format),
+        _ => anyhow::bail!(
+            "Unknown output format: {}. Use json, jsonl, or md",
+            output_format
+        ),
     };
 
     // Write output
@@ -1042,7 +1174,7 @@ fn convert_to_jsonl(session: &crate::models::ChatSession) -> Result<String> {
         lines.push(serde_json::to_string(&delta)?);
     }
 
-    Ok(lines.join("\n"))
+    Ok(format!("{}\n", lines.join("\n")))
 }
 
 /// Convert ChatSession to readable markdown
@@ -1050,33 +1182,37 @@ fn convert_to_markdown(session: &crate::models::ChatSession) -> String {
     let mut md = String::new();
 
     md.push_str("# Chat Session\n\n");
-    
+
     if let Some(ref title) = session.custom_title {
         md.push_str(&format!("**Title:** {}\n\n", title));
     }
-    
+
     if let Some(ref session_id) = session.session_id {
         md.push_str(&format!("**Session ID:** `{}`\n\n", session_id));
     }
-    
-    md.push_str(&format!("**Created:** {}\n\n", format_timestamp(session.creation_date)));
+
+    md.push_str(&format!(
+        "**Created:** {}\n\n",
+        format_timestamp(session.creation_date)
+    ));
     md.push_str(&format!("**Messages:** {}\n\n", session.requests.len()));
     md.push_str("---\n\n");
 
     for (i, request) in session.requests.iter().enumerate() {
         md.push_str(&format!("## Turn {}\n\n", i + 1));
-        
+
         // User message
         md.push_str("### User\n\n");
         if let Some(ref msg) = request.message {
             md.push_str(&format!("{}\n\n", msg.text.as_deref().unwrap_or("")));
         }
 
-        // Assistant response  
+        // Assistant response
         if let Some(ref response) = request.response {
             md.push_str("### Assistant\n\n");
             // Response is a serde_json::Value - extract text from 'value' or 'text' field
-            let response_text = response.get("value")
+            let response_text = response
+                .get("value")
                 .or_else(|| response.get("text"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
@@ -1101,10 +1237,11 @@ pub fn recover_extract(
     include_edits: bool,
 ) -> Result<()> {
     let project_path = Path::new(project_path);
-    
+
     // Normalize the path
     let canonical_path = if project_path.exists() {
-        let p = project_path.canonicalize()
+        let p = project_path
+            .canonicalize()
             .with_context(|| format!("Failed to canonicalize path: {}", project_path.display()))?;
         // Strip Windows extended path prefix (\\?\) if present
         let path_str = p.to_string_lossy();
@@ -1122,7 +1259,9 @@ pub fn recover_extract(
     println!();
 
     // Normalize the path for comparison
-    let normalized_path = canonical_path.display().to_string()
+    let normalized_path = canonical_path
+        .display()
+        .to_string()
         .replace('\\', "/")
         .to_lowercase();
 
@@ -1144,7 +1283,7 @@ pub fn recover_extract(
                     if !workspace_dir.is_dir() {
                         continue;
                     }
-                    
+
                     let workspace_json = workspace_dir.join("workspace.json");
                     if let Ok(content) = fs::read_to_string(&workspace_json) {
                         // Parse workspace.json to get folder URI
@@ -1158,11 +1297,18 @@ pub fn recover_extract(
                                     .replace("%3A", ":")
                                     .replace("%3a", ":")
                                     .to_lowercase();
-                                
-                                if folder_path == normalized_path ||
-                                   folder_path.trim_end_matches('/') == normalized_path.trim_end_matches('/') {
-                                    matched_workspaces.push((provider.to_string(), workspace_dir.clone()));
-                                    println!("[+] Found {} workspace: {}", provider, workspace_dir.display());
+
+                                if folder_path == normalized_path
+                                    || folder_path.trim_end_matches('/')
+                                        == normalized_path.trim_end_matches('/')
+                                {
+                                    matched_workspaces
+                                        .push((provider.to_string(), workspace_dir.clone()));
+                                    println!(
+                                        "[+] Found {} workspace: {}",
+                                        provider,
+                                        workspace_dir.display()
+                                    );
                                     println!("    Folder: {}", folder);
                                 }
                             }
@@ -1226,11 +1372,19 @@ pub fn recover_extract(
         canonical_path.join(".chasm_recovery")
     };
 
-    fs::create_dir_all(&output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    fs::create_dir_all(&output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
 
     println!();
-    println!("[*] Extracting {} items to: {}", found_sessions.len(), output_dir.display());
+    println!(
+        "[*] Extracting {} items to: {}",
+        found_sessions.len(),
+        output_dir.display()
+    );
     println!();
 
     let mut total_size = 0u64;
@@ -1239,21 +1393,29 @@ pub fn recover_extract(
 
     for (provider, source_path, format_type) in &found_sessions {
         // Generate unique filename including workspace hash if needed
-        let mut dest_name = format!("{}_{}_{}",
+        let mut dest_name = format!(
+            "{}_{}_{}",
             provider,
             format_type,
-            source_path.file_name().unwrap_or_default().to_string_lossy()
+            source_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
         );
-        
+
         // If we've seen this name, add the parent directory name (workspace hash) to make it unique
         if seen_names.contains(&dest_name) {
             if let Some(parent) = source_path.parent() {
                 if let Some(parent_name) = parent.file_name() {
-                    dest_name = format!("{}_{}_{}_{}",
+                    dest_name = format!(
+                        "{}_{}_{}_{}",
                         provider,
                         format_type,
                         parent_name.to_string_lossy(),
-                        source_path.file_name().unwrap_or_default().to_string_lossy()
+                        source_path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
                     );
                 }
             }
@@ -1265,10 +1427,10 @@ pub fn recover_extract(
             if let Ok(metadata) = fs::metadata(source_path) {
                 total_size += metadata.len();
             }
-            
+
             fs::copy(source_path, &dest_path)
                 .with_context(|| format!("Failed to copy: {}", source_path.display()))?;
-            
+
             file_count += 1;
             println!("    [+] {} -> {}", source_path.display(), dest_name);
         } else if source_path.is_dir() {
@@ -1291,33 +1453,33 @@ pub fn recover_extract(
 /// Recursively copy a directory
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
-    
+
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        
+
         if src_path.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
             fs::copy(&src_path, &dst_path)?;
         }
     }
-    
+
     Ok(())
 }
 
 /// Format a Unix timestamp for display
 fn format_timestamp(ts: i64) -> String {
     use std::time::{Duration, UNIX_EPOCH};
-    
+
     if ts <= 0 {
         return "Unknown".to_string();
     }
-    
+
     // Handle both seconds and milliseconds
     let ts_secs = if ts > 10_000_000_000 { ts / 1000 } else { ts };
-    
+
     match UNIX_EPOCH.checked_add(Duration::from_secs(ts_secs as u64)) {
         Some(time) => {
             let datetime: chrono::DateTime<chrono::Utc> = time.into();
@@ -1341,8 +1503,8 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
     }
 
     // Read file content
-    let content = fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {}", file))?;
+    let content =
+        fs::read_to_string(file_path).with_context(|| format!("Failed to read file: {}", file))?;
 
     // Detect format
     let format_info = detect_session_format(&content);
@@ -1395,12 +1557,19 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
         println!("    File: {}", file);
         println!("    Size: {} bytes", content.len());
         println!();
-        
+
         println!("[*] Detected Format:");
-        println!("    Type:        {} ({})", format_info.format.short_name().to_uppercase(), format_info.format);
-        println!("    Min VS Code: {}", format_info.format.min_vscode_version());
+        println!(
+            "    Type:        {} ({})",
+            format_info.format.short_name().to_uppercase(),
+            format_info.format
+        );
+        println!(
+            "    Min VS Code: {}",
+            format_info.format.min_vscode_version()
+        );
         println!();
-        
+
         println!("[*] Schema Version:");
         println!("    Version:     {}", format_info.schema_version);
         println!("    Confidence:  {:.0}%", format_info.confidence * 100.0);
@@ -1412,12 +1581,21 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
         match &parse_result {
             Ok((session, _)) => {
                 println!("[+] Session Parsed Successfully:");
-                println!("    Session ID:  {}", session.session_id.as_deref().unwrap_or("none"));
+                println!(
+                    "    Session ID:  {}",
+                    session.session_id.as_deref().unwrap_or("none")
+                );
                 println!("    Version:     {}", session.version);
                 println!("    Requests:    {}", session.requests.len());
-                println!("    Created:     {}", format_timestamp(session.creation_date));
+                println!(
+                    "    Created:     {}",
+                    format_timestamp(session.creation_date)
+                );
                 if session.last_message_date > 0 {
-                    println!("    Last Msg:    {}", format_timestamp(session.last_message_date));
+                    println!(
+                        "    Last Msg:    {}",
+                        format_timestamp(session.last_message_date)
+                    );
                 }
                 if let Some(ref title) = session.custom_title {
                     println!("    Title:       {}", title);
@@ -1425,17 +1603,22 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
                 if let Some(ref responder) = session.responder_username {
                     println!("    Responder:   {}", responder);
                 }
-                
+
                 if verbose && !session.requests.is_empty() {
                     println!();
                     println!("[*] Request Summary:");
                     for (i, req) in session.requests.iter().take(5).enumerate() {
-                        let msg_preview = req.message
+                        let msg_preview = req
+                            .message
                             .as_ref()
                             .and_then(|m| m.text.as_ref())
                             .map(|t| {
                                 let preview: String = t.chars().take(50).collect();
-                                if t.len() > 50 { format!("{}...", preview) } else { preview }
+                                if t.len() > 50 {
+                                    format!("{}...", preview)
+                                } else {
+                                    preview
+                                }
                             })
                             .unwrap_or_else(|| "[no message]".to_string());
                         println!("    {}. {}", i + 1, msg_preview);
@@ -1454,26 +1637,40 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
                     println!("[*] File Preview:");
                     for (i, line) in content.lines().take(5).enumerate() {
                         let preview: String = line.chars().take(100).collect();
-                        println!("    {}: {}{}", i + 1, preview, if line.len() > 100 { "..." } else { "" });
+                        println!(
+                            "    {}: {}{}",
+                            i + 1,
+                            preview,
+                            if line.len() > 100 { "..." } else { "" }
+                        );
                     }
                 }
             }
         }
-        
+
         // Show conversion recommendations
         println!();
         println!("[*] Recommendations:");
         match format_info.format {
             VsCodeSessionFormat::LegacyJson => {
                 println!("    - This is legacy JSON format (VS Code < 1.109.0)");
-                println!("    - Convert to JSONL: chasm recover convert \"{}\" --format jsonl", file);
+                println!(
+                    "    - Convert to JSONL: chasm recover convert \"{}\" --format jsonl",
+                    file
+                );
             }
             VsCodeSessionFormat::JsonLines => {
                 println!("    - This is modern JSONL format (VS Code >= 1.109.0)");
-                println!("    - Convert to JSON: chasm recover convert \"{}\" --format json", file);
+                println!(
+                    "    - Convert to JSON: chasm recover convert \"{}\" --format json",
+                    file
+                );
             }
         }
-        println!("    - Export to Markdown: chasm recover convert \"{}\" --format md", file);
+        println!(
+            "    - Export to Markdown: chasm recover convert \"{}\" --format md",
+            file
+        );
     }
 
     Ok(())
@@ -1497,10 +1694,31 @@ pub fn recover_upgrade(
     println!("{} Session Format Upgrade", "=".repeat(60).dimmed());
     println!("{}", "=".repeat(60).dimmed());
     println!();
-    println!("  Provider:      {}", if provider == "auto" { "auto-detect".cyan() } else { provider.cyan() });
+    println!(
+        "  Provider:      {}",
+        if provider == "auto" {
+            "auto-detect".cyan()
+        } else {
+            provider.cyan()
+        }
+    );
     println!("  Target format: {}", target_format.cyan());
-    println!("  Backup:        {}", if no_backup { "disabled".yellow() } else { "enabled".green() });
-    println!("  Mode:          {}", if dry_run { "DRY RUN".yellow().bold() } else { "LIVE".green().bold() });
+    println!(
+        "  Backup:        {}",
+        if no_backup {
+            "disabled".yellow()
+        } else {
+            "enabled".green()
+        }
+    );
+    println!(
+        "  Mode:          {}",
+        if dry_run {
+            "DRY RUN".yellow().bold()
+        } else {
+            "LIVE".green().bold()
+        }
+    );
     println!();
     println!("{}", "=".repeat(60).dimmed());
 
@@ -1557,13 +1775,14 @@ pub fn recover_upgrade(
 
             let path = entry.path();
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-            
+
             // Only process session files
             if ext != "json" && ext != "jsonl" {
                 continue;
             }
 
-            let file_name = path.file_name()
+            let file_name = path
+                .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
@@ -1578,7 +1797,7 @@ pub fn recover_upgrade(
             };
 
             let format_info = detect_session_format(&content);
-            
+
             // Determine if upgrade is needed
             let needs_upgrade = match target_format {
                 "jsonl" => matches!(format_info.format, VsCodeSessionFormat::LegacyJson),
@@ -1587,7 +1806,12 @@ pub fn recover_upgrade(
             };
 
             if !needs_upgrade {
-                println!("    {} {} - already {}", "○".dimmed(), file_name, target_format);
+                println!(
+                    "    {} {} - already {}",
+                    "○".dimmed(),
+                    file_name,
+                    target_format
+                );
                 total_skipped += 1;
                 continue;
             }
@@ -1615,20 +1839,36 @@ pub fn recover_upgrade(
                 "json" => match serde_json::to_string_pretty(&session) {
                     Ok(c) => c,
                     Err(e) => {
-                        println!("    {} {} - serialization error: {}", "✗".red(), file_name, e);
+                        println!(
+                            "    {} {} - serialization error: {}",
+                            "✗".red(),
+                            file_name,
+                            e
+                        );
                         total_errors += 1;
                         continue;
                     }
                 },
                 _ => {
-                    println!("    {} {} - unsupported target format: {}", "✗".red(), file_name, target_format);
+                    println!(
+                        "    {} {} - unsupported target format: {}",
+                        "✗".red(),
+                        file_name,
+                        target_format
+                    );
                     total_errors += 1;
                     continue;
                 }
             };
 
             if dry_run {
-                println!("    {} {} - would upgrade ({} → {})", "◉".cyan(), file_name, ext, target_format);
+                println!(
+                    "    {} {} - would upgrade ({} → {})",
+                    "◉".cyan(),
+                    file_name,
+                    ext,
+                    target_format
+                );
                 total_upgraded += 1;
                 continue;
             }

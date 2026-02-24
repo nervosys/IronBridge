@@ -502,7 +502,11 @@ pub fn detect_orphaned(path: Option<&str>, recover: bool) -> Result<()> {
                                         .filter(|e| {
                                             e.path()
                                                 .extension()
-                                                .map(|ext| ext == "json")
+                                                .map(|ext| {
+                                                    ext == "json"
+                                                        || ext == "jsonl"
+                                                        || ext == "backup"
+                                                })
                                                 .unwrap_or(false)
                                         })
                                         .count()
@@ -646,7 +650,13 @@ pub fn detect_orphaned(path: Option<&str>, recover: bool) -> Result<()> {
                 if let Ok(entries) = std::fs::read_dir(&orphan_sessions) {
                     for entry in entries.filter_map(|e| e.ok()) {
                         let src = entry.path();
-                        if src.extension().map(|e| e == "json").unwrap_or(false) {
+                        let ext_match = src
+                            .extension()
+                            .map(|e| e == "json" || e == "jsonl" || e == "backup")
+                            .unwrap_or(false);
+                        let is_bak = src.to_string_lossy().ends_with(".bak")
+                            || src.to_string_lossy().ends_with(".corrupt");
+                        if ext_match && !is_bak {
                             let filename = src.file_name().unwrap();
                             let dest = active_chat_sessions.join(filename);
                             if !dest.exists() {
