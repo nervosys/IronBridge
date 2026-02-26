@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-02-25
+
+### Added
+
+- **Model cache rebuild** (`agentSessions.model.cache`) — Sessions now appear in the Chat panel sidebar after repair; previously recovered sessions were invisible because this cache was never populated
+- **State cache cleanup** (`agentSessions.state.cache`) — Removes stale entries referencing deleted sessions that could confuse VS Code's UI state
+- **Memento fix** (`memento/interactive-session-view-copilot`) — Repairs the last-active-session pointer when it references a non-existent session
+- **`.json.bak` recovery** — When a `.jsonl` has fewer requests than a co-located `.json.bak` (truncated migration), automatically restores the full session from the backup
+- **Old inputState migration** — Converts pre-v3 top-level `attachments`/`mode`/`inputText`/`selections`/`contrib` fields into the nested `inputState` object VS Code expects
+- **`fix_request_model_states()`** — Fixes pending (0) and cancelled (2) modelState values in recovered sessions, adding `completedAt` timestamps
+- **`session_resource_uri()` / `session_id_from_resource_uri()`** — Helpers for building and parsing `vscode-chat-session://local/{base64}` URIs
+- **`repair_workspace_db_caches()`** — Reusable helper that runs all DB cache repairs (model cache, state cache, memento, .json.bak recovery) for `--all` and `--recursive` repair paths
+- New repair passes in `register repair`: Pass 0.5 (.json.bak recovery), Pass 4 (model cache), Pass 5 (state cache), Pass 6 (memento)
+
+### Changed
+
+- `ensure_vscode_compat_fields()` now calls `migrate_old_input_state()` before the inputState existence check
+- `repair_workspace_sessions()` now runs `.json.bak` recovery as its first step (Pass 0.5)
+- `register repair --all` and `register repair --recursive` now run full DB cache repairs for each workspace
+
 ## [1.5.3] - 2026-02-21
 
 ### Added
