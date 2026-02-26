@@ -15,10 +15,11 @@ use std::path::{Path, PathBuf};
 use crate::error::CsmError;
 use crate::models::ChatSession;
 use crate::storage::{
-    add_session_to_index, close_vscode_and_wait, diagnose_workspace_sessions,
-    get_workspace_storage_db, is_session_file_extension, is_vscode_running, parse_session_file,
-    parse_session_json, read_chat_session_index, register_all_sessions_from_directory,
-    reopen_vscode, repair_workspace_sessions, trim_session_jsonl,
+    add_session_to_index, cleanup_state_cache, close_vscode_and_wait, diagnose_workspace_sessions,
+    fix_session_memento, get_workspace_storage_db, is_session_file_extension, is_vscode_running,
+    parse_session_file, parse_session_json, read_chat_session_index, rebuild_model_cache,
+    recover_from_json_bak, register_all_sessions_from_directory, reopen_vscode,
+    repair_workspace_sessions, trim_session_jsonl,
 };
 use crate::workspace::{
     discover_workspaces, find_workspace_by_path, normalize_path,
@@ -1022,6 +1023,29 @@ pub fn register_repair(
     }
 
     // Run the repair
+    // Pass 0.5: Recover from .json.bak when .jsonl has fewer requests (truncated migration)
+    println!(
+        "   {} Pass 0.5: Recovering sessions from .json.bak files...",
+        "[*]".cyan()
+    );
+    match recover_from_json_bak(&chat_sessions_dir) {
+        Ok(0) => {}
+        Ok(n) => {
+            println!(
+                "   {} Recovered {} session(s) from .json.bak backups",
+                "[OK]".green(),
+                n.to_string().cyan()
+            );
+        }
+        Err(e) => {
+            println!(
+                "   {} Failed to recover from .json.bak: {}",
+                "[WARN]".yellow(),
+                e
+            );
+        }
+    }
+
     println!(
         "   {} Pass 1: Compacting JSONL files & fixing compat fields...",
         "[*]".cyan()
@@ -1082,6 +1106,113 @@ pub fn register_repair(
                 "[OK]".green(),
                 deleted_json
             );
+        }
+    }
+
+    // Pass 4: Rebuild agentSessions.model.cache (makes sessions visible in Chat sidebar)
+    let db_path = get_workspace_storage_db(&ws_id)?;
+    println!(
+        "   {} Pass 4: Rebuilding model cache (agentSessions.model.cache)...",
+        "[*]".cyan()
+    );
+    match read_chat_session_index(&db_path) {
+        Ok(index) => match rebuild_model_cache(&db_path, &index) {
+            Ok(n) => {
+                println!(
+                    "   {} Model cache rebuilt with {} entries",
+                    "[OK]".green(),
+                    n.to_string().cyan()
+                );
+            }
+            Err(e) => {
+                println!(
+                    "   {} Failed to rebuild model cache: {}",
+                    "[WARN]".yellow(),
+                    e
+                );
+            }
+        },
+        Err(e) => {
+            println!(
+                "   {} Failed to read index for model cache rebuild: {}",
+                "[WARN]".yellow(),
+                e
+            );
+        }
+    }
+
+    // Pass 5: Cleanup agentSessions.state.cache (remove stale entries)
+    println!(
+        "   {} Pass 5: Cleaning up state cache (agentSessions.state.cache)...",
+        "[*]".cyan()
+    );
+    {
+        // Collect valid session IDs from disk
+        let mut valid_ids: HashSet<String> = HashSet::new();
+        if chat_sessions_dir.exists() {
+            for entry in std::fs::read_dir(&chat_sessions_dir)? {
+                let entry = entry?;
+                let p = entry.path();
+                if p.extension().is_some_and(|e| e == "jsonl") {
+                    if let Some(stem) = p.file_stem() {
+                        valid_ids.insert(stem.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+        match cleanup_state_cache(&db_path, &valid_ids) {
+            Ok(0) => {
+                println!("   {} State cache: all entries valid", "[OK]".green());
+            }
+            Ok(n) => {
+                println!(
+                    "   {} State cache: removed {} stale entries",
+                    "[OK]".green(),
+                    n.to_string().cyan()
+                );
+            }
+            Err(e) => {
+                println!(
+                    "   {} Failed to cleanup state cache: {}",
+                    "[WARN]".yellow(),
+                    e
+                );
+            }
+        }
+
+        // Pass 6: Fix memento (point to a valid session)
+        println!(
+            "   {} Pass 6: Fixing session memento (last active session)...",
+            "[*]".cyan()
+        );
+        // Pick the most recently active non-empty session as preferred
+        let preferred_id = read_chat_session_index(&db_path).ok().and_then(|idx| {
+            idx.entries
+                .iter()
+                .filter(|(_, e)| !e.is_empty)
+                .max_by_key(|(_, e)| e.last_message_date)
+                .map(|(id, _)| id.clone())
+        });
+        match fix_session_memento(&db_path, &valid_ids, preferred_id.as_deref()) {
+            Ok(true) => {
+                println!(
+                    "   {} Memento updated to point to: {}",
+                    "[OK]".green(),
+                    preferred_id
+                        .as_deref()
+                        .unwrap_or("(first valid session)")
+                        .cyan()
+                );
+            }
+            Ok(false) => {
+                println!(
+                    "   {} Memento already points to a valid session",
+                    "[OK]".green()
+                );
+            }
+            Err(e) => {
+                println!("   {} Failed to fix memento: {}", "[WARN]".yellow(), e);
+            }
         }
     }
 
@@ -1339,6 +1470,11 @@ fn register_repair_recursive(
                                                 );
                                             }
 
+                                            // Repair DB caches (model cache, state cache, memento, .json.bak recovery)
+                                            let _ = repair_workspace_db_caches(
+                                                &ws.hash, &chat_dir, false,
+                                            );
+
                                             let detail = format!(
                                                 "{} compacted, {} synced{}",
                                                 compacted,
@@ -1535,6 +1671,111 @@ fn register_repair_recursive(
     Ok(())
 }
 
+/// Repair the VS Code DB caches for a single workspace:
+/// - `.json.bak` recovery (restore truncated sessions from backups)
+/// - `agentSessions.model.cache` rebuild (makes sessions visible in Chat sidebar)
+/// - `agentSessions.state.cache` cleanup (removes stale entries for deleted sessions)
+/// - `memento/interactive-session-view-copilot` fix (points to a valid session)
+///
+/// Call this AFTER `repair_workspace_sessions()` and stale .json cleanup.
+fn repair_workspace_db_caches(
+    workspace_id: &str,
+    chat_sessions_dir: &Path,
+    verbose: bool,
+) -> Result<()> {
+    let db_path = get_workspace_storage_db(workspace_id)?;
+    if !db_path.exists() {
+        return Ok(());
+    }
+
+    // .json.bak recovery
+    match recover_from_json_bak(chat_sessions_dir) {
+        Ok(0) => {}
+        Ok(n) => {
+            if verbose {
+                println!(
+                    "      {} Recovered {} session(s) from .json.bak",
+                    "[OK]".green(),
+                    n
+                );
+            }
+        }
+        Err(e) => {
+            if verbose {
+                println!(
+                    "      {} .json.bak recovery failed: {}",
+                    "[WARN]".yellow(),
+                    e
+                );
+            }
+        }
+    }
+
+    // Rebuild model cache
+    match read_chat_session_index(&db_path) {
+        Ok(index) => {
+            if let Ok(n) = rebuild_model_cache(&db_path, &index) {
+                if verbose && n > 0 {
+                    println!(
+                        "      {} Model cache rebuilt ({} entries)",
+                        "[OK]".green(),
+                        n
+                    );
+                }
+            }
+        }
+        Err(_) => {}
+    }
+
+    // Collect valid session IDs from disk
+    let mut valid_ids: HashSet<String> = HashSet::new();
+    if chat_sessions_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(chat_sessions_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().is_some_and(|e| e == "jsonl") {
+                    if let Some(stem) = p.file_stem() {
+                        valid_ids.insert(stem.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // Cleanup state cache
+    match cleanup_state_cache(&db_path, &valid_ids) {
+        Ok(n) if n > 0 && verbose => {
+            println!(
+                "      {} State cache: removed {} stale entries",
+                "[OK]".green(),
+                n
+            );
+        }
+        _ => {}
+    }
+
+    // Fix memento
+    let preferred_id = read_chat_session_index(&db_path).ok().and_then(|idx| {
+        idx.entries
+            .iter()
+            .filter(|(_, e)| !e.is_empty)
+            .max_by_key(|(_, e)| e.last_message_date)
+            .map(|(id, _)| id.clone())
+    });
+    match fix_session_memento(&db_path, &valid_ids, preferred_id.as_deref()) {
+        Ok(true) if verbose => {
+            println!(
+                "      {} Memento updated to: {}",
+                "[OK]".green(),
+                preferred_id.as_deref().unwrap_or("(first valid)"),
+            );
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
 /// Repair all workspaces that have chat sessions
 fn register_repair_all(force: bool, close_vscode: bool, reopen: bool) -> Result<()> {
     let should_close = close_vscode || reopen;
@@ -1639,6 +1880,9 @@ fn register_repair_all(force: bool, close_vscode: bool, reopen: bool) -> Result<
                 if deleted_json > 0 {
                     repair_workspace_sessions(&ws.hash, &chat_sessions_dir, true)?;
                 }
+
+                // Repair DB caches (model cache, state cache, memento, .json.bak recovery)
+                let _ = repair_workspace_db_caches(&ws.hash, &chat_sessions_dir, false);
 
                 total_compacted += compacted;
                 total_synced += index_fixed;

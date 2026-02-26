@@ -334,6 +334,62 @@ pub struct ChatSessionIndexEntry {
     pub is_external: Option<bool>,
 }
 
+/// Entry in the `agentSessions.model.cache` DB key.
+/// This cache drives the Chat panel sidebar in VS Code — sessions *must* have
+/// a model cache entry to be visible in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCacheEntry {
+    /// Always "local" for local sessions
+    pub provider_type: String,
+
+    /// Always "Local" for local sessions
+    pub provider_label: String,
+
+    /// Resource URI: `vscode-chat-session://local/{base64(sessionId)}`
+    pub resource: String,
+
+    /// Icon identifier (typically "vm")
+    pub icon: String,
+
+    /// Session title (display label)
+    pub label: String,
+
+    /// Status: 1 = valid
+    pub status: u8,
+
+    /// Session timing information
+    pub timing: ChatSessionTiming,
+
+    /// Initial location (panel, terminal, etc.)
+    pub initial_location: String,
+
+    /// Whether the session has pending edits
+    pub has_pending_edits: bool,
+
+    /// Whether the session is empty (no requests)
+    pub is_empty: bool,
+
+    /// Whether the session is from an external source
+    pub is_external: bool,
+
+    /// Last response state: 0=Pending, 1=Complete, 2=Cancelled, 3=Failed, 4=NeedsInput
+    pub last_response_state: u8,
+}
+
+/// Entry in the `agentSessions.state.cache` DB key.
+/// Tracks read timestamps per session for UI state (e.g., unread indicators).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StateCacheEntry {
+    /// Resource URI: `vscode-chat-session://local/{base64(sessionId)}`
+    pub resource: String,
+
+    /// Timestamp of last read (ms since epoch)
+    #[serde(default)]
+    pub read: Option<i64>,
+}
+
 /// Session with its file path for internal processing
 #[derive(Debug, Clone)]
 pub struct SessionWithPath {

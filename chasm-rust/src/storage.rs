@@ -5,8 +5,10 @@
 use crate::error::{CsmError, Result};
 use crate::models::{
     ChatRequest, ChatSession, ChatSessionIndex, ChatSessionIndexEntry, ChatSessionTiming,
+    ModelCacheEntry, StateCacheEntry,
 };
 use crate::workspace::{get_empty_window_sessions_path, get_workspace_storage_path};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use rusqlite::Connection;
@@ -1036,6 +1038,503 @@ pub fn write_chat_session_index(db_path: &Path, index: &ChatSessionIndex) -> Res
     Ok(())
 }
 
+// ── Generic DB key read/write ──────────────────────────────────────────────
+
+/// Read a JSON value from the VS Code state DB by key
+fn read_db_json(db_path: &Path, key: &str) -> Result<Option<serde_json::Value>> {
+    let conn = Connection::open(db_path)?;
+    let result: std::result::Result<String, rusqlite::Error> =
+        conn.query_row("SELECT value FROM ItemTable WHERE key = ?", [key], |row| {
+            row.get(0)
+        });
+    match result {
+        Ok(json_str) => {
+            let v = serde_json::from_str(&json_str)
+                .map_err(|e| CsmError::InvalidSessionFormat(e.to_string()))?;
+            Ok(Some(v))
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(CsmError::SqliteError(e)),
+    }
+}
+
+/// Write a JSON value to the VS Code state DB (upsert)
+fn write_db_json(db_path: &Path, key: &str, value: &serde_json::Value) -> Result<()> {
+    let conn = Connection::open(db_path)?;
+    let json_str = serde_json::to_string(value)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)",
+        rusqlite::params![key, json_str],
+    )?;
+    Ok(())
+}
+
+// ── Session resource URI helpers ───────────────────────────────────────────
+
+/// Build the `vscode-chat-session://local/{base64(sessionId)}` resource URI
+/// that VS Code uses to identify sessions in model cache and state cache.
+pub fn session_resource_uri(session_id: &str) -> String {
+    let b64 = BASE64.encode(session_id.as_bytes());
+    format!("vscode-chat-session://local/{}", b64)
+}
+
+/// Extract a session ID from a `vscode-chat-session://` resource URI.
+/// Returns `None` if the URI doesn't match the expected format.
+pub fn session_id_from_resource_uri(uri: &str) -> Option<String> {
+    let prefix = "vscode-chat-session://local/";
+    if let Some(b64) = uri.strip_prefix(prefix) {
+        BASE64
+            .decode(b64)
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+    } else {
+        None
+    }
+}
+
+// ── Model cache (agentSessions.model.cache) ────────────────────────────────
+
+const MODEL_CACHE_KEY: &str = "agentSessions.model.cache";
+
+/// Read the `agentSessions.model.cache` from VS Code storage.
+/// Returns an empty Vec if the key doesn't exist.
+pub fn read_model_cache(db_path: &Path) -> Result<Vec<ModelCacheEntry>> {
+    match read_db_json(db_path, MODEL_CACHE_KEY)? {
+        Some(v) => serde_json::from_value(v)
+            .map_err(|e| CsmError::InvalidSessionFormat(format!("model cache: {}", e))),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Write the `agentSessions.model.cache` to VS Code storage.
+pub fn write_model_cache(db_path: &Path, cache: &[ModelCacheEntry]) -> Result<()> {
+    let v = serde_json::to_value(cache)?;
+    write_db_json(db_path, MODEL_CACHE_KEY, &v)
+}
+
+/// Rebuild the model cache from the session index. This makes sessions visible
+/// in the Chat panel sidebar. Only non-empty sessions get entries (VS Code
+/// hides empty ones).
+pub fn rebuild_model_cache(db_path: &Path, index: &ChatSessionIndex) -> Result<usize> {
+    let mut cache: Vec<ModelCacheEntry> = Vec::new();
+
+    for (session_id, entry) in &index.entries {
+        // Only include non-empty sessions — empty ones are hidden in the sidebar
+        if entry.is_empty {
+            continue;
+        }
+
+        let timing = entry.timing.clone().unwrap_or(ChatSessionTiming {
+            created: entry.last_message_date,
+            last_request_started: Some(entry.last_message_date),
+            last_request_ended: Some(entry.last_message_date),
+        });
+
+        cache.push(ModelCacheEntry {
+            provider_type: "local".to_string(),
+            provider_label: "Local".to_string(),
+            resource: session_resource_uri(session_id),
+            icon: "vm".to_string(),
+            label: entry.title.clone(),
+            status: 1,
+            timing,
+            initial_location: entry.initial_location.clone(),
+            has_pending_edits: false,
+            is_empty: false,
+            is_external: entry.is_external.unwrap_or(false),
+            last_response_state: 1, // Complete
+        });
+    }
+
+    let count = cache.len();
+    write_model_cache(db_path, &cache)?;
+    Ok(count)
+}
+
+// ── State cache (agentSessions.state.cache) ────────────────────────────────
+
+const STATE_CACHE_KEY: &str = "agentSessions.state.cache";
+
+/// Read the `agentSessions.state.cache` from VS Code storage.
+pub fn read_state_cache(db_path: &Path) -> Result<Vec<StateCacheEntry>> {
+    match read_db_json(db_path, STATE_CACHE_KEY)? {
+        Some(v) => serde_json::from_value(v)
+            .map_err(|e| CsmError::InvalidSessionFormat(format!("state cache: {}", e))),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Write the `agentSessions.state.cache` to VS Code storage.
+pub fn write_state_cache(db_path: &Path, cache: &[StateCacheEntry]) -> Result<()> {
+    let v = serde_json::to_value(cache)?;
+    write_db_json(db_path, STATE_CACHE_KEY, &v)
+}
+
+/// Remove state cache entries whose resource URIs reference sessions that no
+/// longer exist on disk. Returns the number of stale entries removed.
+pub fn cleanup_state_cache(db_path: &Path, valid_session_ids: &HashSet<String>) -> Result<usize> {
+    let entries = read_state_cache(db_path)?;
+    let valid_resources: HashSet<String> = valid_session_ids
+        .iter()
+        .map(|id| session_resource_uri(id))
+        .collect();
+
+    let before = entries.len();
+    let cleaned: Vec<StateCacheEntry> = entries
+        .into_iter()
+        .filter(|e| valid_resources.contains(&e.resource))
+        .collect();
+    let removed = before - cleaned.len();
+
+    if removed > 0 {
+        write_state_cache(db_path, &cleaned)?;
+    }
+
+    Ok(removed)
+}
+
+// ── Memento (memento/interactive-session-view-copilot) ──────────────────────
+
+const MEMENTO_KEY: &str = "memento/interactive-session-view-copilot";
+
+/// Read the Copilot Chat memento (tracks the last-active session).
+pub fn read_session_memento(db_path: &Path) -> Result<Option<serde_json::Value>> {
+    read_db_json(db_path, MEMENTO_KEY)
+}
+
+/// Write the Copilot Chat memento.
+pub fn write_session_memento(db_path: &Path, value: &serde_json::Value) -> Result<()> {
+    write_db_json(db_path, MEMENTO_KEY, value)
+}
+
+/// Fix the memento so it points to a session that actually exists.
+/// If the current memento references a deleted/non-existent session, update it
+/// to the most recently active valid session. Returns `true` if the memento was
+/// changed.
+pub fn fix_session_memento(
+    db_path: &Path,
+    valid_session_ids: &HashSet<String>,
+    preferred_session_id: Option<&str>,
+) -> Result<bool> {
+    let memento = read_session_memento(db_path)?;
+
+    let current_sid = memento
+        .as_ref()
+        .and_then(|v| v.get("sessionId"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // Check if current memento already points to a valid session
+    if let Some(ref sid) = current_sid {
+        if valid_session_ids.contains(sid) {
+            return Ok(false); // Already valid
+        }
+    }
+
+    // Pick a session to point to: prefer the explicit choice, otherwise pick any valid one
+    let target = preferred_session_id
+        .filter(|id| valid_session_ids.contains(*id))
+        .or_else(|| valid_session_ids.iter().next().map(|s| s.as_str()));
+
+    if let Some(target_id) = target {
+        let mut new_memento = memento.unwrap_or(serde_json::json!({}));
+        if let Some(obj) = new_memento.as_object_mut() {
+            obj.insert(
+                "sessionId".to_string(),
+                serde_json::Value::String(target_id.to_string()),
+            );
+        }
+        write_session_memento(db_path, &new_memento)?;
+        Ok(true)
+    } else {
+        Ok(false) // No valid sessions to point to
+    }
+}
+
+// ── .json.bak recovery ─────────────────────────────────────────────────────
+
+/// Count the number of requests in a session's `v.requests` array from a JSONL
+/// file (reads only the first kind:0 line).
+fn count_jsonl_requests(path: &Path) -> Result<usize> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+    let first_line = content.lines().next().unwrap_or("");
+    let parsed: serde_json::Value = serde_json::from_str(first_line)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Parse error: {}", e)))?;
+
+    let count = parsed
+        .get("v")
+        .or_else(|| Some(&parsed)) // bare JSON (non-JSONL) may not have "v" wrapper
+        .and_then(|v| v.get("requests"))
+        .and_then(|r| r.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+
+    Ok(count)
+}
+
+/// Count the number of requests in a `.json.bak` (or `.json`) file.
+fn count_json_bak_requests(path: &Path) -> Result<usize> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| CsmError::InvalidSessionFormat(format!("Parse error: {}", e)))?;
+
+    let count = parsed
+        .get("requests")
+        .and_then(|r| r.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+
+    Ok(count)
+}
+
+/// Migrate old-format inputState fields from top-level to a nested `inputState`
+/// object. VS Code version 3 expects `inputState` as a sub-object with keys
+/// `attachments`, `mode`, `inputText`, `selections`, `contrib`.
+///
+/// Old format (pre-v3): `{ "attachments": [...], "mode": {...}, "inputText": "...", ... }`
+/// New format (v3):     `{ "inputState": { "attachments": [...], "mode": {...}, ... } }`
+pub fn migrate_old_input_state(state: &mut serde_json::Value) {
+    if let Some(obj) = state.as_object_mut() {
+        // Only migrate if inputState doesn't already exist AND old top-level fields do
+        if obj.contains_key("inputState") {
+            return;
+        }
+
+        let old_keys = [
+            "attachments",
+            "mode",
+            "inputText",
+            "selections",
+            "contrib",
+            "selectedModel",
+        ];
+        let has_old = old_keys.iter().any(|k| obj.contains_key(*k));
+
+        if has_old {
+            let mut input_state = serde_json::Map::new();
+
+            // Move each old key into the nested object (with defaults)
+            input_state.insert(
+                "attachments".to_string(),
+                obj.remove("attachments").unwrap_or(serde_json::json!([])),
+            );
+            input_state.insert(
+                "mode".to_string(),
+                obj.remove("mode")
+                    .unwrap_or(serde_json::json!({"id": "agent", "kind": "agent"})),
+            );
+            input_state.insert(
+                "inputText".to_string(),
+                obj.remove("inputText").unwrap_or(serde_json::json!("")),
+            );
+            input_state.insert(
+                "selections".to_string(),
+                obj.remove("selections").unwrap_or(serde_json::json!([])),
+            );
+            input_state.insert(
+                "contrib".to_string(),
+                obj.remove("contrib").unwrap_or(serde_json::json!({})),
+            );
+
+            // selectedModel is optional, only include if present
+            if let Some(model) = obj.remove("selectedModel") {
+                input_state.insert("selectedModel".to_string(), model);
+            }
+
+            obj.insert(
+                "inputState".to_string(),
+                serde_json::Value::Object(input_state),
+            );
+        }
+    }
+}
+
+/// Recover sessions from `.json.bak` files when the corresponding `.jsonl` has
+/// fewer requests (indicating a truncated migration/compaction). For each .jsonl
+/// that has a co-located .json.bak with more requests, rebuilds the .jsonl from
+/// the backup data.
+///
+/// Returns the number of sessions recovered from backups.
+pub fn recover_from_json_bak(chat_sessions_dir: &Path) -> Result<usize> {
+    if !chat_sessions_dir.exists() {
+        return Ok(0);
+    }
+
+    let mut recovered = 0;
+
+    // Collect all .json.bak files
+    let mut bak_files: Vec<PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(chat_sessions_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.to_string_lossy().ends_with(".json.bak") {
+            bak_files.push(path);
+        }
+    }
+
+    for bak_path in &bak_files {
+        // Derive session ID and .jsonl path
+        let bak_name = bak_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let session_id = bak_name.trim_end_matches(".json.bak");
+        let jsonl_path = chat_sessions_dir.join(format!("{}.jsonl", session_id));
+
+        // Get request counts
+        let bak_count = match count_json_bak_requests(bak_path) {
+            Ok(c) => c,
+            Err(_) => continue, // Skip unparseable backups
+        };
+
+        if bak_count == 0 {
+            continue; // Backup has no data, skip
+        }
+
+        let jsonl_count = if jsonl_path.exists() {
+            count_jsonl_requests(&jsonl_path).unwrap_or(0)
+        } else {
+            0 // No .jsonl at all — definitely recover from backup
+        };
+
+        if bak_count <= jsonl_count {
+            continue; // .jsonl already has equal or more data
+        }
+
+        // .json.bak has more requests — recover from it
+        println!(
+            "   [*] .json.bak has {} requests vs .jsonl has {} for {}",
+            bak_count, jsonl_count, session_id
+        );
+
+        // Read the full backup
+        let bak_content = match std::fs::read_to_string(bak_path) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("   [WARN] Failed to read .json.bak {}: {}", session_id, e);
+                continue;
+            }
+        };
+        let mut full_data: serde_json::Value = match serde_json::from_str(&bak_content) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("   [WARN] Failed to parse .json.bak {}: {}", session_id, e);
+                continue;
+            }
+        };
+
+        // Clean up: build ISerializableChatData3 format
+        if let Some(obj) = full_data.as_object_mut() {
+            // Ensure version 3
+            obj.insert("version".to_string(), serde_json::json!(3));
+
+            // Ensure sessionId
+            if !obj.contains_key("sessionId") {
+                obj.insert("sessionId".to_string(), serde_json::json!(session_id));
+            }
+
+            // Force safe values
+            obj.insert("hasPendingEdits".to_string(), serde_json::json!(false));
+            obj.insert("pendingRequests".to_string(), serde_json::json!([]));
+
+            // Ensure responderUsername
+            if !obj.contains_key("responderUsername") {
+                obj.insert(
+                    "responderUsername".to_string(),
+                    serde_json::json!("GitHub Copilot"),
+                );
+            }
+
+            // Migrate old inputState format
+            migrate_old_input_state(&mut full_data);
+
+            // Fix modelState values in requests
+            fix_request_model_states(&mut full_data);
+        }
+
+        // Backup existing .jsonl if present
+        if jsonl_path.exists() {
+            let pre_fix_bak = jsonl_path.with_extension("jsonl.pre_bak_recovery");
+            if let Err(e) = std::fs::copy(&jsonl_path, &pre_fix_bak) {
+                println!(
+                    "   [WARN] Failed to backup .jsonl before recovery {}: {}",
+                    session_id, e
+                );
+                continue;
+            }
+        }
+
+        // Write new JSONL kind:0
+        let jsonl_obj = serde_json::json!({"kind": 0, "v": full_data});
+        let jsonl_str = serde_json::to_string(&jsonl_obj).map_err(|e| {
+            CsmError::InvalidSessionFormat(format!("Failed to serialize recovered session: {}", e))
+        })?;
+        std::fs::write(&jsonl_path, format!("{}\n", jsonl_str))?;
+
+        println!(
+            "   [OK] Recovered {} from .json.bak ({} → {} requests)",
+            session_id, jsonl_count, bak_count
+        );
+        recovered += 1;
+    }
+
+    Ok(recovered)
+}
+
+/// Fix modelState values in a session's requests array.
+/// - Pending (value=0) or Cancelled (value=2) → set to Cancelled (3) with completedAt
+/// - Terminal states (1, 3, 4) without completedAt → add completedAt from request timestamp
+fn fix_request_model_states(session_data: &mut serde_json::Value) {
+    let requests = match session_data
+        .get_mut("requests")
+        .and_then(|r| r.as_array_mut())
+    {
+        Some(r) => r,
+        None => return,
+    };
+
+    for req in requests.iter_mut() {
+        let timestamp = req
+            .get("timestamp")
+            .and_then(|t| t.as_i64())
+            .unwrap_or_else(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as i64
+            });
+
+        if let Some(ms) = req.get_mut("modelState") {
+            if let Some(val) = ms.get("value").and_then(|v| v.as_u64()) {
+                match val {
+                    0 | 2 => {
+                        // Pending or Cancelled → force to Cancelled with completedAt
+                        *ms = serde_json::json!({
+                            "value": 3,
+                            "completedAt": timestamp
+                        });
+                    }
+                    1 | 3 | 4 => {
+                        // Terminal states — ensure completedAt exists
+                        if ms.get("completedAt").is_none() {
+                            if let Some(ms_obj) = ms.as_object_mut() {
+                                ms_obj.insert(
+                                    "completedAt".to_string(),
+                                    serde_json::json!(timestamp),
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
 /// Add a session to the VS Code index
 pub fn add_session_to_index(
     db_path: &Path,
@@ -2051,6 +2550,10 @@ fn apply_splice(
 /// - `pendingRequests` (array, default [])
 /// - `inputState` (object with mode, attachments, etc.)
 pub fn ensure_vscode_compat_fields(state: &mut serde_json::Value, session_id: Option<&str>) {
+    // Migrate old-format inputState (top-level attachments/mode/etc.) to nested object.
+    // Must run BEFORE the inputState existence check below.
+    migrate_old_input_state(state);
+
     if let Some(obj) = state.as_object_mut() {
         // version
         if !obj.contains_key("version") {
@@ -2408,6 +2911,14 @@ pub fn repair_workspace_sessions(
     let mut fields_fixed = 0;
 
     if chat_sessions_dir.exists() {
+        // Pass 0.5: Recover from .json.bak when .jsonl has fewer requests
+        match recover_from_json_bak(chat_sessions_dir) {
+            Ok(n) if n > 0 => {
+                println!("   [OK] Recovered {} session(s) from .json.bak backups", n);
+            }
+            _ => {}
+        }
+
         // Pass 1: Compact large JSONL files and fix missing fields
         for entry in std::fs::read_dir(chat_sessions_dir)? {
             let entry = entry?;
