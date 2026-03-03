@@ -733,35 +733,49 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                                 keys_arr[1].as_u64().map(|i| i as usize),
                                 keys_arr[2].as_str(),
                             ) {
-                                if idx < session.requests.len() {
-                                    match field {
-                                        "response" => {
-                                            session.requests[idx].response = Some(value.clone());
-                                        }
-                                        "result" => {
-                                            session.requests[idx].result = Some(value.clone());
-                                        }
-                                        "followups" => {
-                                            session.requests[idx].followups =
-                                                serde_json::from_value(value.clone()).ok();
-                                        }
-                                        "isCanceled" => {
-                                            session.requests[idx].is_canceled = value.as_bool();
-                                        }
-                                        "contentReferences" => {
-                                            session.requests[idx].content_references =
-                                                serde_json::from_value(value.clone()).ok();
-                                        }
-                                        "codeCitations" => {
-                                            session.requests[idx].code_citations =
-                                                serde_json::from_value(value.clone()).ok();
-                                        }
-                                        "modelState" | "modelId" | "agent" | "variableData" => {
-                                            // Known request fields - update as generic Value
-                                            // modelState tracks the request lifecycle
-                                        }
-                                        _ => {} // Ignore unknown request fields
+                                // Auto-grow requests array to accommodate the referenced index.
+                                // VS Code emits events for request indices before a formal
+                                // kind:2 k=["requests"] append, so we must create placeholder
+                                // requests as needed.
+                                while idx >= session.requests.len() {
+                                    session.requests.push(ChatRequest::default());
+                                }
+                                match field {
+                                    "response" => {
+                                        session.requests[idx].response = Some(value.clone());
                                     }
+                                    "result" => {
+                                        session.requests[idx].result = Some(value.clone());
+                                    }
+                                    "followups" => {
+                                        session.requests[idx].followups =
+                                            serde_json::from_value(value.clone()).ok();
+                                    }
+                                    "isCanceled" => {
+                                        session.requests[idx].is_canceled = value.as_bool();
+                                    }
+                                    "contentReferences" => {
+                                        session.requests[idx].content_references =
+                                            serde_json::from_value(value.clone()).ok();
+                                    }
+                                    "codeCitations" => {
+                                        session.requests[idx].code_citations =
+                                            serde_json::from_value(value.clone()).ok();
+                                    }
+                                    "modelState" => {
+                                        session.requests[idx].model_state = Some(value.clone());
+                                    }
+                                    "modelId" => {
+                                        session.requests[idx].model_id =
+                                            value.as_str().map(|s| s.to_string());
+                                    }
+                                    "agent" => {
+                                        session.requests[idx].agent = Some(value.clone());
+                                    }
+                                    "variableData" => {
+                                        session.requests[idx].variable_data = Some(value.clone());
+                                    }
+                                    _ => {} // Ignore unknown request fields
                                 }
                             }
                         }
@@ -807,65 +821,62 @@ pub fn parse_session_jsonl(content: &str) -> std::result::Result<ChatSession, se
                                 keys_arr[1].as_u64().map(|i| i as usize),
                                 keys_arr[2].as_str(),
                             ) {
-                                if req_idx < session.requests.len() {
-                                    match field {
-                                        "response" => {
-                                            // Response is stored as a JSON Value (array)
-                                            if let Some(idx) = splice_index {
-                                                // Splice: keep items before index i, replace rest
-                                                if let Some(existing) =
-                                                    session.requests[req_idx].response.as_ref()
-                                                {
-                                                    if let Some(existing_arr) = existing.as_array()
-                                                    {
-                                                        let mut new_arr: Vec<serde_json::Value> =
-                                                            existing_arr
-                                                                [..idx.min(existing_arr.len())]
-                                                                .to_vec();
-                                                        if let Some(new_items) = value.as_array() {
-                                                            new_arr
-                                                                .extend(new_items.iter().cloned());
-                                                        }
-                                                        session.requests[req_idx].response =
-                                                            Some(serde_json::Value::Array(new_arr));
-                                                    } else {
-                                                        session.requests[req_idx].response =
-                                                            Some(value.clone());
+                                // Auto-grow requests array for the referenced index
+                                while req_idx >= session.requests.len() {
+                                    session.requests.push(ChatRequest::default());
+                                }
+                                match field {
+                                    "response" => {
+                                        // Response is stored as a JSON Value (array)
+                                        if let Some(idx) = splice_index {
+                                            // Splice: keep items before index i, replace rest
+                                            if let Some(existing) =
+                                                session.requests[req_idx].response.as_ref()
+                                            {
+                                                if let Some(existing_arr) = existing.as_array() {
+                                                    let mut new_arr: Vec<serde_json::Value> =
+                                                        existing_arr[..idx.min(existing_arr.len())]
+                                                            .to_vec();
+                                                    if let Some(new_items) = value.as_array() {
+                                                        new_arr.extend(new_items.iter().cloned());
                                                     }
+                                                    session.requests[req_idx].response =
+                                                        Some(serde_json::Value::Array(new_arr));
                                                 } else {
                                                     session.requests[req_idx].response =
                                                         Some(value.clone());
                                                 }
                                             } else {
-                                                // No splice index: append to existing response array
-                                                if let Some(existing) =
-                                                    session.requests[req_idx].response.as_ref()
-                                                {
-                                                    if let Some(existing_arr) = existing.as_array()
-                                                    {
-                                                        let mut new_arr = existing_arr.clone();
-                                                        if let Some(new_items) = value.as_array() {
-                                                            new_arr
-                                                                .extend(new_items.iter().cloned());
-                                                        }
-                                                        session.requests[req_idx].response =
-                                                            Some(serde_json::Value::Array(new_arr));
-                                                    } else {
-                                                        session.requests[req_idx].response =
-                                                            Some(value.clone());
+                                                session.requests[req_idx].response =
+                                                    Some(value.clone());
+                                            }
+                                        } else {
+                                            // No splice index: append to existing response array
+                                            if let Some(existing) =
+                                                session.requests[req_idx].response.as_ref()
+                                            {
+                                                if let Some(existing_arr) = existing.as_array() {
+                                                    let mut new_arr = existing_arr.clone();
+                                                    if let Some(new_items) = value.as_array() {
+                                                        new_arr.extend(new_items.iter().cloned());
                                                     }
+                                                    session.requests[req_idx].response =
+                                                        Some(serde_json::Value::Array(new_arr));
                                                 } else {
                                                     session.requests[req_idx].response =
                                                         Some(value.clone());
                                                 }
+                                            } else {
+                                                session.requests[req_idx].response =
+                                                    Some(value.clone());
                                             }
                                         }
-                                        "contentReferences" => {
-                                            session.requests[req_idx].content_references =
-                                                serde_json::from_value(value.clone()).ok();
-                                        }
-                                        _ => {} // Ignore unknown fields
                                     }
+                                    "contentReferences" => {
+                                        session.requests[req_idx].content_references =
+                                            serde_json::from_value(value.clone()).ok();
+                                    }
+                                    _ => {} // Ignore unknown fields
                                 }
                             }
                         }
@@ -1041,7 +1052,7 @@ pub fn write_chat_session_index(db_path: &Path, index: &ChatSessionIndex) -> Res
 // ── Generic DB key read/write ──────────────────────────────────────────────
 
 /// Read a JSON value from the VS Code state DB by key
-fn read_db_json(db_path: &Path, key: &str) -> Result<Option<serde_json::Value>> {
+pub fn read_db_json(db_path: &Path, key: &str) -> Result<Option<serde_json::Value>> {
     let conn = Connection::open(db_path)?;
     let result: std::result::Result<String, rusqlite::Error> =
         conn.query_row("SELECT value FROM ItemTable WHERE key = ?", [key], |row| {
@@ -1482,6 +1493,310 @@ pub fn recover_from_json_bak(chat_sessions_dir: &Path) -> Result<usize> {
     }
 
     Ok(recovered)
+}
+
+/// Recover sessions from `.jsonl.bak` files when the backup is larger than the
+/// corresponding `.jsonl` file — indicating the live session was truncated.
+///
+/// For each `.jsonl.bak` whose byte size exceeds the active `.jsonl`:
+/// 1. Backs up the active file to `.jsonl.pre-restore`
+/// 2. Copies the `.jsonl.bak` over the active `.jsonl`
+///
+/// This handles the common scenario where VS Code or compaction overwrites a
+/// session with a truncated version while the backup retains the full data.
+///
+/// Returns `(restored_count, total_bytes_recovered)`.
+pub fn recover_from_jsonl_bak(chat_sessions_dir: &Path, dry_run: bool) -> Result<(usize, u64)> {
+    if !chat_sessions_dir.exists() {
+        return Ok((0, 0));
+    }
+
+    let mut restored = 0usize;
+    let mut bytes_recovered = 0u64;
+
+    // Collect all .jsonl.bak files
+    let mut bak_files: Vec<PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(chat_sessions_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.to_string_lossy().ends_with(".jsonl.bak") {
+            bak_files.push(path);
+        }
+    }
+
+    for bak_path in &bak_files {
+        let bak_name = bak_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let session_id = bak_name.trim_end_matches(".jsonl.bak");
+        let jsonl_path = chat_sessions_dir.join(format!("{}.jsonl", session_id));
+
+        // Only act when the .jsonl exists AND the backup is strictly larger
+        if !jsonl_path.exists() {
+            continue;
+        }
+
+        let orig_size = match std::fs::metadata(&jsonl_path) {
+            Ok(m) => m.len(),
+            Err(_) => continue,
+        };
+        let bak_size = match std::fs::metadata(bak_path) {
+            Ok(m) => m.len(),
+            Err(_) => continue,
+        };
+
+        if bak_size <= orig_size {
+            continue; // Backup is not larger, nothing to recover
+        }
+
+        let delta = bak_size - orig_size;
+        let orig_kb = orig_size as f64 / 1024.0;
+        let bak_kb = bak_size as f64 / 1024.0;
+
+        if dry_run {
+            println!(
+                "   [*] Would restore {} ({:.1}KB → {:.1}KB, +{:.1}KB)",
+                session_id,
+                orig_kb,
+                bak_kb,
+                delta as f64 / 1024.0
+            );
+        } else {
+            // Safety backup of current file
+            let pre_restore = jsonl_path.with_extension("jsonl.pre-restore");
+            if let Err(e) = std::fs::copy(&jsonl_path, &pre_restore) {
+                println!(
+                    "   [WARN] Failed to create safety backup for {}: {}",
+                    session_id, e
+                );
+                continue;
+            }
+
+            // Restore from backup
+            if let Err(e) = std::fs::copy(bak_path, &jsonl_path) {
+                println!(
+                    "   [WARN] Failed to restore {} from .jsonl.bak: {}",
+                    session_id, e
+                );
+                // Try to roll back
+                let _ = std::fs::copy(&pre_restore, &jsonl_path);
+                continue;
+            }
+
+            println!(
+                "   [OK] Restored {} from .jsonl.bak ({:.1}KB → {:.1}KB, +{:.1}KB recovered)",
+                session_id,
+                orig_kb,
+                bak_kb,
+                delta as f64 / 1024.0
+            );
+        }
+
+        restored += 1;
+        bytes_recovered += delta;
+    }
+
+    Ok((restored, bytes_recovered))
+}
+
+/// Detail about a single session backup recovery action.
+#[derive(Debug, Clone)]
+pub struct BackupRecoveryAction {
+    /// Session ID (UUID portion of filename)
+    pub session_id: String,
+    /// Source file used for recovery (the backup with more requests)
+    pub source_file: String,
+    /// Number of requests in the current .jsonl
+    pub current_requests: usize,
+    /// Number of requests in the best backup
+    pub recovered_requests: usize,
+    /// Size of the current .jsonl in bytes
+    pub current_size: u64,
+    /// Size of the best backup in bytes
+    pub recovered_size: u64,
+    /// Whether the source was a different format (e.g. .json → .jsonl conversion)
+    pub converted: bool,
+}
+
+/// Comprehensive session recovery from ALL backup file variants.
+///
+/// For each session ID found in `chat_sessions_dir`, examines:
+/// - `.jsonl.bak` (VS Code JSONL backup)
+/// - `.jsonl.pre-restore` (chasm safety backup)
+/// - `.jsonl.pre_bak_recovery` (earlier chasm recovery backup)
+/// - `.json` (old JSON format — may contain more requests than current JSONL)
+/// - `.json.bak` (old JSON format backup)
+///
+/// Selects the file with the **most requests** (not just largest size) and
+/// restores it as the active `.jsonl`, converting from JSON format if needed.
+///
+/// Returns a list of recovery actions taken (or that would be taken in dry-run).
+pub fn recover_from_all_backups(
+    chat_sessions_dir: &Path,
+    dry_run: bool,
+) -> Result<Vec<BackupRecoveryAction>> {
+    use std::collections::HashMap;
+
+    if !chat_sessions_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    // Collect all files grouped by session ID (first 36 chars = UUID)
+    let mut session_files: HashMap<String, Vec<(String, PathBuf)>> = HashMap::new();
+    for entry in std::fs::read_dir(chat_sessions_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let fname = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        // Skip markdown, non-session files
+        if fname.ends_with(".md") || fname.len() < 36 {
+            continue;
+        }
+        // Session ID is the first 36 characters (UUID format)
+        let sid = fname[..36].to_string();
+        // Only include JSON/JSONL files (including .bak, .pre-restore variants)
+        if fname.contains(".json") {
+            session_files.entry(sid).or_default().push((fname, path));
+        }
+    }
+
+    let mut actions = Vec::new();
+
+    for (sid, files) in &session_files {
+        // Find the current active .jsonl file
+        let current_jsonl_name = format!("{}.jsonl", sid);
+        let current_jsonl_path = chat_sessions_dir.join(&current_jsonl_name);
+
+        // Parse the current .jsonl to get its request count
+        let current_requests = if current_jsonl_path.exists() {
+            match parse_session_file(&current_jsonl_path) {
+                Ok(session) => session.requests.len(),
+                Err(_) => 0,
+            }
+        } else {
+            0
+        };
+        let current_size = if current_jsonl_path.exists() {
+            std::fs::metadata(&current_jsonl_path)
+                .map(|m| m.len())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        // Find the backup with the most requests
+        let mut best_requests = current_requests;
+        let mut best_file: Option<(&str, &Path)> = None;
+
+        for (fname, fpath) in files {
+            // Skip the current active file
+            if fname == &current_jsonl_name {
+                continue;
+            }
+            // Skip files that are clearly recovery markers (tiny files)
+            let size = std::fs::metadata(fpath).map(|m| m.len()).unwrap_or(0);
+            if size < 100 {
+                continue;
+            }
+            // Parse to count requests
+            match parse_session_file(fpath) {
+                Ok(session) => {
+                    let req_count = session.requests.len();
+                    if req_count > best_requests {
+                        best_requests = req_count;
+                        best_file = Some((fname.as_str(), fpath.as_path()));
+                    }
+                }
+                Err(_) => {
+                    // Can't parse — skip
+                }
+            }
+        }
+
+        if let Some((best_name, best_path)) = best_file {
+            let best_size = std::fs::metadata(best_path).map(|m| m.len()).unwrap_or(0);
+            let is_json_source = !best_name.contains(".jsonl");
+
+            if !dry_run {
+                // Safety backup of current file
+                if current_jsonl_path.exists() {
+                    let pre_restore = current_jsonl_path.with_extension("jsonl.pre-restore");
+                    // Don't overwrite existing pre-restore (keep earliest backup)
+                    if !pre_restore.exists() {
+                        if let Err(e) = std::fs::copy(&current_jsonl_path, &pre_restore) {
+                            eprintln!(
+                                "   [WARN] Failed to create safety backup for {}: {}",
+                                sid, e
+                            );
+                            continue;
+                        }
+                    }
+                }
+
+                if is_json_source {
+                    // Convert JSON → JSONL: parse and re-serialize as kind:0 JSONL entry
+                    match parse_session_file(best_path) {
+                        Ok(session) => {
+                            // Read the raw JSON to preserve all fields
+                            let raw_content =
+                                std::fs::read_to_string(best_path).unwrap_or_default();
+                            let raw_value: serde_json::Value =
+                                serde_json::from_str(&raw_content).unwrap_or_default();
+                            let jsonl_entry = serde_json::json!({"kind": 0, "v": raw_value});
+                            if let Err(e) = std::fs::write(
+                                &current_jsonl_path,
+                                serde_json::to_string(&jsonl_entry).unwrap_or_default() + "\n",
+                            ) {
+                                eprintln!(
+                                    "   [WARN] Failed to write converted JSONL for {}: {}",
+                                    sid, e
+                                );
+                                continue;
+                            }
+                            // Update the session_id if missing in the converted file
+                            let _ = session;
+                        }
+                        Err(e) => {
+                            eprintln!("   [WARN] Failed to parse JSON backup for {}: {}", sid, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    // JSONL → JSONL: direct copy
+                    if let Err(e) = std::fs::copy(best_path, &current_jsonl_path) {
+                        eprintln!(
+                            "   [WARN] Failed to restore {} from {}: {}",
+                            sid, best_name, e
+                        );
+                        continue;
+                    }
+                }
+            }
+
+            actions.push(BackupRecoveryAction {
+                session_id: sid.clone(),
+                source_file: best_name.to_string(),
+                current_requests,
+                recovered_requests: best_requests,
+                current_size,
+                recovered_size: best_size,
+                converted: is_json_source,
+            });
+        }
+    }
+
+    // Sort by session ID for deterministic output
+    actions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
+
+    Ok(actions)
 }
 
 /// Fix modelState values in a session's requests array.
@@ -2463,11 +2778,13 @@ fn apply_delta(root: &mut serde_json::Value, keys: &[serde_json::Value], value: 
             current = &mut current[k];
         } else if let Some(idx) = key.as_u64() {
             if let Some(arr) = current.as_array_mut() {
-                if (idx as usize) < arr.len() {
-                    current = &mut arr[idx as usize];
-                } else {
-                    return; // Index out of bounds
+                // Auto-grow array with null placeholders if index is beyond current length.
+                // VS Code's event sourcing may reference indices before they are formally
+                // added via a kind:2 splice.
+                while (idx as usize) >= arr.len() {
+                    arr.push(serde_json::Value::Object(serde_json::Map::new()));
                 }
+                current = &mut arr[idx as usize];
             } else {
                 return;
             }
@@ -2480,9 +2797,10 @@ fn apply_delta(root: &mut serde_json::Value, keys: &[serde_json::Value], value: 
             current[k] = value;
         } else if let Some(idx) = last_key.as_u64() {
             if let Some(arr) = current.as_array_mut() {
-                if (idx as usize) < arr.len() {
-                    arr[idx as usize] = value;
+                while (idx as usize) >= arr.len() {
+                    arr.push(serde_json::Value::Null);
                 }
+                arr[idx as usize] = value;
             }
         }
     }
@@ -2511,11 +2829,11 @@ fn apply_splice(
             current = &mut current[k];
         } else if let Some(idx) = key.as_u64() {
             if let Some(arr) = current.as_array_mut() {
-                if (idx as usize) < arr.len() {
-                    current = &mut arr[idx as usize];
-                } else {
-                    return;
+                // Auto-grow array if index is beyond current length
+                while (idx as usize) >= arr.len() {
+                    arr.push(serde_json::Value::Object(serde_json::Map::new()));
                 }
+                current = &mut arr[idx as usize];
             } else {
                 return;
             }
@@ -2911,10 +3229,22 @@ pub fn repair_workspace_sessions(
     let mut fields_fixed = 0;
 
     if chat_sessions_dir.exists() {
-        // Pass 0.5: Recover from .json.bak when .jsonl has fewer requests
+        // Pass 0.5a: Recover from .json.bak when .jsonl has fewer requests
         match recover_from_json_bak(chat_sessions_dir) {
             Ok(n) if n > 0 => {
                 println!("   [OK] Recovered {} session(s) from .json.bak backups", n);
+            }
+            _ => {}
+        }
+
+        // Pass 0.5b: Recover from .jsonl.bak when backup is larger than active file
+        match recover_from_jsonl_bak(chat_sessions_dir, false) {
+            Ok((n, bytes)) if n > 0 => {
+                println!(
+                    "   [OK] Restored {} session(s) from .jsonl.bak ({:.1}MB recovered)",
+                    n,
+                    bytes as f64 / (1024.0 * 1024.0)
+                );
             }
             _ => {}
         }

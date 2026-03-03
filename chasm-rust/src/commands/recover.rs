@@ -14,7 +14,11 @@ use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::storage::{detect_session_format, parse_session_auto, VsCodeSessionFormat};
+use crate::storage::{
+    detect_session_format, is_vscode_running, parse_session_auto, recover_from_jsonl_bak,
+    VsCodeSessionFormat,
+};
+use crate::workspace::{discover_workspaces, normalize_path};
 
 /// Get workspace storage path for a provider
 fn get_provider_storage_path(provider: &str) -> Option<PathBuf> {
@@ -996,10 +1000,25 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
         }
     }
 
+    // ── Copilot Chat Extension Version Analysis ──────────────────────
+    println!();
+    match crate::copilot_version::build_version_report(None) {
+        Ok(report) => {
+            print!("{}", crate::copilot_version::format_version_report(&report));
+        }
+        Err(e) => {
+            println!("[!] Could not detect Copilot Chat version: {}", e);
+        }
+    }
+    println!();
+
     println!("[*] Recommendations:");
     println!("    1. Run 'chasm recover scan' to find recoverable sessions");
     println!("    2. Use 'chasm harvest run' to consolidate all sessions");
     println!("    3. Consider setting up the recording API for crash protection");
+    println!(
+        "    4. Run 'chasm recover copilot-info' for detailed extension version analysis"
+    );
 
     Ok(())
 }
@@ -1650,6 +1669,48 @@ pub fn recover_detect(file: &str, verbose: bool, output_json: bool) -> Result<()
 
         // Show conversion recommendations
         println!();
+
+        // Extract and show extension version from session data
+        let session_versions = crate::copilot_version::extract_session_versions(&content);
+        if !session_versions.is_empty() {
+            println!("[*] Extension Version (from session data):");
+            for ver in &session_versions {
+                println!("    v{}", ver);
+            }
+            println!();
+        }
+
+        // Show installed extension version for comparison
+        if let Ok(installs) = crate::copilot_version::detect_installed_versions() {
+            if let Some(active) = installs.iter().find(|i| i.is_active) {
+                println!(
+                    "[*] Installed Copilot Chat: v{} (requires VS Code {})",
+                    active.version, active.required_vscode_version
+                );
+
+                // Check for version mismatch
+                if !session_versions.is_empty() {
+                    let active_str = active.version.to_string();
+                    let mismatched: Vec<&String> = session_versions
+                        .iter()
+                        .filter(|v| v.as_str() != active_str)
+                        .collect();
+                    if !mismatched.is_empty() {
+                        println!(
+                            "    [?] Session was created with different extension version(s): {}",
+                            mismatched
+                                .iter()
+                                .map(|v| format!("v{}", v))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                        println!("        This may affect recovery compatibility");
+                    }
+                }
+                println!();
+            }
+        }
+
         println!("[*] Recommendations:");
         match format_info.format {
             VsCodeSessionFormat::LegacyJson => {
@@ -1930,6 +1991,436 @@ pub fn recover_upgrade(
             target_format,
             total_errors,
             total_projects
+        );
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Copilot Info Command - Show Copilot Chat extension version details
+// ============================================================================
+
+/// Display comprehensive Copilot Chat extension version information and
+/// compatibility analysis with session data.
+pub fn recover_copilot_info(
+    session_dir: Option<&str>,
+    output_json: bool,
+) -> Result<()> {
+    let session_path = session_dir.map(Path::new);
+
+    let report = crate::copilot_version::build_version_report(session_path)?;
+
+    if output_json {
+        let json = crate::copilot_version::format_version_report_json(&report)?;
+        println!("{}", json);
+    } else {
+        println!("╔═══════════════════════════════════════════════════════════════════╗");
+        println!("║          Copilot Chat Extension Version Analysis                  ║");
+        println!("╚═══════════════════════════════════════════════════════════════════╝\n");
+
+        print!("{}", crate::copilot_version::format_version_report(&report));
+
+        // Show the compatibility table
+        println!();
+        println!("[*] Known Version Compatibility:");
+        println!("    ┌─────────────────────┬──────────────┬─────────┬────────────────────────────────────┐");
+        println!("    │ Extension Range      │ VS Code Min  │ Format  │ Notes                              │");
+        println!("    ├─────────────────────┼──────────────┼─────────┼────────────────────────────────────┤");
+        for entry in crate::copilot_version::known_compatibility() {
+            println!(
+                "    │ {:>7} - {:<9} │ {:>12} │ {:>7} │ {:<34} │",
+                entry.extension_min,
+                entry.extension_max,
+                entry.vscode_min,
+                entry.session_format,
+                &entry.notes[..entry.notes.len().min(34)],
+            );
+        }
+        println!("    └─────────────────────┴──────────────┴─────────┴────────────────────────────────────┘");
+
+        // Recommendations
+        println!();
+        let has_errors = report.issues.iter().any(|i| i.severity == "error");
+        let has_warnings = report.issues.iter().any(|i| i.severity == "warning");
+
+        if has_errors || has_warnings {
+            println!("[*] Recommendations:");
+            if has_errors {
+                println!("    [!] Install Copilot Chat from the VS Code marketplace");
+            }
+            if has_warnings {
+                println!("    [?] Run 'chasm recover upgrade' to update legacy sessions to JSONL format");
+                println!("    [?] Run 'chasm doctor --fix' to repair any session issues");
+            }
+        } else {
+            println!("[+] No compatibility issues detected");
+        }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Backups Command - Restore truncated sessions from all backup file types
+// ============================================================================
+
+/// Scan all VS Code workspaces (optionally filtered by path) for backup files
+/// (`.jsonl.bak`, `.jsonl.pre-restore`, `.json`, `.json.bak`) that contain more
+/// requests than the current `.jsonl` — and restore them.
+///
+/// After restoration, rebuilds the VS Code session index and model cache for
+/// each affected workspace so sessions are immediately visible.
+///
+/// This is the explicit CLI entry-point for comprehensive backup recovery.
+pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result<()> {
+    use crate::storage::{
+        parse_session_file, rebuild_model_cache,
+        recover_from_all_backups, write_chat_session_index, cleanup_state_cache,
+        fix_session_memento,
+    };
+    use std::collections::HashSet;
+
+    if !force && is_vscode_running() {
+        println!(
+            "{} VS Code is running. Use {} to proceed anyway.",
+            "[!]".yellow(),
+            "--force".cyan()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "\n{} Scanning for truncated sessions with recoverable backups",
+        "[R]".cyan().bold()
+    );
+    println!("{}", "=".repeat(70));
+
+    let workspaces = discover_workspaces()?;
+
+    // Optionally filter by root path
+    let root_filter: Option<String> = path.map(|p| {
+        let resolved = std::path::Path::new(p)
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(p));
+        normalize_path(&resolved.to_string_lossy())
+    });
+
+    let filtered: Vec<_> = if let Some(ref root) = root_filter {
+        workspaces
+            .iter()
+            .filter(|ws| {
+                ws.project_path
+                    .as_ref()
+                    .map(|p| normalize_path(p).starts_with(root.as_str()))
+                    .unwrap_or(false)
+            })
+            .collect()
+    } else {
+        workspaces.iter().collect()
+    };
+
+    let with_sessions: Vec<_> = filtered
+        .iter()
+        .filter(|ws| ws.has_chat_sessions)
+        .collect();
+
+    if let Some(ref root) = root_filter {
+        println!(
+            "   Filtering to workspaces under: {}",
+            root.bright_white()
+        );
+    }
+    println!(
+        "   Found {} workspace(s) with chat sessions",
+        with_sessions.len().to_string().cyan()
+    );
+    println!(
+        "   Checking: .jsonl.bak, .jsonl.pre-restore, .json, .json.bak\n",
+    );
+
+    let mut total_restored = 0usize;
+    let mut total_requests_gained = 0usize;
+    let mut workspaces_affected = 0usize;
+    let mut workspaces_rebuilt = 0usize;
+
+    for ws in &with_sessions {
+        let chat_sessions_dir = ws.chat_sessions_path.clone();
+        if !chat_sessions_dir.exists() {
+            continue;
+        }
+
+        let display = ws.project_path.as_deref().unwrap_or(&ws.hash);
+
+        match recover_from_all_backups(&chat_sessions_dir, dry_run) {
+            Ok(actions) if !actions.is_empty() => {
+                workspaces_affected += 1;
+
+                for action in &actions {
+                    let delta = action.recovered_requests - action.current_requests;
+                    let marker = if action.converted { " [json→jsonl]" } else { "" };
+                    let src_display = if action.source_file.len() > 40 {
+                        format!("...{}", &action.source_file[action.source_file.len() - 37..])
+                    } else {
+                        action.source_file.clone()
+                    };
+
+                    if dry_run {
+                        println!(
+                            "   {} {} — {} → {} requests (+{}){} from {}",
+                            "[*]".yellow(),
+                            display.cyan(),
+                            action.current_requests.to_string().bright_black(),
+                            action.recovered_requests.to_string().green(),
+                            delta.to_string().green(),
+                            marker.bright_black(),
+                            src_display.bright_black(),
+                        );
+                    } else {
+                        println!(
+                            "   {} {} — {} → {} requests (+{}){} from {}",
+                            "[+]".green(),
+                            display.cyan(),
+                            action.current_requests.to_string().bright_black(),
+                            action.recovered_requests.to_string().green(),
+                            delta.to_string().green(),
+                            marker.bright_black(),
+                            src_display.bright_black(),
+                        );
+                    }
+
+                    total_restored += 1;
+                    total_requests_gained += delta;
+                }
+
+                // After restoring files, rebuild index + model cache for this workspace
+                if !dry_run {
+                    let db_path = ws
+                        .workspace_path
+                        .join("state.vscdb");
+
+                    if db_path.exists() {
+                        // Scan all current session files and rebuild index
+                        let mut session_entries = Vec::new();
+                        let mut valid_ids = HashSet::new();
+
+                        for entry in std::fs::read_dir(&chat_sessions_dir)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|e| e.ok())
+                        {
+                            let p = entry.path();
+                            if !p.is_file() {
+                                continue;
+                            }
+                            let fname = p
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
+                            // Only process active .jsonl files (not backups)
+                            if !fname.ends_with(".jsonl")
+                                || fname.contains(".bak")
+                                || fname.contains(".pre-restore")
+                                || fname.contains(".pre_bak")
+                                || fname.contains(".pre_recovery")
+                            {
+                                continue;
+                            }
+
+                            if let Ok(session) = parse_session_file(&p) {
+                                let session_id = session
+                                    .session_id
+                                    .clone()
+                                    .unwrap_or_else(|| {
+                                        fname.trim_end_matches(".jsonl").to_string()
+                                    });
+                                valid_ids.insert(session_id.clone());
+
+                                let title = session.title();
+                                let is_empty = session.is_empty();
+
+                                session_entries.push(crate::models::ChatSessionIndexEntry {
+                                    session_id: session_id.clone(),
+                                    title,
+                                    last_message_date: session.last_message_date,
+                                    timing: Some(crate::models::ChatSessionTiming {
+                                        created: session.creation_date,
+                                        last_request_started: Some(session.last_message_date),
+                                        last_request_ended: Some(session.last_message_date),
+                                    }),
+                                    last_response_state: 1,
+                                    initial_location: "panel".to_string(),
+                                    is_empty,
+                                    is_imported: Some(false),
+                                    has_pending_edits: Some(false),
+                                    is_external: Some(false),
+                                });
+                            }
+                        }
+
+                        // Also include .json-only sessions (no corresponding .jsonl)
+                        for entry in std::fs::read_dir(&chat_sessions_dir)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|e| e.ok())
+                        {
+                            let p = entry.path();
+                            if !p.is_file() {
+                                continue;
+                            }
+                            let fname = p
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
+                            if !fname.ends_with(".json")
+                                || fname.contains(".bak")
+                                || fname.contains(".pre-restore")
+                            {
+                                continue;
+                            }
+                            let sid = fname.trim_end_matches(".json").to_string();
+                            if valid_ids.contains(&sid) {
+                                continue; // Already have .jsonl for this session
+                            }
+
+                            if let Ok(session) = parse_session_file(&p) {
+                                let session_id = session
+                                    .session_id
+                                    .clone()
+                                    .unwrap_or(sid.clone());
+                                valid_ids.insert(session_id.clone());
+
+                                session_entries.push(crate::models::ChatSessionIndexEntry {
+                                    session_id: session_id.clone(),
+                                    title: session.title(),
+                                    last_message_date: session.last_message_date,
+                                    timing: Some(crate::models::ChatSessionTiming {
+                                        created: session.creation_date,
+                                        last_request_started: Some(session.last_message_date),
+                                        last_request_ended: Some(session.last_message_date),
+                                    }),
+                                    last_response_state: 1,
+                                    initial_location: "panel".to_string(),
+                                    is_empty: session.is_empty(),
+                                    is_imported: Some(false),
+                                    has_pending_edits: Some(false),
+                                    is_external: Some(false),
+                                });
+                            }
+                        }
+
+                        // Build the index
+                        let mut entries_map = std::collections::HashMap::new();
+                        for entry in &session_entries {
+                            entries_map.insert(entry.session_id.clone(), entry.clone());
+                        }
+                        let new_index = crate::models::ChatSessionIndex {
+                            version: 1,
+                            entries: entries_map,
+                        };
+
+                        // Write index + rebuild model cache + cleanup state cache
+                        let mut rebuild_ok = true;
+                        if let Err(e) = write_chat_session_index(&db_path, &new_index) {
+                            eprintln!(
+                                "   {} {} — failed to write index: {}",
+                                "[!]".red(), display, e
+                            );
+                            rebuild_ok = false;
+                        }
+                        if let Err(e) = rebuild_model_cache(&db_path, &new_index) {
+                            eprintln!(
+                                "   {} {} — failed to rebuild model cache: {}",
+                                "[!]".red(), display, e
+                            );
+                            rebuild_ok = false;
+                        }
+                        let _ = cleanup_state_cache(&db_path, &valid_ids);
+                        let preferred = new_index
+                            .entries
+                            .iter()
+                            .filter(|(_, e)| !e.is_empty)
+                            .max_by_key(|(_, e)| e.last_message_date)
+                            .map(|(id, _)| id.clone());
+                        let _ = fix_session_memento(&db_path, &valid_ids, preferred.as_deref());
+
+                        if rebuild_ok {
+                            let non_empty = new_index
+                                .entries
+                                .values()
+                                .filter(|e| !e.is_empty)
+                                .count();
+                            println!(
+                                "   {} {} — rebuilt index ({} entries, {} visible)",
+                                "\u{2714}".green(),
+                                display.cyan(),
+                                new_index.entries.len().to_string().cyan(),
+                                non_empty.to_string().green(),
+                            );
+                            workspaces_rebuilt += 1;
+                        }
+                    }
+                }
+            }
+            Ok(_) => {} // Nothing to restore for this workspace
+            Err(e) => {
+                println!(
+                    "   {} {} — error: {}",
+                    "[!]".red(),
+                    display,
+                    e
+                );
+            }
+        }
+    }
+
+    println!("\n{}", "=".repeat(70));
+    if dry_run {
+        println!("{} Dry run complete", "[OK]".green());
+    } else {
+        println!("{} Backup recovery complete", "[OK]".green());
+    }
+    println!("{}", "=".repeat(70));
+    println!("   Workspaces scanned:        {}", with_sessions.len());
+    println!(
+        "   Workspaces with recoveries: {}",
+        workspaces_affected.to_string().cyan()
+    );
+    println!(
+        "   Sessions {}:       {}",
+        if dry_run { "to restore" } else { "restored  " },
+        total_restored.to_string().green()
+    );
+    println!(
+        "   Requests {}:      {}",
+        if dry_run { "to recover" } else { "recovered " },
+        total_requests_gained.to_string().green()
+    );
+    if !dry_run && workspaces_rebuilt > 0 {
+        println!(
+            "   Indexes rebuilt:            {}",
+            workspaces_rebuilt.to_string().green()
+        );
+    }
+
+    if dry_run && total_restored > 0 {
+        println!(
+            "\n   {} Run without {} to apply changes.",
+            "Tip:".bright_black(),
+            "--dry-run".cyan()
+        );
+    }
+
+    if !dry_run && total_restored > 0 {
+        println!(
+            "\n   {} Safety backups saved as .jsonl.pre-restore",
+            "[i]".bright_black()
+        );
+        println!(
+            "   {} Quit VS Code (Alt+F4) and reopen to see restored sessions.",
+            "Tip:".bright_black()
         );
     }
 
