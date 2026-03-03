@@ -62,6 +62,7 @@ pub mod plugins;
 pub mod providers;
 pub mod routing;
 pub mod scaling;
+pub mod schema;
 pub mod storage;
 pub mod sync;
 pub mod teams;
@@ -73,8 +74,9 @@ pub mod workspace;
 pub use cli::{
     Cli, Commands, ExportCommands, FetchCommands, FindCommands, GitCommands, ImportCommands,
     ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands,
-    ShardCommands, ShowCommands,
+    SchemaCommands, ShardCommands, ShowCommands,
 };
+pub use schema::{DetectedSchema, Ontology, ProviderSchema, SchemaRegistry, SchemaVersion};
 pub use database::{ChatDatabase, ShareLinkInfo, ShareLinkParser, ShareLinkProvider};
 pub use error::CsmError;
 pub use models::{

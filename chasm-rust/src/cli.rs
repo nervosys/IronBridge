@@ -306,11 +306,55 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Inspect Commands
+    // ============================================================================
+    /// Inspect VS Code state databases, session indices, caches, and file validity
+    Inspect {
+        #[command(subcommand)]
+        command: InspectCommands,
+    },
+
+    // ============================================================================
+    // Schema Commands
+    // ============================================================================
+    /// Database schema registry, version detection, ontology, and cross-provider mappings
+    ///
+    /// Provides persistent schema definitions for every known AI chat provider format,
+    /// an ontology for AI agent discovery, and backwards compatibility guarantees.
+    Schema {
+        #[command(subcommand)]
+        command: SchemaCommands,
+    },
+
+    // ============================================================================
+    // Internal Commands (hidden)
+    // ============================================================================
+    /// Internal commands used by chasm background processes
+    #[command(hide = true)]
+    Internal {
+        #[command(subcommand)]
+        command: InternalCommands,
+    },
+
+    // ============================================================================
     // Easter Egg
     // ============================================================================
     /// Show banner
     #[command(hide = true)]
     Banner,
+}
+
+// ============================================================================
+// Internal Subcommands (hidden, used by background processes)
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum InternalCommands {
+    /// Re-apply a pending session registration after VS Code exits
+    ApplyPending {
+        /// Path to the pending registration JSON file
+        pending_file: String,
+    },
 }
 
 // ============================================================================
@@ -1273,7 +1317,8 @@ pub enum RegisterCommands {
         #[arg(long, short)]
         merge: bool,
 
-        /// Force registration even if VS Code is running
+        /// Force registration (from external terminal: close/reopen VS Code without prompt;
+        /// from VS Code terminal: write to DB with background watchdog to survive shutdown)
         #[arg(long, short)]
         force: bool,
 
@@ -1284,6 +1329,11 @@ pub enum RegisterCommands {
         /// Reopen VS Code after registering (implies --close-vscode)
         #[arg(long)]
         reopen: bool,
+
+        /// Write directly to DB without closing VS Code. A background watchdog
+        /// re-applies the index after VS Code exits to survive the shutdown cache flush.
+        #[arg(long, short = 'w')]
+        write_only: bool,
     },
 
     /// Register specific sessions by ID or title into VS Code's index
@@ -1895,6 +1945,59 @@ pub enum RecoverCommands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Show Copilot Chat extension version info and compatibility analysis
+    CopilotInfo {
+        /// Path to session directory to scan for version info (default: auto-detect)
+        #[arg(long)]
+        session_dir: Option<String>,
+
+        /// Output as JSON instead of human-readable table
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Restore truncated sessions from .jsonl.bak backup files across all workspaces
+    #[command(visible_alias = "b")]
+    Backups {
+        /// Root path to scan (default: all VS Code workspaces)
+        path: Option<String>,
+
+        /// Only show what would be restored without making changes
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Force operation even if VS Code is running
+        #[arg(long, short)]
+        force: bool,
+    },
+
+    /// Recursively walk directories to find and recover orphaned sessions for all workspaces
+    #[command(visible_alias = "r")]
+    Recursive {
+        /// Root path to start recursive search (default: current directory)
+        path: Option<String>,
+
+        /// Maximum directory depth to recurse (default: unlimited)
+        #[arg(long, short)]
+        depth: Option<usize>,
+
+        /// Force registration even if VS Code is running
+        #[arg(long, short)]
+        force: bool,
+
+        /// Only show what would be recovered without making changes
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip directories matching these patterns (can be used multiple times)
+        #[arg(long, short = 'x')]
+        exclude: Vec<String>,
+
+        /// Also register recovered sessions in VS Code's index
+        #[arg(long)]
+        register: bool,
+    },
 }
 
 // ============================================================================
@@ -2206,12 +2309,222 @@ pub enum TelemetryCommands {
     Test,
 }
 
+// ============================================================================
+// Inspect Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum InspectCommands {
+    /// Show the ChatSessionStore index entries from state.vscdb
+    Index {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show session memento (input history and active session state)
+    Memento {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show agentSessions model and state caches (drives sidebar visibility)
+    Cache {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Validate session files on disk (format, size, parse, index consistency)
+    Validate {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List keys in state.vscdb with value sizes
+    Keys {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Show ALL keys (not just session-related)
+        #[arg(long, short)]
+        all: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List all files in the chatSessions directory with format and size details
+    Files {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Rebuild session index and model cache from session files on disk
+    ///
+    /// Scans the chatSessions directory, parses each file to extract metadata
+    /// (title, timestamps, request count), then overwrites the index and
+    /// rebuilds the agentSessions.model.cache so sessions appear in the Chat
+    /// sidebar. Also cleans up the state cache and fixes the active-session
+    /// memento.
+    #[command(visible_alias = "fix")]
+    Rebuild {
+        /// Project path (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Only show what would change without writing (dry run)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 /// Parse key=value pairs for telemetry record command
 fn parse_key_value(s: &str) -> std::result::Result<(String, String), String> {
     let pos = s
         .find('=')
         .ok_or_else(|| format!("invalid key=value pair: no '=' found in '{s}'"))?;
     Ok((s[..pos].to_string(), s[pos + 1..].to_string()))
+}
+
+// ============================================================================
+// Schema Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum SchemaCommands {
+    /// List all known provider schemas (session formats and DB key layouts)
+    #[command(visible_alias = "ls")]
+    List {
+        /// Filter by provider name (e.g., copilot, cursor, claude-code)
+        #[arg(long, short = 'p')]
+        provider: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show detailed schema for a specific version ID
+    ///
+    /// Example IDs: copilot-json-v3, copilot-jsonl-v1, cursor-jsonl-v1
+    Show {
+        /// Schema version ID (use `chasm schema list` to see available IDs)
+        schema_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Auto-detect the schema version for a workspace or session file
+    Detect {
+        /// Path to a session file or workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace storage hash (alternative to --path)
+        #[arg(long, short = 'w')]
+        workspace_id: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Export the full schema registry + ontology as JSON (for AI agent consumption)
+    Export {
+        /// Compact JSON output (single line)
+        #[arg(long)]
+        compact: bool,
+
+        /// Write to file instead of stdout
+        #[arg(long, short = 'o')]
+        output: Option<String>,
+    },
+
+    /// Show the cross-provider ontology (entity types, relationships, semantic tags)
+    Ontology {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show cross-provider field mappings and transformation rules
+    Mappings {
+        /// Source schema ID (e.g., copilot-json-v3)
+        #[arg(long, short = 's')]
+        source: Option<String>,
+
+        /// Target schema ID (e.g., copilot-jsonl-v1)
+        #[arg(long, short = 't')]
+        target: Option<String>,
+
+        /// Filter mappings by semantic tag (e.g., session_id, message_content)
+        #[arg(long)]
+        tag: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 // ============================================================================

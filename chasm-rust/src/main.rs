@@ -14,11 +14,13 @@ mod api;
 mod browser;
 mod cli;
 mod commands;
+mod copilot_version;
 mod database;
 mod error;
 mod mcp;
 mod models;
 mod providers;
+mod schema;
 mod storage;
 mod telemetry;
 mod tui;
@@ -761,6 +763,29 @@ fn main() -> Result<()> {
                 no_backup,
                 dry_run,
             ),
+            cli::RecoverCommands::CopilotInfo { session_dir, json } => {
+                commands::recover_copilot_info(session_dir.as_deref(), json)
+            }
+            cli::RecoverCommands::Backups {
+                path,
+                dry_run,
+                force,
+            } => commands::recover_backups(path.as_deref(), dry_run, force),
+            cli::RecoverCommands::Recursive {
+                path,
+                depth,
+                force,
+                dry_run,
+                exclude,
+                register,
+            } => commands::recover_recursive(
+                path.as_deref(),
+                depth,
+                force,
+                dry_run,
+                &exclude,
+                register,
+            ),
         },
 
         // ====================================================================
@@ -773,7 +798,15 @@ fn main() -> Result<()> {
                 force,
                 close_vscode,
                 reopen,
-            } => commands::register_all(path.as_deref(), merge, force, close_vscode, reopen),
+                write_only,
+            } => commands::register_all(
+                path.as_deref(),
+                merge,
+                force,
+                close_vscode,
+                reopen,
+                write_only,
+            ),
             cli::RegisterCommands::Session {
                 ids,
                 title,
@@ -1021,6 +1054,90 @@ fn main() -> Result<()> {
         // Doctor
         // ====================================================================
         Commands::Doctor { full, format, fix } => commands::doctor(full, &format, fix),
+
+        // ====================================================================
+        // Inspect Commands
+        // ====================================================================
+        Commands::Inspect { command } => match command {
+            cli::InspectCommands::Index {
+                path,
+                workspace_id,
+                json,
+            } => commands::inspect_index(path.as_deref(), workspace_id.as_deref(), json),
+            cli::InspectCommands::Memento {
+                path,
+                workspace_id,
+                json,
+            } => commands::inspect_memento(path.as_deref(), workspace_id.as_deref(), json),
+            cli::InspectCommands::Cache {
+                path,
+                workspace_id,
+                json,
+            } => commands::inspect_cache(path.as_deref(), workspace_id.as_deref(), json),
+            cli::InspectCommands::Validate {
+                path,
+                workspace_id,
+                json,
+            } => commands::inspect_validate(path.as_deref(), workspace_id.as_deref(), json),
+            cli::InspectCommands::Keys {
+                path,
+                workspace_id,
+                all,
+                json,
+            } => commands::inspect_keys(path.as_deref(), workspace_id.as_deref(), all, json),
+            cli::InspectCommands::Files {
+                path,
+                workspace_id,
+                json,
+            } => commands::inspect_files(path.as_deref(), workspace_id.as_deref(), json),
+            cli::InspectCommands::Rebuild {
+                path,
+                workspace_id,
+                dry_run,
+                json,
+            } => commands::inspect_rebuild(path.as_deref(), workspace_id.as_deref(), dry_run, json),
+        },
+
+        // ====================================================================
+        // Schema Commands
+        // ====================================================================
+        Commands::Schema { command } => match command {
+            cli::SchemaCommands::List { provider, json } => {
+                commands::schema_list(provider.as_deref(), json)
+            }
+            cli::SchemaCommands::Show { schema_id, json } => {
+                commands::schema_show(&schema_id, json)
+            }
+            cli::SchemaCommands::Detect {
+                path,
+                workspace_id,
+                json,
+            } => commands::schema_detect(path.as_deref(), workspace_id.as_deref(), json),
+            cli::SchemaCommands::Export { compact, output } => {
+                commands::schema_export(compact, output.as_deref())
+            }
+            cli::SchemaCommands::Ontology { json } => commands::schema_ontology(json),
+            cli::SchemaCommands::Mappings {
+                source,
+                target,
+                tag,
+                json,
+            } => commands::schema_mappings(
+                source.as_deref(),
+                target.as_deref(),
+                tag.as_deref(),
+                json,
+            ),
+        },
+
+        // ====================================================================
+        // Internal Commands (background processes)
+        // ====================================================================
+        Commands::Internal { command } => match command {
+            cli::InternalCommands::ApplyPending { pending_file } => {
+                commands::apply_pending_index(&pending_file)
+            }
+        },
 
         // ====================================================================
         // Easter Egg
