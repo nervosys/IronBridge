@@ -188,6 +188,8 @@ impl OpenAICompatProvider {
                             code_citations: None,
                             response_markdown_info: None,
                             source_session: None,
+                            model_state: None,
+                            time_spent_waiting: None,
                         });
                     }
                 }

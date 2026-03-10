@@ -1,5 +1,9 @@
 # Chat System Manager (CSM)
 
+.chasm_recovery/
+*.vscdb
+*.db
+
 # Rust build artifacts
 csm-rust/target/
 chasm-rust/target/
@@ -82,3 +86,46 @@ config.local.json
 
 # Large sample/scratch files
 jsonl_sample_raw.txt
+
+# Diagnostic/debug scripts and output (contain hardcoded local paths, session IDs,
+# workspace hashes, and other private data — never commit)
+diag*.py
+diag*.txt
+diagnose_*.py
+check_*.py
+compare_*.py
+dump_*.py
+inspect_*.py
+fix_*.py
+fix_*.ps1
+recover_*.py
+recover_*.ps1
+restore_*.py
+validate_sessions.py
+deep_*.py
+find_*.py
+inject_*.py
+post_*.py
+raw_format_check.py
+chasm-rust/check_*.py
+chasm-rust/compare_*.py
+chasm-rust/deep_*.py
+chasm-rust/dump_*.py
+chasm-rust/find_*.py
+chasm-rust/fix_*.py
+chasm-rust/inject_*.py
+chasm-rust/inspect_*.py
+chasm-rust/post_*.py
+chasm-rust/raw_format_check.py
+
+# Recovery/repair logs and output (contain local paths and project names)
+recovery_log_*.txt
+repair_all.txt
+repair_help.txt
+repair_test.txt
+verify.txt
+framewerx_index.txt
+owgcs_*.txt
+harvest_output.txt
+chasm-rust/build_errors.txt
+chasm-rust/build_output.txt

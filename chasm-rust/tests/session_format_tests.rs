@@ -296,6 +296,8 @@ mod chat_session_to_generic_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         }
     }
@@ -608,6 +610,8 @@ mod session_to_markdown_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         }
     }
@@ -689,6 +693,8 @@ mod session_to_markdown_tests {
             code_citations: None,
             response_markdown_info: None,
             source_session: None,
+            model_state: None,
+            time_spent_waiting: None,
         });
 
         let md = session_to_markdown(&session);
@@ -887,6 +893,8 @@ mod roundtrip_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: Some(1700000010000),
@@ -909,6 +917,8 @@ mod roundtrip_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
             ],
         }
@@ -1000,6 +1010,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1040,6 +1052,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1082,6 +1096,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 

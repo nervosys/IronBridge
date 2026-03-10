@@ -88,6 +88,8 @@ impl CloudConversation {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: Some(format!("{}:{}", provider_name, self.id)),
+                    model_state: None,
+                    time_spent_waiting: None,
                 };
 
                 // Check if next message is assistant response

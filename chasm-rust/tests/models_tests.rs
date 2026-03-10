@@ -151,6 +151,8 @@ mod chat_request_tests {
             code_citations: None,
             response_markdown_info: None,
             source_session: None,
+            model_state: None,
+            time_spent_waiting: None,
         }
     }
 
@@ -208,6 +210,8 @@ mod chat_request_tests {
             code_citations: Some(vec![serde_json::json!({"license": "MIT"})]),
             response_markdown_info: Some(vec![serde_json::json!({"rendered": true})]),
             source_session: Some("source-session-123".to_string()),
+            model_state: None,
+            time_spent_waiting: None,
         };
 
         let json = serde_json::to_string(&req).unwrap();
@@ -257,6 +261,8 @@ mod chat_request_tests {
             code_citations: None,
             response_markdown_info: None,
             source_session: None,
+            model_state: None,
+            time_spent_waiting: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(!json.contains("_sourceSession"));
@@ -303,6 +309,8 @@ mod chat_session_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: Some(1700000010000),
@@ -323,6 +331,8 @@ mod chat_session_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
             ],
         }
@@ -657,9 +667,9 @@ mod chat_session_index_entry_tests {
             last_response_state: 1,
             initial_location: "panel".to_string(),
             is_empty: false,
-                is_imported: None,
-                has_pending_edits: None,
-                is_external: None,
+            is_imported: None,
+            has_pending_edits: None,
+            is_external: None,
         };
 
         assert_eq!(entry.session_id, "test-id");
@@ -676,9 +686,9 @@ mod chat_session_index_entry_tests {
             last_response_state: 1,
             initial_location: "editor".to_string(),
             is_empty: true,
-                is_imported: None,
-                has_pending_edits: None,
-                is_external: None,
+            is_imported: None,
+            has_pending_edits: None,
+            is_external: None,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
@@ -713,9 +723,9 @@ mod chat_session_index_entry_tests {
             last_response_state: 1,
             initial_location: "terminal".to_string(),
             is_empty: false,
-                is_imported: None,
-                has_pending_edits: None,
-                is_external: None,
+            is_imported: None,
+            has_pending_edits: None,
+            is_external: None,
         };
 
         let cloned = entry.clone();
@@ -954,6 +964,8 @@ mod edge_case_tests {
             code_citations: None,
             response_markdown_info: None,
             source_session: None,
+            model_state: None,
+            time_spent_waiting: None,
         });
 
         assert!(session.title().len() <= 53);
@@ -996,6 +1008,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             });
         }
 
@@ -1035,6 +1049,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1074,6 +1090,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1112,6 +1130,8 @@ mod edge_case_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: None, // No timestamp
@@ -1129,6 +1149,8 @@ mod edge_case_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: Some(300),
@@ -1146,6 +1168,8 @@ mod edge_case_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
             ],
         };

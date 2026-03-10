@@ -14,6 +14,7 @@ use ratatui::{
 };
 
 use super::app::{App, AppMode, ExportFormat};
+use crate::models::extract_response_text;
 
 /// Color scheme for the TUI (Abyss dark theme — matching Remotion videos)
 #[allow(dead_code)]
@@ -434,7 +435,7 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
 
         // Assistant response
         if let Some(resp) = &req.response {
-            if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+            if let Some(result) = extract_response_text(resp) {
                 lines.push(Line::from(vec![
                     Span::styled("▎ ", Style::default().fg(Colors::SECONDARY)),
                     Span::styled(
@@ -443,7 +444,7 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
                     ),
                 ]));
                 lines.push(Line::from(Span::styled(
-                    format!("  {}", truncate_string(result, 55)),
+                    format!("  {}", truncate_string(&result, 55)),
                     Style::default().fg(Colors::TEXT),
                 )));
             }
@@ -550,7 +551,7 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
 
         // Assistant response
         if let Some(resp) = &req.response {
-            if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+            if let Some(result) = extract_response_text(resp) {
                 lines.push(Line::from(vec![
                     Span::styled("  ▎ ", Style::default().fg(Colors::SECONDARY)),
                     Span::styled(

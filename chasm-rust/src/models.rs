@@ -94,12 +94,12 @@ impl ChatSession {
                 let mut texts = Vec::new();
                 if let Some(msg) = &req.message {
                     if let Some(text) = &msg.text {
-                        texts.push(text.as_str());
+                        texts.push(text.clone());
                     }
                 }
                 if let Some(resp) = &req.response {
-                    if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
-                        texts.push(result);
+                    if let Some(text) = extract_response_text(resp) {
+                        texts.push(text);
                     }
                 }
                 texts
@@ -120,13 +120,7 @@ impl ChatSession {
     pub fn assistant_responses(&self) -> Vec<String> {
         self.requests
             .iter()
-            .filter_map(|req| {
-                req.response.as_ref().and_then(|r| {
-                    r.get("result")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string())
-                })
-            })
+            .filter_map(|req| req.response.as_ref().and_then(|r| extract_response_text(r)))
             .collect()
     }
 }
@@ -145,7 +139,7 @@ fn default_response_state() -> u8 {
 }
 
 /// A single chat request (message + response)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatRequest {
     /// Request timestamp (milliseconds)
@@ -207,6 +201,15 @@ pub struct ChatRequest {
     /// Source session for merged requests
     #[serde(rename = "_sourceSession", skip_serializing_if = "Option::is_none")]
     pub source_session: Option<String>,
+
+    /// Model state tracking (VS Code 1.109+ / Copilot Chat 0.37+)
+    /// Object with `value` (0=Pending, 1=Complete, 2=Cancelled) and optional `completedAt`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_state: Option<serde_json::Value>,
+
+    /// Time spent waiting for response (milliseconds)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_spent_waiting: Option<i64>,
 }
 
 /// User message in a chat request
@@ -227,6 +230,66 @@ impl ChatMessage {
     pub fn get_text(&self) -> String {
         self.text.clone().unwrap_or_default()
     }
+}
+
+/// Extract text from various response formats.
+///
+/// Handles three formats:
+/// 1. **New array format (VS Code Copilot Chat 0.37+)**: response is a JSON array of
+///    response parts, each with an optional `kind` field. Markdown content parts have
+///    `kind: ""` (or absent) and a `value` field containing the text.
+/// 2. **Legacy object format**: response is `{"value": [{"value": "text"}, ...]}`.
+/// 3. **Simple formats**: response has `"text"` or `"content"` string fields.
+pub fn extract_response_text(response: &serde_json::Value) -> Option<String> {
+    // New format: response is an array of response parts
+    if let Some(parts) = response.as_array() {
+        let texts: Vec<&str> = parts
+            .iter()
+            .filter_map(|part| {
+                let kind = part.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+                match kind {
+                    // Markdown content: kind is "" or absent
+                    "" => part.get("value").and_then(|v| v.as_str()),
+                    // Thinking blocks
+                    "thinking" => part.get("value").and_then(|v| v.as_str()),
+                    // Skip tool invocations, MCP server starts, etc.
+                    _ => None,
+                }
+            })
+            .collect();
+        if !texts.is_empty() {
+            return Some(texts.join("\n"));
+        }
+    }
+
+    // Legacy object format: {"value": [{"value": "text"}, ...]}
+    if let Some(value) = response.get("value").and_then(|v| v.as_array()) {
+        let parts: Vec<String> = value
+            .iter()
+            .filter_map(|v| v.get("value").and_then(|v| v.as_str()))
+            .map(String::from)
+            .collect();
+        if !parts.is_empty() {
+            return Some(parts.join("\n"));
+        }
+    }
+
+    // Try direct text field
+    if let Some(text) = response.get("text").and_then(|v| v.as_str()) {
+        return Some(text.to_string());
+    }
+
+    // Try result field (legacy)
+    if let Some(result) = response.get("result").and_then(|v| v.as_str()) {
+        return Some(result.to_string());
+    }
+
+    // Try content field (OpenAI format)
+    if let Some(content) = response.get("content").and_then(|v| v.as_str()) {
+        return Some(content.to_string());
+    }
+
+    None
 }
 
 /// AI response in a chat request
@@ -254,9 +317,70 @@ pub struct ChatSessionIndex {
     #[serde(default = "default_index_version")]
     pub version: u32,
 
-    /// Session entries keyed by session ID
-    #[serde(default)]
+    /// Session entries keyed by session ID.
+    /// Handles both old format (array of UUID strings) and new format (map of UUID → entry).
+    #[serde(default, deserialize_with = "deserialize_index_entries")]
     pub entries: HashMap<String, ChatSessionIndexEntry>,
+}
+
+/// Custom deserializer that handles both index formats:
+/// - Old: `{"entries": ["uuid1", "uuid2", ...]}`
+/// - New: `{"entries": {"uuid1": {...}, "uuid2": {...}, ...}}`
+fn deserialize_index_entries<'de, D>(
+    deserializer: D,
+) -> std::result::Result<HashMap<String, ChatSessionIndexEntry>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct EntriesVisitor;
+
+    impl<'de> de::Visitor<'de> for EntriesVisitor {
+        type Value = HashMap<String, ChatSessionIndexEntry>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a map of session entries or an array of session ID strings")
+        }
+
+        // New format: {"uuid": {entry}, ...}
+        fn visit_map<M>(self, mut access: M) -> std::result::Result<Self::Value, M::Error>
+        where
+            M: de::MapAccess<'de>,
+        {
+            let mut map = HashMap::new();
+            while let Some((key, value)) = access.next_entry::<String, ChatSessionIndexEntry>()? {
+                map.insert(key, value);
+            }
+            Ok(map)
+        }
+
+        // Old format: ["uuid1", "uuid2", ...]
+        fn visit_seq<S>(self, mut seq: S) -> std::result::Result<Self::Value, S::Error>
+        where
+            S: de::SeqAccess<'de>,
+        {
+            let mut map = HashMap::new();
+            while let Some(id) = seq.next_element::<String>()? {
+                let entry = ChatSessionIndexEntry {
+                    session_id: id.clone(),
+                    title: String::new(),
+                    last_message_date: 0,
+                    timing: None,
+                    last_response_state: 0,
+                    initial_location: "panel".to_string(),
+                    is_empty: false,
+                    is_imported: None,
+                    has_pending_edits: None,
+                    is_external: None,
+                };
+                map.insert(id, entry);
+            }
+            Ok(map)
+        }
+    }
+
+    deserializer.deserialize_any(EntriesVisitor)
 }
 
 fn default_index_version() -> u32 {
@@ -274,7 +398,7 @@ impl Default for ChatSessionIndex {
 
 /// Session timing information (VS Code 1.109+)
 /// Supports both old format (startTime/endTime) and new format (created/lastRequestStarted/lastRequestEnded)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatSessionTiming {
     /// When the session was created (ms since epoch)
@@ -341,39 +465,50 @@ pub struct ChatSessionIndexEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ModelCacheEntry {
     /// Always "local" for local sessions
+    #[serde(default)]
     pub provider_type: String,
 
     /// Always "Local" for local sessions
+    #[serde(default)]
     pub provider_label: String,
 
     /// Resource URI: `vscode-chat-session://local/{base64(sessionId)}`
     pub resource: String,
 
     /// Icon identifier (typically "vm")
+    #[serde(default)]
     pub icon: String,
 
     /// Session title (display label)
+    #[serde(default)]
     pub label: String,
 
     /// Status: 1 = valid
+    #[serde(default)]
     pub status: u8,
 
     /// Session timing information
+    #[serde(default)]
     pub timing: ChatSessionTiming,
 
     /// Initial location (panel, terminal, etc.)
+    #[serde(default)]
     pub initial_location: String,
 
     /// Whether the session has pending edits
+    #[serde(default)]
     pub has_pending_edits: bool,
 
     /// Whether the session is empty (no requests)
+    #[serde(default)]
     pub is_empty: bool,
 
     /// Whether the session is from an external source
+    #[serde(default)]
     pub is_external: bool,
 
     /// Last response state: 0=Pending, 1=Complete, 2=Cancelled, 3=Failed, 4=NeedsInput
+    #[serde(default)]
     pub last_response_state: u8,
 }
 

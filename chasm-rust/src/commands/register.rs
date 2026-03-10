@@ -16,10 +16,11 @@ use crate::error::CsmError;
 use crate::models::ChatSession;
 use crate::storage::{
     add_session_to_index, cleanup_state_cache, close_vscode_and_wait, diagnose_workspace_sessions,
-    fix_session_memento, get_workspace_storage_db, is_session_file_extension, is_vscode_running,
-    parse_session_file, parse_session_json, read_chat_session_index, rebuild_model_cache,
-    recover_from_json_bak, register_all_sessions_from_directory, reopen_vscode,
-    repair_workspace_sessions, trim_session_jsonl,
+    fix_broken_view_state, fix_session_memento, get_workspace_storage_db,
+    is_session_file_extension, is_vscode_running, parse_session_file, parse_session_json,
+    read_chat_session_index, rebuild_model_cache, recover_from_json_bak, recover_from_jsonl_bak,
+    register_all_sessions_from_directory, reopen_vscode, repair_workspace_sessions,
+    trim_session_jsonl,
 };
 use crate::workspace::{
     discover_workspaces, find_workspace_by_path, normalize_path,
@@ -62,6 +63,7 @@ pub fn register_all(
     force: bool,
     close_vscode: bool,
     reopen: bool,
+    write_only: bool,
 ) -> Result<()> {
     let path = resolve_path(project_path);
     // --reopen implies --close-vscode
@@ -106,10 +108,42 @@ pub fn register_all(
         return Ok(());
     }
 
+    // Detect if running from VS Code's integrated terminal
+    let in_vscode_terminal = std::env::var("TERM_PROGRAM")
+        .map(|v| v.to_lowercase().contains("vscode"))
+        .unwrap_or(false);
+
     // Handle VS Code lifecycle
     let vscode_was_running = is_vscode_running();
+    let mut will_reopen = reopen;
     if vscode_was_running {
-        if should_close {
+        if write_only {
+            // Explicit --write-only: write to DB directly, spawn watchdog to
+            // re-apply after VS Code exits (since VS Code's in-memory cache
+            // will overwrite on shutdown)
+            println!(
+                "   {} VS Code is running. Writing to index with shutdown watchdog.",
+                "[*]".yellow()
+            );
+        } else if should_close {
+            // Explicit --close-vscode or --reopen
+            if in_vscode_terminal && !force {
+                println!(
+                    "{} Cannot close VS Code from its integrated terminal.",
+                    "[!]".yellow()
+                );
+                println!(
+                    "   Use {} to write to the index now (a background watchdog will",
+                    "--write-only".cyan()
+                );
+                println!("   re-apply after VS Code exits to survive shutdown).");
+                println!(
+                    "   Or run this command from an {} with {}.",
+                    "external terminal".cyan(),
+                    "--reopen".cyan()
+                );
+                return Err(CsmError::VSCodeRunning.into());
+            }
             if !confirm_close_vscode(force) {
                 println!("{} Aborted.", "[!]".yellow());
                 return Ok(());
@@ -117,23 +151,42 @@ pub fn register_all(
             println!("   {} Closing VS Code (saving state)...", "[*]".yellow());
             close_vscode_and_wait(30)?;
             println!("   {} VS Code closed.", "[OK]".green());
-        } else if !force {
+        } else if force {
+            // --force from external terminal: close and reopen automatically
+            if in_vscode_terminal {
+                // Can't close VS Code from inside it; fall back to write-only + watchdog
+                println!(
+                    "   {} VS Code is running (in its terminal). Writing with shutdown watchdog.",
+                    "[*]".yellow()
+                );
+            } else {
+                // External terminal: --force means "just make it work"
+                println!("   {} Closing VS Code (saving state)...", "[*]".yellow());
+                close_vscode_and_wait(30)?;
+                println!("   {} VS Code closed.", "[OK]".green());
+                will_reopen = true;
+            }
+        } else {
+            // No flags: show helpful guidance
             println!(
-                "{} VS Code is running. Its in-memory cache will overwrite index changes.",
+                "{} VS Code is running. Its in-memory cache will overwrite index changes on shutdown.",
                 "[!]".yellow()
             );
-            println!(
-                "   Use {} to close VS Code first, register, and reopen.",
-                "--reopen".cyan()
-            );
-            println!(
-                "   Use {} to just close VS Code first.",
-                "--close-vscode".cyan()
-            );
-            println!(
-                "   Use {} to write anyway (works after restarting VS Code).",
-                "--force".cyan()
-            );
+            if in_vscode_terminal {
+                println!(
+                    "   Use {} to write now (a background watchdog ensures persistence).",
+                    "--write-only".cyan()
+                );
+            } else {
+                println!(
+                    "   Use {} to close VS Code first, register, and reopen.",
+                    "--reopen".cyan()
+                );
+                println!(
+                    "   Use {} to skip the confirmation prompt.",
+                    "--force".cyan()
+                );
+            }
             return Err(CsmError::VSCodeRunning.into());
         }
     }
@@ -145,7 +198,36 @@ pub fn register_all(
         sessions_on_disk.to_string().green()
     );
 
-    // Register all sessions
+    // Recover truncated sessions from backups before registering
+    match recover_from_json_bak(&chat_sessions_dir) {
+        Ok(0) => {}
+        Ok(n) => {
+            println!(
+                "{} Recovered {} session(s) from .json.bak backups",
+                "[OK]".green().bold(),
+                n.to_string().cyan()
+            );
+        }
+        Err(e) => {
+            println!("{} .json.bak recovery: {}", "[WARN]".yellow(), e);
+        }
+    }
+    match recover_from_jsonl_bak(&chat_sessions_dir, false) {
+        Ok((0, _)) => {}
+        Ok((n, bytes)) => {
+            println!(
+                "{} Restored {} session(s) from .jsonl.bak ({:.1}MB recovered)",
+                "[OK]".green().bold(),
+                n.to_string().cyan(),
+                bytes as f64 / (1024.0 * 1024.0)
+            );
+        }
+        Err(e) => {
+            println!("{} .jsonl.bak recovery: {}", "[WARN]".yellow(), e);
+        }
+    }
+
+    // Register all sessions (rebuild index from disk)
     let registered = register_all_sessions_from_directory(&ws_id, &chat_sessions_dir, true)?;
 
     println!(
@@ -154,34 +236,210 @@ pub fn register_all(
         registered.to_string().cyan()
     );
 
-    // Reopen VS Code if requested (or if we closed it with --reopen)
-    if reopen && vscode_was_running {
+    // Rebuild model cache (makes sessions visible in Chat sidebar)
+    let db_path = get_workspace_storage_db(&ws_id)?;
+    match read_chat_session_index(&db_path) {
+        Ok(index) => match rebuild_model_cache(&db_path, &index) {
+            Ok(n) => {
+                println!(
+                    "{} Rebuilt model cache with {} entries",
+                    "[OK]".green().bold(),
+                    n.to_string().cyan()
+                );
+            }
+            Err(e) => {
+                println!("{} Failed to rebuild model cache: {}", "[WARN]".yellow(), e);
+            }
+        },
+        Err(e) => {
+            println!(
+                "{} Failed to read index for model cache rebuild: {}",
+                "[WARN]".yellow(),
+                e
+            );
+        }
+    }
+
+    // Cleanup state cache
+    {
+        let mut valid_ids: HashSet<String> = HashSet::new();
+        if chat_sessions_dir.exists() {
+            for entry in std::fs::read_dir(&chat_sessions_dir)? {
+                let entry = entry?;
+                let p = entry.path();
+                if p.extension().is_some_and(|e| e == "jsonl") {
+                    if let Some(stem) = p.file_stem() {
+                        valid_ids.insert(stem.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+        if let Ok(n) = cleanup_state_cache(&db_path, &valid_ids) {
+            if n > 0 {
+                println!(
+                    "{} Cleaned {} stale state cache entries",
+                    "[OK]".green().bold(),
+                    n.to_string().cyan()
+                );
+            }
+        }
+    }
+
+    // Fix broken view state (sessions hidden in sidebar)
+    match fix_broken_view_state(&db_path) {
+        Ok(true) => {
+            println!(
+                "{} Fixed broken view state (sessions were hidden in sidebar)",
+                "[OK]".green().bold()
+            );
+        }
+        Ok(false) => {} // View state is fine
+        Err(e) => {
+            println!("{} Failed to check view state: {}", "[WARN]".yellow(), e);
+        }
+    }
+
+    // If VS Code was running and we didn't close it (write-only or --force from vscode terminal),
+    // spawn a watchdog to re-apply the index after VS Code exits
+    let wrote_while_running = vscode_was_running && is_vscode_running();
+    if wrote_while_running {
+        match spawn_registration_watchdog(&ws_id, &chat_sessions_dir, Some(&path_str)) {
+            Ok(()) => {
+                println!(
+                    "\n{} Background watchdog spawned to re-apply index after VS Code exits.",
+                    "[OK]".green()
+                );
+                println!(
+                    "   Sessions will {} across VS Code restarts.",
+                    "persist".green().bold()
+                );
+                println!(
+                    "   To see them now, press {} and run {}",
+                    "Ctrl+Shift+P".cyan(),
+                    "Developer: Reload Window".cyan()
+                );
+            }
+            Err(e) => {
+                println!("\n{} Could not spawn watchdog: {}", "[!]".yellow(), e);
+                println!(
+                    "   {} VS Code's in-memory cache may overwrite these changes on shutdown.",
+                    "[!]".red()
+                );
+                println!(
+                    "   Use {} and run {} to pick up the changes NOW",
+                    "Ctrl+Shift+P".cyan(),
+                    "Developer: Reload Window".cyan()
+                );
+                println!(
+                    "   {} Do NOT restart VS Code — that will lose the registered sessions.",
+                    "[!]".red().bold()
+                );
+            }
+        }
+    }
+
+    // Reopen VS Code if requested (or if --force from external terminal closed it)
+    if will_reopen && !is_vscode_running() {
         println!("   {} Reopening VS Code...", "[*]".yellow());
         reopen_vscode(Some(&path_str))?;
         println!(
             "   {} VS Code launched. Sessions should appear in Copilot Chat history.",
             "[OK]".green()
         );
-    } else if should_close && vscode_was_running {
+    } else if should_close && vscode_was_running && !is_vscode_running() && !will_reopen {
         println!(
             "\n{} VS Code was closed. Reopen it to see the recovered sessions.",
             "[!]".yellow()
         );
         println!("   Run: {}", format!("code {}", path.display()).cyan());
-    } else if force && vscode_was_running {
-        // VS Code is still running with --force, show reload instructions
-        println!(
-            "\n{} VS Code caches the session index in memory.",
-            "[!]".yellow()
-        );
-        println!("   To see the new sessions, do one of the following:");
-        println!(
-            "   * Press {} and run {}",
-            "Ctrl+Shift+P".cyan(),
-            "Developer: Reload Window".cyan()
-        );
-        println!("   * Or restart VS Code");
     }
+
+    Ok(())
+}
+
+/// Spawn a detached watchdog process that waits for VS Code to exit, then re-applies
+/// the session index to state.vscdb. This ensures registrations survive VS Code's
+/// shutdown flush of its in-memory IStorageService cache.
+fn spawn_registration_watchdog(
+    ws_id: &str,
+    chat_sessions_dir: &Path,
+    _project_path: Option<&str>,
+) -> Result<()> {
+    // Write pending registration info to a temp file
+    let pending_file = std::env::temp_dir().join(format!("chasm_pending_{}.json", ws_id));
+    let pending = serde_json::json!({
+        "workspace_id": ws_id,
+        "chat_sessions_dir": chat_sessions_dir.to_string_lossy(),
+    });
+    std::fs::write(&pending_file, serde_json::to_string_pretty(&pending)?)?;
+
+    // Spawn ourselves with the hidden `internal apply-pending` command
+    let exe = std::env::current_exe()?;
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+
+        std::process::Command::new(&exe)
+            .args(["internal", "apply-pending", &pending_file.to_string_lossy()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+            .spawn()?;
+    }
+
+    #[cfg(not(windows))]
+    {
+        std::process::Command::new(&exe)
+            .args(["internal", "apply-pending", &pending_file.to_string_lossy()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
+            .spawn()?;
+    }
+
+    Ok(())
+}
+
+/// Apply a pending registration after VS Code has exited.
+/// Called by the detached watchdog process (via `chasm internal apply-pending`).
+pub fn apply_pending_index(pending_file: &str) -> Result<()> {
+    let content = std::fs::read_to_string(pending_file)?;
+    let pending: serde_json::Value = serde_json::from_str(&content)?;
+
+    let ws_id = pending["workspace_id"]
+        .as_str()
+        .ok_or_else(|| CsmError::InvalidSessionFormat("missing workspace_id".into()))?;
+    let chat_sessions_dir = PathBuf::from(
+        pending["chat_sessions_dir"]
+            .as_str()
+            .ok_or_else(|| CsmError::InvalidSessionFormat("missing chat_sessions_dir".into()))?,
+    );
+
+    // Wait for VS Code to exit (poll every 2 seconds, timeout after 10 minutes)
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
+    while is_vscode_running() {
+        if std::time::Instant::now() >= deadline {
+            // Timed out waiting — clean up and exit
+            let _ = std::fs::remove_file(pending_file);
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    // Extra wait for file locks to release
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // Re-apply the registration
+    if chat_sessions_dir.exists() {
+        let _ = register_all_sessions_from_directory(ws_id, &chat_sessions_dir, true);
+    }
+
+    // Clean up the pending file
+    let _ = std::fs::remove_file(pending_file);
 
     Ok(())
 }
@@ -564,7 +822,12 @@ fn find_sessions_by_titles(
     Ok(matches)
 }
 
-/// Recursively walk directories and register orphaned sessions for all workspaces found
+/// Recursively walk directories and register orphaned sessions for all workspaces found.
+///
+/// Instead of walking the entire filesystem tree (which can be extremely slow for
+/// large directory hierarchies), this function discovers all VS Code workspaces upfront
+/// and filters them by the root path prefix. This is O(workspaces) instead of
+/// O(filesystem entries), making it orders of magnitude faster for deep trees.
 pub fn register_recursive(
     root_path: Option<&str>,
     max_depth: Option<usize>,
@@ -573,9 +836,10 @@ pub fn register_recursive(
     exclude_patterns: &[String],
 ) -> Result<()> {
     let root = resolve_path(root_path);
+    let root_normalized = normalize_path(&root.to_string_lossy());
 
     println!(
-        "{} Scanning for workspaces recursively from: {}",
+        "{} Scanning for workspaces under: {}",
         "[CSM]".cyan().bold(),
         root.display()
     );
@@ -595,22 +859,8 @@ pub fn register_recursive(
         return Err(CsmError::VSCodeRunning.into());
     }
 
-    // Get all VS Code workspaces
+    // Get all VS Code workspaces — this is fast (reads workspaceStorage metadata)
     let workspaces = discover_workspaces()?;
-    println!(
-        "   Found {} VS Code workspaces to check",
-        workspaces.len().to_string().cyan()
-    );
-
-    // Build a map of normalized project paths to workspace info
-    let mut workspace_map: std::collections::HashMap<String, Vec<&crate::models::Workspace>> =
-        std::collections::HashMap::new();
-    for ws in &workspaces {
-        if let Some(ref project_path) = ws.project_path {
-            let normalized = normalize_path(project_path);
-            workspace_map.entry(normalized).or_default().push(ws);
-        }
-    }
 
     // Compile exclude patterns
     let exclude_matchers: Vec<glob::Pattern> = exclude_patterns
@@ -633,39 +883,159 @@ pub fn register_recursive(
         ".cargo",
     ];
 
-    let mut total_dirs_scanned = 0;
-    let mut workspaces_found = 0;
+    // Filter workspaces to those under the root path, applying exclusions and depth limits.
+    // This replaces the slow recursive filesystem walk with a fast filter over the
+    // already-known workspace list.
+    let matching_workspaces: Vec<&crate::models::Workspace> = workspaces
+        .iter()
+        .filter(|ws| {
+            let Some(ref project_path) = ws.project_path else {
+                return false;
+            };
+
+            // Must be under the root path
+            let ws_normalized = normalize_path(project_path);
+            if !ws_normalized.starts_with(&root_normalized) {
+                return false;
+            }
+
+            // Check depth limit: count path components after root
+            if let Some(max) = max_depth {
+                let suffix = &ws_normalized[root_normalized.len()..];
+                let suffix = suffix.trim_start_matches(['/', '\\']);
+                let depth = if suffix.is_empty() {
+                    0
+                } else {
+                    suffix.matches(['/', '\\']).count() + 1
+                };
+                if depth > max {
+                    return false;
+                }
+            }
+
+            // Check exclude patterns against the relative path and directory name
+            let relative = &ws_normalized[root_normalized.len()..];
+            let relative = relative.trim_start_matches(['/', '\\']);
+            let dir_name = project_path
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+
+            // Skip default excluded directory names (check each path component)
+            for component in relative.split(['/', '\\']) {
+                if default_excludes.contains(&component) {
+                    return false;
+                }
+            }
+
+            // Skip user exclude patterns
+            for pattern in &exclude_matchers {
+                if pattern.matches(relative) || pattern.matches(&dir_name) {
+                    return false;
+                }
+            }
+
+            // Must have chat sessions
+            ws.has_chat_sessions
+        })
+        .collect();
+
+    let total_workspaces = matching_workspaces.len();
+    println!(
+        "   Found {} workspaces with chat sessions under this path (from {} total)",
+        total_workspaces.to_string().cyan(),
+        workspaces.len().to_string().white()
+    );
+
+    let mut workspaces_processed = 0;
     let mut total_sessions_registered = 0;
     let mut workspaces_with_orphans: Vec<(String, usize, usize)> = Vec::new();
 
-    // Walk the directory tree
-    walk_directory(
-        &root,
-        &root,
-        0,
-        max_depth,
-        &workspace_map,
-        &exclude_matchers,
-        &default_excludes,
-        force,
-        dry_run,
-        &mut total_dirs_scanned,
-        &mut workspaces_found,
-        &mut total_sessions_registered,
-        &mut workspaces_with_orphans,
-    )?;
+    for (i, ws) in matching_workspaces.iter().enumerate() {
+        let display_path = ws.project_path.as_deref().unwrap_or(&ws.hash);
+        let chat_sessions_dir = &ws.chat_sessions_path;
+
+        // Progress indicator
+        if (i + 1) % 25 == 0 || i + 1 == total_workspaces {
+            println!(
+                "   ... processing {}/{}",
+                (i + 1).to_string().cyan(),
+                total_workspaces.to_string().white()
+            );
+        }
+
+        // Count orphaned sessions
+        match count_orphaned_sessions(&ws.hash, chat_sessions_dir) {
+            Ok((on_disk, in_index, orphaned_count)) => {
+                workspaces_processed += 1;
+
+                if orphaned_count > 0 {
+                    if dry_run {
+                        println!(
+                            "   {} {} - {} sessions on disk, {} in index, {} orphaned",
+                            "[DRY]".yellow(),
+                            display_path.cyan(),
+                            on_disk.to_string().white(),
+                            in_index.to_string().white(),
+                            orphaned_count.to_string().yellow()
+                        );
+                        workspaces_with_orphans.push((
+                            display_path.to_string(),
+                            orphaned_count,
+                            orphaned_count,
+                        ));
+                    } else {
+                        // Register the sessions
+                        match register_all_sessions_from_directory(
+                            &ws.hash,
+                            chat_sessions_dir,
+                            force,
+                        ) {
+                            Ok(registered) => {
+                                total_sessions_registered += registered;
+                                println!(
+                                    "   {} {} - registered {} sessions",
+                                    "[+]".green(),
+                                    display_path.cyan(),
+                                    registered.to_string().green()
+                                );
+                                workspaces_with_orphans.push((
+                                    display_path.to_string(),
+                                    orphaned_count,
+                                    registered,
+                                ));
+                            }
+                            Err(e) => {
+                                println!(
+                                    "   {} {} - error: {}",
+                                    "[!]".red(),
+                                    display_path.cyan(),
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!(
+                    "   {} {} - error checking: {}",
+                    "[!]".yellow(),
+                    display_path,
+                    e
+                );
+            }
+        }
+    }
 
     // Print summary
     println!("\n{}", "═".repeat(60).cyan());
     println!("{} Recursive scan complete", "[OK]".green().bold());
     println!("{}", "═".repeat(60).cyan());
     println!(
-        "   Directories scanned:    {}",
-        total_dirs_scanned.to_string().cyan()
-    );
-    println!(
-        "   Workspaces found:       {}",
-        workspaces_found.to_string().cyan()
+        "   Workspaces checked:     {}",
+        workspaces_processed.to_string().cyan()
     );
     println!(
         "   Sessions registered:    {}",
@@ -705,180 +1075,6 @@ pub fn register_recursive(
             "Developer: Reload Window".cyan()
         );
         println!("   * Or restart VS Code");
-    }
-
-    Ok(())
-}
-
-/// Recursively walk a directory and process workspaces
-#[allow(clippy::too_many_arguments)]
-fn walk_directory(
-    current_dir: &Path,
-    root: &Path,
-    current_depth: usize,
-    max_depth: Option<usize>,
-    workspace_map: &std::collections::HashMap<String, Vec<&crate::models::Workspace>>,
-    exclude_matchers: &[glob::Pattern],
-    default_excludes: &[&str],
-    force: bool,
-    dry_run: bool,
-    total_dirs_scanned: &mut usize,
-    workspaces_found: &mut usize,
-    total_sessions_registered: &mut usize,
-    workspaces_with_orphans: &mut Vec<(String, usize, usize)>,
-) -> Result<()> {
-    // Check depth limit
-    if let Some(max) = max_depth {
-        if current_depth > max {
-            return Ok(());
-        }
-    }
-
-    *total_dirs_scanned += 1;
-
-    // Get directory name for exclusion checking
-    let dir_name = current_dir
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    // Skip default excluded directories
-    if default_excludes.contains(&dir_name.as_str()) {
-        return Ok(());
-    }
-
-    // Skip if matches user exclusion patterns
-    let relative_path = current_dir
-        .strip_prefix(root)
-        .unwrap_or(current_dir)
-        .to_string_lossy();
-    for pattern in exclude_matchers {
-        if pattern.matches(&relative_path) || pattern.matches(&dir_name) {
-            return Ok(());
-        }
-    }
-
-    // Check if this directory is a VS Code workspace
-    let normalized_path = normalize_path(&current_dir.to_string_lossy());
-    if let Some(workspace_entries) = workspace_map.get(&normalized_path) {
-        *workspaces_found += 1;
-
-        for ws in workspace_entries {
-            // Check for orphaned sessions in this workspace
-            if ws.has_chat_sessions {
-                let chat_sessions_dir = &ws.chat_sessions_path;
-
-                // Count orphaned sessions
-                match count_orphaned_sessions(&ws.hash, chat_sessions_dir) {
-                    Ok((on_disk, in_index, orphaned_count)) => {
-                        if orphaned_count > 0 {
-                            let display_path = ws.project_path.as_deref().unwrap_or(&ws.hash);
-
-                            if dry_run {
-                                println!(
-                                    "   {} {} - {} sessions on disk, {} in index, {} orphaned",
-                                    "[DRY]".yellow(),
-                                    display_path.cyan(),
-                                    on_disk.to_string().white(),
-                                    in_index.to_string().white(),
-                                    orphaned_count.to_string().yellow()
-                                );
-                                workspaces_with_orphans.push((
-                                    display_path.to_string(),
-                                    orphaned_count,
-                                    orphaned_count,
-                                ));
-                            } else {
-                                // Register the sessions
-                                match register_all_sessions_from_directory(
-                                    &ws.hash,
-                                    chat_sessions_dir,
-                                    force,
-                                ) {
-                                    Ok(registered) => {
-                                        *total_sessions_registered += registered;
-                                        println!(
-                                            "   {} {} - registered {} sessions",
-                                            "[+]".green(),
-                                            display_path.cyan(),
-                                            registered.to_string().green()
-                                        );
-                                        workspaces_with_orphans.push((
-                                            display_path.to_string(),
-                                            orphaned_count,
-                                            registered,
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        println!(
-                                            "   {} {} - error: {}",
-                                            "[!]".red(),
-                                            display_path.cyan(),
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let display_path = ws.project_path.as_deref().unwrap_or(&ws.hash);
-                        println!(
-                            "   {} {} - error checking: {}",
-                            "[!]".yellow(),
-                            display_path,
-                            e
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // Recurse into subdirectories
-    match std::fs::read_dir(current_dir) {
-        Ok(entries) => {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    // Skip hidden directories
-                    let name = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    if name.starts_with('.') {
-                        continue;
-                    }
-
-                    walk_directory(
-                        &path,
-                        root,
-                        current_depth + 1,
-                        max_depth,
-                        workspace_map,
-                        exclude_matchers,
-                        default_excludes,
-                        force,
-                        dry_run,
-                        total_dirs_scanned,
-                        workspaces_found,
-                        total_sessions_registered,
-                        workspaces_with_orphans,
-                    )?;
-                }
-            }
-        }
-        Err(e) => {
-            // Permission denied or other errors - skip silently
-            if e.kind() != std::io::ErrorKind::PermissionDenied {
-                eprintln!(
-                    "   {} Could not read {}: {}",
-                    "[!]".yellow(),
-                    current_dir.display(),
-                    e
-                );
-            }
-        }
     }
 
     Ok(())
@@ -1213,6 +1409,26 @@ pub fn register_repair(
             Err(e) => {
                 println!("   {} Failed to fix memento: {}", "[WARN]".yellow(), e);
             }
+        }
+    }
+
+    // Pass 7: Fix broken view state (sessions hidden in sidebar)
+    println!(
+        "   {} Pass 7: Checking view state (workbench.view.chat.sessions.state)...",
+        "[*]".cyan()
+    );
+    match fix_broken_view_state(&db_path) {
+        Ok(true) => {
+            println!(
+                "   {} Removed broken view state (all sections were hidden)",
+                "[OK]".green()
+            );
+        }
+        Ok(false) => {
+            println!("   {} View state is valid", "[OK]".green());
+        }
+        Err(e) => {
+            println!("   {} Failed to check view state: {}", "[WARN]".yellow(), e);
         }
     }
 
@@ -1768,6 +1984,17 @@ fn repair_workspace_db_caches(
                 "      {} Memento updated to: {}",
                 "[OK]".green(),
                 preferred_id.as_deref().unwrap_or("(first valid)"),
+            );
+        }
+        _ => {}
+    }
+
+    // Fix broken view state (sessions hidden in sidebar)
+    match fix_broken_view_state(&db_path) {
+        Ok(true) if verbose => {
+            println!(
+                "      {} Removed broken view state (all sections were hidden)",
+                "[OK]".green()
             );
         }
         _ => {}

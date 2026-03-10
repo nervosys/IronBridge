@@ -9,6 +9,13 @@ use std::path::Path;
 use crate::models::Workspace;
 use crate::workspace::{get_workspace_by_hash, get_workspace_by_path};
 
+/// Check if a path has a session file extension (.json or .jsonl)
+fn is_session_file(path: &Path) -> bool {
+    path.extension()
+        .map(|e| e == "json" || e == "jsonl")
+        .unwrap_or(false)
+}
+
 /// Export chat sessions from a workspace
 pub fn export_sessions(destination: &str, hash: Option<&str>, path: Option<&str>) -> Result<()> {
     let workspace = if let Some(h) = hash {
@@ -34,7 +41,7 @@ pub fn export_sessions(destination: &str, hash: Option<&str>, path: Option<&str>
         let entry = entry?;
         let src_path = entry.path();
 
-        if src_path.extension().map(|e| e == "json").unwrap_or(false) {
+        if is_session_file(&src_path) {
             let dest_file = dest_path.join(entry.file_name());
             std::fs::copy(&src_path, &dest_file)?;
             exported_count += 1;
@@ -92,7 +99,7 @@ pub fn export_batch(destination: &str, project_paths: &[String]) -> Result<()> {
                     let entry = entry?;
                     let src_path = entry.path();
 
-                    if src_path.extension().map(|e| e == "json").unwrap_or(false) {
+                    if is_session_file(&src_path) {
                         let dest_file = project_dest.join(entry.file_name());
                         std::fs::copy(&src_path, &dest_file)?;
                         exported_count += 1;
@@ -160,7 +167,7 @@ pub fn import_sessions(
         let entry = entry?;
         let src_file = entry.path();
 
-        if src_file.extension().map(|e| e == "json").unwrap_or(false) {
+        if is_session_file(&src_file) {
             let dest_file = workspace.chat_sessions_path.join(entry.file_name());
 
             if dest_file.exists() && !force {
@@ -250,7 +257,7 @@ fn move_sessions_internal(
         let entry = entry?;
         let src_file = entry.path();
 
-        if src_file.extension().map(|e| e == "json").unwrap_or(false) {
+        if is_session_file(&src_file) {
             let dest_file = target_ws.chat_sessions_path.join(entry.file_name());
 
             // Skip if file already exists with same name (don't overwrite)
@@ -543,7 +550,7 @@ pub fn move_by_path(source_path: &str, target_path: &str) -> Result<()> {
         let entry = entry?;
         let src_file = entry.path();
 
-        if src_file.extension().map(|e| e == "json").unwrap_or(false) {
+        if is_session_file(&src_file) {
             let dest_file = target_ws.chat_sessions_path.join(entry.file_name());
             std::fs::rename(&src_file, &dest_file)?;
             moved_count += 1;

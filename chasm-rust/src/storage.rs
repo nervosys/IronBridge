@@ -1262,6 +1262,54 @@ pub fn fix_session_memento(
     }
 }
 
+// ── View state fix ─────────────────────────────────────────────────────────
+
+const VIEW_STATE_KEY: &str = "workbench.view.chat.sessions.state";
+
+/// Fix broken view state where all chat sections are hidden in the sidebar.
+///
+/// VS Code stores `workbench.view.chat.sessions.state` as a JSON object whose
+/// values are section descriptors with an `isHidden` boolean. If every section
+/// has `isHidden: true`, chat sessions become invisible in the sidebar even
+/// though they exist on disk and in the index. This function detects that
+/// condition and deletes the key so VS Code regenerates it with default
+/// (visible) state.
+///
+/// Returns `Ok(true)` if the key was deleted, `Ok(false)` if the view state
+/// was healthy or absent.
+pub fn fix_broken_view_state(db_path: &Path) -> Result<bool> {
+    let view_state = match read_db_json(db_path, VIEW_STATE_KEY)? {
+        Some(v) => v,
+        None => return Ok(false), // No view state key — nothing to fix
+    };
+
+    let obj = match view_state.as_object() {
+        Some(o) => o,
+        None => return Ok(false), // Not a JSON object — leave it alone
+    };
+
+    if obj.is_empty() {
+        return Ok(false);
+    }
+
+    // Check whether every section descriptor has "isHidden": true
+    let all_hidden = obj.values().all(|v| {
+        v.as_object()
+            .and_then(|section| section.get("isHidden"))
+            .and_then(|h| h.as_bool())
+            .unwrap_or(false)
+    });
+
+    if !all_hidden {
+        return Ok(false); // At least one section is visible — view state is fine
+    }
+
+    // All sections hidden — delete the key so VS Code regenerates defaults
+    let conn = Connection::open(db_path)?;
+    conn.execute("DELETE FROM ItemTable WHERE key = ?", [VIEW_STATE_KEY])?;
+    Ok(true)
+}
+
 // ── .json.bak recovery ─────────────────────────────────────────────────────
 
 /// Count the number of requests in a session's `v.requests` array from a JSONL

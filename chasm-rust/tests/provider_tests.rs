@@ -508,6 +508,8 @@ mod session_format_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: Some(1700000001000),
@@ -530,6 +532,8 @@ mod session_format_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
             ],
         }
@@ -806,6 +810,8 @@ mod openai_compat_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1044,6 +1050,8 @@ mod integration_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1101,6 +1109,8 @@ mod integration_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: Some(1700000001000),
@@ -1123,6 +1133,8 @@ mod integration_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
                 ChatRequest {
                     timestamp: Some(1700000002000),
@@ -1145,6 +1157,8 @@ mod integration_tests {
                     code_citations: None,
                     response_markdown_info: None,
                     source_session: None,
+                    model_state: None,
+                    time_spent_waiting: None,
                 },
             ],
         };
@@ -1255,6 +1269,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1298,6 +1314,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1348,6 +1366,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -1382,6 +1402,8 @@ mod edge_case_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             });
         }
 

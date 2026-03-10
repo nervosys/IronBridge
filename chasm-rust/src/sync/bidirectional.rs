@@ -5,7 +5,7 @@
 //! Provides two-way synchronization between CSM and provider-native storage.
 //! Handles conflict resolution, change tracking, and state reconciliation.
 
-use crate::models::ChatSession;
+use crate::models::{extract_response_text, ChatSession};
 use crate::providers::ProviderType;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
@@ -165,7 +165,7 @@ pub fn compute_session_hash(session: &ChatSession) -> String {
             }
         }
         if let Some(resp) = &request.response {
-            if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+            if let Some(result) = extract_response_text(resp) {
                 hasher.update(result.as_bytes());
             }
         }

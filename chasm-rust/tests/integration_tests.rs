@@ -148,6 +148,8 @@ mod model_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 
@@ -228,6 +230,8 @@ mod model_tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
         // Title should be first message text, truncated

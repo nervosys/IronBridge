@@ -8,7 +8,7 @@
 //! - Ollama format
 //! - Generic markdown format
 
-use crate::models::{ChatMessage, ChatRequest, ChatSession};
+use crate::models::{extract_response_text, ChatMessage, ChatRequest, ChatSession};
 use serde::{Deserialize, Serialize};
 
 /// Generic message format for import/export
@@ -102,9 +102,9 @@ impl From<GenericSession> for ChatSession {
                                 text: Some(user_text),
                                 parts: None,
                             }),
-                            response: Some(serde_json::json!({
-                                "value": [{"value": msg.content}]
-                            })),
+                            response: Some(serde_json::json!(
+                                [{"value": msg.content}]
+                            )),
                             variable_data: None,
                             request_id: Some(uuid::Uuid::new_v4().to_string()),
                             response_id: Some(uuid::Uuid::new_v4().to_string()),
@@ -117,6 +117,8 @@ impl From<GenericSession> for ChatSession {
                             code_citations: None,
                             response_markdown_info: None,
                             source_session: None,
+                            model_state: None,
+                            time_spent_waiting: None,
                         });
                     }
                 }
@@ -291,9 +293,9 @@ fn create_request(
             text: Some(user_text),
             parts: None,
         }),
-        response: Some(serde_json::json!({
-            "value": [{"value": assistant_text}]
-        })),
+        response: Some(serde_json::json!(
+            [{"value": assistant_text}]
+        )),
         variable_data: None,
         request_id: Some(uuid::Uuid::new_v4().to_string()),
         response_id: Some(uuid::Uuid::new_v4().to_string()),
@@ -306,34 +308,16 @@ fn create_request(
         code_citations: None,
         response_markdown_info: None,
         source_session: None,
+        model_state: None,
+        time_spent_waiting: None,
     }
 }
 
 /// Extract text from various response formats
-fn extract_response_text(response: &serde_json::Value) -> Option<String> {
-    // Try direct text field
-    if let Some(text) = response.get("text").and_then(|v| v.as_str()) {
-        return Some(text.to_string());
-    }
-
-    // Try value array format (VS Code Copilot format)
-    if let Some(value) = response.get("value").and_then(|v| v.as_array()) {
-        let parts: Vec<String> = value
-            .iter()
-            .filter_map(|v| v.get("value").and_then(|v| v.as_str()))
-            .map(String::from)
-            .collect();
-        if !parts.is_empty() {
-            return Some(parts.join("\n"));
-        }
-    }
-
-    // Try content field (OpenAI format)
-    if let Some(content) = response.get("content").and_then(|v| v.as_str()) {
-        return Some(content.to_string());
-    }
-
-    None
+/// NOTE: This is now delegated to crate::models::extract_response_text.
+/// This wrapper is kept for backward compatibility with in-module callers.
+fn _extract_response_text_legacy(response: &serde_json::Value) -> Option<String> {
+    extract_response_text(response)
 }
 
 /// Format a timestamp for display
@@ -390,6 +374,8 @@ mod tests {
                 code_citations: None,
                 response_markdown_info: None,
                 source_session: None,
+                model_state: None,
+                time_spent_waiting: None,
             }],
         };
 

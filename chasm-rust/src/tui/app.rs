@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Application state for the TUI
 
-use crate::models::{ChatSession, Workspace};
+use crate::models::{extract_response_text, ChatSession, Workspace};
 use crate::workspace::{discover_workspaces, get_chat_sessions_from_workspace};
 use std::path::PathBuf;
 
@@ -800,7 +800,7 @@ impl App {
                         }
                     }
                     if let Some(resp) = &req.response {
-                        if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+                        if let Some(result) = extract_response_text(resp) {
                             md.push_str(&format!("**Assistant:**\n\n{}\n\n---\n\n", result));
                         }
                     }
@@ -818,7 +818,7 @@ impl App {
                         }
                     }
                     if let Some(resp) = &req.response {
-                        if let Some(result) = resp.get("result").and_then(|v| v.as_str()) {
+                        if let Some(result) = extract_response_text(resp) {
                             txt.push_str(&format!("[{}] Assistant:\n{}\n\n", i + 1, result));
                         }
                     }

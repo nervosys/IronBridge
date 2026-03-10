@@ -26,12 +26,16 @@
 
 ## ✨ Features
 
-- 🔍 **Harvest** - Extract chat sessions from VS Code, Cursor, Windsurf, and other editors
+- 🔍 **Harvest** - Extract chat sessions from VS Code, Cursor, Windsurf, and 30+ providers
 - 🔀 **Merge** - Combine sessions across workspaces and time periods
+- 🔧 **Recover** - Detect and recover orphaned sessions across all projects recursively
 - 📊 **Analyze** - Get statistics on your AI assistant usage
 - 🔌 **API Server** - REST API for building custom integrations
 - 🤖 **MCP Tools** - Model Context Protocol support for AI agent integration
 - 🗃️ **Universal Database** - SQLite-based storage that normalizes all providers
+- 🤖 **Agency** - Rust-native agent development kit with multi-agent orchestration
+- 🩺 **Doctor** - System health checks with auto-fix capabilities
+- ✂️ **Shard** - Split oversized sessions into linked, manageable parts
 
 ## 📦 Installation
 
@@ -94,7 +98,13 @@ chasm show path /path/to/your/project
 ### Harvest sessions from VS Code
 
 ```bash
-chasm harvest
+chasm harvest run
+```
+
+### Recover orphaned sessions across all projects
+
+```bash
+chasm recover recursive --force --register /path/to/projects
 ```
 
 ### Export a session to Markdown
@@ -113,56 +123,95 @@ chasm api serve --port 8787
 
 ### Core Commands
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `chasm list workspaces`          | List all discovered workspaces                   |
-| `chasm list sessions`            | List sessions (optionally filtered by workspace) |
-| `chasm list orphaned`            | List unregistered sessions on disk               |
-| `chasm show session <id>`        | Display full session content                     |
-| `chasm show path <path>`         | Show sessions for a project path                 |
-| `chasm find workspace <pattern>` | Search workspaces by name                        |
-| `chasm find session <pattern>`   | Search sessions by content                       |
+| Command                          | Description                                       |
+| -------------------------------- | ------------------------------------------------- |
+| `chasm list workspaces`          | List all discovered workspaces                    |
+| `chasm list sessions`            | List sessions (optionally filtered by workspace)  |
+| `chasm list orphaned`            | List unregistered sessions on disk                |
+| `chasm show session <id>`        | Display full session content                      |
+| `chasm show path <path>`         | Show sessions for a project path                  |
+| `chasm find workspace <pattern>` | Search workspaces by name                         |
+| `chasm find session <pattern>`   | Search sessions by content                        |
+| `chasm fetch <path>`             | Fetch chat sessions from a workspace              |
+| `chasm detect all <path>`        | Detect workspace, providers, sessions for a path  |
+| `chasm detect providers`         | Detect available AI providers                     |
+| `chasm watch`                    | Watch agent sessions for changes and auto-harvest |
 
 ### Data Management
 
-| Command                        | Description                               |
-| ------------------------------ | ----------------------------------------- |
-| `chasm harvest scan`           | Scan for available providers and sessions |
-| `chasm harvest run`            | Collect sessions from all providers       |
-| `chasm harvest status`         | Show harvest database status              |
-| `chasm sync --pull`            | Pull sessions from workspaces to database |
-| `chasm sync --push`            | Push sessions from database to workspaces |
-| `chasm merge workspace <name>` | Merge sessions from a workspace           |
-| `chasm export session <id>`    | Export session to file                    |
-| `chasm export batch <dest> <paths...>` | Batch export from multiple projects |
-| `chasm import <file>`          | Import sessions from file                 |
+| Command                                | Description                                    |
+| -------------------------------------- | ---------------------------------------------- |
+| `chasm harvest scan`                   | Scan for available providers and sessions      |
+| `chasm harvest run`                    | Collect sessions from all providers            |
+| `chasm harvest status`                 | Show harvest database status                   |
+| `chasm sync --pull`                    | Pull sessions from workspaces to database      |
+| `chasm sync --push`                    | Push sessions from database to workspaces      |
+| `chasm merge workspace <name>`         | Merge sessions from a workspace                |
+| `chasm export session <id>`            | Export session to file                         |
+| `chasm export batch <dest> <paths...>` | Batch export from multiple projects            |
+| `chasm import <file>`                  | Import sessions from file                      |
+| `chasm move <session> <dest>`          | Move sessions between workspaces               |
+| `chasm git`                            | Git integration for session versioning         |
+| `chasm migration`                      | Migration commands for moving between machines |
 
 ### Session Recovery
 
-| Command                            | Description                                    |
-| ---------------------------------- | ---------------------------------------------- |
-| `chasm detect orphaned <path>`     | Find orphaned sessions in old workspace hashes |
-| `chasm detect orphaned -r <path>`  | Recover orphaned sessions to active workspace  |
-| `chasm register all --path <path>` | Register on-disk sessions in VS Code's index   |
-| `chasm recover extract <path>`     | Extract sessions from VS Code recording state  |
-| `chasm recover upgrade <path>`     | Upgrade session format from JSON to JSONL      |
+| Command                             | Description                                                   |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `chasm detect orphaned <path>`      | Find orphaned sessions in old workspace hashes                |
+| `chasm detect orphaned -r <path>`   | Recover orphaned sessions to active workspace                 |
+| `chasm recover recursive <path>`    | Recursively recover orphaned sessions for all projects        |
+| `chasm recover extract <path>`      | Extract sessions from a VS Code workspace by project path     |
+| `chasm recover scan`                | Scan for recoverable sessions from various sources            |
+| `chasm recover status`              | Show recovery status and recommendations                      |
+| `chasm recover upgrade <paths...>`  | Upgrade session format from JSON to JSONL                     |
+| `chasm recover convert <file>`      | Convert between JSON and JSONL formats                        |
+| `chasm recover copilot-info`        | Show Copilot Chat extension version and compatibility         |
+| `chasm register all --path <path>`  | Register on-disk sessions in VS Code's index                  |
+| `chasm register recursive <path>`   | Recursively register sessions for all workspaces under a path |
+| `chasm register repair --recursive` | Repair and rebuild index for all discovered workspaces        |
+| `chasm register trim --all`         | Trim oversized sessions to keep recent requests               |
+| `chasm shard workspace`             | Split oversized sessions into linked shards                   |
 
 #### Recovering Lost Chat History
 
 When VS Code creates a new workspace hash (e.g., after reinstall or path change), your chat sessions may become "orphaned" in the old workspace folder. Use these commands to recover them:
 
 ```bash
-# 1. Scan for orphaned sessions
-chasm detect orphaned /path/to/project
-
-# 2. Recover them (copy to active workspace)
-chasm detect orphaned --recover /path/to/project
-
-# 3. Register in VS Code's database
-chasm register all --force --path /path/to/project
-
+# Recover a single project
+chasm detect orphaned /path/to/project          # 1. Scan for orphans
+chasm detect orphaned --recover /path/to/project # 2. Copy to active workspace
+chasm register all --force --path /path/to/project # 3. Register in VS Code's index
 # 4. Reload VS Code (Ctrl+Shift+P -> Developer: Reload Window)
 ```
+
+#### Bulk Recovery (All Projects)
+
+Recover orphaned sessions across an entire directory tree in one command:
+
+```bash
+# Dry run first to see what would be recovered
+chasm recover recursive --dry-run /path/to/projects
+
+# Recover and register in one step
+chasm recover recursive --force --register /path/to/projects
+
+# Or recover then register separately
+chasm recover recursive --force /path/to/projects
+chasm register recursive --force /path/to/projects
+```
+
+### Maintenance
+
+| Command                       | Description                                            |
+| ----------------------------- | ------------------------------------------------------ |
+| `chasm doctor`                | Check system environment, providers, and config health |
+| `chasm doctor --fix`          | Auto-fix detected issues                               |
+| `chasm register repair --all` | Repair and rebuild session index for all workspaces    |
+| `chasm register trim --all`   | Trim sessions over 10MB to keep recent requests        |
+| `chasm shard session <file>`  | Split a session into linked shards by request count    |
+| `chasm shard workspace`       | Shard all oversized sessions in a workspace            |
+| `chasm telemetry`             | Manage anonymous usage data collection                 |
 
 ### Server
 
@@ -189,23 +238,23 @@ chasm api serve --host 0.0.0.0 --port 8787
 
 ### Endpoints
 
-| Method | Endpoint                      | Description                   |
-| ------ | ----------------------------- | ----------------------------- |
-| GET    | `/api/health`                 | Health check                  |
-| GET    | `/api/workspaces`             | List workspaces               |
-| GET    | `/api/workspaces/:id`         | Get workspace details         |
-| GET    | `/api/sessions`               | List sessions                 |
-| GET    | `/api/sessions/:id`           | Get session with messages     |
-| GET    | `/api/sessions/search?q=`     | Search sessions               |
-| GET    | `/api/stats`                  | Database statistics           |
-| GET    | `/api/providers`              | List supported providers      |
-| GET    | `/api/agents`                 | List available agents         |
-| POST   | `/api/recording/events`       | Send recording events         |
-| POST   | `/api/recording/snapshot`     | Store session snapshot        |
-| GET    | `/api/recording/sessions`     | List active recording sessions|
-| GET    | `/api/recording/sessions/:id` | Get recorded session          |
-| GET    | `/api/recording/recovery`     | Recover sessions after crash  |
-| GET    | `/api/recording/status`       | Recording service status      |
+| Method | Endpoint                      | Description                    |
+| ------ | ----------------------------- | ------------------------------ |
+| GET    | `/api/health`                 | Health check                   |
+| GET    | `/api/workspaces`             | List workspaces                |
+| GET    | `/api/workspaces/:id`         | Get workspace details          |
+| GET    | `/api/sessions`               | List sessions                  |
+| GET    | `/api/sessions/:id`           | Get session with messages      |
+| GET    | `/api/sessions/search?q=`     | Search sessions                |
+| GET    | `/api/stats`                  | Database statistics            |
+| GET    | `/api/providers`              | List supported providers       |
+| GET    | `/api/agents`                 | List available agents          |
+| POST   | `/api/recording/events`       | Send recording events          |
+| POST   | `/api/recording/snapshot`     | Store session snapshot         |
+| GET    | `/api/recording/sessions`     | List active recording sessions |
+| GET    | `/api/recording/sessions/:id` | Get recorded session           |
+| GET    | `/api/recording/recovery`     | Recover sessions after crash   |
+| GET    | `/api/recording/status`       | Recording service status       |
 
 ### Example
 
@@ -247,12 +296,12 @@ chasm mcp serve
 
 Support for multiple isolated tenants with subscription tiers:
 
-| Tier         | Users  | Storage | Features                              |
-| ------------ | ------ | ------- | ------------------------------------- |
-| Free         | 5      | 1 GB    | Basic harvest, local storage          |
-| Starter      | 25     | 10 GB   | Cloud sync, API access                |
-| Professional | 100    | 100 GB  | SSO, advanced analytics, priority     |
-| Enterprise   | Custom | Custom  | Audit logs, compliance, white-label   |
+| Tier         | Users  | Storage | Features                            |
+| ------------ | ------ | ------- | ----------------------------------- |
+| Free         | 5      | 1 GB    | Basic harvest, local storage        |
+| Starter      | 25     | 10 GB   | Cloud sync, API access              |
+| Professional | 100    | 100 GB  | SSO, advanced analytics, priority   |
+| Enterprise   | Custom | Custom  | Audit logs, compliance, white-label |
 
 ### Compliance Frameworks
 
@@ -694,6 +743,10 @@ curl -X POST http://localhost:3000/api/v1/swarms/{id}/start \
 - ✅ GPT4All
 - ✅ LocalAI
 - ✅ llama.cpp / llamafile
+- ✅ vLLM
+- ✅ Azure AI Foundry
+- ✅ Text Generation WebUI
+- ✅ Jan.ai
 
 ### Cloud APIs
 - ✅ OpenAI / ChatGPT

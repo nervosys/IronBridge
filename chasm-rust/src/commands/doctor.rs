@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use colored::Colorize;
+use semver;
 use std::path::PathBuf;
 
 use crate::storage::{
@@ -77,6 +78,7 @@ pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
     results.push(check_harvest_db());
 
     // ── Provider checks ────────────────────────────────────────────
+    results.push(check_copilot_chat());
     results.push(check_claude_code());
     results.push(check_codex_cli());
     results.push(check_gemini_cli());
@@ -452,6 +454,51 @@ fn check_harvest_db() -> CheckResult {
             ),
         ),
         None => CheckResult::warn("storage", "Harvest database", "Could not determine path"),
+    }
+}
+
+fn check_copilot_chat() -> CheckResult {
+    match crate::copilot_version::detect_installed_versions() {
+        Ok(installs) if installs.is_empty() => CheckResult::warn(
+            "provider",
+            "Copilot Chat",
+            "Not installed — no github.copilot-chat-* extension found",
+        ),
+        Ok(installs) => {
+            let active = installs.iter().find(|i| i.is_active);
+            let latest = installs.iter().max_by(|a, b| a.version.cmp(&b.version));
+            let picked = active.or(latest).unwrap();
+
+            let mut detail = format!("v{}", picked.version);
+            if installs.len() > 1 {
+                detail.push_str(&format!(" ({} versions installed)", installs.len()));
+            }
+            if !picked.required_vscode_version.is_empty() {
+                detail.push_str(&format!(
+                    ", requires VS Code {}",
+                    picked.required_vscode_version
+                ));
+            }
+
+            // Warn if using a very old version (pre-JSONL)
+            if picked.version < semver::Version::new(0, 37, 0) {
+                CheckResult::warn(
+                    "provider",
+                    "Copilot Chat",
+                    &format!(
+                        "v{} is pre-JSONL (< 0.37). Session recovery may use legacy format.",
+                        picked.version
+                    ),
+                )
+            } else {
+                CheckResult::pass("provider", "Copilot Chat").with_detail(&detail)
+            }
+        }
+        Err(e) => CheckResult::warn(
+            "provider",
+            "Copilot Chat",
+            &format!("Detection failed: {}", e),
+        ),
     }
 }
 

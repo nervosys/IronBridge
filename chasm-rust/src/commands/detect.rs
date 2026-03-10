@@ -4,11 +4,14 @@
 
 use anyhow::Result;
 use colored::*;
+use std::collections::HashMap;
 
-use crate::models::Workspace;
+use crate::models::{Workspace, WorkspaceJson};
 use crate::providers::{ProviderRegistry, ProviderType};
+use crate::storage::{is_vscode_running, register_all_sessions_from_directory};
 use crate::workspace::{
-    discover_workspaces, find_workspace_by_path, get_chat_sessions_from_workspace,
+    decode_workspace_folder, discover_workspaces, find_workspace_by_path,
+    get_chat_sessions_from_workspace, get_workspace_storage_path, normalize_path,
 };
 
 /// Detect workspace information for a given path
@@ -697,6 +700,366 @@ pub fn detect_orphaned(path: Option<&str>, recover: bool) -> Result<()> {
         }
     } else {
         println!("{} No orphaned sessions found", "[OK]".green().bold());
+    }
+
+    Ok(())
+}
+
+/// Recursively walk a directory tree and recover orphaned sessions for all workspaces found.
+///
+/// This combines the logic of `detect_orphaned` (finding orphaned workspace hashes and
+/// copying sessions to the active workspace) with `register_recursive` (using the workspace-map
+/// filter for fast scanning). Optionally registers recovered sessions in VS Code's index.
+pub fn recover_recursive(
+    root_path: Option<&str>,
+    max_depth: Option<usize>,
+    force: bool,
+    dry_run: bool,
+    exclude_patterns: &[String],
+    register: bool,
+) -> Result<()> {
+    let root = super::register::resolve_path(root_path);
+    let root_normalized = normalize_path(&root.to_string_lossy());
+
+    println!(
+        "\n{} Recovering orphaned sessions under: {}",
+        "[R]".green().bold(),
+        root.display()
+    );
+    println!("{}", "=".repeat(60));
+
+    if dry_run {
+        println!("{} Dry run mode — no changes will be made", "[!]".yellow());
+    }
+
+    // Check if VS Code is running (warn for register, but recovery is safe either way)
+    if register && !force && !dry_run && is_vscode_running() {
+        println!(
+            "{} VS Code is running. Use {} to register anyway.",
+            "[!]".yellow(),
+            "--force".cyan()
+        );
+    }
+
+    let storage_path = get_workspace_storage_path()?;
+
+    // Build a map of project_path → Vec<(hash, workspace_dir, session_count, last_modified)>
+    // from ALL workspace storage directories. This finds orphaned hashes that
+    // `discover_workspaces` may not surface with full detail.
+    let mut path_workspaces: HashMap<
+        String,
+        Vec<(String, std::path::PathBuf, usize, std::time::SystemTime)>,
+    > = HashMap::new();
+
+    for entry in std::fs::read_dir(&storage_path)? {
+        let entry = entry?;
+        let workspace_dir = entry.path();
+        if !workspace_dir.is_dir() {
+            continue;
+        }
+
+        let workspace_json_path = workspace_dir.join("workspace.json");
+        if !workspace_json_path.exists() {
+            continue;
+        }
+
+        let content = match std::fs::read_to_string(&workspace_json_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let ws_json: WorkspaceJson = match serde_json::from_str(&content) {
+            Ok(j) => j,
+            Err(_) => continue,
+        };
+        let folder = match &ws_json.folder {
+            Some(f) => f.clone(),
+            None => continue,
+        };
+
+        let folder_path = decode_workspace_folder(&folder);
+        let normalized = normalize_path(&folder_path);
+
+        // Only include workspaces under the root
+        if !normalized.starts_with(&root_normalized) {
+            continue;
+        }
+
+        // Apply depth limit
+        if let Some(max) = max_depth {
+            let suffix = &normalized[root_normalized.len()..];
+            let suffix = suffix.trim_start_matches(['/', '\\']);
+            let depth = if suffix.is_empty() {
+                0
+            } else {
+                suffix.matches(['/', '\\']).count() + 1
+            };
+            if depth > max {
+                continue;
+            }
+        }
+
+        // Apply exclude patterns
+        let relative = &normalized[root_normalized.len()..];
+        let relative = relative.trim_start_matches(['/', '\\']);
+        let default_excludes = [
+            "node_modules",
+            ".git",
+            "target",
+            "build",
+            "dist",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".cache",
+            "vendor",
+            ".cargo",
+        ];
+        let skip = relative
+            .split(['/', '\\'])
+            .any(|c| default_excludes.contains(&c));
+        if skip {
+            continue;
+        }
+
+        let exclude_matchers: Vec<glob::Pattern> = exclude_patterns
+            .iter()
+            .filter_map(|p| glob::Pattern::new(p).ok())
+            .collect();
+        let dir_name = folder_path
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or("")
+            .to_lowercase();
+        let excluded_by_user = exclude_matchers
+            .iter()
+            .any(|p| p.matches(relative) || p.matches(&dir_name));
+        if excluded_by_user {
+            continue;
+        }
+
+        // Count sessions
+        let chat_sessions_dir = workspace_dir.join("chatSessions");
+        let session_count = if chat_sessions_dir.exists() {
+            std::fs::read_dir(&chat_sessions_dir)
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .filter(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "json" || ext == "jsonl" || ext == "backup")
+                                .unwrap_or(false)
+                        })
+                        .count()
+                })
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        let last_modified = if chat_sessions_dir.exists() {
+            std::fs::read_dir(&chat_sessions_dir)
+                .ok()
+                .and_then(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .filter_map(|e| e.metadata().ok())
+                        .filter_map(|m| m.modified().ok())
+                        .max()
+                })
+                .unwrap_or(std::time::UNIX_EPOCH)
+        } else {
+            std::time::UNIX_EPOCH
+        };
+
+        let hash = entry.file_name().to_string_lossy().to_string();
+        path_workspaces
+            .entry(normalized.clone())
+            .or_default()
+            .push((hash, workspace_dir, session_count, last_modified));
+    }
+
+    // Sort each project's workspaces by last modified (newest first = active)
+    for workspaces in path_workspaces.values_mut() {
+        workspaces.sort_by(|a, b| b.3.cmp(&a.3));
+    }
+
+    // Find projects with orphaned workspaces (more than one hash, or a hash with sessions
+    // that's not the newest)
+    let total_projects = path_workspaces.len();
+    let mut projects_with_orphans = 0;
+    let mut total_sessions_recovered = 0;
+    let mut total_sessions_registered = 0;
+    let mut processed = 0;
+
+    // Sort projects for deterministic output
+    let mut project_paths: Vec<String> = path_workspaces.keys().cloned().collect();
+    project_paths.sort();
+
+    println!(
+        "   Found {} unique project paths under this root",
+        total_projects.to_string().cyan()
+    );
+
+    for project_normalized in &project_paths {
+        let workspaces = &path_workspaces[project_normalized];
+        processed += 1;
+
+        if (processed) % 50 == 0 || processed == total_projects {
+            println!(
+                "   ... scanning {}/{}",
+                processed.to_string().cyan(),
+                total_projects.to_string().white()
+            );
+        }
+
+        if workspaces.len() <= 1 {
+            // Only one workspace hash — no orphan recovery needed
+            continue;
+        }
+
+        // Active = first (most recent), rest = orphaned
+        let (ref active_hash, ref active_dir, active_count, _) = workspaces[0];
+        let orphaned = &workspaces[1..];
+
+        // Count total orphaned sessions
+        let orphaned_with_sessions: Vec<&(
+            String,
+            std::path::PathBuf,
+            usize,
+            std::time::SystemTime,
+        )> = orphaned
+            .iter()
+            .filter(|(_, _, count, _)| *count > 0)
+            .collect();
+
+        if orphaned_with_sessions.is_empty() {
+            continue;
+        }
+
+        let orphan_session_count: usize = orphaned_with_sessions.iter().map(|(_, _, c, _)| c).sum();
+        projects_with_orphans += 1;
+
+        // Display path relative to root for readability
+        let display_path = if project_normalized.len() > root_normalized.len() {
+            project_normalized[root_normalized.len()..].trim_start_matches(['/', '\\'])
+        } else {
+            project_normalized.as_str()
+        };
+
+        if dry_run {
+            println!(
+                "   {} {} — {} workspace(s), active has {} sessions, {} orphaned session(s) in {} hash(es)",
+                "[DRY]".yellow(),
+                display_path.cyan(),
+                workspaces.len().to_string().white(),
+                active_count.to_string().white(),
+                orphan_session_count.to_string().yellow(),
+                orphaned_with_sessions.len().to_string().yellow(),
+            );
+            total_sessions_recovered += orphan_session_count;
+            continue;
+        }
+
+        // Recover: copy orphaned sessions to active workspace's chatSessions dir
+        let active_chat_sessions = active_dir.join("chatSessions");
+        if !active_chat_sessions.exists() {
+            std::fs::create_dir_all(&active_chat_sessions)?;
+        }
+
+        let mut recovered_this_project = 0;
+        for (_orphan_hash, orphan_dir, _, _) in &orphaned_with_sessions {
+            let orphan_sessions = orphan_dir.join("chatSessions");
+            if let Ok(entries) = std::fs::read_dir(&orphan_sessions) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let src = entry.path();
+                    let ext_match = src
+                        .extension()
+                        .map(|e| e == "json" || e == "jsonl" || e == "backup")
+                        .unwrap_or(false);
+                    let is_bak = src.to_string_lossy().ends_with(".bak")
+                        || src.to_string_lossy().ends_with(".corrupt");
+                    if ext_match && !is_bak {
+                        let filename = src.file_name().unwrap();
+                        let dest = active_chat_sessions.join(filename);
+                        if !dest.exists() {
+                            std::fs::copy(&src, &dest)?;
+                            recovered_this_project += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        if recovered_this_project > 0 {
+            println!(
+                "   {} {} — recovered {} session(s) from {} orphaned hash(es)",
+                "[+]".green(),
+                display_path.cyan(),
+                recovered_this_project.to_string().green(),
+                orphaned_with_sessions.len().to_string().white(),
+            );
+            total_sessions_recovered += recovered_this_project;
+
+            // Optionally register
+            if register {
+                match register_all_sessions_from_directory(
+                    active_hash,
+                    &active_chat_sessions,
+                    force,
+                ) {
+                    Ok(registered) => {
+                        total_sessions_registered += registered;
+                    }
+                    Err(e) => {
+                        println!(
+                            "   {} Failed to register for {}: {}",
+                            "[!]".red(),
+                            display_path,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Summary
+    println!("\n{}", "═".repeat(60).cyan());
+    println!("{} Recursive recovery complete", "[OK]".green().bold());
+    println!("{}", "═".repeat(60).cyan());
+    println!(
+        "   Projects scanned:       {}",
+        total_projects.to_string().cyan()
+    );
+    println!(
+        "   Projects with orphans:  {}",
+        projects_with_orphans.to_string().yellow()
+    );
+    println!(
+        "   Sessions recovered:     {}",
+        total_sessions_recovered.to_string().green()
+    );
+    if register {
+        println!(
+            "   Sessions registered:    {}",
+            total_sessions_registered.to_string().green()
+        );
+    }
+
+    if !dry_run && total_sessions_recovered > 0 {
+        if !register {
+            println!(
+                "\n{} Run {} to make them visible in VS Code",
+                "[i]".cyan(),
+                format!("chasm register recursive --force \"{}\"", root.display()).cyan()
+            );
+        } else {
+            println!(
+                "\n{} Reload VS Code (Developer: Reload Window) to see recovered sessions",
+                "[i]".cyan()
+            );
+        }
     }
 
     Ok(())
