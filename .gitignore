@@ -81,6 +81,7 @@ config.local.json
 **/session_sample.txt
 **/test_output.json
 **/*_log.txt
+**/*_log_*.txt
 **/*_out.txt
 **/*_err.txt
 
@@ -101,7 +102,7 @@ fix_*.ps1
 recover_*.py
 recover_*.ps1
 restore_*.py
-validate_sessions.py
+validate_*.py
 deep_*.py
 find_*.py
 inject_*.py

@@ -635,7 +635,8 @@ pub fn recover_orphans(provider: &str, unindexed: bool, _verify: bool) -> Result
 /// Repair corrupted session files in place
 pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<()> {
     use crate::storage::{
-        convert_skeleton_json_to_jsonl, fix_cancelled_model_state, is_skeleton_json,
+        convert_skeleton_json_to_jsonl, fix_cancelled_model_state, is_gutted_session,
+        is_skeleton_json,
     };
 
     let path = Path::new(path);
@@ -769,6 +770,22 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
                                     e
                                 );
                             }
+                        }
+                    }
+
+                    // Check for gutted JSONL sessions (many requests, stripped content)
+                    if file_path.extension().is_some_and(|e| e == "jsonl") {
+                        if let Some((req_count, total_chars)) = is_gutted_session(file_path) {
+                            println!(
+                                "  [!] Gutted session: {} — {} requests but only {} chars of content",
+                                file_path.display(),
+                                req_count,
+                                total_chars
+                            );
+                            println!(
+                                "      Run {} to restore from backups",
+                                "chasm recover backups".cyan()
+                            );
                         }
                     }
                 }
@@ -1016,9 +1033,7 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
     println!("    1. Run 'chasm recover scan' to find recoverable sessions");
     println!("    2. Use 'chasm harvest run' to consolidate all sessions");
     println!("    3. Consider setting up the recording API for crash protection");
-    println!(
-        "    4. Run 'chasm recover copilot-info' for detailed extension version analysis"
-    );
+    println!("    4. Run 'chasm recover copilot-info' for detailed extension version analysis");
 
     Ok(())
 }
@@ -2003,10 +2018,7 @@ pub fn recover_upgrade(
 
 /// Display comprehensive Copilot Chat extension version information and
 /// compatibility analysis with session data.
-pub fn recover_copilot_info(
-    session_dir: Option<&str>,
-    output_json: bool,
-) -> Result<()> {
+pub fn recover_copilot_info(session_dir: Option<&str>, output_json: bool) -> Result<()> {
     let session_path = session_dir.map(Path::new);
 
     let report = crate::copilot_version::build_version_report(session_path)?;
@@ -2050,7 +2062,9 @@ pub fn recover_copilot_info(
                 println!("    [!] Install Copilot Chat from the VS Code marketplace");
             }
             if has_warnings {
-                println!("    [?] Run 'chasm recover upgrade' to update legacy sessions to JSONL format");
+                println!(
+                    "    [?] Run 'chasm recover upgrade' to update legacy sessions to JSONL format"
+                );
                 println!("    [?] Run 'chasm doctor --fix' to repair any session issues");
             }
         } else {
@@ -2075,9 +2089,8 @@ pub fn recover_copilot_info(
 /// This is the explicit CLI entry-point for comprehensive backup recovery.
 pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result<()> {
     use crate::storage::{
-        parse_session_file, rebuild_model_cache,
-        recover_from_all_backups, write_chat_session_index, cleanup_state_cache,
-        fix_session_memento,
+        cleanup_state_cache, fix_session_memento, parse_session_file, rebuild_model_cache,
+        recover_from_all_backups, write_chat_session_index,
     };
     use std::collections::HashSet;
 
@@ -2120,24 +2133,16 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
         workspaces.iter().collect()
     };
 
-    let with_sessions: Vec<_> = filtered
-        .iter()
-        .filter(|ws| ws.has_chat_sessions)
-        .collect();
+    let with_sessions: Vec<_> = filtered.iter().filter(|ws| ws.has_chat_sessions).collect();
 
     if let Some(ref root) = root_filter {
-        println!(
-            "   Filtering to workspaces under: {}",
-            root.bright_white()
-        );
+        println!("   Filtering to workspaces under: {}", root.bright_white());
     }
     println!(
         "   Found {} workspace(s) with chat sessions",
         with_sessions.len().to_string().cyan()
     );
-    println!(
-        "   Checking: .jsonl.bak, .jsonl.pre-restore, .json, .json.bak\n",
-    );
+    println!("   Checking: .jsonl.bak, .jsonl.pre-restore, .json, .json.bak\n",);
 
     let mut total_restored = 0usize;
     let mut total_requests_gained = 0usize;
@@ -2158,9 +2163,16 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
 
                 for action in &actions {
                     let delta = action.recovered_requests - action.current_requests;
-                    let marker = if action.converted { " [json→jsonl]" } else { "" };
+                    let marker = if action.converted {
+                        " [json→jsonl]"
+                    } else {
+                        ""
+                    };
                     let src_display = if action.source_file.len() > 40 {
-                        format!("...{}", &action.source_file[action.source_file.len() - 37..])
+                        format!(
+                            "...{}",
+                            &action.source_file[action.source_file.len() - 37..]
+                        )
                     } else {
                         action.source_file.clone()
                     };
@@ -2195,9 +2207,7 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
 
                 // After restoring files, rebuild index + model cache for this workspace
                 if !dry_run {
-                    let db_path = ws
-                        .workspace_path
-                        .join("state.vscdb");
+                    let db_path = ws.workspace_path.join("state.vscdb");
 
                     if db_path.exists() {
                         // Scan all current session files and rebuild index
@@ -2229,12 +2239,9 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
                             }
 
                             if let Ok(session) = parse_session_file(&p) {
-                                let session_id = session
-                                    .session_id
-                                    .clone()
-                                    .unwrap_or_else(|| {
-                                        fname.trim_end_matches(".jsonl").to_string()
-                                    });
+                                let session_id = session.session_id.clone().unwrap_or_else(|| {
+                                    fname.trim_end_matches(".jsonl").to_string()
+                                });
                                 valid_ids.insert(session_id.clone());
 
                                 let title = session.title();
@@ -2286,10 +2293,7 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
                             }
 
                             if let Ok(session) = parse_session_file(&p) {
-                                let session_id = session
-                                    .session_id
-                                    .clone()
-                                    .unwrap_or(sid.clone());
+                                let session_id = session.session_id.clone().unwrap_or(sid.clone());
                                 valid_ids.insert(session_id.clone());
 
                                 session_entries.push(crate::models::ChatSessionIndexEntry {
@@ -2326,14 +2330,18 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
                         if let Err(e) = write_chat_session_index(&db_path, &new_index) {
                             eprintln!(
                                 "   {} {} — failed to write index: {}",
-                                "[!]".red(), display, e
+                                "[!]".red(),
+                                display,
+                                e
                             );
                             rebuild_ok = false;
                         }
                         if let Err(e) = rebuild_model_cache(&db_path, &new_index) {
                             eprintln!(
                                 "   {} {} — failed to rebuild model cache: {}",
-                                "[!]".red(), display, e
+                                "[!]".red(),
+                                display,
+                                e
                             );
                             rebuild_ok = false;
                         }
@@ -2347,11 +2355,8 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
                         let _ = fix_session_memento(&db_path, &valid_ids, preferred.as_deref());
 
                         if rebuild_ok {
-                            let non_empty = new_index
-                                .entries
-                                .values()
-                                .filter(|e| !e.is_empty)
-                                .count();
+                            let non_empty =
+                                new_index.entries.values().filter(|e| !e.is_empty).count();
                             println!(
                                 "   {} {} — rebuilt index ({} entries, {} visible)",
                                 "\u{2714}".green(),
@@ -2366,12 +2371,7 @@ pub fn recover_backups(path: Option<&str>, dry_run: bool, force: bool) -> Result
             }
             Ok(_) => {} // Nothing to restore for this workspace
             Err(e) => {
-                println!(
-                    "   {} {} — error: {}",
-                    "[!]".red(),
-                    display,
-                    e
-                );
+                println!("   {} {} — error: {}", "[!]".red(), display, e);
             }
         }
     }

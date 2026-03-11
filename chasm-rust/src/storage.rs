@@ -4,8 +4,8 @@
 
 use crate::error::{CsmError, Result};
 use crate::models::{
-    ChatRequest, ChatSession, ChatSessionIndex, ChatSessionIndexEntry, ChatSessionTiming,
-    ModelCacheEntry, StateCacheEntry,
+    extract_response_text, ChatRequest, ChatSession, ChatSessionIndex, ChatSessionIndexEntry,
+    ChatSessionTiming, ModelCacheEntry, StateCacheEntry,
 };
 use crate::workspace::{get_empty_window_sessions_path, get_workspace_storage_path};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -48,6 +48,8 @@ pub enum SessionIssueKind {
     DuplicateFormat,
     /// Legacy .json file is corrupted — contains only structural chars ({}, whitespace)
     SkeletonJson,
+    /// JSONL session has many requests but message/response content has been stripped
+    GuttedSession,
 }
 
 impl std::fmt::Display for SessionIssueKind {
@@ -62,6 +64,7 @@ impl std::fmt::Display for SessionIssueKind {
             SessionIssueKind::MissingCompatFields => write!(f, "missing compat fields"),
             SessionIssueKind::DuplicateFormat => write!(f, "duplicate .json/.jsonl"),
             SessionIssueKind::SkeletonJson => write!(f, "skeleton .json (corrupt)"),
+            SessionIssueKind::GuttedSession => write!(f, "gutted session (content stripped)"),
         }
     }
 }
@@ -270,6 +273,21 @@ pub fn diagnose_workspace_sessions(
                     ),
                 });
             }
+        }
+    }
+
+    // Check JSONL files for gutted content (many requests but stripped messages)
+    for id in &jsonl_sessions {
+        let path = chat_sessions_dir.join(format!("{id}.jsonl"));
+        if let Some((req_count, total_chars)) = is_gutted_session(&path) {
+            diagnosis.issues.push(SessionIssue {
+                session_id: id.clone(),
+                kind: SessionIssueKind::GuttedSession,
+                detail: format!(
+                    "{} requests but only {} chars of content — message/response text stripped",
+                    req_count, total_chars
+                ),
+            });
         }
     }
 
@@ -1740,8 +1758,9 @@ pub fn recover_from_all_backups(
             0
         };
 
-        // Find the backup with the most requests
+        // Find the backup with the most requests (or most content when equal)
         let mut best_requests = current_requests;
+        let mut best_size = current_size;
         let mut best_file: Option<(&str, &Path)> = None;
 
         for (fname, fpath) in files {
@@ -1760,6 +1779,12 @@ pub fn recover_from_all_backups(
                     let req_count = session.requests.len();
                     if req_count > best_requests {
                         best_requests = req_count;
+                        best_size = size;
+                        best_file = Some((fname.as_str(), fpath.as_path()));
+                    } else if req_count == best_requests && req_count > 0 && size > best_size * 2 {
+                        // Same request count but backup is >2x larger — likely the
+                        // active file is gutted (content stripped but structure kept)
+                        best_size = size;
                         best_file = Some((fname.as_str(), fpath.as_path()));
                     }
                 }
@@ -3019,6 +3044,48 @@ pub fn is_skeleton_json(content: &str) -> bool {
     structural_ratio > 0.85
 }
 
+/// Detect whether a session file (JSONL or JSON) is "gutted" — has multiple requests
+/// but message/response content has been stripped, leaving only structural stubs.
+///
+/// A gutted session typically has >5 requests but <200 total characters of actual
+/// message text + response text. This happens when VS Code or extensions corrupt
+/// session data by preserving request structure while stripping content.
+///
+/// Returns `Some((request_count, total_content_chars))` if gutted, `None` if healthy.
+pub fn is_gutted_session(path: &Path) -> Option<(usize, usize)> {
+    let session = parse_session_file(path).ok()?;
+    let request_count = session.requests.len();
+
+    if request_count < 5 {
+        return None; // Too few requests to be meaningfully gutted
+    }
+
+    let total_message_chars: usize = session
+        .requests
+        .iter()
+        .filter_map(|req| req.message.as_ref().and_then(|m| m.text.as_ref()))
+        .map(|text| text.len())
+        .sum();
+
+    let total_response_chars: usize = session
+        .requests
+        .iter()
+        .filter_map(|req| req.response.as_ref().and_then(|r| extract_response_text(r)))
+        .map(|text| text.len())
+        .sum();
+
+    let total_content = total_message_chars + total_response_chars;
+
+    // Heuristic: a session with many requests should have substantial content.
+    // Average at least 20 chars per request to be considered healthy.
+    let min_expected = request_count * 20;
+    if total_content < min_expected.min(200) {
+        Some((request_count, total_content))
+    } else {
+        None
+    }
+}
+
 /// Convert a skeleton .json file to a valid minimal .jsonl file.
 /// Preserves title and timestamp from the index entry if available.
 /// The original .json file is renamed to `.json.corrupt` (non-destructive).
@@ -3293,6 +3360,25 @@ pub fn repair_workspace_sessions(
                     n,
                     bytes as f64 / (1024.0 * 1024.0)
                 );
+            }
+            _ => {}
+        }
+
+        // Pass 0.5c: Detect gutted sessions and recover from any available backup
+        // (catches cases where request count matches but content was stripped)
+        match recover_from_all_backups(chat_sessions_dir, false) {
+            Ok(actions) if !actions.is_empty() => {
+                for action in &actions {
+                    println!(
+                        "   [OK] Restored {} from {} ({} → {} requests, {:.1}KB → {:.1}KB)",
+                        action.session_id,
+                        action.source_file,
+                        action.current_requests,
+                        action.recovered_requests,
+                        action.current_size as f64 / 1024.0,
+                        action.recovered_size as f64 / 1024.0,
+                    );
+                }
             }
             _ => {}
         }
