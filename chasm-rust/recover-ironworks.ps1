@@ -12,7 +12,8 @@
 #   4. Reopens VS Code
 
 param(
-    [string]$ProjectPath = "C:\Users\adamm\dev\nervosys\ai\IronWorks",
+    [Parameter(Mandatory=$true)]
+    [string]$ProjectPath,
     [string]$ChasmExe = "$PSScriptRoot\target\release\chasm.exe",
     [switch]$SkipReopen
 )
