@@ -556,6 +556,66 @@ pub fn telemetry_test() -> Result<()> {
     Ok(())
 }
 
+/// Configure OpenTelemetry OTLP export via the service-scoped .env file
+pub fn telemetry_otel_setup(
+    endpoint: Option<&str>,
+    protocol: &str,
+    headers: Option<&str>,
+    service_name: &str,
+) -> Result<()> {
+    use crate::telemetry::{otel_env_path, write_otel_env};
+
+    if endpoint.is_none() && headers.is_none() {
+        // Show current state
+        let path = otel_env_path().unwrap_or_default();
+        if path.exists() {
+            println!("{}", "[OTEL SETUP]".cyan().bold());
+            println!();
+            println!("Config file: {}", path.display().to_string().green());
+            println!();
+            let content = std::fs::read_to_string(&path)?;
+            for line in content.lines() {
+                let line = line.trim();
+                if line.starts_with("OTEL_EXPORTER_OTLP_HEADERS") {
+                    println!("OTEL_EXPORTER_OTLP_HEADERS=(configured, masked)");
+                } else if !line.is_empty() {
+                    println!("{}", line);
+                }
+            }
+        } else {
+            println!("{} No OTEL config found", "[INFO]".cyan());
+            println!();
+            println!("To configure:");
+            println!(
+                "  {} --endpoint <URL> --headers \"Authorization=Bearer <TOKEN>\"",
+                "chasm telemetry setup".cyan()
+            );
+        }
+        return Ok(());
+    }
+
+    let endpoint = endpoint.unwrap_or("https://nervosys.ai/otlp");
+    let headers = headers.unwrap_or("");
+
+    let path = write_otel_env(endpoint, protocol, headers, service_name)?;
+
+    println!("{} OpenTelemetry OTLP configured", "[OK]".green().bold());
+    println!();
+    println!("Config written to: {}", path.display().to_string().green());
+    println!();
+    println!("  Endpoint:     {}", endpoint.cyan());
+    println!("  Protocol:     {}", protocol);
+    println!("  Service name: {}", service_name);
+    if !headers.is_empty() {
+        println!("  Headers:      (configured)");
+    }
+    println!();
+    println!("Settings are loaded automatically on startup (service-scoped, not machine-global).");
+    println!("Process env vars always take precedence over this file.");
+
+    Ok(())
+}
+
 /// Parse a date string (YYYY-MM-DD) to a Unix timestamp
 fn parse_date_to_timestamp(date_str: &str) -> Option<i64> {
     chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")

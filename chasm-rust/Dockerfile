@@ -50,6 +50,12 @@ WORKDIR /data
 # Default environment
 ENV CSM_DATABASE_PATH=/data/csm.db
 
+# OpenTelemetry (override at runtime via docker run -e)
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=""
+ENV OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
+ENV OTEL_EXPORTER_OTLP_HEADERS=""
+ENV OTEL_SERVICE_NAME="chasm-cli"
+
 # Expose API port
 EXPOSE 8787
 

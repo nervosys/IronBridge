@@ -4,6 +4,12 @@
 //!
 //! This module provides opt-in (by default) anonymous usage telemetry to help
 //! improve Chasm. No personal data is collected - only aggregate usage statistics.
+//!
+//! ## OpenTelemetry Support
+//!
+//! When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, traces are exported via OTLP.
+//! All standard `OTEL_EXPORTER_OTLP_*` environment variables are respected
+//! (endpoint, protocol, headers, etc.) — no credentials are hardcoded.
 
 use crate::error::{CsmError, Result};
 use serde::{Deserialize, Serialize};
@@ -12,6 +18,186 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use uuid::Uuid;
+
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::KeyValue;
+use opentelemetry_sdk::trace::TracerProvider;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+/// Guard that shuts down the OpenTelemetry tracer provider on drop.
+/// Hold this in `main()` for the lifetime of the process.
+pub struct OtelGuard {
+    provider: Option<TracerProvider>,
+}
+
+impl Drop for OtelGuard {
+    fn drop(&mut self) {
+        if let Some(provider) = self.provider.take() {
+            if let Err(e) = provider.shutdown() {
+                eprintln!("[otel] shutdown error: {e}");
+            }
+        }
+    }
+}
+
+/// Initialise the `tracing` subscriber with optional OpenTelemetry OTLP export.
+///
+/// * First loads service-scoped env vars from the chasm config directory
+///   (`~/.config/chasm/.env` or `%APPDATA%\chasm\.env`).
+/// * When `OTEL_EXPORTER_OTLP_ENDPOINT` is set (from either the `.env` file or
+///   the process environment) the function builds an OTLP span exporter and
+///   registers a `tracing-opentelemetry` layer.
+/// * When the variable is absent a plain stderr logger is configured instead.
+///
+/// Returns an [`OtelGuard`] that **must** be held until the process exits so
+/// that the provider is flushed and shut down cleanly.
+pub fn init_otel() -> OtelGuard {
+    // Load service-scoped .env before checking env vars
+    load_dotenv();
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let has_otlp = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok();
+
+    if has_otlp {
+        match try_init_otlp(env_filter) {
+            Ok(guard) => return guard,
+            Err(e) => {
+                eprintln!("[otel] failed to initialise OTLP exporter: {e}");
+                eprintln!("[otel] falling back to stderr logging");
+            }
+        }
+    }
+
+    // Fallback: stderr-only subscriber
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .init();
+
+    OtelGuard { provider: None }
+}
+
+fn try_init_otlp(
+    env_filter: EnvFilter,
+) -> std::result::Result<OtelGuard, Box<dyn std::error::Error>> {
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http()
+        .build()?;
+
+    let provider = TracerProvider::builder()
+        .with_simple_exporter(exporter)
+        .with_resource(opentelemetry_sdk::Resource::new(vec![KeyValue::new(
+            "service.name",
+            std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "chasm-cli".into()),
+        )]))
+        .build();
+
+    let tracer = provider.tracer("chasm");
+    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(otel_layer)
+        .init();
+
+    Ok(OtelGuard {
+        provider: Some(provider),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Service-scoped .env loader
+// ---------------------------------------------------------------------------
+
+/// Path to the service-scoped `.env` file inside the chasm config directory.
+pub fn otel_env_path() -> Option<PathBuf> {
+    let config_dir = if cfg!(target_os = "windows") {
+        dirs::config_dir().map(|p| p.join("chasm"))
+    } else {
+        dirs::home_dir().map(|p| p.join(".config/chasm"))
+    };
+    config_dir.map(|d| d.join(".env"))
+}
+
+/// Load KEY=VALUE pairs from the chasm `.env` file into the process
+/// environment.  Already-set variables are **not** overwritten so that
+/// explicit env vars always win.
+fn load_dotenv() {
+    let path = match otel_env_path() {
+        Some(p) if p.exists() => p,
+        _ => return,
+    };
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim().trim_matches('"');
+            // Do not overwrite — process env takes precedence
+            if std::env::var(key).is_err() {
+                std::env::set_var(key, value);
+            }
+        }
+    }
+}
+
+/// Write the OTEL environment variables to the service-scoped `.env` file.
+/// Existing file contents are preserved for non-OTEL keys.
+pub fn write_otel_env(
+    endpoint: &str,
+    protocol: &str,
+    headers: &str,
+    service_name: &str,
+) -> Result<PathBuf> {
+    let path = otel_env_path().ok_or(CsmError::StorageNotFound)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Read existing non-OTEL lines
+    let existing = if path.exists() {
+        fs::read_to_string(&path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let otel_keys = [
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_PROTOCOL",
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        "OTEL_SERVICE_NAME",
+    ];
+
+    let mut lines: Vec<String> = existing
+        .lines()
+        .filter(|l| {
+            let trimmed = l.trim();
+            trimmed.is_empty()
+                || trimmed.starts_with('#')
+                || !otel_keys.iter().any(|k| trimmed.starts_with(k))
+        })
+        .map(|l| l.to_string())
+        .collect();
+
+    lines.push(String::new());
+    lines.push("# OpenTelemetry (written by chasm telemetry setup)".to_string());
+    lines.push(format!("OTEL_EXPORTER_OTLP_ENDPOINT={endpoint}"));
+    lines.push(format!("OTEL_EXPORTER_OTLP_PROTOCOL={protocol}"));
+    lines.push(format!("OTEL_EXPORTER_OTLP_HEADERS={headers}"));
+    lines.push(format!("OTEL_SERVICE_NAME={service_name}"));
+
+    fs::write(&path, lines.join("\n") + "\n")?;
+    Ok(path)
+}
 
 /// Telemetry configuration stored on disk
 #[derive(Debug, Clone, Serialize, Deserialize)]

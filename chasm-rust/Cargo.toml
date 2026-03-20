@@ -128,6 +128,17 @@ regex = "1.12.2"
 flate2 = "1.1.8"
 semver = "1.0.27"
 
+# OpenTelemetry
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = "0.28"
+opentelemetry = "0.27"
+opentelemetry_sdk = { version = "0.27", features = [] }
+opentelemetry-otlp = { version = "0.27", features = [
+    "http-proto",
+    "reqwest-blocking-client",
+] }
+
 # Windows DPAPI for cookie decryption
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

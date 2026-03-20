@@ -2307,6 +2307,25 @@ pub enum TelemetryCommands {
 
     /// Test connection to remote telemetry server
     Test,
+
+    /// Configure OpenTelemetry OTLP export (writes service-scoped .env)
+    Setup {
+        /// OTLP endpoint URL
+        #[arg(long)]
+        endpoint: Option<String>,
+
+        /// OTLP protocol (default: http/protobuf)
+        #[arg(long, default_value = "http/protobuf")]
+        protocol: String,
+
+        /// OTLP headers (e.g. "Authorization=Bearer <token>")
+        #[arg(long)]
+        headers: Option<String>,
+
+        /// Service name (default: chasm-cli)
+        #[arg(long, default_value = "chasm-cli")]
+        service_name: String,
+    },
 }
 
 // ============================================================================

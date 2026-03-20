@@ -44,6 +44,7 @@ fn get_current_dir_name() -> String {
 }
 
 fn main() -> Result<()> {
+    let _otel_guard = telemetry::init_otel();
     let cli = Cli::parse();
 
     match cli.command {
@@ -1001,6 +1002,17 @@ fn main() -> Result<()> {
                 commands::telemetry_sync(limit, clear_after)
             }
             Some(TelemetryCommands::Test) => commands::telemetry_test(),
+            Some(TelemetryCommands::Setup {
+                endpoint,
+                protocol,
+                headers,
+                service_name,
+            }) => commands::telemetry_otel_setup(
+                endpoint.as_deref(),
+                &protocol,
+                headers.as_deref(),
+                &service_name,
+            ),
         },
 
         // ====================================================================
