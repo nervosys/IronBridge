@@ -77,7 +77,7 @@ struct Engines {
 // ============================================================================
 
 /// Known Copilot Chat version ranges and their session format characteristics.
-/// Derived from the CHANGELOG at https://github.com/microsoft/vscode-copilot-chat
+/// Derived from the CHANGELOG at <https://github.com/microsoft/vscode-copilot-chat>
 ///
 /// Key format transitions:
 ///   - 0.25.x  (Feb 2025)  VS Code 1.98  — Agent mode experimental, legacy JSON
@@ -92,9 +92,15 @@ struct Engines {
 ///   - 0.35.x  (Nov 2025)  VS Code 1.107 — Agent sessions in Chat view, language models editor
 ///   - 0.36.x  (Dec 2025)  VS Code 1.108 — Agent Skills experimental
 ///   - 0.37.x  (Jan 2026)  VS Code 1.109 — JSONL format (event-sourced), session type picker
+///   - 0.38.x  (Feb 2026)  VS Code 1.110 — Agent plugins, browser tools, Edit Mode deprecated
+///   - 0.39.x  (Mar 2026)  VS Code 1.111 — Autopilot, agent permissions, agent-scoped hooks
+///   - 0.40.x  (Mar 2026)  VS Code 1.112 — Copilot CLI message steering, image/binary support
+///   - 0.41.x  (Mar 2026)  VS Code 1.113 — Claude/CLI MCP support, nested subagents
+///   - 0.42.x+ (Apr 2026+) VS Code 1.114+ — see VS Code release notes for current details
 ///
 /// The JSONL format transition happened with VS Code 1.109.0+ (January 2026).
-/// Sessions created with 0.37.x use JSONL; earlier versions use legacy JSON.
+/// Sessions created with 0.37.x and later use JSONL; earlier versions use legacy JSON.
+/// No further on-disk session-format breaking changes have been observed through 0.41.x.
 pub struct VersionCompatEntry {
     pub extension_min: &'static str,
     pub extension_max: &'static str,
@@ -118,7 +124,36 @@ pub fn known_compatibility() -> Vec<VersionCompatEntry> {
             extension_max: "0.37.99",
             vscode_min: "1.109.0",
             session_format: "jsonl",
-            notes: "JSONL event-sourced format (kind 0/1/2)",
+            notes: "JSONL event-sourced format introduced (kind 0/1/2)",
+        },
+        VersionCompatEntry {
+            extension_min: "0.38.0",
+            extension_max: "0.38.99",
+            vscode_min: "1.110.0",
+            session_format: "jsonl",
+            notes: "Agent plugins, agentic browser tools; Edit Mode hidden by default",
+        },
+        VersionCompatEntry {
+            extension_min: "0.39.0",
+            extension_max: "0.39.99",
+            vscode_min: "1.111.0",
+            session_format: "jsonl",
+            notes: "Autopilot and agent permissions, agent-scoped hooks",
+        },
+        VersionCompatEntry {
+            extension_min: "0.40.0",
+            extension_max: "0.40.99",
+            vscode_min: "1.112.0",
+            session_format: "jsonl",
+            notes: "Copilot CLI steering/queueing, image and binary file support",
+        },
+        VersionCompatEntry {
+            extension_min: "0.41.0",
+            extension_max: "0.49.99",
+            vscode_min: "1.113.0",
+            session_format: "jsonl",
+            notes: "MCP support in Copilot CLI & Claude agents, nested subagents \
+                    (covers Copilot Chat 0.41+ on VS Code 1.113+ — JSONL format unchanged)",
         },
     ]
 }

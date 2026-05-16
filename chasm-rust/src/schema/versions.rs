@@ -81,7 +81,7 @@ pub fn copilot_json_v3() -> ProviderSchema {
 }
 
 // ============================================================================
-// VS Code Copilot Chat — JSONL format (0.37.x+)
+// VS Code Copilot Chat — JSONL format (0.37.x – current)
 // ============================================================================
 
 /// VS Code Copilot Chat JSONL event-sourced format (extensions 0.37.0+).
@@ -90,6 +90,10 @@ pub fn copilot_json_v3() -> ProviderSchema {
 /// - kind 0: Full session snapshot (first line)
 /// - kind 1: Incremental request update
 /// - kind 2: Incremental response update
+///
+/// Verified compatible with extension versions 0.37.x through 0.41.x
+/// (VS Code 1.109 through 1.113+) — the on-disk session format has not
+/// changed since the JSONL transition.
 pub fn copilot_jsonl_v1() -> ProviderSchema {
     ProviderSchema {
         version: SchemaVersion::new("copilot", FormatType::Jsonl, 1, "Copilot Chat JSONL v1"),
@@ -399,10 +403,7 @@ pub fn continue_dev_v1() -> ProviderSchema {
             description: "Continue.dev stores sessions in ~/.continue/sessions/".into(),
             path_pattern: "{HOME}/.continue/sessions/{session_id}.json".into(),
             platform_paths: HashMap::from([
-                (
-                    "windows".into(),
-                    "%USERPROFILE%/.continue/sessions/".into(),
-                ),
+                ("windows".into(), "%USERPROFILE%/.continue/sessions/".into()),
                 ("macos".into(), "~/.continue/sessions/".into()),
                 ("linux".into(), "~/.continue/sessions/".into()),
             ]),
@@ -448,14 +449,17 @@ pub fn openai_api_v1() -> ProviderSchema {
         introduced: Some("2023-03".into()),
         deprecated: None,
         storage: StorageLocation {
-            description: "OpenAI-compatible API — conversations are ephemeral unless saved by the client".into(),
+            description:
+                "OpenAI-compatible API — conversations are ephemeral unless saved by the client"
+                    .into(),
             path_pattern: "N/A — API-based, no local storage".into(),
             platform_paths: HashMap::new(),
             storage_type: StorageType::CloudApi,
             file_extensions: vec![],
         },
         session_schema: SessionFormatSchema {
-            description: "OpenAI Chat Completions API format (messages array with role/content)".into(),
+            description: "OpenAI Chat Completions API format (messages array with role/content)"
+                .into(),
             format: FormatType::OpenAiApi,
             fields: openai_api_fields(),
             nested_objects: openai_api_nested_objects(),
@@ -472,7 +476,8 @@ pub fn openai_api_v1() -> ProviderSchema {
         db_keys: vec![],
         notes: vec![
             "Standard OpenAI Chat Completions API format".into(),
-            "Used by: Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile, TextGen WebUI".into(),
+            "Used by: Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile, TextGen WebUI"
+                .into(),
             "Also used by cloud providers: OpenAI, Groq, Together, Fireworks, DeepSeek".into(),
             "Conversations are request/response pairs — no persistent session storage".into(),
         ],
@@ -678,7 +683,8 @@ fn copilot_nested_objects_v3() -> HashMap<String, Vec<FieldSchema>> {
                 data_type: DataType::Optional(Box::new(DataType::Json)),
                 required: false,
                 default_value: None,
-                description: "AI response. Legacy format: {\"value\": [{\"value\": \"text\"}]}".into(),
+                description: "AI response. Legacy format: {\"value\": [{\"value\": \"text\"}]}"
+                    .into(),
                 constraints: vec![],
                 semantic_tag: Some("assistant_response".into()),
                 since_version: None,
@@ -702,7 +708,8 @@ fn copilot_nested_objects_v3() -> HashMap<String, Vec<FieldSchema>> {
                 data_type: DataType::Optional(Box::new(DataType::String)),
                 required: false,
                 default_value: None,
-                description: "LLM model used for this request (e.g., 'gpt-4o', 'claude-3.5-sonnet')".into(),
+                description:
+                    "LLM model used for this request (e.g., 'gpt-4o', 'claude-3.5-sonnet')".into(),
                 constraints: vec![],
                 semantic_tag: Some("model_id".into()),
                 since_version: None,
@@ -804,7 +811,9 @@ fn copilot_jsonl_event_fields() -> Vec<FieldSchema> {
             data_type: DataType::Json,
             required: true,
             default_value: None,
-            description: "Event payload. For kind:0, the full session object. For kind:1/2, update deltas.".into(),
+            description:
+                "Event payload. For kind:0, the full session object. For kind:1/2, update deltas."
+                    .into(),
             constraints: vec![],
             semantic_tag: Some("event_data".into()),
             since_version: Some("0.37.0".into()),
@@ -1120,7 +1129,8 @@ fn copilot_model_cache_fields() -> Vec<FieldSchema> {
             data_type: DataType::Boolean,
             required: true,
             default_value: Some(serde_json::json!(false)),
-            description: "Whether the session has no requests. MUST be false for VS Code to load.".into(),
+            description: "Whether the session has no requests. MUST be false for VS Code to load."
+                .into(),
             constraints: vec![],
             semantic_tag: Some("is_empty".into()),
             since_version: Some("0.37.0".into()),
@@ -1530,9 +1540,9 @@ fn openai_api_nested_objects() -> HashMap<String, Vec<FieldSchema>> {
             FieldSchema {
                 name: "tool_calls".into(),
                 serialized_name: None,
-                data_type: DataType::Optional(Box::new(DataType::Array(Box::new(DataType::Object(
-                    "ToolCall".into(),
-                ))))),
+                data_type: DataType::Optional(Box::new(DataType::Array(Box::new(
+                    DataType::Object("ToolCall".into()),
+                )))),
                 required: false,
                 default_value: None,
                 description: "Tool/function calls made by the assistant".into(),
