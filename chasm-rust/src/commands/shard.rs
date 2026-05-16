@@ -25,6 +25,7 @@ use crate::storage::{
 ///
 /// `max_requests` and `max_size` are mutually exclusive; if both are `None`
 /// the default is 50 requests per shard.
+#[allow(clippy::too_many_arguments)]
 pub fn shard_session(
     file: &str,
     max_requests: Option<usize>,
@@ -230,7 +231,7 @@ pub fn shard_session(
         )?;
 
         // Always write as .jsonl
-        let target_path = if file_path.extension().map_or(false, |e| e == "json") {
+        let target_path = if file_path.extension().is_some_and(|e| e == "json") {
             file_path.with_extension("jsonl")
         } else {
             file_path.clone()
@@ -683,6 +684,7 @@ fn deterministic_uuid(session_id: &str, shard_index: usize) -> String {
 }
 
 /// Build a JSONL string for a single shard.
+#[allow(clippy::too_many_arguments)]
 fn build_shard_jsonl(
     session: &ChatSession,
     requests: &[serde_json::Value],
@@ -737,7 +739,7 @@ fn infer_workspace_hash(file_path: &Path) -> Result<String> {
     // Walk up looking for "chatSessions" parent, then one more up for the hash
     let mut current = file_path.parent();
     while let Some(dir) = current {
-        if dir.file_name().map_or(false, |n| n == "chatSessions") {
+        if dir.file_name().is_some_and(|n| n == "chatSessions") {
             if let Some(ws_dir) = dir.parent() {
                 if let Some(hash) = ws_dir.file_name() {
                     return Ok(hash.to_string_lossy().to_string());

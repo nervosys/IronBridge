@@ -475,10 +475,9 @@ impl ActivityManager {
             .await
             .get(&user_id)
             .cloned()
-            .unwrap_or_else(|| {
-                let mut prefs = NotificationPreferences::default();
-                prefs.user_id = user_id;
-                prefs
+            .unwrap_or_else(|| NotificationPreferences {
+                user_id,
+                ..NotificationPreferences::default()
             })
     }
 
@@ -525,6 +524,7 @@ pub fn team_event(
 }
 
 /// Create a member activity event
+#[allow(clippy::too_many_arguments)]
 pub fn member_event(
     team_id: TeamId,
     actor_id: MemberId,

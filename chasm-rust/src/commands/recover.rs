@@ -666,24 +666,23 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
                     if file_path.extension().is_some_and(|e| e == "json")
                         && !file_path.to_string_lossy().ends_with(".bak")
                         && !file_path.to_string_lossy().ends_with(".corrupt")
+                        && is_skeleton_json(&content)
                     {
-                        if is_skeleton_json(&content) {
-                            println!(
-                                "  [!] Skeleton .json: {} — corrupt, only structural chars",
-                                file_path.display()
-                            );
-                            if !dry_run {
-                                match convert_skeleton_json_to_jsonl(file_path, None, None) {
-                                    Ok(Some(_)) => {
-                                        println!("  [+] Converted to .jsonl, original renamed to .json.corrupt");
-                                        skeletons_converted += 1;
-                                    }
-                                    Ok(None) => {} // Skipped (e.g., .jsonl already exists)
-                                    Err(e) => println!("  [!] Failed to convert skeleton: {}", e),
+                        println!(
+                            "  [!] Skeleton .json: {} — corrupt, only structural chars",
+                            file_path.display()
+                        );
+                        if !dry_run {
+                            match convert_skeleton_json_to_jsonl(file_path, None, None) {
+                                Ok(Some(_)) => {
+                                    println!("  [+] Converted to .jsonl, original renamed to .json.corrupt");
+                                    skeletons_converted += 1;
                                 }
+                                Ok(None) => {} // Skipped (e.g., .jsonl already exists)
+                                Err(e) => println!("  [!] Failed to convert skeleton: {}", e),
                             }
-                            continue; // Don't try to repair skeleton content
                         }
+                        continue; // Don't try to repair skeleton content
                     }
 
                     // Check for corrupted JSON lines
@@ -703,10 +702,10 @@ pub fn recover_repair(path: &str, create_backup: bool, dry_run: bool) -> Result<
                             .and_then(|obj| {
                                 if obj.get("kind")?.as_u64()? == 0 {
                                     let v = obj.get("v")?;
-                                    let missing = !v.get("hasPendingEdits").is_some()
-                                        || !v.get("pendingRequests").is_some()
-                                        || !v.get("inputState").is_some()
-                                        || !v.get("sessionId").is_some();
+                                    let missing = v.get("hasPendingEdits").is_none()
+                                        || v.get("pendingRequests").is_none()
+                                        || v.get("inputState").is_none()
+                                        || v.get("sessionId").is_none();
                                     Some(missing)
                                 } else {
                                     None
@@ -1279,9 +1278,11 @@ pub fn recover_extract(
             .with_context(|| format!("Failed to canonicalize path: {}", project_path.display()))?;
         // Strip Windows extended path prefix (\\?\) if present
         let path_str = p.to_string_lossy();
-        if path_str.starts_with("\\\\?\\") {
-            PathBuf::from(&path_str[4..])
+        if let Some(stripped) = path_str.strip_prefix("\\\\?\\") {
+            let stripped_owned = stripped.to_string();
+            PathBuf::from(stripped_owned)
         } else {
+            drop(path_str);
             p
         }
     } else {

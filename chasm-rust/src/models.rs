@@ -120,7 +120,7 @@ impl ChatSession {
     pub fn assistant_responses(&self) -> Vec<String> {
         self.requests
             .iter()
-            .filter_map(|req| req.response.as_ref().and_then(|r| extract_response_text(r)))
+            .filter_map(|req| req.response.as_ref().and_then(extract_response_text))
             .collect()
     }
 }

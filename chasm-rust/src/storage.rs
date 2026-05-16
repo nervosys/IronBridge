@@ -238,7 +238,6 @@ pub fn diagnose_workspace_sessions(
                                 if v.get("hasPendingEdits")
                                     .and_then(|v| v.as_bool())
                                     .unwrap_or(false)
-                                    == true
                                 {
                                     diagnosis.issues.push(SessionIssue {
                                         session_id: id.clone(),
@@ -298,7 +297,7 @@ pub fn diagnose_workspace_sessions(
             diagnosis.sessions_in_index = index.entries.len();
 
             // Stale index entries (in index but no file on disk)
-            for (id, _entry) in &index.entries {
+            for id in index.entries.keys() {
                 if !all_session_ids.contains(id) {
                     diagnosis.issues.push(SessionIssue {
                         session_id: id.clone(),
@@ -1341,7 +1340,7 @@ fn count_jsonl_requests(path: &Path) -> Result<usize> {
 
     let count = parsed
         .get("v")
-        .or_else(|| Some(&parsed)) // bare JSON (non-JSONL) may not have "v" wrapper
+        .or(Some(&parsed)) // bare JSON (non-JSONL) may not have "v" wrapper
         .and_then(|v| v.get("requests"))
         .and_then(|r| r.as_array())
         .map(|a| a.len())
@@ -2048,7 +2047,7 @@ pub fn sync_session_index(
     }
 
     let mut added = 0;
-    for (_, path) in &session_files {
+    for path in session_files.values() {
         if let Ok(session) = parse_session_file(path) {
             let session_id = session.session_id.clone().unwrap_or_else(|| {
                 path.file_stem()
@@ -2223,7 +2222,7 @@ pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
                 RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
             );
             sys2.refresh_processes();
-            for (_pid, process) in sys2.processes() {
+            for process in sys2.processes().values() {
                 let name = process.name().to_lowercase();
                 if name.contains("code") && !name.contains("codec") {
                     process.kill();
@@ -2541,7 +2540,7 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
     let kind = entry.get("kind").and_then(|k| k.as_u64()).unwrap_or(99);
     if kind != 0 {
         return Err(
-            CsmError::InvalidSessionFormat("First JSONL line must be kind:0".to_string()).into(),
+            CsmError::InvalidSessionFormat("First JSONL line must be kind:0".to_string()),
         );
     }
 
@@ -2555,8 +2554,7 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
         None => {
             return Err(CsmError::InvalidSessionFormat(
                 "Session has no requests array".to_string(),
-            )
-            .into());
+            ));
         }
     };
 
@@ -2845,7 +2843,7 @@ fn apply_delta(root: &mut serde_json::Value, keys: &[serde_json::Value], value: 
     let mut current = root;
     for key in &keys[..keys.len() - 1] {
         if let Some(k) = key.as_str() {
-            if !current.get(k).is_some() {
+            if current.get(k).is_none() {
                 current[k] = serde_json::Value::Object(serde_json::Map::new());
             }
             current = &mut current[k];
@@ -2896,7 +2894,7 @@ fn apply_splice(
     let mut current = root;
     for key in keys {
         if let Some(k) = key.as_str() {
-            if !current.get(k).is_some() {
+            if current.get(k).is_none() {
                 current[k] = serde_json::json!([]);
             }
             current = &mut current[k];
@@ -3070,7 +3068,7 @@ pub fn is_gutted_session(path: &Path) -> Option<(usize, usize)> {
     let total_response_chars: usize = session
         .requests
         .iter()
-        .filter_map(|req| req.response.as_ref().and_then(|r| extract_response_text(r)))
+        .filter_map(|req| req.response.as_ref().and_then(extract_response_text))
         .map(|text| text.len())
         .sum();
 
@@ -3455,12 +3453,11 @@ pub fn repair_workspace_sessions(
                                     // Check if fields are missing OR have wrong values.
                                     // hasPendingEdits must be false — true prevents session loading
                                     // because VS Code tries to restore stale file edits that fail.
-                                    let needs_fix = !v.get("inputState").is_some()
-                                        || !v.get("sessionId").is_some()
+                                    let needs_fix = v.get("inputState").is_none()
+                                        || v.get("sessionId").is_none()
                                         || v.get("hasPendingEdits")
                                             .and_then(|v| v.as_bool())
                                             .unwrap_or(true)
-                                            != false
                                         || v.get("pendingRequests")
                                             .and_then(|v| v.as_array())
                                             .map(|a| !a.is_empty())

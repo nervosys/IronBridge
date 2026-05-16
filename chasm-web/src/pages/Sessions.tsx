@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
 import { formatDate } from '@csm/shared';
+import type { Session, SessionWithMessages } from '@csm/shared';
 import ExportModal from '../components/ExportModal';
 import SessionDiff from '../components/SessionDiff';
 import AdvancedSearch, { createDefaultFilters, type SearchFilters } from '../components/AdvancedSearch';
@@ -227,14 +228,14 @@ export default function Sessions() {
             {/* Session Diff View */}
             {showDiffView && (
                 <SessionDiff
-                    sessionA={sessions.find(s => s.id === (diffSessionA || filteredSessions[0]?.id)) as any}
-                    sessionB={sessions.find(s => s.id === (selectedSession || filteredSessions[1]?.id)) as any}
+                    sessionA={sessions.find(s => s.id === (diffSessionA || filteredSessions[0]?.id)) as unknown as SessionWithMessages}
+                    sessionB={sessions.find(s => s.id === (selectedSession || filteredSessions[1]?.id)) as unknown as SessionWithMessages}
                     onSelectSession={(side: 'A' | 'B') => {
                         // When user picks a side to swap, open selection UI
                         if (side === 'A') setDiffSessionA(null);
                         else setSelectedSession(null);
                     }}
-                    availableSessions={sessions as any[]}
+                    availableSessions={sessions as unknown as Session[]}
                 />
             )}
 
@@ -357,7 +358,7 @@ export default function Sessions() {
             {/* Export Modal */}
             {showExportModal && exportSessionId && (
                 <ExportModal
-                    session={sessions.find(s => s.id === exportSessionId) as any}
+                    session={sessions.find(s => s.id === exportSessionId) as unknown as SessionWithMessages}
                     isOpen={showExportModal}
                     onClose={() => { setShowExportModal(false); setExportSessionId(null); }}
                 />

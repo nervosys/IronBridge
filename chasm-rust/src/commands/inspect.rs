@@ -403,7 +403,7 @@ pub fn inspect_cache(path: Option<&str>, workspace_id: Option<&str>, json: bool)
             session_id_from_resource_uri(&entry.resource).unwrap_or_else(|| entry.resource.clone());
         let read_ts = entry
             .read
-            .map(|r| fmt_ts(r))
+            .map(fmt_ts)
             .unwrap_or("(never)".to_string());
 
         // Check if this session is in the model cache

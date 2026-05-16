@@ -177,6 +177,7 @@ pub trait ProviderAdapter: Send + Sync {
     fn to_provider_format(&self, context: &ConversationContext) -> ProviderMessages;
 
     /// Convert provider response to normalized format
+    #[allow(clippy::wrong_self_convention)]
     fn from_provider_format(&self, response: &ProviderResponse) -> NormalizedMessage;
 
     /// Get supported features

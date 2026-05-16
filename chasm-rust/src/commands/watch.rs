@@ -288,7 +288,7 @@ pub fn watch_cli(
 }
 
 /// Determine if a file is a session-related file worth watching
-fn should_watch_file(path: &PathBuf) -> bool {
+fn should_watch_file(path: &std::path::Path) -> bool {
     let name = match path.file_name() {
         Some(n) => n.to_string_lossy().to_lowercase(),
         None => return false,

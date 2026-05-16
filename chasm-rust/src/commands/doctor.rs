@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use colored::Colorize;
-use semver;
 use std::path::PathBuf;
 
 use crate::storage::{
@@ -64,6 +63,7 @@ impl CheckResult {
 }
 
 /// Run all diagnostic checks
+#[allow(clippy::vec_init_then_push)]
 pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
     let mut results: Vec<CheckResult> = Vec::new();
 
@@ -186,12 +186,10 @@ pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
                     );
                 }
 
-                let chat_sessions_dir = PathBuf::from(
-                    get_vscode_storage_path()
+                let chat_sessions_dir = get_vscode_storage_path()
                         .unwrap_or_default()
                         .join(&diag.workspace_hash)
-                        .join("chatSessions"),
-                );
+                        .join("chatSessions");
 
                 match repair_workspace_sessions(&diag.workspace_hash, &chat_sessions_dir, true) {
                     Ok((compacted, synced)) => {
@@ -344,7 +342,7 @@ fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<Workspace
                     .map(|i| {
                         format!(
                             "{}: {}",
-                            i.session_id[..8.min(i.session_id.len())].to_string(),
+                            &i.session_id[..8.min(i.session_id.len())],
                             i.kind
                         )
                     })
@@ -353,7 +351,7 @@ fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<Workspace
                 results.push(CheckResult::warn(
                     "sessions",
                     &format!("  {}", truncate_path(display, 45)),
-                    &format!("{}", issue_summary.join("; ")),
+                    &issue_summary.join("; ").to_string(),
                 ));
             }
         }

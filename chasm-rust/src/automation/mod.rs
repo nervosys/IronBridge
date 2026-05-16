@@ -751,14 +751,14 @@ impl AutomationEngine {
                 if let serde_json::Value::String(s) = right {
                     Ok(left == s)
                 } else {
-                    Ok(left == right.to_string())
+                    Ok(left == *right)
                 }
             }
             CompareOp::NotEquals => {
                 if let serde_json::Value::String(s) = right {
                     Ok(left != s)
                 } else {
-                    Ok(left != right.to_string())
+                    Ok(left != *right)
                 }
             }
             CompareOp::Contains => {

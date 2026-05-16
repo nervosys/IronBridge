@@ -562,7 +562,7 @@ mod tests {
         let tool_registry = Arc::new(ToolRegistry::new());
         let executor = Executor::new(tool_registry);
 
-        let mut agent = AgentBuilder::new("test_agent")
+        let agent = AgentBuilder::new("test_agent")
             .description("Test agent")
             .instruction("You are a helpful assistant.")
             .model("gemini-2.5-flash")
@@ -572,7 +572,7 @@ mod tests {
         let mut ctx = ExecutionContext::new(&session);
 
         let result = executor
-            .execute(&mut agent, &mut session, "Hello!", &mut ctx)
+            .execute(&agent, &mut session, "Hello!", &mut ctx)
             .await
             .unwrap();
 

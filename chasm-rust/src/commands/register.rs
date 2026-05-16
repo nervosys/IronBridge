@@ -643,7 +643,7 @@ pub fn list_orphaned(project_path: Option<&str>) -> Result<()> {
         }
     }
 
-    for (_, path) in &session_files {
+    for path in session_files.values() {
         if let Ok(session) = parse_session_file(path) {
             let session_id = session.session_id.clone().unwrap_or_else(|| {
                 path.file_stem()
@@ -799,7 +799,7 @@ fn find_sessions_by_titles(
         }
     }
 
-    for (_, path) in &session_files {
+    for path in session_files.values() {
         if let Ok(session) = parse_session_file(path) {
             let session_title = session.title().to_lowercase();
 
@@ -1118,6 +1118,7 @@ fn count_orphaned_sessions(
 }
 
 /// Repair sessions: compact JSONL files and rebuild the index with correct metadata
+#[allow(clippy::too_many_arguments)]
 pub fn register_repair(
     project_path: Option<&str>,
     all: bool,
@@ -1545,9 +1546,9 @@ fn register_repair_recursive(
     let mut repair_results: Vec<(String, usize, bool, String)> = Vec::new(); // (path, issues, success, detail)
 
     // Walk the directory tree looking for known workspaces
+    #[allow(clippy::too_many_arguments)]
     fn walk_for_repair(
         dir: &Path,
-        root: &Path,
         current_depth: usize,
         max_depth: Option<usize>,
         workspace_map: &std::collections::HashMap<String, Vec<&crate::models::Workspace>>,
@@ -1637,11 +1638,10 @@ fn register_repair_recursive(
                                         }
                                     }
 
-                                    match repair_workspace_sessions(
-                                        &ws.hash,
-                                        &chat_dir,
-                                        force || true,
-                                    ) {
+                                    // Always force-repair when issues have been detected
+                                    // (the `force` argument controls a separate dry-run gate above).
+                                    let _ = force;
+                                    match repair_workspace_sessions(&ws.hash, &chat_dir, true) {
                                         Ok((compacted, synced)) => {
                                             *total_compacted += compacted;
                                             *total_synced += synced;
@@ -1728,8 +1728,7 @@ fn register_repair_recursive(
                                         println!(
                                             "      {} {} — {}",
                                             "→".bright_black(),
-                                            issue.session_id[..8.min(issue.session_id.len())]
-                                                .to_string(),
+                                            &issue.session_id[..8.min(issue.session_id.len())],
                                             issue.kind
                                         );
                                     }
@@ -1785,7 +1784,6 @@ fn register_repair_recursive(
 
             walk_for_repair(
                 &path,
-                root,
                 current_depth + 1,
                 max_depth,
                 workspace_map,
@@ -1807,7 +1805,6 @@ fn register_repair_recursive(
     }
 
     walk_for_repair(
-        &root,
         &root,
         0,
         max_depth,
@@ -1928,19 +1925,16 @@ fn repair_workspace_db_caches(
     }
 
     // Rebuild model cache
-    match read_chat_session_index(&db_path) {
-        Ok(index) => {
-            if let Ok(n) = rebuild_model_cache(&db_path, &index) {
-                if verbose && n > 0 {
-                    println!(
-                        "      {} Model cache rebuilt ({} entries)",
-                        "[OK]".green(),
-                        n
-                    );
-                }
+    if let Ok(index) = read_chat_session_index(&db_path) {
+        if let Ok(n) = rebuild_model_cache(&db_path, &index) {
+            if verbose && n > 0 {
+                println!(
+                    "      {} Model cache rebuilt ({} entries)",
+                    "[OK]".green(),
+                    n
+                );
             }
         }
-        Err(_) => {}
     }
 
     // Collect valid session IDs from disk
@@ -2303,10 +2297,9 @@ pub fn register_trim(
                 let size = std::fs::metadata(&p)?.len();
                 let size_mb_val = size / (1024 * 1024);
 
-                if size_mb_val >= threshold_mb {
-                    if largest.as_ref().map_or(true, |(_, s)| size > *s) {
-                        largest = Some((p, size));
-                    }
+                if size_mb_val >= threshold_mb && largest.as_ref().map_or(true, |(_, s)| size > *s)
+                {
+                    largest = Some((p, size));
                 }
             }
         }

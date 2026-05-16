@@ -687,6 +687,7 @@ fn contains_case_insensitive(haystack: &str, needle_lower: &str) -> bool {
 /// 4. Case-insensitive search avoids String::to_lowercase() allocation
 /// 5. Content search is opt-in (expensive)
 /// 6. Parallel file scanning with rayon
+#[allow(clippy::too_many_arguments)]
 pub fn find_sessions_filtered(
     pattern: &str,
     workspace_filter: Option<&str>,
@@ -2415,7 +2416,7 @@ pub fn show_index(project_path: Option<&str>, all: bool) -> Result<()> {
     }
 
     let mut rows: Vec<IndexRow> = Vec::new();
-    for (_, entry) in &index.entries {
+    for entry in index.entries.values() {
         let last_msg = if entry.last_message_date > 0 {
             let secs = entry.last_message_date / 1000;
             chrono::DateTime::from_timestamp(secs, 0)

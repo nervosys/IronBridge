@@ -92,7 +92,7 @@ function buildSessionMarkdown(sessionData: any, pureSessionId: string): string {
  */
 function parseJsonlSessionFile(content: string): any {
     const lines = content.split('\n').filter(line => line.trim());
-    let sessionData: any = { requests: [], version: 3 };
+    const sessionData: any = { requests: [], version: 3 };
 
     for (const line of lines) {
         try {
@@ -1043,7 +1043,7 @@ export function activate(context: vscode.ExtensionContext) {
                     await openChatSession(item.sessionInfo.sessionFile, outputChannel);
                     break;
 
-                case 'merge':
+                case 'merge': {
                     const mergeResult = await vscode.window.withProgress({
                         location: vscode.ProgressLocation.Notification,
                         title: 'Merging sessions...',
@@ -1065,8 +1065,9 @@ export function activate(context: vscode.ExtensionContext) {
                         vscode.window.showErrorMessage(`Merge failed: ${mergeResult.error}`);
                     }
                     break;
+                }
 
-                case 'fetch':
+                case 'fetch': {
                     const fetchResult = await vscode.window.withProgress({
                         location: vscode.ProgressLocation.Notification,
                         title: 'Fetching sessions from other workspaces...',
@@ -1088,6 +1089,7 @@ export function activate(context: vscode.ExtensionContext) {
                         vscode.window.showErrorMessage(`Fetch failed: ${fetchResult.error}`);
                     }
                     break;
+                }
 
                 case 'copy':
                     await vscode.env.clipboard.writeText(item.sessionInfo.sessionFile);

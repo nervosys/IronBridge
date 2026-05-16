@@ -402,7 +402,7 @@ export class ChasmChatPanel {
     }
 
     private async _sendChatMessage(content: string) {
-        if (!content.trim()) return;
+        if (!content.trim()) {return;}
 
         // Create session if needed
         if (!this._currentSession) {
@@ -504,7 +504,7 @@ export class ChasmChatPanel {
 
     private async _createTaskPlan(task: string): Promise<TaskPlan | undefined> {
         try {
-            const planningPrompt = `Given this task, create a step-by-step plan:\\n\\nTask: ${task}\\n\\nProvide a JSON response with this structure:\\n{\\n  \"reasoning\": \"explanation of approach\",\\n  \"steps\": [\\n    {\"id\": \"step1\", \"description\": \"step description\", \"status\": \"pending\"}\\n  ],\\n  \"estimatedTime\": 300\\n}`;
+            const planningPrompt = `Given this task, create a step-by-step plan:\n\nTask: ${task}\n\nProvide a JSON response with this structure:\n{\n  "reasoning": "explanation of approach",\n  "steps": [\n    {"id": "step1", "description": "step description", "status": "pending"}\n  ],\n  "estimatedTime": 300\n}`;
 
             const planResponse = await this._getChatResponse(planningPrompt);
 
@@ -555,7 +555,7 @@ export class ChasmChatPanel {
             return await this._getChatResponse(content);
         }
 
-        let results: string[] = [];
+        const results: string[] = [];
         for (const step of plan.steps) {
             step.status = 'in_progress';
             this._sendState();
@@ -628,7 +628,7 @@ export class ChasmChatPanel {
 
     private async _executeDebate(content: string): Promise<string> {
         // Multi-turn debate between agents
-        let debate: string[] = [];
+        const debate: string[] = [];
         const agents = ['assistant', 'reviewer'];
 
         for (let round = 0; round < 3; round++) {
@@ -649,7 +649,7 @@ export class ChasmChatPanel {
 
     private async _reflectOnResponse(question: string, response: string): Promise<AgentReflection | undefined> {
         try {
-            const reflectionPrompt = `Evaluate this response and suggest improvements:\\n\\nQuestion: ${question}\\n\\nResponse: ${response}\\n\\nProvide JSON:\\n{\\n  \"evaluation\": \"assessment of response quality\",\\n  \"improvements\": [\"improvement 1\", \"improvement 2\"],\\n  \"confidence\": 0.85\\n}`;
+            const reflectionPrompt = `Evaluate this response and suggest improvements:\n\nQuestion: ${question}\n\nResponse: ${response}\n\nProvide JSON:\n{\n  "evaluation": "assessment of response quality",\n  "improvements": ["improvement 1", "improvement 2"],\n  "confidence": 0.85\n}`;
 
             const reflectionText = await this._getChatResponse(reflectionPrompt);
 
@@ -845,7 +845,7 @@ export class ChasmChatPanel {
 
     private async _exportSession(sessionId: string, format: 'json' | 'markdown' | 'html') {
         const session = this._sessions.find(s => s.id === sessionId);
-        if (!session) return;
+        if (!session) {return;}
 
         let content: string;
         let extension: string;
@@ -1121,10 +1121,10 @@ Create a step-by-step plan with agent assignments.`;
 
         // Phase 2: Execute with each worker agent
         for (const swarmAgent of swarm.agents) {
-            if (swarmAgent.agentId === coordinatorId) continue;
+            if (swarmAgent.agentId === coordinatorId) {continue;}
 
             const agent = this._agents.find(a => a.name === swarmAgent.agentId);
-            if (!agent) continue;
+            if (!agent) {continue;}
 
             const actionMessage: AgentMessage = {
                 id: this._generateId(),
@@ -1228,7 +1228,7 @@ Provide a comprehensive final response that combines all contributions.`;
 
         switch (action) {
             case 'start':
-            case 'resume':
+            case 'resume': {
                 const goal = await vscode.window.showInputBox({
                     prompt: 'Enter the goal for this swarm run',
                     placeHolder: 'e.g., Analyze and refactor the authentication module'
@@ -1237,6 +1237,7 @@ Provide a comprehensive final response that combines all contributions.`;
                     await this._startSwarm(this._currentSwarm.id, goal);
                 }
                 break;
+            }
             case 'pause':
                 await this._pauseSwarm(this._currentSwarm.id);
                 break;

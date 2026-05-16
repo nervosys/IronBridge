@@ -352,7 +352,7 @@ impl PluginManager {
     }
 
     /// Load a plugin from a directory
-    pub async fn load_plugin(&self, plugin_path: &PathBuf) -> Result<String> {
+    pub async fn load_plugin(&self, plugin_path: &std::path::Path) -> Result<String> {
         let manifest_path = plugin_path.join("plugin.json");
         let manifest_content = std::fs::read_to_string(&manifest_path)?;
         let manifest: PluginManifest = serde_json::from_str(&manifest_content)?;
@@ -366,7 +366,7 @@ impl PluginManager {
         let instance = PluginInstance {
             manifest: manifest.clone(),
             state: PluginState::Loaded,
-            path: plugin_path.clone(),
+            path: plugin_path.to_path_buf(),
             installed_at: Utc::now(),
             last_activated: None,
             config: serde_json::Value::Object(serde_json::Map::new()),

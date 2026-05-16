@@ -56,14 +56,12 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
  * Hook providing Tauri desktop integration
  */
 export function useTauri() {
-    const [desktop, setDesktop] = useState(false);
+    const [desktop] = useState(() => isTauri());
     const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
     const [platform, setPlatform] = useState<string | null>(null);
 
     useEffect(() => {
-        const inTauri = isTauri();
-        setDesktop(inTauri);
-        if (!inTauri) return;
+        if (!desktop) return;
 
         // Fetch app info and platform on mount
         (async () => {
@@ -74,7 +72,7 @@ export function useTauri() {
             if (info) setAppInfo(info);
             if (plat) setPlatform(plat);
         })();
-    }, []);
+    }, [desktop]);
 
     const minimizeToTray = useCallback(async () => {
         await invoke('minimize_to_tray');

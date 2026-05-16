@@ -30,22 +30,18 @@ fn single_request_session_jsonl() -> String {
 
 /// Multi-request session: kind:0 with 2 requests + kind:2 append + kind:1 delta
 fn multi_request_session_jsonl() -> String {
-    let mut lines = Vec::new();
-
-    // kind:0 initial with 2 requests
-    lines.push(r#"{"kind":0,"v":{"version":3,"creationDate":1762576472674,"customTitle":"Multi-request session","initialLocation":"panel","responderUsername":"GitHub Copilot","sessionId":"multi-test-1234","hasPendingEdits":false,"requests":[{"requestId":"req-1","timestamp":1762576780191,"modelId":"copilot/gpt-4o","response":[{"kind":"markdownContent","content":{"value":"Response 1"}}],"message":{"text":"First question","parts":[{"kind":"text","text":"First question"}]},"variableData":{"variables":[]}},{"requestId":"req-2","timestamp":1762576890000,"modelId":"copilot/gpt-4o","response":[{"kind":"markdownContent","content":{"value":"Response 2"}}],"message":{"text":"Second question","parts":[{"kind":"text","text":"Second question"}]},"variableData":{"variables":[]}}]}}"#);
-
-    // kind:2 append a new request
-    lines.push(r#"{"kind":2,"k":["requests"],"v":[{"requestId":"req-3","timestamp":1762577000000,"modelId":"copilot/claude-sonnet-4.5","response":[{"kind":"markdownContent","content":{"value":"Response 3"}}],"message":{"text":"Third question","parts":[{"kind":"text","text":"Third question"}]},"variableData":{"variables":[]}}]}"#);
-
-    // kind:1 update the custom title
-    lines.push(r#"{"kind":1,"k":["customTitle"],"v":"Updated session title"}"#);
-
-    // kind:1 update response state on request 2
-    lines.push(r#"{"kind":1,"k":["requests",2,"modelState"],"v":{"state":"complete"}}"#);
-
-    // kind:2 append response parts to request 2
-    lines.push(r#"{"kind":2,"k":["requests",2,"response"],"v":[{"kind":"markdownContent","content":{"value":" additional content"}}]}"#);
+    let lines = [
+        // kind:0 initial with 2 requests
+        r#"{"kind":0,"v":{"version":3,"creationDate":1762576472674,"customTitle":"Multi-request session","initialLocation":"panel","responderUsername":"GitHub Copilot","sessionId":"multi-test-1234","hasPendingEdits":false,"requests":[{"requestId":"req-1","timestamp":1762576780191,"modelId":"copilot/gpt-4o","response":[{"kind":"markdownContent","content":{"value":"Response 1"}}],"message":{"text":"First question","parts":[{"kind":"text","text":"First question"}]},"variableData":{"variables":[]}},{"requestId":"req-2","timestamp":1762576890000,"modelId":"copilot/gpt-4o","response":[{"kind":"markdownContent","content":{"value":"Response 2"}}],"message":{"text":"Second question","parts":[{"kind":"text","text":"Second question"}]},"variableData":{"variables":[]}}]}}"#,
+        // kind:2 append a new request
+        r#"{"kind":2,"k":["requests"],"v":[{"requestId":"req-3","timestamp":1762577000000,"modelId":"copilot/claude-sonnet-4.5","response":[{"kind":"markdownContent","content":{"value":"Response 3"}}],"message":{"text":"Third question","parts":[{"kind":"text","text":"Third question"}]},"variableData":{"variables":[]}}]}"#,
+        // kind:1 update the custom title
+        r#"{"kind":1,"k":["customTitle"],"v":"Updated session title"}"#,
+        // kind:1 update response state on request 2
+        r#"{"kind":1,"k":["requests",2,"modelState"],"v":{"state":"complete"}}"#,
+        // kind:2 append response parts to request 2
+        r#"{"kind":2,"k":["requests",2,"response"],"v":[{"kind":"markdownContent","content":{"value":" additional content"}}]}"#,
+    ];
 
     lines.join("\n")
 }
@@ -58,13 +54,12 @@ fn session_with_unknown_fields_jsonl() -> String {
 /// Session with kind:2 truncation index (VS Code uses `i` for truncating arrays)
 #[allow(dead_code)]
 fn session_with_truncation_jsonl() -> String {
-    let mut lines = Vec::new();
-
-    // Initial session with one request that has response parts
-    lines.push(r#"{"kind":0,"v":{"version":3,"creationDate":1770000000000,"initialLocation":"panel","responderUsername":"GitHub Copilot","sessionId":"truncation-test","hasPendingEdits":false,"requests":[{"requestId":"req-t1","timestamp":1770000001000,"modelId":"copilot/gpt-4o","response":[{"kind":"markdownContent","content":{"value":"Part 1"}},{"kind":"markdownContent","content":{"value":"Part 2"}},{"kind":"markdownContent","content":{"value":"Part 3"}}],"message":{"text":"Test truncation","parts":[]},"variableData":{"variables":[]}}]}}"#);
-
-    // kind:2 with truncation index (i=1 means truncate at index 1, then append)
-    lines.push(r#"{"kind":2,"k":["requests",0,"response"],"v":[{"kind":"markdownContent","content":{"value":"Replacement part"}}],"i":1}"#);
+    let lines = [
+        // Initial session with one request that has response parts
+        r#"{"kind":0,"v":{"version":3,"creationDate":1770000000000,"initialLocation":"panel","responderUsername":"GitHub Copilot","sessionId":"truncation-test","hasPendingEdits":false,"requests":[{"requestId":"req-t1","timestamp":1770000001000,"modelId":"copilot/gpt-4o","response":[{"kind":"markdownContent","content":{"value":"Part 1"}},{"kind":"markdownContent","content":{"value":"Part 2"}},{"kind":"markdownContent","content":{"value":"Part 3"}}],"message":{"text":"Test truncation","parts":[]},"variableData":{"variables":[]}}]}}"#,
+        // kind:2 with truncation index (i=1 means truncate at index 1, then append)
+        r#"{"kind":2,"k":["requests",0,"response"],"v":[{"kind":"markdownContent","content":{"value":"Replacement part"}}],"i":1}"#,
+    ];
 
     lines.join("\n")
 }
@@ -726,9 +721,9 @@ mod ironworks_regression {
             last_response_state: 1,
             initial_location: session.initial_location.clone(),
             is_empty: session.is_empty(),
-                is_imported: None,
-                has_pending_edits: None,
-                is_external: None,
+            is_imported: None,
+            has_pending_edits: None,
+            is_external: None,
         };
 
         // THE CRITICAL ASSERTION
