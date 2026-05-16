@@ -170,7 +170,23 @@ impl ChatGPTProvider {
             .get("accessToken")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                anyhow!("No access token in session response - authentication may have expired")
+                // Include a redacted summary of the response so users can
+                // distinguish "logged out" (`{}` or `{"user":null,...}`)
+                // from other API regressions.
+                let snippet = serde_json::to_string(&session_data)
+                    .unwrap_or_else(|_| "<unserializable>".to_string());
+                let snippet = if snippet.len() > 300 {
+                    format!("{}…", &snippet[..300])
+                } else {
+                    snippet
+                };
+                anyhow!(
+                    "No accessToken in /api/auth/session response — \
+                     authentication likely expired or cookies are incomplete. \
+                     Re-login to ChatGPT in your browser and retry. \
+                     Response: {}",
+                    snippet
+                )
             })?
             .to_string();
 
@@ -191,6 +207,111 @@ impl ChatGPTProvider {
             return Ok(format!("Bearer {}", key));
         }
         Err(anyhow!("No authentication credentials available"))
+    }
+
+    /// Fetch the raw, unparsed JSON for a single conversation.
+    ///
+    /// Returned value is the entire `/backend-api/conversation/{id}` response
+    /// including the `mapping` tree and per-message metadata (attachments,
+    /// asset pointers, etc.). Used for downstream file extraction.
+    pub fn fetch_conversation_raw(&self, id: &str) -> Result<serde_json::Value> {
+        let mut provider = ChatGPTProvider {
+            api_key: self.api_key.clone(),
+            session_token: self.session_token.clone(),
+            access_token: self.access_token.clone(),
+            client: None,
+        };
+        if !provider.is_authenticated() {
+            return Err(anyhow!("ChatGPT requires authentication"));
+        }
+        let auth_header = provider.get_auth_header()?;
+        let client = provider.ensure_client()?;
+        let url = format!("{}/conversation/{}", CHATGPT_API_BASE, id);
+        let response = client
+            .get(&url)
+            .header("Authorization", &auth_header)
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to fetch conversation {}: {}", id, e))?;
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Failed to fetch conversation {}: HTTP {}",
+                id,
+                response.status()
+            ));
+        }
+        response
+            .json::<serde_json::Value>()
+            .map_err(|e| anyhow!("Failed to parse conversation {}: {}", id, e))
+    }
+
+    /// Download a single file referenced by a ChatGPT conversation.
+    ///
+    /// ChatGPT's flow is two-step: first call `/backend-api/files/{id}/download`
+    /// to obtain a short-lived presigned URL, then GET that URL (no auth) to
+    /// fetch the bytes. Returns `(filename, bytes)`. The filename comes from
+    /// the metadata endpoint when available and falls back to the file ID.
+    pub fn download_file(&self, file_id: &str) -> Result<(String, Vec<u8>)> {
+        let mut provider = ChatGPTProvider {
+            api_key: self.api_key.clone(),
+            session_token: self.session_token.clone(),
+            access_token: self.access_token.clone(),
+            client: None,
+        };
+        if !provider.is_authenticated() {
+            return Err(anyhow!("ChatGPT requires authentication"));
+        }
+        let auth_header = provider.get_auth_header()?;
+        let client = provider.ensure_client()?;
+
+        let meta_url = format!("{}/files/{}/download", CHATGPT_API_BASE, file_id);
+        let meta_resp = client
+            .get(&meta_url)
+            .header("Authorization", &auth_header)
+            .header("Accept", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to request download URL for {}: {}", file_id, e))?;
+        if !meta_resp.status().is_success() {
+            return Err(anyhow!(
+                "File metadata request for {} returned HTTP {}",
+                file_id,
+                meta_resp.status()
+            ));
+        }
+        let meta: serde_json::Value = meta_resp
+            .json()
+            .map_err(|e| anyhow!("Failed to parse download metadata for {}: {}", file_id, e))?;
+
+        let download_url = meta
+            .get("download_url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("No download_url in response for file {}", file_id))?
+            .to_string();
+        let filename = meta
+            .get("file_name")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| file_id.to_string());
+
+        // Most current download URLs point at chatgpt.com's own
+        // `/backend-api/estuary/content` endpoint, which requires the Bearer
+        // token. Older / Azure-blob style presigned URLs reject extra headers,
+        // so only attach auth for first-party hosts.
+        let mut req = client.get(&download_url);
+        if download_url.starts_with("https://chatgpt.com/")
+            || download_url.starts_with("https://chat.openai.com/")
+        {
+            req = req.header("Authorization", &auth_header);
+        }
+        let bytes = req
+            .send()
+            .map_err(|e| anyhow!("Failed to download file {}: {}", file_id, e))?
+            .error_for_status()
+            .map_err(|e| anyhow!("Download for {} returned error: {}", file_id, e))?
+            .bytes()
+            .map_err(|e| anyhow!("Failed to read bytes for {}: {}", file_id, e))?;
+
+        Ok((filename, bytes.to_vec()))
     }
 }
 

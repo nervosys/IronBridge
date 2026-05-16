@@ -618,6 +618,7 @@ pub fn harvest_run(
     incremental: bool,
     auto_commit: bool,
     message: Option<&str>,
+    with_files: bool,
 ) -> Result<()> {
     let db_path = get_db_path(path)?;
 
@@ -837,7 +838,14 @@ pub fn harvest_run(
 
     // Harvest from web-based cloud providers (ChatGPT, Claude, etc.)
     let include_list: Vec<String> = include_providers.clone().unwrap_or_default();
-    harvest_web_providers(&conn, &mut stats, &include_list, &exclude_providers)?;
+    harvest_web_providers(
+        &conn,
+        &mut stats,
+        &include_list,
+        &exclude_providers,
+        with_files,
+        &db_path,
+    )?;
 
     // Update metadata
     update_harvest_metadata(&conn)?;
@@ -1637,6 +1645,7 @@ fn create_harvest_database(path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_or_update_session(
     conn: &Connection,
     session: &ChatSession,
@@ -2111,6 +2120,8 @@ fn harvest_web_providers(
     stats: &mut HarvestStats,
     include_providers: &[String],
     exclude_providers: &[String],
+    with_files: bool,
+    db_path: &Path,
 ) -> Result<()> {
     use crate::browser::extract_provider_cookies;
 
@@ -2149,8 +2160,19 @@ fn harvest_web_providers(
 
                 // Create provider and fetch conversations
                 let result = match *provider_key {
-                    "chatgpt" => harvest_chatgpt_sessions(conn, session_token, stats),
-                    "claude" => harvest_claude_sessions(conn, session_token, stats),
+                    "chatgpt" => {
+                        harvest_chatgpt_sessions(conn, session_token, stats, with_files, db_path)
+                    }
+                    "claude" => {
+                        if with_files {
+                            eprintln!(
+                                "      {} --with-files is not yet supported for Claude; \
+                                 conversations will be harvested without attachments.",
+                                "warn:".yellow()
+                            );
+                        }
+                        harvest_claude_sessions(conn, session_token, stats)
+                    }
                     _ => Ok(0),
                 };
 
@@ -2199,6 +2221,8 @@ fn harvest_chatgpt_sessions(
     conn: &Connection,
     session_token: &str,
     stats: &mut HarvestStats,
+    with_files: bool,
+    db_path: &Path,
 ) -> Result<usize> {
     use crate::providers::cloud::chatgpt::ChatGPTProvider;
     use crate::providers::cloud::common::{CloudProvider, FetchOptions};
@@ -2247,6 +2271,19 @@ fn harvest_chatgpt_sessions(
                 }
                 harvested += 1;
                 stats.sessions_added += 1;
+
+                // Optionally download attached files into a sidecar directory.
+                if with_files {
+                    if let Err(e) = download_chatgpt_files_for_session(&provider, &conv.id, db_path)
+                    {
+                        eprintln!(
+                            "  {} file download for {} failed: {}",
+                            "warn:".yellow(),
+                            conv.id,
+                            e
+                        );
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("Failed to fetch conversation {}: {}", conv_summary.id, e);
@@ -2258,6 +2295,89 @@ fn harvest_chatgpt_sessions(
     }
 
     Ok(harvested)
+}
+
+/// Download every file attached to a ChatGPT conversation into
+/// `<db_dir>/files/chatgpt/<conversation_id>/<sanitized-name>`.
+///
+/// Failures for individual files are logged but do not abort the harvest.
+fn download_chatgpt_files_for_session(
+    provider: &crate::providers::cloud::chatgpt::ChatGPTProvider,
+    conversation_id: &str,
+    db_path: &Path,
+) -> Result<()> {
+    use std::collections::HashSet;
+
+    let raw = match provider.fetch_conversation_raw(conversation_id) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "  {} could not fetch raw conversation {}: {}",
+                "warn:".yellow(),
+                conversation_id,
+                e
+            );
+            return Ok(());
+        }
+    };
+
+    let refs = extract_chatgpt_file_refs(&raw);
+    if refs.is_empty() {
+        return Ok(());
+    }
+
+    let db_dir = db_path.parent().unwrap_or(Path::new("."));
+    let out_dir = db_dir.join("files").join("chatgpt").join(conversation_id);
+    fs::create_dir_all(&out_dir)
+        .with_context(|| format!("Failed to create {}", out_dir.display()))?;
+
+    let mut ok = 0usize;
+    let mut taken: HashSet<String> = HashSet::new();
+    for fref in &refs {
+        match provider.download_file(&fref.file_id) {
+            Ok((name, bytes)) => {
+                let base = sanitize_file_name(&name);
+                let mut final_name = base.clone();
+                if !taken.insert(final_name.clone()) {
+                    final_name = format!("{}-{}", &fref.file_id, base);
+                    let mut i = 1;
+                    while !taken.insert(final_name.clone()) {
+                        final_name = format!("{}-{}-{}", &fref.file_id, i, base);
+                        i += 1;
+                    }
+                }
+                let dest = out_dir.join(&final_name);
+                if let Err(e) = fs::write(&dest, &bytes) {
+                    eprintln!(
+                        "  {} failed to write {}: {}",
+                        "warn:".yellow(),
+                        dest.display(),
+                        e
+                    );
+                } else {
+                    ok += 1;
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} failed to download {}: {}",
+                    "warn:".yellow(),
+                    fref.file_id,
+                    e
+                );
+            }
+        }
+    }
+
+    println!(
+        "     {} {} file{} -> {}",
+        "[+]".green(),
+        ok.to_string().cyan(),
+        if ok == 1 { "" } else { "s" },
+        out_dir.display().to_string().dimmed()
+    );
+
+    Ok(())
 }
 
 /// Harvest sessions from Claude web interface
@@ -2654,6 +2774,586 @@ pub fn harvest_share(
     println!("   Or use 'csm harvest shares' to view pending links.");
 
     Ok(())
+}
+
+// ============================================================================
+// Pull (single authenticated session download)
+// ============================================================================
+
+/// Parsed reference to a single chat conversation extracted from a provider URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PullTarget {
+    /// Lowercase short key: "chatgpt" or "claude".
+    provider_key: &'static str,
+    /// Human-friendly display name.
+    display_name: &'static str,
+    /// Conversation/chat ID from the URL path.
+    conversation_id: String,
+}
+
+/// Parse a provider conversation URL into a [`PullTarget`].
+///
+/// Supports:
+/// - `https://chatgpt.com/c/<uuid>`
+/// - `https://chat.openai.com/c/<uuid>`
+/// - `https://claude.ai/chat/<uuid>`
+fn parse_pull_url(url: &str) -> Option<PullTarget> {
+    // Strip scheme
+    let after_scheme = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+
+    // Split host and path; drop any query/fragment from the path
+    let (host_raw, path_raw) = match after_scheme.split_once('/') {
+        Some((h, p)) => (h, p),
+        None => (after_scheme, ""),
+    };
+    let path = path_raw.split(['?', '#']).next().unwrap_or("");
+
+    let host = host_raw.to_ascii_lowercase();
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+
+    match host.as_str() {
+        "chatgpt.com" | "chat.openai.com" | "www.chatgpt.com" => {
+            if segments.len() >= 2 && segments[0] == "c" {
+                return Some(PullTarget {
+                    provider_key: "chatgpt",
+                    display_name: "ChatGPT",
+                    conversation_id: segments[1].to_string(),
+                });
+            }
+            None
+        }
+        "claude.ai" | "www.claude.ai" => {
+            if segments.len() >= 2 && segments[0] == "chat" {
+                return Some(PullTarget {
+                    provider_key: "claude",
+                    display_name: "Claude",
+                    conversation_id: segments[1].to_string(),
+                });
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Download a single authenticated chat session from a provider URL.
+///
+/// Uses browser session cookies to fetch the conversation. If `db_path` is
+/// provided the conversation is inserted into the harvest database; otherwise
+/// it is written to `output` (or `./<provider>-<id>.json`) as JSON.
+///
+/// When `with_files` is true, every file referenced by the conversation is
+/// also downloaded. When `bundle` is true (or implied by `with_files` in file
+/// mode), the conversation JSON, raw provider response, manifest, and any
+/// downloaded files are packaged into a single `.tar.gz` archive.
+pub fn harvest_pull(
+    url: &str,
+    output: Option<&str>,
+    db_path: Option<&str>,
+    workspace: Option<&str>,
+    pretty: bool,
+    with_files: bool,
+    bundle: bool,
+) -> Result<()> {
+    use crate::browser::extract_provider_cookies;
+    use crate::providers::cloud::anthropic::AnthropicProvider;
+    use crate::providers::cloud::chatgpt::ChatGPTProvider;
+    use crate::providers::cloud::common::CloudProvider;
+
+    println!("{}", "=".repeat(60).cyan());
+    println!("{}", " Pull Single Chat Session ".bold().cyan());
+    println!("{}", "=".repeat(60).cyan());
+    println!();
+
+    // 1. Parse URL
+    let target = parse_pull_url(url).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unrecognized chat URL: {}\n\
+             Supported formats:\n  \
+             - https://chatgpt.com/c/<id>\n  \
+             - https://claude.ai/chat/<uuid>",
+            url
+        )
+    })?;
+
+    println!("{} Provider: {}", "[i]".blue(), target.display_name.bold());
+    println!(
+        "{} Conversation ID: {}",
+        "[i]".blue(),
+        target.conversation_id
+    );
+
+    // 2. Extract session cookie from browser
+    print!("{} Reading browser cookies ... ", "[*]".blue());
+    let creds = extract_provider_cookies(target.provider_key).ok_or_else(|| {
+        println!("{}", "not found".red());
+        anyhow::anyhow!(
+            "No browser session found for {}.\n\
+             Log in to the provider in Chrome, Edge, Brave, Firefox, Vivaldi, or Opera,\n\
+             then re-run this command.",
+            target.display_name
+        )
+    })?;
+
+    let session_token = creds.session_token.clone().ok_or_else(|| {
+        println!("{}", "no session token".red());
+        anyhow::anyhow!(
+            "Cookies found for {} but no session token cookie was present.\n\
+             Try logging out and back in to refresh the session.",
+            target.display_name
+        )
+    })?;
+
+    if let Some(b) = creds.browser {
+        println!("{} (via {})", "ok".green(), b.name().dimmed());
+    } else {
+        println!("{}", "ok".green());
+    }
+
+    // 3. Fetch the conversation
+    print!("{} Fetching conversation ... ", "[*]".blue());
+    // Eagerly construct the ChatGPT provider so we can reuse it for raw
+    // fetches and file downloads below; Claude uses a single-shot fetch only.
+    let chatgpt_provider = if target.provider_key == "chatgpt" {
+        Some(ChatGPTProvider::with_session_token(session_token.clone()))
+    } else {
+        None
+    };
+
+    let conv = match target.provider_key {
+        "chatgpt" => chatgpt_provider
+            .as_ref()
+            .unwrap()
+            .fetch_conversation(&target.conversation_id),
+        "claude" => {
+            let provider = AnthropicProvider::with_session_token(session_token);
+            provider.fetch_conversation(&target.conversation_id)
+        }
+        other => anyhow::bail!("Unsupported provider key: {}", other),
+    };
+
+    let conv = match conv {
+        Ok(c) => {
+            println!("{}", "ok".green());
+            c
+        }
+        Err(e) => {
+            println!("{}", "failed".red());
+            return Err(e).with_context(|| {
+                format!(
+                    "Failed to fetch {} conversation {}",
+                    target.display_name, target.conversation_id
+                )
+            });
+        }
+    };
+
+    println!(
+        "{} Title: {}",
+        "[+]".green(),
+        conv.title.clone().unwrap_or_else(|| "(untitled)".into())
+    );
+    println!("{} Messages: {}", "[+]".green(), conv.messages.len());
+
+    // 3b. Optionally fetch raw response and download files
+    let need_bundle = bundle || (with_files && db_path.is_none());
+    let mut raw_json: Option<serde_json::Value> = None;
+    let mut downloaded: Vec<DownloadedFile> = Vec::new();
+
+    if need_bundle || with_files {
+        match target.provider_key {
+            "chatgpt" => {
+                let provider = chatgpt_provider.as_ref().unwrap();
+                print!("{} Fetching raw conversation ... ", "[*]".blue());
+                match provider.fetch_conversation_raw(&target.conversation_id) {
+                    Ok(v) => {
+                        println!("{}", "ok".green());
+                        raw_json = Some(v);
+                    }
+                    Err(e) => {
+                        println!("{}", "skipped".yellow());
+                        eprintln!("  {} {}", "warn:".yellow(), e);
+                    }
+                }
+
+                if with_files {
+                    if let Some(raw) = raw_json.as_ref() {
+                        let refs = extract_chatgpt_file_refs(raw);
+                        println!("{} Files referenced: {}", "[+]".green(), refs.len());
+                        for (i, fref) in refs.iter().enumerate() {
+                            let label = fref.name.as_deref().unwrap_or(&fref.file_id);
+                            print!("{} [{}/{}] {} ... ", "[*]".blue(), i + 1, refs.len(), label);
+                            match provider.download_file(&fref.file_id) {
+                                Ok((name, bytes)) => {
+                                    println!("{} ({} bytes)", "ok".green(), bytes.len());
+                                    downloaded.push(DownloadedFile {
+                                        file_id: fref.file_id.clone(),
+                                        name,
+                                        bytes,
+                                    });
+                                }
+                                Err(e) => {
+                                    println!("{}", "skipped".yellow());
+                                    eprintln!("  {} {}", "warn:".yellow(), e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "claude" => {
+                if with_files {
+                    eprintln!(
+                        "{} --with-files is not yet supported for Claude; \
+                         the conversation will be saved without attachments.",
+                        "warn:".yellow()
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // 4. Persist
+    if let Some(p) = db_path {
+        let resolved = get_db_path(Some(p))?;
+        let db = ChatDatabase::open(&resolved)?;
+        let conn = db.connection();
+        insert_cloud_conversation_to_harvest_db(conn, &conv, target.provider_key, workspace)
+            .with_context(|| format!("Failed to insert session into {}", resolved.display()))?;
+        println!(
+            "{} Stored in harvest database: {}",
+            "[+]".green(),
+            resolved.display().to_string().cyan()
+        );
+    } else if need_bundle {
+        let out_path = match output {
+            Some(o) => PathBuf::from(o),
+            None => PathBuf::from(format!(
+                "{}-{}.tar.gz",
+                target.provider_key, target.conversation_id
+            )),
+        };
+        if let Some(parent) = out_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create output directory {}", parent.display())
+                })?;
+            }
+        }
+        write_pull_bundle(
+            &out_path,
+            &conv,
+            raw_json.as_ref(),
+            &downloaded,
+            target.provider_key,
+            target.display_name,
+            url,
+        )
+        .with_context(|| format!("Failed to write bundle {}", out_path.display()))?;
+        println!(
+            "{} Wrote {} ({} file{})",
+            "[+]".green(),
+            out_path.display().to_string().cyan(),
+            downloaded.len(),
+            if downloaded.len() == 1 { "" } else { "s" }
+        );
+    } else {
+        let out_path = match output {
+            Some(o) => PathBuf::from(o),
+            None => PathBuf::from(format!(
+                "{}-{}.json",
+                target.provider_key, target.conversation_id
+            )),
+        };
+
+        if let Some(parent) = out_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create output directory {}", parent.display())
+                })?;
+            }
+        }
+
+        let json = if pretty {
+            serde_json::to_string_pretty(&conv)?
+        } else {
+            serde_json::to_string(&conv)?
+        };
+        fs::write(&out_path, json)
+            .with_context(|| format!("Failed to write {}", out_path.display()))?;
+
+        println!(
+            "{} Wrote {}",
+            "[+]".green(),
+            out_path.display().to_string().cyan()
+        );
+    }
+
+    Ok(())
+}
+
+/// A file extracted from a provider conversation, ready to be bundled.
+#[derive(Debug, Clone)]
+struct DownloadedFile {
+    file_id: String,
+    name: String,
+    bytes: Vec<u8>,
+}
+
+/// A file reference discovered inside a ChatGPT conversation tree.
+#[derive(Debug, Clone)]
+struct ChatGPTFileRef {
+    file_id: String,
+    name: Option<String>,
+}
+
+impl ChatGPTFileRef {
+    fn new(file_id: String, name: Option<String>) -> Self {
+        Self { file_id, name }
+    }
+}
+
+/// Walk a raw ChatGPT conversation JSON and return every referenced file ID
+/// (user uploads, generated images, code-interpreter outputs).
+///
+/// ChatGPT scatters file references across two shapes:
+/// - `{"id": "file-...", "name": "...", "mime_type": "..."}` inside the
+///   `attachments` arrays under `message.metadata`.
+/// - `{"content_type": "image_asset_pointer", "asset_pointer": "file-service://file-..."}`
+///   inside `message.content.parts`.
+///
+/// We walk the whole JSON tree (cheap; conversations top out at a few MB) and
+/// deduplicate by file ID so attachments mentioned in multiple places aren't
+/// downloaded twice.
+fn extract_chatgpt_file_refs(raw: &serde_json::Value) -> Vec<ChatGPTFileRef> {
+    use std::collections::HashSet;
+    let mut out: Vec<ChatGPTFileRef> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    fn walk(
+        v: &serde_json::Value,
+        out: &mut Vec<ChatGPTFileRef>,
+        seen: &mut std::collections::HashSet<String>,
+    ) {
+        match v {
+            serde_json::Value::Object(map) => {
+                // Pattern 1: attachment-like object with a file ID.
+                if let Some(id) = map.get("id").and_then(|x| x.as_str()) {
+                    if id.starts_with("file-")
+                        && (map.contains_key("name")
+                            || map.contains_key("mime_type")
+                            || map.contains_key("size"))
+                        && seen.insert(id.to_string())
+                    {
+                        let name = map.get("name").and_then(|x| x.as_str()).map(String::from);
+                        out.push(ChatGPTFileRef::new(id.to_string(), name));
+                    }
+                }
+                // Pattern 2: asset_pointer "file-service://file-XXXX"
+                if let Some(ptr) = map.get("asset_pointer").and_then(|x| x.as_str()) {
+                    if let Some(id) = ptr.strip_prefix("file-service://") {
+                        if id.starts_with("file-") && seen.insert(id.to_string()) {
+                            out.push(ChatGPTFileRef::new(id.to_string(), None));
+                        }
+                    }
+                }
+                for child in map.values() {
+                    walk(child, out, seen);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for child in arr {
+                    walk(child, out, seen);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    walk(raw, &mut out, &mut seen);
+    out
+}
+
+/// Write a `.tar.gz` bundle containing the conversation, raw provider response,
+/// manifest, and any downloaded files.
+///
+/// Layout inside the archive:
+/// ```text
+/// conversation.json    # CloudConversation (parsed, lossy)
+/// raw.json             # raw provider response (when available)
+/// manifest.json        # provider, IDs, fetched_at, file index
+/// files/<name>         # one entry per downloaded attachment
+/// ```
+///
+/// File names are de-duplicated by prefixing collisions with the file ID, so
+/// two attachments named `image.png` won't overwrite each other.
+fn write_pull_bundle(
+    out_path: &Path,
+    conv: &crate::providers::cloud::common::CloudConversation,
+    raw: Option<&serde_json::Value>,
+    files: &[DownloadedFile],
+    provider_key: &str,
+    display_name: &str,
+    source_url: &str,
+) -> Result<()> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::collections::HashSet;
+    use std::io::Write;
+    use tar::{Builder, Header};
+
+    let f = fs::File::create(out_path)
+        .with_context(|| format!("Failed to create {}", out_path.display()))?;
+    let gz = GzEncoder::new(f, Compression::default());
+    let mut tar = Builder::new(gz);
+
+    let mtime = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    fn append_bytes<W: Write>(
+        tar: &mut Builder<W>,
+        path: &str,
+        data: &[u8],
+        mtime: u64,
+    ) -> Result<()> {
+        let mut h = Header::new_gnu();
+        h.set_size(data.len() as u64);
+        h.set_mode(0o644);
+        h.set_mtime(mtime);
+        h.set_cksum();
+        tar.append_data(&mut h, path, data)
+            .with_context(|| format!("Failed to append {} to archive", path))?;
+        Ok(())
+    }
+
+    // Pre-compute final file names (with collision-avoidance) so the manifest
+    // and the archive entries agree.
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut final_names: Vec<String> = Vec::with_capacity(files.len());
+    for f in files {
+        let base = sanitize_file_name(&f.name);
+        let mut name = base.clone();
+        if !taken.insert(name.clone()) {
+            name = format!("{}-{}", &f.file_id, base);
+            // If still collides (extremely unlikely), append index.
+            let mut i = 1;
+            while !taken.insert(name.clone()) {
+                name = format!("{}-{}-{}", &f.file_id, i, base);
+                i += 1;
+            }
+        }
+        final_names.push(name);
+    }
+
+    let manifest = serde_json::json!({
+        "provider": provider_key,
+        "provider_display_name": display_name,
+        "conversation_id": conv.id,
+        "source_url": source_url,
+        "title": conv.title,
+        "fetched_at": Utc::now().to_rfc3339(),
+        "message_count": conv.messages.len(),
+        "files": files
+            .iter()
+            .zip(final_names.iter())
+            .map(|(f, name)| serde_json::json!({
+                "file_id": f.file_id,
+                "original_name": f.name,
+                "archive_path": format!("files/{}", name),
+                "size_bytes": f.bytes.len(),
+            }))
+            .collect::<Vec<_>>(),
+    });
+
+    append_bytes(
+        &mut tar,
+        "conversation.json",
+        &serde_json::to_vec_pretty(conv)?,
+        mtime,
+    )?;
+    if let Some(raw) = raw {
+        append_bytes(&mut tar, "raw.json", &serde_json::to_vec(raw)?, mtime)?;
+    }
+    append_bytes(
+        &mut tar,
+        "manifest.json",
+        &serde_json::to_vec_pretty(&manifest)?,
+        mtime,
+    )?;
+    for (f, name) in files.iter().zip(final_names.iter()) {
+        append_bytes(&mut tar, &format!("files/{}", name), &f.bytes, mtime)?;
+    }
+
+    tar.into_inner()
+        .and_then(|gz| gz.finish())
+        .context("Failed to finalize tar.gz archive")?;
+    Ok(())
+}
+
+/// Sanitize an attachment file name for use as a tar entry.
+///
+/// Strips path separators, control chars, and falls back to `unnamed` when
+/// the result is empty.
+fn sanitize_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | '\0' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect();
+    let cleaned = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
+    if cleaned.is_empty() {
+        "unnamed".to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
+#[cfg(test)]
+mod pull_url_tests {
+    use super::parse_pull_url;
+
+    #[test]
+    fn test_parse_chatgpt_url() {
+        let t =
+            parse_pull_url("https://chatgpt.com/c/68f6c5a0-1234-4abc-9def-0123456789ab").unwrap();
+        assert_eq!(t.provider_key, "chatgpt");
+        assert_eq!(t.conversation_id, "68f6c5a0-1234-4abc-9def-0123456789ab");
+    }
+
+    #[test]
+    fn test_parse_chat_openai_url() {
+        let t = parse_pull_url("https://chat.openai.com/c/abc123").unwrap();
+        assert_eq!(t.provider_key, "chatgpt");
+        assert_eq!(t.conversation_id, "abc123");
+    }
+
+    #[test]
+    fn test_parse_claude_url() {
+        let t =
+            parse_pull_url("https://claude.ai/chat/11111111-2222-3333-4444-555555555555").unwrap();
+        assert_eq!(t.provider_key, "claude");
+        assert_eq!(t.display_name, "Claude");
+        assert_eq!(t.conversation_id, "11111111-2222-3333-4444-555555555555");
+    }
+
+    #[test]
+    fn test_parse_unknown_host() {
+        assert!(parse_pull_url("https://example.com/c/abc").is_none());
+    }
+
+    #[test]
+    fn test_parse_bad_path() {
+        assert!(parse_pull_url("https://chatgpt.com/").is_none());
+        assert!(parse_pull_url("https://claude.ai/about").is_none());
+    }
 }
 
 /// List share links in the harvest database
@@ -3231,11 +3931,7 @@ pub fn harvest_compact(db_path: Option<&str>, dry_run: bool) -> Result<()> {
     conn.execute_batch("VACUUM")?;
 
     let file_size_after = std::fs::metadata(&db_path)?.len();
-    let saved = if file_size_before > file_size_after {
-        file_size_before - file_size_after
-    } else {
-        0
-    };
+    let saved = file_size_before.saturating_sub(file_size_after);
 
     println!();
     println!("{} Compact complete!", "[+]".green().bold());
@@ -3528,6 +4224,7 @@ fn md5_hash(data: &str) -> u128 {
 /// - `--pull`: Import sessions from provider workspaces into the database (similar to harvest run)
 ///
 /// Sync supports filtering by provider, workspace, or specific session IDs.
+#[allow(clippy::too_many_arguments)]
 pub fn harvest_sync(
     path: Option<&str>,
     push: bool,

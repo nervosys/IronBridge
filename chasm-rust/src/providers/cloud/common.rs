@@ -196,7 +196,15 @@ pub trait CloudProvider: Send + Sync {
 /// HTTP client configuration for cloud providers
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
+    /// Total request timeout, including body read.
+    ///
+    /// Defaults to 5 minutes — large conversations from ChatGPT/Claude can
+    /// be several megabytes of JSON and take >30 s for the server to assemble
+    /// before any bytes arrive, plus additional time to stream the payload.
     pub timeout_secs: u64,
+    /// TCP/TLS connect timeout. Kept short so unreachable hosts fail fast
+    /// without consuming the full request timeout budget.
+    pub connect_timeout_secs: u64,
     pub user_agent: String,
     pub accept_invalid_certs: bool,
 }
@@ -204,7 +212,8 @@ pub struct HttpClientConfig {
 impl Default for HttpClientConfig {
     fn default() -> Self {
         Self {
-            timeout_secs: 30,
+            timeout_secs: 300,
+            connect_timeout_secs: 15,
             user_agent: format!("csm/{}", env!("CARGO_PKG_VERSION")),
             accept_invalid_certs: false,
         }
@@ -217,6 +226,7 @@ pub fn build_http_client(config: &HttpClientConfig) -> Result<reqwest::blocking:
 
     reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(config.timeout_secs))
+        .connect_timeout(Duration::from_secs(config.connect_timeout_secs))
         .user_agent(&config.user_agent)
         .danger_accept_invalid_certs(config.accept_invalid_certs)
         .build()

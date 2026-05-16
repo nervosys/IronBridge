@@ -1509,6 +1509,12 @@ pub enum HarvestCommands {
         /// Commit message (requires --commit)
         #[arg(short, long)]
         message: Option<String>,
+
+        /// Also download every file attached to harvested cloud conversations
+        /// (currently ChatGPT only). Files are stored in
+        /// `<db_dir>/files/<provider>/<conversation_id>/<name>`.
+        #[arg(long)]
+        with_files: bool,
     },
 
     /// Show harvest database status
@@ -1575,6 +1581,44 @@ pub enum HarvestCommands {
         /// Associate with a workspace path
         #[arg(long)]
         workspace: Option<String>,
+    },
+
+    /// Download a single authenticated chat session from a provider URL
+    ///
+    /// Uses your browser's session cookies to fetch a specific conversation
+    /// (e.g. https://chatgpt.com/c/<id>, https://claude.ai/chat/<uuid>).
+    /// You must be logged in to the provider in a supported browser.
+    Pull {
+        /// Conversation URL (e.g. https://chatgpt.com/c/<id>, https://claude.ai/chat/<uuid>)
+        url: String,
+
+        /// Output file path (default: ./<provider>-<id>.json). Ignored if --path is set.
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Path to the harvest database. If set, store in DB instead of writing a file.
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Workspace name to associate with the imported session
+        #[arg(long)]
+        workspace: Option<String>,
+
+        /// Pretty-print JSON file output
+        #[arg(long)]
+        pretty: bool,
+
+        /// Also download every file attached to the conversation
+        /// (user uploads, generated images, code-interpreter outputs).
+        /// Implies `--bundle` when no other output mode is chosen.
+        #[arg(long)]
+        with_files: bool,
+
+        /// Package the conversation, raw provider response, manifest, and
+        /// (optionally) downloaded files into a single `.tar.gz` archive.
+        /// Output path defaults to `./<provider>-<id>.tar.gz` when set.
+        #[arg(long)]
+        bundle: bool,
     },
 
     /// List pending or imported share links

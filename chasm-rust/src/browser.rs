@@ -10,20 +10,49 @@ use colored::Colorize;
 use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Suppress dead code warnings for fields used in debugging
 #[allow(dead_code)]
 /// Supported browser types for cookie extraction
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BrowserType {
+    // Chromium-based
     Chrome,
     Edge,
-    Firefox,
     Brave,
     Vivaldi,
     Opera,
+    OperaGx,
+    Chromium,
+    Arc,
+    // Firefox-based
+    Firefox,
+    LibreWolf,
+    Zen,
+    Waterfox,
 }
+
+/// Canonical ordered list of all browsers to probe.
+///
+/// Iteration order determines which browser's cookie wins when the same
+/// provider is logged in to multiple browsers — Edge first (since Windows
+/// defaults install it), then mainstream Chromium browsers, then Firefox
+/// family, then the long tail.
+pub const ALL_BROWSERS: &[BrowserType] = &[
+    BrowserType::Edge,
+    BrowserType::Chrome,
+    BrowserType::Brave,
+    BrowserType::Firefox,
+    BrowserType::Vivaldi,
+    BrowserType::Opera,
+    BrowserType::OperaGx,
+    BrowserType::Chromium,
+    BrowserType::Arc,
+    BrowserType::LibreWolf,
+    BrowserType::Zen,
+    BrowserType::Waterfox,
+];
 
 impl BrowserType {
     pub fn name(&self) -> &'static str {
@@ -34,7 +63,25 @@ impl BrowserType {
             BrowserType::Brave => "Brave",
             BrowserType::Vivaldi => "Vivaldi",
             BrowserType::Opera => "Opera",
+            BrowserType::OperaGx => "Opera GX",
+            BrowserType::Chromium => "Chromium",
+            BrowserType::Arc => "Arc",
+            BrowserType::LibreWolf => "LibreWolf",
+            BrowserType::Zen => "Zen",
+            BrowserType::Waterfox => "Waterfox",
         }
+    }
+
+    /// Returns true if this browser uses the Mozilla/Firefox profile + cookie layout
+    /// (random-named profile dirs containing `cookies.sqlite`).
+    pub fn is_firefox_family(&self) -> bool {
+        matches!(
+            self,
+            BrowserType::Firefox
+                | BrowserType::LibreWolf
+                | BrowserType::Zen
+                | BrowserType::Waterfox
+        )
     }
 
     /// Get the default profile path for this browser
@@ -51,34 +98,20 @@ impl BrowserType {
             }
             BrowserType::Vivaldi => local_app_data.join("Vivaldi/User Data/Default"),
             BrowserType::Opera => roaming_app_data.join("Opera Software/Opera Stable"),
+            BrowserType::OperaGx => roaming_app_data.join("Opera Software/Opera GX Stable"),
+            BrowserType::Chromium => local_app_data.join("Chromium/User Data/Default"),
+            BrowserType::Arc => find_arc_profile_windows(&local_app_data)?,
             BrowserType::Firefox => {
-                // Firefox uses random profile directories
-                // Select the profile with the largest cookies.sqlite (most likely active)
-                let profiles_dir = roaming_app_data.join("Mozilla/Firefox/Profiles");
-                if profiles_dir.exists() {
-                    if let Ok(entries) = fs::read_dir(&profiles_dir) {
-                        let mut best_profile: Option<(PathBuf, u64)> = None;
-
-                        for entry in entries.flatten() {
-                            let profile_path = entry.path();
-                            let cookies_path = profile_path.join("cookies.sqlite");
-
-                            if cookies_path.exists() {
-                                if let Ok(metadata) = fs::metadata(&cookies_path) {
-                                    let size = metadata.len();
-                                    if best_profile.as_ref().map_or(true, |(_, s)| size > *s) {
-                                        best_profile = Some((profile_path, size));
-                                    }
-                                }
-                            }
-                        }
-
-                        if let Some((path, _)) = best_profile {
-                            return Some(path);
-                        }
-                    }
-                }
-                return None;
+                find_firefox_family_profile(&roaming_app_data.join("Mozilla/Firefox/Profiles"))?
+            }
+            BrowserType::LibreWolf => {
+                find_firefox_family_profile(&roaming_app_data.join("LibreWolf/Profiles"))?
+            }
+            BrowserType::Zen => {
+                find_firefox_family_profile(&roaming_app_data.join("zen/Profiles"))?
+            }
+            BrowserType::Waterfox => {
+                find_firefox_family_profile(&roaming_app_data.join("Waterfox/Profiles"))?
             }
         };
 
@@ -114,24 +147,6 @@ impl BrowserType {
                     home.join(".config/microsoft-edge/Default")
                 }
             }
-            BrowserType::Firefox => {
-                #[cfg(target_os = "macos")]
-                let profiles_dir = home.join("Library/Application Support/Firefox/Profiles");
-                #[cfg(target_os = "linux")]
-                let profiles_dir = home.join(".mozilla/firefox");
-
-                if profiles_dir.exists() {
-                    if let Ok(entries) = fs::read_dir(&profiles_dir) {
-                        for entry in entries.flatten() {
-                            let name = entry.file_name().to_string_lossy().to_string();
-                            if name.ends_with(".default-release") || name.ends_with(".default") {
-                                return Some(entry.path());
-                            }
-                        }
-                    }
-                }
-                return None;
-            }
             BrowserType::Brave => {
                 #[cfg(target_os = "macos")]
                 {
@@ -142,7 +157,84 @@ impl BrowserType {
                     home.join(".config/BraveSoftware/Brave-Browser/Default")
                 }
             }
-            _ => return None,
+            BrowserType::Vivaldi => {
+                #[cfg(target_os = "macos")]
+                {
+                    home.join("Library/Application Support/Vivaldi/Default")
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    home.join(".config/vivaldi/Default")
+                }
+            }
+            BrowserType::Opera => {
+                #[cfg(target_os = "macos")]
+                {
+                    home.join("Library/Application Support/com.operasoftware.Opera")
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    home.join(".config/opera")
+                }
+            }
+            BrowserType::OperaGx => {
+                #[cfg(target_os = "macos")]
+                {
+                    home.join("Library/Application Support/com.operasoftware.OperaGX")
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    home.join(".config/opera-gx")
+                }
+            }
+            BrowserType::Chromium => {
+                #[cfg(target_os = "macos")]
+                {
+                    home.join("Library/Application Support/Chromium/Default")
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    home.join(".config/chromium/Default")
+                }
+            }
+            BrowserType::Arc => {
+                #[cfg(target_os = "macos")]
+                {
+                    home.join("Library/Application Support/Arc/User Data/Default")
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    return None; // Arc has no official Linux release
+                }
+            }
+            BrowserType::Firefox => {
+                #[cfg(target_os = "macos")]
+                let profiles_dir = home.join("Library/Application Support/Firefox/Profiles");
+                #[cfg(target_os = "linux")]
+                let profiles_dir = home.join(".mozilla/firefox");
+                return find_firefox_family_profile(&profiles_dir);
+            }
+            BrowserType::LibreWolf => {
+                #[cfg(target_os = "macos")]
+                let profiles_dir = home.join("Library/Application Support/LibreWolf/Profiles");
+                #[cfg(target_os = "linux")]
+                let profiles_dir = home.join(".librewolf");
+                return find_firefox_family_profile(&profiles_dir);
+            }
+            BrowserType::Zen => {
+                #[cfg(target_os = "macos")]
+                let profiles_dir = home.join("Library/Application Support/zen/Profiles");
+                #[cfg(target_os = "linux")]
+                let profiles_dir = home.join(".zen");
+                return find_firefox_family_profile(&profiles_dir);
+            }
+            BrowserType::Waterfox => {
+                #[cfg(target_os = "macos")]
+                let profiles_dir = home.join("Library/Application Support/Waterfox/Profiles");
+                #[cfg(target_os = "linux")]
+                let profiles_dir = home.join(".waterfox");
+                return find_firefox_family_profile(&profiles_dir);
+            }
         };
 
         if path.exists() {
@@ -156,28 +248,21 @@ impl BrowserType {
     pub fn cookies_path(&self) -> Option<PathBuf> {
         let profile = self.profile_path()?;
 
-        match self {
-            BrowserType::Firefox => {
-                let path = profile.join("cookies.sqlite");
-                if path.exists() {
-                    Some(path)
-                } else {
-                    None
-                }
-            }
-            _ => {
-                // Chromium-based browsers store cookies in Network/Cookies (newer) or Cookies (older)
-                let network_path = profile.join("Network/Cookies");
-                if network_path.exists() {
-                    return Some(network_path);
-                }
-                let old_path = profile.join("Cookies");
-                if old_path.exists() {
-                    Some(old_path)
-                } else {
-                    None
-                }
-            }
+        if self.is_firefox_family() {
+            let path = profile.join("cookies.sqlite");
+            return if path.exists() { Some(path) } else { None };
+        }
+
+        // Chromium-based browsers store cookies in Network/Cookies (newer) or Cookies (older)
+        let network_path = profile.join("Network/Cookies");
+        if network_path.exists() {
+            return Some(network_path);
+        }
+        let old_path = profile.join("Cookies");
+        if old_path.exists() {
+            Some(old_path)
+        } else {
+            None
         }
     }
 
@@ -197,7 +282,18 @@ impl BrowserType {
             }
             BrowserType::Vivaldi => local_app_data.join("Vivaldi/User Data/Local State"),
             BrowserType::Opera => roaming_app_data.join("Opera Software/Opera Stable/Local State"),
-            BrowserType::Firefox => return None, // Firefox doesn't use this
+            BrowserType::OperaGx => {
+                roaming_app_data.join("Opera Software/Opera GX Stable/Local State")
+            }
+            BrowserType::Chromium => local_app_data.join("Chromium/User Data/Local State"),
+            BrowserType::Arc => find_arc_profile_windows(&local_app_data)?
+                .parent()?
+                .parent()?
+                .join("Local State"),
+            BrowserType::Firefox
+            | BrowserType::LibreWolf
+            | BrowserType::Zen
+            | BrowserType::Waterfox => return None, // Firefox-family doesn't use this
         };
 
         if path.exists() {
@@ -206,6 +302,66 @@ impl BrowserType {
             None
         }
     }
+}
+
+/// Locate the most-recently-active profile directory in a Firefox-family
+/// browser by selecting the one with the largest `cookies.sqlite`.
+fn find_firefox_family_profile(profiles_dir: &Path) -> Option<PathBuf> {
+    if !profiles_dir.exists() {
+        return None;
+    }
+
+    let entries = fs::read_dir(profiles_dir).ok()?;
+    let mut best: Option<(PathBuf, u64)> = None;
+
+    for entry in entries.flatten() {
+        let profile_path = entry.path();
+        if !profile_path.is_dir() {
+            continue;
+        }
+        let cookies_path = profile_path.join("cookies.sqlite");
+        if !cookies_path.exists() {
+            continue;
+        }
+        if let Ok(metadata) = fs::metadata(&cookies_path) {
+            let size = metadata.len();
+            if best.as_ref().map_or(true, |(_, s)| size > *s) {
+                best = Some((profile_path, size));
+            }
+        }
+    }
+
+    best.map(|(p, _)| p)
+}
+
+/// Locate Arc's profile directory on Windows.
+///
+/// Arc is distributed as an MSIX package, so its profile lives under
+/// `%LOCALAPPDATA%/Packages/TheBrowserCompany.Arc_<hash>/LocalCache/Local/Arc/User Data/Default`.
+/// The hash suffix varies per install, so we scan for the package directory.
+#[cfg(windows)]
+fn find_arc_profile_windows(local_app_data: &Path) -> Option<PathBuf> {
+    let packages = local_app_data.join("Packages");
+    if !packages.exists() {
+        return None;
+    }
+    let entries = fs::read_dir(&packages).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with("TheBrowserCompany.Arc_") {
+            let candidate = entry.path().join("LocalCache/Local/Arc/User Data/Default");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+fn find_arc_profile_windows(_: &Path) -> Option<PathBuf> {
+    None
 }
 
 /// Web LLM provider authentication info
@@ -340,16 +496,7 @@ pub fn scan_browser_auth_verbose() -> Vec<BrowserAuthResult> {
 fn scan_browser_auth_internal(verbose: bool) -> Vec<BrowserAuthResult> {
     let mut results = Vec::new();
 
-    let browsers = [
-        BrowserType::Edge,
-        BrowserType::Chrome,
-        BrowserType::Brave,
-        BrowserType::Firefox,
-        BrowserType::Vivaldi,
-        BrowserType::Opera,
-    ];
-
-    for browser in browsers {
+    for &browser in ALL_BROWSERS {
         if let Some(cookies_path) = browser.cookies_path() {
             if verbose {
                 println!(
@@ -387,17 +534,9 @@ fn scan_browser_auth_internal(verbose: bool) -> Vec<BrowserAuthResult> {
 
 /// Get list of installed browsers
 pub fn get_installed_browsers() -> Vec<BrowserType> {
-    let browsers = [
-        BrowserType::Edge,
-        BrowserType::Chrome,
-        BrowserType::Brave,
-        BrowserType::Firefox,
-        BrowserType::Vivaldi,
-        BrowserType::Opera,
-    ];
-
-    browsers
-        .into_iter()
+    ALL_BROWSERS
+        .iter()
+        .copied()
         .filter(|b| b.profile_path().is_some())
         .collect()
 }
@@ -675,16 +814,7 @@ pub fn extract_provider_cookies(provider_name: &str) -> Option<ProviderCredentia
         vec![provider_auth.domain]
     };
 
-    let browsers = [
-        BrowserType::Edge,
-        BrowserType::Chrome,
-        BrowserType::Brave,
-        BrowserType::Firefox,
-        BrowserType::Vivaldi,
-        BrowserType::Opera,
-    ];
-
-    for browser in browsers {
+    for &browser in ALL_BROWSERS {
         if let Some(cookies_path) = browser.cookies_path() {
             for domain in &domains_to_try {
                 // Try to extract cookies
@@ -698,20 +828,18 @@ pub fn extract_provider_cookies(provider_name: &str) -> Option<ProviderCredentia
                         };
 
                         for cookie in &cookies {
-                            // Check if this is a session token cookie
-                            if provider_auth
-                                .auth_cookie_names
-                                .iter()
-                                .any(|name| cookie.name.contains(name))
-                                && (cookie.name.contains("session")
-                                    || cookie.name.contains("token"))
-                            {
-                                creds.session_token = Some(cookie.value.clone());
-                            }
                             creds
                                 .cookies
                                 .insert(cookie.name.clone(), cookie.value.clone());
                         }
+
+                        // Resolve session token, including NextAuth chunked
+                        // cookies (e.g. `__Secure-next-auth.session-token.0`,
+                        // `.1`, ...) which must be concatenated in order to
+                        // form the full JWT when it exceeds the ~4 KB cookie
+                        // size limit.
+                        creds.session_token =
+                            resolve_session_token(&creds.cookies, provider_auth.auth_cookie_names);
 
                         if creds.session_token.is_some() || !creds.cookies.is_empty() {
                             return Some(creds);
@@ -722,6 +850,52 @@ pub fn extract_provider_cookies(provider_name: &str) -> Option<ProviderCredentia
         }
     }
 
+    None
+}
+
+/// Pick the best session-token value from the cookie jar.
+///
+/// Handles two cases:
+/// 1. Plain cookie (`__Secure-next-auth.session-token`) — returned as-is.
+/// 2. NextAuth chunked cookies (`<name>.0`, `<name>.1`, ...) which the browser
+///    splits when the JWT exceeds the per-cookie size limit. These must be
+///    concatenated in numeric order to reconstruct the full token.
+fn resolve_session_token(
+    cookies: &HashMap<String, String>,
+    auth_cookie_names: &[&str],
+) -> Option<String> {
+    for &auth_name in auth_cookie_names {
+        // Only treat names that look like session/token cookies as the auth
+        // primary; visitor IDs and similar are ignored here.
+        if !(auth_name.contains("session") || auth_name.contains("token")) {
+            continue;
+        }
+
+        // Exact match wins (unchunked cookie).
+        if let Some(v) = cookies.get(auth_name) {
+            if !v.is_empty() {
+                return Some(v.clone());
+            }
+        }
+
+        // Look for chunked variants: `<auth_name>.0`, `.1`, ...
+        let prefix = format!("{}.", auth_name);
+        let mut chunks: Vec<(u32, &String)> = cookies
+            .iter()
+            .filter_map(|(k, v)| {
+                let suffix = k.strip_prefix(&prefix)?;
+                let idx: u32 = suffix.parse().ok()?;
+                Some((idx, v))
+            })
+            .collect();
+        if !chunks.is_empty() {
+            chunks.sort_by_key(|&(idx, _)| idx);
+            let joined: String = chunks.into_iter().map(|(_, v)| v.as_str()).collect();
+            if !joined.is_empty() {
+                return Some(joined);
+            }
+        }
+    }
     None
 }
 

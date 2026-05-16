@@ -581,6 +581,7 @@ fn main() -> Result<()> {
                 incremental,
                 commit,
                 message,
+                with_files,
             } => commands::harvest_run(
                 path.as_deref(),
                 providers.as_deref(),
@@ -588,6 +589,7 @@ fn main() -> Result<()> {
                 incremental,
                 commit,
                 message.as_deref(),
+                with_files,
             ),
             HarvestCommands::Status { path } => commands::harvest_status(path.as_deref()),
             HarvestCommands::List {
@@ -624,6 +626,23 @@ fn main() -> Result<()> {
                 &url,
                 name.as_deref(),
                 workspace.as_deref(),
+            ),
+            HarvestCommands::Pull {
+                url,
+                output,
+                path,
+                workspace,
+                pretty,
+                with_files,
+                bundle,
+            } => commands::harvest_pull(
+                &url,
+                output.as_deref(),
+                path.as_deref(),
+                workspace.as_deref(),
+                pretty,
+                with_files,
+                bundle,
             ),
             HarvestCommands::Shares {
                 path,

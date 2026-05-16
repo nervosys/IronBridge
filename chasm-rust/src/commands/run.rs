@@ -485,7 +485,15 @@ pub(crate) fn auto_harvest_sessions(session_files: &[std::path::PathBuf]) -> Res
     }
 
     // Run harvest to pick up new session files from all providers
-    harvest_run(None, None, None, true, false, Some("Auto-save from chasm run"))?;
+    harvest_run(
+        None,
+        None,
+        None,
+        true,
+        false,
+        Some("Auto-save from chasm run"),
+        false,
+    )?;
 
     Ok(session_files.len())
 }
