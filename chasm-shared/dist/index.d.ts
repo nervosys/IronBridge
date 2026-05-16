@@ -28,6 +28,30 @@ declare const PROVIDERS: {
         readonly color: "#ff6b6b";
         readonly icon: "continue";
     };
+    readonly codexcli: {
+        readonly id: "codexcli";
+        readonly name: "Codex CLI";
+        readonly type: "local";
+        readonly models: readonly ["codex"];
+        readonly color: "#10a37f";
+        readonly icon: "openai";
+    };
+    readonly droidcli: {
+        readonly id: "droidcli";
+        readonly name: "Droid CLI";
+        readonly type: "local";
+        readonly models: readonly [];
+        readonly color: "#6366f1";
+        readonly icon: "factory";
+    };
+    readonly geminicli: {
+        readonly id: "geminicli";
+        readonly name: "Gemini CLI";
+        readonly type: "local";
+        readonly models: readonly ["gemini-2.5-pro", "gemini-2.5-flash"];
+        readonly color: "#4285f4";
+        readonly icon: "google";
+    };
     readonly openai: {
         readonly id: "openai";
         readonly name: "OpenAI";
