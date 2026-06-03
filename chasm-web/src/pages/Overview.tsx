@@ -513,7 +513,7 @@ export default function Overview() {
                                         return [numValue.toLocaleString(), labels[String(name)] || String(name)];
                                     }}
                                     labelFormatter={(label, payload) => {
-                                        const data = (payload as { payload?: ActivityDataPoint }[])?.[0]?.payload;
+                                        const data = (payload as unknown as { payload?: ActivityDataPoint }[])?.[0]?.payload;
                                         return data?.fullDate || String(label);
                                     }}
                                 />

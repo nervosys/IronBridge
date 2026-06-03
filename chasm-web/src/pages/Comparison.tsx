@@ -671,7 +671,7 @@ export default function Comparison() {
                                         if (name === 'Accuracy') return [`${numValue}%`, name];
                                         return [numValue, String(name)];
                                     }}
-                                    labelFormatter={(_, payload) => (payload as { payload?: { name?: string } }[])?.[0]?.payload?.name || ''}
+                                    labelFormatter={(_, payload) => (payload as unknown as { payload?: { name?: string } }[])?.[0]?.payload?.name || ''}
                                 />
                                 {allProviders.filter(p => selectedProviders.includes(p)).map(provider => (
                                     <Scatter
