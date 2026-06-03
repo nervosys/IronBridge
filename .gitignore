@@ -130,3 +130,6 @@ owgcs_*.txt
 harvest_output.txt
 chasm-rust/build_errors.txt
 chasm-rust/build_output.txt
+
+# Recovered chat sessions (large, contain full conversation history)
+recovered-sessions/
