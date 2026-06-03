@@ -21,9 +21,17 @@ pub type Database = std::sync::Arc<dyn DatabaseOps + Send + Sync>;
 #[allow(dead_code)]
 #[async_trait::async_trait]
 pub trait DatabaseOps {
-    async fn create(&self, table: &str, data: serde_json::Value) -> Result<serde_json::Value, String>;
+    async fn create(
+        &self,
+        table: &str,
+        data: serde_json::Value,
+    ) -> Result<serde_json::Value, String>;
     async fn get_by_id(&self, table: &str, id: &str) -> Result<Option<serde_json::Value>, String>;
-    async fn query(&self, table: &str, filter: serde_json::Value) -> Result<Vec<serde_json::Value>, String>;
+    async fn query(
+        &self,
+        table: &str,
+        filter: serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>, String>;
     async fn count(&self, table: &str, filter: serde_json::Value) -> Result<i64, String>;
     async fn update(&self, table: &str, id: &str, data: serde_json::Value) -> Result<(), String>;
     async fn delete(&self, table: &str, id: &str) -> Result<(), String>;

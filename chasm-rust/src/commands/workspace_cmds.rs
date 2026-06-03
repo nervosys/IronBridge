@@ -1439,10 +1439,8 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
         Some(p) => {
             let p_lower = p.to_lowercase();
             match p_lower.as_str() {
-                "vscode" | "vs-code" | "copilot" => {
-                    if vscode_path.exists() {
-                        paths.push(("vscode".to_string(), vscode_path));
-                    }
+                "vscode" | "vs-code" | "copilot" if vscode_path.exists() => {
+                    paths.push(("vscode".to_string(), vscode_path));
                 }
                 "cursor" => {
                     if let Some(cp) = cursor_path {
@@ -2538,10 +2536,7 @@ fn show_index_all() -> Result<()> {
     let mut sync_issues = 0usize;
 
     for (i, ws) in ws_with_sessions.iter().enumerate() {
-        let display_name = ws
-            .project_path
-            .as_deref()
-            .unwrap_or(&ws.hash);
+        let display_name = ws.project_path.as_deref().unwrap_or(&ws.hash);
 
         let db_path = match crate::storage::get_workspace_storage_db(&ws.hash) {
             Ok(p) => p,

@@ -133,10 +133,7 @@ fn find_agent_binary(config: &AgentConfig) -> Option<String> {
                 }
             }
             // Also check common npm global paths
-            if let Ok(output) = Command::new("where")
-                .arg(format!("{}.cmd", cmd))
-                .output()
-            {
+            if let Ok(output) = Command::new("where").arg(format!("{}.cmd", cmd)).output() {
                 if output.status.success() {
                     if let Ok(path) = String::from_utf8(output.stdout) {
                         let path = path.lines().next().unwrap_or("").trim();
@@ -165,7 +162,9 @@ fn find_agent_binary(config: &AgentConfig) -> Option<String> {
 }
 
 /// Snapshot current session files before agent launch (for diff-based auto-save)
-fn snapshot_session_dir(config: &AgentConfig) -> Option<std::collections::HashMap<std::path::PathBuf, std::time::SystemTime>> {
+fn snapshot_session_dir(
+    config: &AgentConfig,
+) -> Option<std::collections::HashMap<std::path::PathBuf, std::time::SystemTime>> {
     let home = dirs::home_dir()?;
     let storage_path = resolve_storage_path(&home, config)?;
 
@@ -190,7 +189,10 @@ fn snapshot_session_dir(config: &AgentConfig) -> Option<std::collections::HashMa
 }
 
 /// Resolve the storage path for an agent from its config
-pub(crate) fn resolve_storage_path(home: &std::path::Path, config: &AgentConfig) -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_storage_path(
+    home: &std::path::Path,
+    config: &AgentConfig,
+) -> Option<std::path::PathBuf> {
     // Parse storage_hint like "~/.claude/projects/" into actual path
     let hint = config.storage_hint.trim_start_matches("~/");
     let path = home.join(hint);
@@ -360,12 +362,7 @@ pub fn run_agent_cli(
         .stderr(std::process::Stdio::inherit());
 
     if verbose {
-        println!(
-            "{} Running: {} {}",
-            "[*]".blue(),
-            binary,
-            args.join(" ")
-        );
+        println!("{} Running: {} {}", "[*]".blue(), binary, args.join(" "));
     }
 
     // Launch agent (blocking — waits for user to finish)
@@ -382,11 +379,7 @@ pub fn run_agent_cli(
             elapsed.as_secs() % 60
         )
     } else if elapsed.as_secs() >= 60 {
-        format!(
-            "{}m {}s",
-            elapsed.as_secs() / 60,
-            elapsed.as_secs() % 60
-        )
+        format!("{}m {}s", elapsed.as_secs() / 60, elapsed.as_secs() % 60)
     } else {
         format!("{}s", elapsed.as_secs())
     };
@@ -416,10 +409,7 @@ pub fn run_agent_cli(
         if let Some(ref before) = before_snapshot {
             let new_sessions = detect_new_sessions(config, before);
             if new_sessions.is_empty() {
-                println!(
-                    "{} No new session files detected",
-                    "[i]".blue()
-                );
+                println!("{} No new session files detected", "[i]".blue());
             } else {
                 println!(
                     "{} Detected {} new/modified session file(s)",
@@ -434,10 +424,7 @@ pub fn run_agent_cli(
 
                 // Auto-harvest into the database
                 println!();
-                println!(
-                    "{} Auto-saving to harvest database...",
-                    "[*]".blue()
-                );
+                println!("{} Auto-saving to harvest database...", "[*]".blue());
 
                 match auto_harvest_sessions(&new_sessions) {
                     Ok(count) => {
@@ -448,11 +435,7 @@ pub fn run_agent_cli(
                         );
                     }
                     Err(e) => {
-                        println!(
-                            "{} Auto-save failed: {}",
-                            "[!]".yellow(),
-                            e
-                        );
+                        println!("{} Auto-save failed: {}", "[!]".yellow(), e);
                         println!(
                             "{} Run 'chasm harvest run' manually to save sessions",
                             "[i]".blue()
@@ -501,10 +484,7 @@ pub(crate) fn auto_harvest_sessions(session_files: &[std::path::PathBuf]) -> Res
 /// List all available agents and their status
 pub fn list_agents_cli() -> Result<()> {
     println!("{}", "=".repeat(70).cyan());
-    println!(
-        "{} Available Agents",
-        "[*]".bold()
-    );
+    println!("{} Available Agents", "[*]".bold());
     println!("{}", "=".repeat(70).cyan());
     println!();
 

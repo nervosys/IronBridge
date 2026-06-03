@@ -553,7 +553,7 @@ pub fn detect_orphaned(path: Option<&str>, recover: bool) -> Result<()> {
     }
 
     // Sort by last modified (newest first)
-    all_workspaces.sort_by(|a, b| b.3.cmp(&a.3));
+    all_workspaces.sort_by_key(|w| std::cmp::Reverse(w.3));
 
     // The first one (most recently modified) is the "active" workspace
     let active_dir = all_workspaces[0].1.clone();
@@ -881,7 +881,7 @@ pub fn recover_recursive(
 
     // Sort each project's workspaces by last modified (newest first = active)
     for workspaces in path_workspaces.values_mut() {
-        workspaces.sort_by(|a, b| b.3.cmp(&a.3));
+        workspaces.sort_by_key(|w| std::cmp::Reverse(w.3));
     }
 
     // Find projects with orphaned workspaces (more than one hash, or a hash with sessions

@@ -1904,9 +1904,9 @@ fn fix_request_model_states(session_data: &mut serde_json::Value) {
                             "completedAt": timestamp
                         });
                     }
-                    1 | 3 | 4 => {
+                    1 | 3 | 4
                         // Terminal states — ensure completedAt exists
-                        if ms.get("completedAt").is_none() {
+                        if ms.get("completedAt").is_none() => {
                             if let Some(ms_obj) = ms.as_object_mut() {
                                 ms_obj.insert(
                                     "completedAt".to_string(),
@@ -1914,7 +1914,6 @@ fn fix_request_model_states(session_data: &mut serde_json::Value) {
                                 );
                             }
                         }
-                    }
                     _ => {}
                 }
             }
@@ -2313,7 +2312,7 @@ pub fn read_empty_window_sessions() -> Result<Vec<ChatSession>> {
     }
 
     // Sort by last message date (most recent first)
-    sessions.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
+    sessions.sort_by_key(|s| std::cmp::Reverse(s.last_message_date));
 
     Ok(sessions)
 }
@@ -2539,9 +2538,9 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
 
     let kind = entry.get("kind").and_then(|k| k.as_u64()).unwrap_or(99);
     if kind != 0 {
-        return Err(
-            CsmError::InvalidSessionFormat("First JSONL line must be kind:0".to_string()),
-        );
+        return Err(CsmError::InvalidSessionFormat(
+            "First JSONL line must be kind:0".to_string(),
+        ));
     }
 
     // Get the requests array

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use super::run::{resolve_agent, resolve_storage_path, auto_harvest_sessions, AGENTS};
+use super::run::{auto_harvest_sessions, resolve_agent, resolve_storage_path, AGENTS};
 
 /// Run the watch command — monitor agent session directories for changes
 pub fn watch_cli(
@@ -119,11 +119,7 @@ pub fn watch_cli(
             "[i]".blue()
         );
     }
-    println!(
-        "{} Debounce interval: {}s",
-        "[i]".blue(),
-        debounce_secs
-    );
+    println!("{} Debounce interval: {}s", "[i]".blue(), debounce_secs);
     println!(
         "{} Press {} to stop watching",
         "[i]".blue(),
@@ -171,20 +167,14 @@ pub fn watch_cli(
     let mut last_event_time: Option<Instant> = None;
     let mut total_harvested: usize = 0;
 
-    println!(
-        "{} Watching for changes...",
-        "[*]".blue()
-    );
+    println!("{} Watching for changes...", "[*]".blue());
     println!();
 
     loop {
         match rx.recv_timeout(Duration::from_millis(500)) {
             Ok(Ok(event)) => {
                 // Filter for create/modify events on files
-                let dominated = matches!(
-                    event.kind,
-                    EventKind::Create(_) | EventKind::Modify(_)
-                );
+                let dominated = matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_));
 
                 if dominated {
                     for path in event.paths {
@@ -208,21 +198,14 @@ pub fn watch_cli(
             }
             Ok(Err(e)) => {
                 if verbose {
-                    println!(
-                        "{} Watcher error: {}",
-                        "[!]".yellow(),
-                        e
-                    );
+                    println!("{} Watcher error: {}", "[!]".yellow(), e);
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 // Check if we have pending files past the debounce window
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                println!(
-                    "{} Watcher disconnected, stopping...",
-                    "[!]".yellow()
-                );
+                println!("{} Watcher disconnected, stopping...", "[!]".yellow());
                 break;
             }
         }
@@ -245,11 +228,7 @@ pub fn watch_cli(
 
                     for f in &files {
                         if let Some(name) = f.file_name() {
-                            println!(
-                                "   {} {}",
-                                "+".green(),
-                                name.to_string_lossy().dimmed()
-                            );
+                            println!("   {} {}", "+".green(), name.to_string_lossy().dimmed());
                         }
                     }
 
@@ -265,18 +244,11 @@ pub fn watch_cli(
                                 );
                             }
                             Err(e) => {
-                                println!(
-                                    "{} Harvest failed: {}",
-                                    "[!]".yellow(),
-                                    e
-                                );
+                                println!("{} Harvest failed: {}", "[!]".yellow(), e);
                             }
                         }
                     } else {
-                        println!(
-                            "{} Dry-run — skipping harvest",
-                            "[i]".blue()
-                        );
+                        println!("{} Dry-run — skipping harvest", "[i]".blue());
                     }
                     println!();
                 }

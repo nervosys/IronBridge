@@ -264,7 +264,11 @@ impl TeamSearchEngine {
     }
 
     /// Match a session against the query
-    fn match_session(&self, session: &SessionData, query: &TeamSearchQuery) -> Option<TeamSessionResult> {
+    fn match_session(
+        &self,
+        session: &SessionData,
+        query: &TeamSearchQuery,
+    ) -> Option<TeamSessionResult> {
         // Filter by provider
         if let Some(providers) = &query.providers {
             if !providers.contains(&session.provider) {
@@ -304,7 +308,8 @@ impl TeamSearchEngine {
         }
 
         // Text search
-        let (score, highlights) = self.calculate_relevance(session, &query.text, query.search_content);
+        let (score, highlights) =
+            self.calculate_relevance(session, &query.text, query.search_content);
 
         // Require minimum score for text queries
         if !query.text.is_empty() && score < 0.1 {
@@ -374,7 +379,10 @@ impl TeamSearchEngine {
         }
 
         // Provider matching
-        if query_terms.iter().any(|t| session.provider.to_lowercase().contains(t)) {
+        if query_terms
+            .iter()
+            .any(|t| session.provider.to_lowercase().contains(t))
+        {
             score += 1.0;
         }
 
@@ -463,7 +471,11 @@ impl TeamSearchEngine {
     }
 
     /// Calculate facets from search results
-    fn calculate_facets(&self, sessions: &[&SessionData], _query: &TeamSearchQuery) -> SearchFacets {
+    fn calculate_facets(
+        &self,
+        sessions: &[&SessionData],
+        _query: &TeamSearchQuery,
+    ) -> SearchFacets {
         let mut providers: HashMap<String, usize> = HashMap::new();
         let mut members: HashMap<String, MemberFacet> = HashMap::new();
         let mut tags: HashMap<String, usize> = HashMap::new();
@@ -498,18 +510,16 @@ impl TeamSearchEngine {
         let mut date_histogram: Vec<DateBucket> = date_counts
             .into_iter()
             .filter_map(|(date_str, count)| {
-                let date = chrono::NaiveDate::parse_from_str(&format!("{}-01", date_str), "%Y-%m-%d")
-                    .ok()?;
+                let date =
+                    chrono::NaiveDate::parse_from_str(&format!("{}-01", date_str), "%Y-%m-%d")
+                        .ok()?;
                 Some(DateBucket {
-                    date: DateTime::from_naive_utc_and_offset(
-                        date.and_hms_opt(0, 0, 0)?,
-                        Utc,
-                    ),
+                    date: DateTime::from_naive_utc_and_offset(date.and_hms_opt(0, 0, 0)?, Utc),
                     count,
                 })
             })
             .collect();
-        date_histogram.sort_by(|a, b| a.date.cmp(&b.date));
+        date_histogram.sort_by_key(|a| a.date);
 
         SearchFacets {
             providers,

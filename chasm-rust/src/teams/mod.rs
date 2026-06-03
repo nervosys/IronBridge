@@ -4,12 +4,12 @@
 //!
 //! Provides team workspaces, collaboration, RBAC, and activity tracking.
 
-pub mod workspace;
-pub mod rbac;
 pub mod activity;
+pub mod rbac;
 pub mod search;
+pub mod workspace;
 
-pub use workspace::*;
-pub use rbac::*;
 pub use activity::*;
+pub use rbac::*;
 pub use search::*;
+pub use workspace::*;

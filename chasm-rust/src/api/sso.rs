@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use std::io::Read;
 use uuid::Uuid;
 
-use super::auth::{AuthResponse, Claims, PublicUser, SubscriptionTier, User};
 use super::audit::Database;
+use super::auth::{AuthResponse, Claims, PublicUser, SubscriptionTier, User};
 
 // =============================================================================
 // SSO Configuration

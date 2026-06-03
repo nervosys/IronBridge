@@ -213,9 +213,14 @@ impl EdgeCacheManager {
     }
 
     /// Generate cache key from request
-    pub fn generate_key(&self, path: &str, query: Option<&str>, vary_headers: &HashMap<String, String>) -> String {
+    pub fn generate_key(
+        &self,
+        path: &str,
+        query: Option<&str>,
+        vary_headers: &HashMap<String, String>,
+    ) -> String {
         let mut key = path.to_string();
-        
+
         if let Some(q) = query {
             key.push('?');
             key.push_str(q);
@@ -237,7 +242,10 @@ impl EdgeCacheManager {
 
     /// Get cache rule for path
     fn get_rule(&self, path: &str) -> Option<&CacheRule> {
-        self.config.rules.iter().find(|r| path.starts_with(&r.pattern))
+        self.config
+            .rules
+            .iter()
+            .find(|r| path.starts_with(&r.pattern))
     }
 
     /// Get entry from cache
@@ -266,7 +274,9 @@ impl EdgeCacheManager {
     /// Set entry in cache
     pub async fn set(&self, key: String, value: Vec<u8>, content_type: String, path: &str) {
         let rule = self.get_rule(path);
-        let ttl = rule.map(|r| r.ttl_seconds).unwrap_or(self.config.default_ttl_seconds);
+        let ttl = rule
+            .map(|r| r.ttl_seconds)
+            .unwrap_or(self.config.default_ttl_seconds);
         let cache_control = rule
             .map(|r| r.cache_control.clone())
             .unwrap_or_else(|| format!("public, max-age={}", ttl));
@@ -299,7 +309,7 @@ impl EdgeCacheManager {
     async fn evict_if_needed(&self, new_entry_size: usize) {
         let max_size = self.config.max_size_mb * 1024 * 1024;
         let stats = self.stats.read().await;
-        
+
         if stats.current_size_bytes + new_entry_size as u64 <= max_size {
             return;
         }
@@ -343,7 +353,11 @@ impl EdgeCacheManager {
 
         // Sort by hits (ascending) and created_at (ascending)
         let mut entries: Vec<_> = cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        entries.sort_by(|a, b| a.1.hits.cmp(&b.1.hits).then(a.1.created_at.cmp(&b.1.created_at)));
+        entries.sort_by(|a, b| {
+            a.1.hits
+                .cmp(&b.1.hits)
+                .then(a.1.created_at.cmp(&b.1.created_at))
+        });
 
         let mut freed = 0usize;
         for (key, entry) in entries {
@@ -466,7 +480,10 @@ fn md5_hash(input: &str) -> u128 {
 }
 
 fn generate_etag(key: &str) -> String {
-    format!("{:x}", md5_hash(&format!("{}{}", key, Utc::now().timestamp())))
+    format!(
+        "{:x}",
+        md5_hash(&format!("{}{}", key, Utc::now().timestamp()))
+    )
 }
 
 #[cfg(test)]
@@ -479,7 +496,14 @@ mod tests {
         let cache = EdgeCacheManager::new(config);
 
         let key = cache.generate_key("/api/stats", None, &HashMap::new());
-        cache.set(key.clone(), b"test data".to_vec(), "application/json".to_string(), "/api/stats").await;
+        cache
+            .set(
+                key.clone(),
+                b"test data".to_vec(),
+                "application/json".to_string(),
+                "/api/stats",
+            )
+            .await;
 
         let entry = cache.get(&key).await;
         assert!(entry.is_some());
@@ -492,7 +516,14 @@ mod tests {
         let cache = EdgeCacheManager::new(config);
 
         let key = cache.generate_key("/api/test", None, &HashMap::new());
-        cache.set(key.clone(), b"test".to_vec(), "text/plain".to_string(), "/api/test").await;
+        cache
+            .set(
+                key.clone(),
+                b"test".to_vec(),
+                "text/plain".to_string(),
+                "/api/test",
+            )
+            .await;
 
         assert!(cache.get(&key).await.is_some());
 

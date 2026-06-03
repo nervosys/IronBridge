@@ -436,9 +436,7 @@ impl TeamManager {
 
         // Add member to team
         let mut teams = self.teams.write().await;
-        let team = teams
-            .get_mut(&invitation.team_id)
-            .ok_or("Team not found")?;
+        let team = teams.get_mut(&invitation.team_id).ok_or("Team not found")?;
 
         let now = Utc::now();
         let member = TeamMember {
@@ -468,11 +466,7 @@ impl TeamManager {
     }
 
     /// Remove a member from a team
-    pub async fn remove_member(
-        &self,
-        team_id: TeamId,
-        member_id: MemberId,
-    ) -> Result<(), String> {
+    pub async fn remove_member(&self, team_id: TeamId, member_id: MemberId) -> Result<(), String> {
         let mut teams = self.teams.write().await;
         let team = teams.get_mut(&team_id).ok_or("Team not found")?;
 

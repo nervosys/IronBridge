@@ -277,16 +277,20 @@ impl ProviderAdapter for OpenAIAdapter {
 
             // Add tool calls for assistant messages
             if !msg.tool_calls.is_empty() && msg.role == MessageRole::Assistant {
-                message["tool_calls"] = serde_json::json!(msg.tool_calls.iter().map(|tc| {
-                    serde_json::json!({
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": tc.arguments.to_string()
-                        }
+                message["tool_calls"] = serde_json::json!(msg
+                    .tool_calls
+                    .iter()
+                    .map(|tc| {
+                        serde_json::json!({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": tc.arguments.to_string()
+                            }
+                        })
                     })
-                }).collect::<Vec<_>>());
+                    .collect::<Vec<_>>());
             }
 
             // Add images for vision
@@ -315,16 +319,22 @@ impl ProviderAdapter for OpenAIAdapter {
 
         // Convert tools
         let tools = if !context.tools.is_empty() {
-            Some(context.tools.iter().map(|t| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters
-                    }
-                })
-            }).collect())
+            Some(
+                context
+                    .tools
+                    .iter()
+                    .map(|t| {
+                        serde_json::json!({
+                            "type": "function",
+                            "function": {
+                                "name": t.name,
+                                "description": t.description,
+                                "parameters": t.parameters
+                            }
+                        })
+                    })
+                    .collect(),
+            )
         } else {
             None
         };
@@ -420,13 +430,19 @@ impl ProviderAdapter for AnthropicAdapter {
 
         // Convert tools to Anthropic format
         let tools = if !context.tools.is_empty() {
-            Some(context.tools.iter().map(|t| {
-                serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "input_schema": t.parameters
-                })
-            }).collect())
+            Some(
+                context
+                    .tools
+                    .iter()
+                    .map(|t| {
+                        serde_json::json!({
+                            "name": t.name,
+                            "description": t.description,
+                            "input_schema": t.parameters
+                        })
+                    })
+                    .collect(),
+            )
         } else {
             None
         };
@@ -495,7 +511,8 @@ impl ContinuationManager {
 
     /// Register a provider adapter
     pub fn register_adapter(&mut self, adapter: Box<dyn ProviderAdapter>) {
-        self.adapters.insert(adapter.provider_name().to_string(), adapter);
+        self.adapters
+            .insert(adapter.provider_name().to_string(), adapter);
     }
 
     /// Create a new conversation context
@@ -542,7 +559,9 @@ impl ContinuationManager {
         // Record the switch
         let last_provider = context.provider_history.last();
         let switch = ProviderSwitch {
-            from_provider: last_provider.map(|p| p.to_provider.clone()).unwrap_or_default(),
+            from_provider: last_provider
+                .map(|p| p.to_provider.clone())
+                .unwrap_or_default(),
             from_model: last_provider.and_then(|p| p.to_model.clone()),
             to_provider: to_provider.to_string(),
             to_model: to_model.map(String::from),
@@ -557,17 +576,25 @@ impl ContinuationManager {
     }
 
     /// Get context for a provider
-    pub fn get_provider_messages(&self, context_id: Uuid, provider: &str) -> Option<ProviderMessages> {
+    pub fn get_provider_messages(
+        &self,
+        context_id: Uuid,
+        provider: &str,
+    ) -> Option<ProviderMessages> {
         let context = self.contexts.get(&context_id)?;
         let adapter = self.adapters.get(provider)?;
         Some(adapter.to_provider_format(context))
     }
 
     /// Process a response from a provider
-    pub fn process_response(&mut self, context_id: Uuid, response: &ProviderResponse) -> Option<NormalizedMessage> {
+    pub fn process_response(
+        &mut self,
+        context_id: Uuid,
+        response: &ProviderResponse,
+    ) -> Option<NormalizedMessage> {
         let adapter = self.adapters.get(&response.provider)?;
         let message = adapter.from_provider_format(response);
-        
+
         if let Some(context) = self.contexts.get_mut(&context_id) {
             context.messages.push(message.clone());
             context.updated_at = Utc::now();
@@ -589,7 +616,12 @@ impl ContinuationManager {
     }
 
     /// Compress context by generating a summary
-    pub fn compress_context(&mut self, context_id: Uuid, summary_text: &str, topics: Vec<String>) -> bool {
+    pub fn compress_context(
+        &mut self,
+        context_id: Uuid,
+        summary_text: &str,
+        topics: Vec<String>,
+    ) -> bool {
         if let Some(context) = self.contexts.get_mut(&context_id) {
             let last_message_id = context.messages.last().map(|m| m.id).unwrap_or(Uuid::nil());
             context.summary = Some(ConversationSummary {
@@ -622,7 +654,7 @@ mod tests {
     fn test_create_context() {
         let mut manager = ContinuationManager::new();
         let id = manager.create_context("Test Conversation", Some("You are helpful."));
-        
+
         let context = manager.get_context(id).unwrap();
         assert_eq!(context.title, "Test Conversation");
         assert_eq!(context.system_prompt.as_deref(), Some("You are helpful."));
@@ -671,7 +703,12 @@ mod tests {
         manager.add_message(id, message);
 
         // Switch to Anthropic
-        let messages = manager.switch_provider(id, "anthropic", Some("claude-sonnet-4-20250514"), Some("Better for writing"));
+        let messages = manager.switch_provider(
+            id,
+            "anthropic",
+            Some("claude-sonnet-4-20250514"),
+            Some("Better for writing"),
+        );
         assert!(messages.is_some());
 
         let context = manager.get_context(id).unwrap();

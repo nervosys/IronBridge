@@ -102,7 +102,7 @@ pub fn inspect_index(path: Option<&str>, workspace_id: Option<&str>, json: bool)
 
     // Sort by lastMessageDate descending
     let mut entries: Vec<_> = index.entries.iter().collect();
-    entries.sort_by(|a, b| b.1.last_message_date.cmp(&a.1.last_message_date));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.1.last_message_date));
 
     for (id, entry) in &entries {
         let title = if entry.title.len() > 60 {
@@ -401,10 +401,7 @@ pub fn inspect_cache(path: Option<&str>, workspace_id: Option<&str>, json: bool)
     for entry in &state_cache {
         let session_id =
             session_id_from_resource_uri(&entry.resource).unwrap_or_else(|| entry.resource.clone());
-        let read_ts = entry
-            .read
-            .map(fmt_ts)
-            .unwrap_or("(never)".to_string());
+        let read_ts = entry.read.map(fmt_ts).unwrap_or("(never)".to_string());
 
         // Check if this session is in the model cache
         let in_model = model_cache.iter().any(|m| m.resource == entry.resource);
@@ -1144,7 +1141,7 @@ pub fn inspect_rebuild(
     }
 
     // Sort by last_message_date descending (most recent first)
-    sessions.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
+    sessions.sort_by_key(|s| std::cmp::Reverse(s.last_message_date));
 
     let non_empty: Vec<&SessionInfo> = sessions.iter().filter(|s| !s.is_empty).collect();
     let empty: Vec<&SessionInfo> = sessions.iter().filter(|s| s.is_empty).collect();

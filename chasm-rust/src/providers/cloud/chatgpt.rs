@@ -625,8 +625,8 @@ pub fn parse_chatgpt_export(json_data: &str) -> Result<Vec<CloudConversation>> {
             model: None,
             messages: conv
                 .mapping
-                .into_iter()
-                .filter_map(|(_, node)| {
+                .into_values()
+                .filter_map(|node| {
                     node.message.map(|msg| {
                         let content = msg
                             .content

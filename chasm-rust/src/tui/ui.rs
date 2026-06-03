@@ -23,30 +23,30 @@ pub struct Colors;
 #[allow(dead_code)]
 impl Colors {
     // Background colors
-    pub const BG: Color = Color::Rgb(10, 14, 20);          // #0a0e14 deep abyss
-    pub const HEADER_BG: Color = Color::Rgb(22, 27, 34);   // #161b22 elevated surface
+    pub const BG: Color = Color::Rgb(10, 14, 20); // #0a0e14 deep abyss
+    pub const HEADER_BG: Color = Color::Rgb(22, 27, 34); // #161b22 elevated surface
 
     // Selection colors
-    pub const SELECTED_BG: Color = Color::Rgb(8, 36, 46);    // rgba(0,212,255,0.12) over abyss
+    pub const SELECTED_BG: Color = Color::Rgb(8, 36, 46); // rgba(0,212,255,0.12) over abyss
     pub const SELECTED_FG: Color = Color::Rgb(230, 237, 243); // #e6edf3 bright text on selection
 
     // Border colors
-    pub const BORDER: Color = Color::Rgb(33, 38, 45);        // #21262d subtle
+    pub const BORDER: Color = Color::Rgb(33, 38, 45); // #21262d subtle
     pub const BORDER_FOCUSED: Color = Color::Rgb(0, 212, 255); // #00d4ff primary cyan
 
     // Text colors
-    pub const TEXT: Color = Color::Rgb(230, 237, 243);      // #e6edf3 crisp
-    pub const TEXT_DIM: Color = Color::Rgb(139, 148, 158);  // #8b949e muted
+    pub const TEXT: Color = Color::Rgb(230, 237, 243); // #e6edf3 crisp
+    pub const TEXT_DIM: Color = Color::Rgb(139, 148, 158); // #8b949e muted
 
     // Accent colors (Abyss palette)
-    pub const ACCENT: Color = Color::Rgb(0, 212, 255);     // #00d4ff primary cyan
+    pub const ACCENT: Color = Color::Rgb(0, 212, 255); // #00d4ff primary cyan
     pub const SECONDARY: Color = Color::Rgb(124, 58, 237); // #7c3aed purple
-    pub const TEAL: Color = Color::Rgb(0, 201, 167);       // #00c9a7 accent teal
-    pub const SUCCESS: Color = Color::Rgb(63, 185, 80);    // #3fb950 green
-    pub const WARNING: Color = Color::Rgb(210, 153, 34);   // #d29922 amber
-    pub const ERROR: Color = Color::Rgb(248, 81, 73);      // #f85149 red
-    pub const INFO: Color = Color::Rgb(0, 212, 255);       // #00d4ff same as primary
-    pub const PURPLE: Color = Color::Rgb(124, 58, 237);    // #7c3aed same as secondary
+    pub const TEAL: Color = Color::Rgb(0, 201, 167); // #00c9a7 accent teal
+    pub const SUCCESS: Color = Color::Rgb(63, 185, 80); // #3fb950 green
+    pub const WARNING: Color = Color::Rgb(210, 153, 34); // #d29922 amber
+    pub const ERROR: Color = Color::Rgb(248, 81, 73); // #f85149 red
+    pub const INFO: Color = Color::Rgb(0, 212, 255); // #00d4ff same as primary
+    pub const PURPLE: Color = Color::Rgb(124, 58, 237); // #7c3aed same as secondary
 }
 
 /// Render the entire UI
@@ -117,8 +117,7 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     // Stats at end
     spans.push(Span::styled(stats, Style::default().fg(Colors::TEXT_DIM)));
 
-    let header = Paragraph::new(Line::from(spans))
-    .block(
+    let header = Paragraph::new(Line::from(spans)).block(
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Colors::BORDER))
@@ -369,7 +368,11 @@ fn render_session_table(frame: &mut Frame, app: &App, area: Rect) {
                     ws_name,
                     app.visible_session_count(),
                     app.sessions.len(),
-                    if !app.session_filter_query.is_empty() { "filtered" } else { "" },
+                    if !app.session_filter_query.is_empty() {
+                        "filtered"
+                    } else {
+                        ""
+                    },
                 ),
                 Style::default().fg(Colors::ACCENT),
             )),
@@ -438,10 +441,7 @@ fn render_message_preview(frame: &mut Frame, app: &App, area: Rect) {
             if let Some(result) = extract_response_text(resp) {
                 lines.push(Line::from(vec![
                     Span::styled("▎ ", Style::default().fg(Colors::SECONDARY)),
-                    Span::styled(
-                        "Assistant",
-                        Style::default().fg(Colors::SECONDARY).bold(),
-                    ),
+                    Span::styled("Assistant", Style::default().fg(Colors::SECONDARY).bold()),
                 ]));
                 lines.push(Line::from(Span::styled(
                     format!("  {}", truncate_string(&result, 55)),
@@ -554,10 +554,7 @@ fn render_session_detail_view(frame: &mut Frame, app: &App, area: Rect) {
             if let Some(result) = extract_response_text(resp) {
                 lines.push(Line::from(vec![
                     Span::styled("  ▎ ", Style::default().fg(Colors::SECONDARY)),
-                    Span::styled(
-                        "Assistant",
-                        Style::default().fg(Colors::SECONDARY).bold(),
-                    ),
+                    Span::styled("Assistant", Style::default().fg(Colors::SECONDARY).bold()),
                 ]));
                 for line in result.lines().take(20) {
                     lines.push(Line::from(Span::styled(
@@ -648,8 +645,7 @@ fn render_search_results(frame: &mut Frame, app: &App, area: Rect) {
 
             Row::new(vec![
                 Cell::from(format!("{}", i + 1)),
-                Cell::from(truncate_string(&ws_name, 20))
-                    .style(Style::default().fg(Colors::TEAL)),
+                Cell::from(truncate_string(&ws_name, 20)).style(Style::default().fg(Colors::TEAL)),
                 Cell::from(truncate_string(&title, 35)),
                 Cell::from(format!("{}", sr.session_info.message_count))
                     .style(Style::default().fg(Colors::INFO)),
@@ -834,7 +830,10 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
     let spans: Vec<Span> = if app.filter_active {
         vec![
             Span::styled(" Filter: ", Style::default().fg(Colors::TEXT_DIM)),
-            Span::styled(app.filter_query.as_str(), Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                app.filter_query.as_str(),
+                Style::default().fg(Colors::ACCENT),
+            ),
             Span::styled("_", Style::default().fg(Colors::ACCENT)),
             Span::raw("  "),
             Span::styled("Enter", Style::default().fg(Colors::ACCENT)),
@@ -845,7 +844,10 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
     } else if app.session_filter_active {
         vec![
             Span::styled(" Session Filter: ", Style::default().fg(Colors::TEXT_DIM)),
-            Span::styled(app.session_filter_query.as_str(), Style::default().fg(Colors::ACCENT)),
+            Span::styled(
+                app.session_filter_query.as_str(),
+                Style::default().fg(Colors::ACCENT),
+            ),
             Span::styled("_", Style::default().fg(Colors::ACCENT)),
             Span::raw("  "),
             Span::styled("Enter", Style::default().fg(Colors::ACCENT)),
@@ -907,10 +909,7 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         }
         if let Some(msg) = &app.yank_message {
             s.push(Span::raw("    "));
-            s.push(Span::styled(
-                msg.clone(),
-                Style::default().fg(Colors::TEAL),
-            ));
+            s.push(Span::styled(msg.clone(), Style::default().fg(Colors::TEAL)));
         }
         if let Some(status) = &app.status_message {
             s.push(Span::raw("    "));

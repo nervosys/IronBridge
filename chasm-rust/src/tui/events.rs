@@ -75,10 +75,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                             app.export_format_index += 1;
                         }
                     }
-                    KeyCode::Char('k') | KeyCode::Up => {
-                        if app.export_format_index > 0 {
-                            app.export_format_index -= 1;
-                        }
+                    KeyCode::Char('k') | KeyCode::Up if app.export_format_index > 0 => {
+                        app.export_format_index -= 1;
                     }
                     KeyCode::Enter => app.confirm_export(),
                     KeyCode::Esc => app.cancel_export(),
@@ -191,7 +189,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                     }
                 }
                 // Filter (/ works in workspaces and sessions)
-                KeyCode::Char('/') if matches!(app.mode, AppMode::Workspaces | AppMode::Sessions) => {
+                KeyCode::Char('/')
+                    if matches!(app.mode, AppMode::Workspaces | AppMode::Sessions) =>
+                {
                     app.start_filter();
                 }
                 // Global search
@@ -203,7 +203,12 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                     app.refresh();
                 }
                 // Export
-                KeyCode::Char('e') if matches!(app.mode, AppMode::Sessions | AppMode::SessionDetail | AppMode::SearchResults) => {
+                KeyCode::Char('e')
+                    if matches!(
+                        app.mode,
+                        AppMode::Sessions | AppMode::SessionDetail | AppMode::SearchResults
+                    ) =>
+                {
                     app.export_current_session();
                 }
                 // Sort (sessions view)
@@ -211,11 +216,18 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                     app.cycle_sort();
                 }
                 // Delete (sessions view)
-                KeyCode::Char('d') if matches!(app.mode, AppMode::Sessions | AppMode::SessionDetail) => {
+                KeyCode::Char('d')
+                    if matches!(app.mode, AppMode::Sessions | AppMode::SessionDetail) =>
+                {
                     app.delete_current_session();
                 }
                 // Yank (copy) session content
-                KeyCode::Char('y') if matches!(app.mode, AppMode::Sessions | AppMode::SessionDetail | AppMode::SearchResults) => {
+                KeyCode::Char('y')
+                    if matches!(
+                        app.mode,
+                        AppMode::Sessions | AppMode::SessionDetail | AppMode::SearchResults
+                    ) =>
+                {
                     app.yank_session();
                 }
                 _ => continue, // No redraw needed for unhandled keys

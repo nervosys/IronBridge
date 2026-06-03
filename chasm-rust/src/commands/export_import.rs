@@ -67,10 +67,7 @@ pub fn export_batch(destination: &str, project_paths: &[String]) -> Result<()> {
     let mut total_projects = 0;
     let mut projects_with_sessions = 0;
 
-    println!(
-        "\n{} Batch Exporting Sessions",
-        "=".repeat(60).dimmed()
-    );
+    println!("\n{} Batch Exporting Sessions", "=".repeat(60).dimmed());
     println!("{}", "=".repeat(60).dimmed());
 
     for project_path in project_paths {

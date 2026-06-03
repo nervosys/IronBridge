@@ -13,25 +13,23 @@ mod docs;
 mod graphql;
 mod handlers_simple;
 mod handlers_swe;
+mod recording;
 #[cfg(feature = "enterprise")]
 mod retention;
 pub mod sdk;
 #[cfg(feature = "enterprise")]
 mod sso;
-mod recording;
 mod state;
 mod sync;
 mod webhooks;
 mod websocket;
 
-pub use recording::{
-    configure_recording_routes, create_recording_state,
-};
 #[cfg(feature = "enterprise")]
 pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
 };
 pub use auth::configure_auth_routes;
+pub use recording::{configure_recording_routes, create_recording_state};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
 #[cfg(feature = "enterprise")]
@@ -296,6 +294,3 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     eprintln!("[DEBUG] Server stopped.");
     Ok(())
 }
-
-
-

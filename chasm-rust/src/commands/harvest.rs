@@ -3003,14 +3003,12 @@ pub fn harvest_pull(
                     }
                 }
             }
-            "claude" => {
-                if with_files {
-                    eprintln!(
-                        "{} --with-files is not yet supported for Claude; \
+            "claude" if with_files => {
+                eprintln!(
+                    "{} --with-files is not yet supported for Claude; \
                          the conversation will be saved without attachments.",
-                        "warn:".yellow()
-                    );
-                }
+                    "warn:".yellow()
+                );
             }
             _ => {}
         }
@@ -3313,46 +3311,6 @@ fn sanitize_file_name(name: &str) -> String {
         "unnamed".to_string()
     } else {
         cleaned.to_string()
-    }
-}
-
-#[cfg(test)]
-mod pull_url_tests {
-    use super::parse_pull_url;
-
-    #[test]
-    fn test_parse_chatgpt_url() {
-        let t =
-            parse_pull_url("https://chatgpt.com/c/68f6c5a0-1234-4abc-9def-0123456789ab").unwrap();
-        assert_eq!(t.provider_key, "chatgpt");
-        assert_eq!(t.conversation_id, "68f6c5a0-1234-4abc-9def-0123456789ab");
-    }
-
-    #[test]
-    fn test_parse_chat_openai_url() {
-        let t = parse_pull_url("https://chat.openai.com/c/abc123").unwrap();
-        assert_eq!(t.provider_key, "chatgpt");
-        assert_eq!(t.conversation_id, "abc123");
-    }
-
-    #[test]
-    fn test_parse_claude_url() {
-        let t =
-            parse_pull_url("https://claude.ai/chat/11111111-2222-3333-4444-555555555555").unwrap();
-        assert_eq!(t.provider_key, "claude");
-        assert_eq!(t.display_name, "Claude");
-        assert_eq!(t.conversation_id, "11111111-2222-3333-4444-555555555555");
-    }
-
-    #[test]
-    fn test_parse_unknown_host() {
-        assert!(parse_pull_url("https://example.com/c/abc").is_none());
-    }
-
-    #[test]
-    fn test_parse_bad_path() {
-        assert!(parse_pull_url("https://chatgpt.com/").is_none());
-        assert!(parse_pull_url("https://claude.ai/about").is_none());
     }
 }
 
@@ -4619,4 +4577,44 @@ fn convert_session_to_jsonl(session: &ChatSession) -> Result<String> {
     }
 
     Ok(lines.join("\n"))
+}
+
+#[cfg(test)]
+mod pull_url_tests {
+    use super::parse_pull_url;
+
+    #[test]
+    fn test_parse_chatgpt_url() {
+        let t =
+            parse_pull_url("https://chatgpt.com/c/68f6c5a0-1234-4abc-9def-0123456789ab").unwrap();
+        assert_eq!(t.provider_key, "chatgpt");
+        assert_eq!(t.conversation_id, "68f6c5a0-1234-4abc-9def-0123456789ab");
+    }
+
+    #[test]
+    fn test_parse_chat_openai_url() {
+        let t = parse_pull_url("https://chat.openai.com/c/abc123").unwrap();
+        assert_eq!(t.provider_key, "chatgpt");
+        assert_eq!(t.conversation_id, "abc123");
+    }
+
+    #[test]
+    fn test_parse_claude_url() {
+        let t =
+            parse_pull_url("https://claude.ai/chat/11111111-2222-3333-4444-555555555555").unwrap();
+        assert_eq!(t.provider_key, "claude");
+        assert_eq!(t.display_name, "Claude");
+        assert_eq!(t.conversation_id, "11111111-2222-3333-4444-555555555555");
+    }
+
+    #[test]
+    fn test_parse_unknown_host() {
+        assert!(parse_pull_url("https://example.com/c/abc").is_none());
+    }
+
+    #[test]
+    fn test_parse_bad_path() {
+        assert!(parse_pull_url("https://chatgpt.com/").is_none());
+        assert!(parse_pull_url("https://claude.ai/about").is_none());
+    }
 }

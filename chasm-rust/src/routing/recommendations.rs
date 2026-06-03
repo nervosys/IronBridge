@@ -4,7 +4,7 @@
 //!
 //! Recommends relevant sessions based on context, history, and user behavior.
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -166,7 +166,10 @@ pub enum RecommendationContext {
     /// Working with a provider
     Provider { provider: String },
     /// Custom context
-    Custom { topics: Vec<String>, tags: Vec<String> },
+    Custom {
+        topics: Vec<String>,
+        tags: Vec<String>,
+    },
 }
 
 /// Recommendation response
@@ -261,7 +264,10 @@ impl UserProfile {
         }
 
         let total = counts.values().sum::<usize>().max(1) as f64;
-        counts.into_iter().map(|(k, v)| (k, v as f64 / total)).collect()
+        counts
+            .into_iter()
+            .map(|(k, v)| (k, v as f64 / total))
+            .collect()
     }
 
     /// Get topic preferences based on history
@@ -277,7 +283,10 @@ impl UserProfile {
         }
 
         let total = counts.values().sum::<usize>().max(1) as f64;
-        counts.into_iter().map(|(k, v)| (k, v as f64 / total)).collect()
+        counts
+            .into_iter()
+            .map(|(k, v)| (k, v as f64 / total))
+            .collect()
     }
 }
 
@@ -319,7 +328,11 @@ impl RecommendationEngine {
         }
 
         // Add or update session
-        if let Some(existing) = self.sessions.iter_mut().find(|s| s.session_id == session.session_id) {
+        if let Some(existing) = self
+            .sessions
+            .iter_mut()
+            .find(|s| s.session_id == session.session_id)
+        {
             *existing = session;
         } else {
             self.sessions.push(session);
@@ -328,11 +341,18 @@ impl RecommendationEngine {
 
     /// Get or create user profile
     pub fn get_or_create_profile(&mut self, user_id: Uuid) -> &mut UserProfile {
-        self.profiles.entry(user_id).or_insert_with(|| UserProfile::new(user_id))
+        self.profiles
+            .entry(user_id)
+            .or_insert_with(|| UserProfile::new(user_id))
     }
 
     /// Record a user interaction
-    pub fn record_interaction(&mut self, user_id: Uuid, session_id: Uuid, interaction_type: InteractionType) {
+    pub fn record_interaction(
+        &mut self,
+        user_id: Uuid,
+        session_id: Uuid,
+        interaction_type: InteractionType,
+    ) {
         let profile = self.get_or_create_profile(user_id);
         profile.record_interaction(session_id, interaction_type);
     }
@@ -340,25 +360,32 @@ impl RecommendationEngine {
     /// Generate recommendations
     pub fn recommend(&self, request: &RecommendationRequest) -> RecommendationResponse {
         let profile = self.profiles.get(&request.user_id);
-        
+
         // Filter sessions
-        let candidates: Vec<&SessionFeatures> = self.sessions.iter()
+        let candidates: Vec<&SessionFeatures> = self
+            .sessions
+            .iter()
             .filter(|s| !request.exclude.contains(&s.session_id))
             .filter(|s| request.include_archived || !s.archived)
             .filter(|s| {
-                request.provider_filter.as_ref()
+                request
+                    .provider_filter
+                    .as_ref()
                     .map(|p| p.contains(&s.provider))
                     .unwrap_or(true)
             })
             .filter(|s| {
-                request.tag_filter.as_ref()
+                request
+                    .tag_filter
+                    .as_ref()
                     .map(|t| s.tags.iter().any(|st| t.contains(st)))
                     .unwrap_or(true)
             })
             .collect();
 
         // Score sessions based on context
-        let mut scored: Vec<(SessionRecommendation, f64)> = candidates.iter()
+        let mut scored: Vec<(SessionRecommendation, f64)> = candidates
+            .iter()
             .map(|s| self.score_session(s, &request.context, profile))
             .collect();
 
@@ -366,7 +393,8 @@ impl RecommendationEngine {
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
         // Take top N
-        let recommendations: Vec<SessionRecommendation> = scored.into_iter()
+        let recommendations: Vec<SessionRecommendation> = scored
+            .into_iter()
             .take(request.limit)
             .map(|(r, _)| r)
             .collect();
@@ -413,21 +441,25 @@ impl RecommendationEngine {
             }
             RecommendationContext::Searching { query } => {
                 let query_lower = query.to_lowercase();
-                
+
                 // Title match
                 if session.title.to_lowercase().contains(&query_lower) {
                     reasons.push((RecommendationReason::SearchRelevant, 0.8));
                 }
 
                 // Topic match
-                let topic_match = session.topics.iter()
+                let topic_match = session
+                    .topics
+                    .iter()
                     .any(|t| t.to_lowercase().contains(&query_lower));
                 if topic_match {
                     reasons.push((RecommendationReason::SearchRelevant, 0.6));
                 }
 
                 // Tag match
-                let tag_match = session.tags.iter()
+                let tag_match = session
+                    .tags
+                    .iter()
                     .any(|t| t.to_lowercase().contains(&query_lower));
                 if tag_match {
                     reasons.push((RecommendationReason::SameTags, 0.5));
@@ -441,12 +473,18 @@ impl RecommendationEngine {
 
                 // Quality score
                 if session.quality_score > 70 {
-                    reasons.push((RecommendationReason::HighQuality, session.quality_score as f64 / 100.0));
+                    reasons.push((
+                        RecommendationReason::HighQuality,
+                        session.quality_score as f64 / 100.0,
+                    ));
                 }
 
                 // Frequency score
                 if session.access_count > 5 {
-                    reasons.push((RecommendationReason::FrequentlyAccessed, (session.access_count as f64).ln() / 10.0));
+                    reasons.push((
+                        RecommendationReason::FrequentlyAccessed,
+                        (session.access_count as f64).ln() / 10.0,
+                    ));
                 }
             }
             RecommendationContext::Workspace { .. } => {
@@ -476,17 +514,23 @@ impl RecommendationEngine {
         // User profile-based scoring
         if let Some(profile) = profile {
             // Viewed similar sessions
-            let view_count = profile.view_history.iter()
+            let view_count = profile
+                .view_history
+                .iter()
                 .filter(|id| {
-                    self.sessions.iter()
+                    self.sessions
+                        .iter()
                         .find(|s| s.session_id == **id)
                         .map(|viewed| self.topic_similarity(&viewed.topics, &session.topics) > 0.5)
                         .unwrap_or(false)
                 })
                 .count();
-            
+
             if view_count > 0 {
-                reasons.push((RecommendationReason::Collaborative, (view_count as f64).ln() / 5.0));
+                reasons.push((
+                    RecommendationReason::Collaborative,
+                    (view_count as f64).ln() / 5.0,
+                ));
             }
 
             // Bookmarked boost
@@ -506,8 +550,12 @@ impl RecommendationEngine {
         // Sort reasons by score
         reasons.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        let primary_reason = reasons.first().map(|(r, _)| *r).unwrap_or(RecommendationReason::RecentlyActive);
-        let additional_reasons: Vec<RecommendationReason> = reasons.iter().skip(1).take(2).map(|(r, _)| *r).collect();
+        let primary_reason = reasons
+            .first()
+            .map(|(r, _)| *r)
+            .unwrap_or(RecommendationReason::RecentlyActive);
+        let additional_reasons: Vec<RecommendationReason> =
+            reasons.iter().skip(1).take(2).map(|(r, _)| *r).collect();
 
         let recommendation = SessionRecommendation {
             session_id: session.session_id,
@@ -547,40 +595,44 @@ impl RecommendationEngine {
     }
 
     /// Generate explanation text
-    fn generate_explanation(&self, reason: RecommendationReason, session: &SessionFeatures) -> String {
+    fn generate_explanation(
+        &self,
+        reason: RecommendationReason,
+        session: &SessionFeatures,
+    ) -> String {
         match reason {
-            RecommendationReason::SimilarContent => {
-                "Similar to what you're viewing".to_string()
-            }
+            RecommendationReason::SimilarContent => "Similar to what you're viewing".to_string(),
             RecommendationReason::RelatedTopics => {
-                let topics = session.topics.iter().take(2).cloned().collect::<Vec<_>>().join(", ");
+                let topics = session
+                    .topics
+                    .iter()
+                    .take(2)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("Related topics: {}", topics)
             }
             RecommendationReason::SameTags => {
-                let tags = session.tags.iter().take(2).cloned().collect::<Vec<_>>().join(", ");
+                let tags = session
+                    .tags
+                    .iter()
+                    .take(2)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("Tagged with: {}", tags)
             }
-            RecommendationReason::FrequentlyAccessed => {
-                "Frequently accessed session".to_string()
-            }
-            RecommendationReason::RecentlyActive => {
-                "Recently active".to_string()
-            }
+            RecommendationReason::FrequentlyAccessed => "Frequently accessed session".to_string(),
+            RecommendationReason::RecentlyActive => "Recently active".to_string(),
             RecommendationReason::HighQuality => {
                 format!("High quality session ({}% score)", session.quality_score)
             }
-            RecommendationReason::SearchRelevant => {
-                "Matches your search".to_string()
-            }
-            RecommendationReason::Collaborative => {
-                "Popular with similar users".to_string()
-            }
+            RecommendationReason::SearchRelevant => "Matches your search".to_string(),
+            RecommendationReason::Collaborative => "Popular with similar users".to_string(),
             RecommendationReason::ContinueSuggestion => {
                 "You might want to continue this".to_string()
             }
-            RecommendationReason::Trending => {
-                "Trending in your team".to_string()
-            }
+            RecommendationReason::Trending => "Trending in your team".to_string(),
         }
     }
 
@@ -588,14 +640,17 @@ impl RecommendationEngine {
     pub fn get_trending(&self, limit: usize, days: i64) -> Vec<SessionRecommendation> {
         let cutoff = Utc::now() - Duration::days(days);
 
-        let mut trending: Vec<&SessionFeatures> = self.sessions.iter()
+        let mut trending: Vec<&SessionFeatures> = self
+            .sessions
+            .iter()
             .filter(|s| s.last_accessed > cutoff)
             .filter(|s| !s.archived)
             .collect();
 
-        trending.sort_by(|a, b| b.access_count.cmp(&a.access_count));
+        trending.sort_by_key(|t| std::cmp::Reverse(t.access_count));
 
-        trending.into_iter()
+        trending
+            .into_iter()
             .take(limit)
             .map(|s| SessionRecommendation {
                 session_id: s.session_id,
@@ -624,7 +679,12 @@ impl Default for RecommendationEngine {
 mod tests {
     use super::*;
 
-    fn create_test_session(id: Uuid, title: &str, topics: Vec<&str>, tags: Vec<&str>) -> SessionFeatures {
+    fn create_test_session(
+        id: Uuid,
+        title: &str,
+        topics: Vec<&str>,
+        tags: Vec<&str>,
+    ) -> SessionFeatures {
         SessionFeatures {
             session_id: id,
             title: title.to_string(),
@@ -673,7 +733,9 @@ mod tests {
 
         let request = RecommendationRequest {
             user_id: Uuid::new_v4(),
-            context: RecommendationContext::ViewingSession { session_id: session1.session_id },
+            context: RecommendationContext::ViewingSession {
+                session_id: session1.session_id,
+            },
             limit: 5,
             exclude: vec![session1.session_id],
             provider_filter: None,
@@ -683,7 +745,7 @@ mod tests {
 
         let response = engine.recommend(&request);
         assert!(!response.recommendations.is_empty());
-        
+
         // Session3 should score higher than session2 due to topic similarity
         let first = &response.recommendations[0];
         assert_eq!(first.session_id, session3.session_id);

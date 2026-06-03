@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     // Example 4: Find workspaces with most sessions
     println!("\n4. Top workspaces by session count...");
     let mut sorted_workspaces = all_workspaces.clone();
-    sorted_workspaces.sort_by(|a, b| b.chat_session_count.cmp(&a.chat_session_count));
+    sorted_workspaces.sort_by_key(|w| std::cmp::Reverse(w.chat_session_count));
 
     for ws in sorted_workspaces.iter().take(5) {
         if ws.chat_session_count > 0 {

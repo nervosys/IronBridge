@@ -133,7 +133,6 @@ pub struct App {
     pub status_message: Option<String>,
 
     // --- New fields ---
-
     /// Session sort order
     pub sort_order: SortOrder,
     /// Session filter query (within sessions view)
@@ -292,10 +291,8 @@ impl App {
             }
             SortOrder::MessagesDesc => self
                 .sessions
-                .sort_by(|a, b| b.message_count.cmp(&a.message_count)),
-            SortOrder::MessagesAsc => self
-                .sessions
-                .sort_by(|a, b| a.message_count.cmp(&b.message_count)),
+                .sort_by_key(|s| std::cmp::Reverse(s.message_count)),
+            SortOrder::MessagesAsc => self.sessions.sort_by_key(|a| a.message_count),
         }
     }
 
@@ -830,11 +827,8 @@ impl App {
         match content {
             Some(data) => match std::fs::write(&filename, &data) {
                 Ok(_) => {
-                    self.status_message = Some(format!(
-                        "Exported {} to {}",
-                        format.label(),
-                        filename
-                    ));
+                    self.status_message =
+                        Some(format!("Exported {} to {}", format.label(), filename));
                 }
                 Err(e) => {
                     self.status_message = Some(format!("Export failed: {e}"));
@@ -855,7 +849,8 @@ impl App {
     pub fn delete_current_session(&mut self) {
         if !self.confirm_delete {
             self.confirm_delete = true;
-            self.status_message = Some("Press d again to confirm delete, Esc to cancel".to_string());
+            self.status_message =
+                Some("Press d again to confirm delete, Esc to cancel".to_string());
             return;
         }
 
@@ -917,12 +912,7 @@ impl App {
                 let ws_name = self
                     .current_workspace()
                     .and_then(|ws| ws.project_path.as_ref())
-                    .map(|p| {
-                        p.split(['/', '\\'])
-                            .next_back()
-                            .unwrap_or(p)
-                            .to_string()
-                    })
+                    .map(|p| p.split(['/', '\\']).next_back().unwrap_or(p).to_string())
                     .unwrap_or_else(|| "workspace".to_string());
                 format!("◆ Workspaces › {}", ws_name)
             }
@@ -930,12 +920,7 @@ impl App {
                 let ws_name = self
                     .current_workspace()
                     .and_then(|ws| ws.project_path.as_ref())
-                    .map(|p| {
-                        p.split(['/', '\\'])
-                            .next_back()
-                            .unwrap_or(p)
-                            .to_string()
-                    })
+                    .map(|p| p.split(['/', '\\']).next_back().unwrap_or(p).to_string())
                     .unwrap_or_else(|| "workspace".to_string());
                 let session_title = self
                     .current_session()

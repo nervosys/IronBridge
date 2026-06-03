@@ -57,7 +57,11 @@ impl AnalyticsPeriod {
         let now = Utc::now();
         match self {
             Self::Today => now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc(),
-            Self::Yesterday => (now - Duration::days(1)).date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc(),
+            Self::Yesterday => (now - Duration::days(1))
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc(),
             Self::Last7Days => now - Duration::days(7),
             Self::Last30Days => now - Duration::days(30),
             Self::Last90Days => now - Duration::days(90),
@@ -501,7 +505,11 @@ impl AnalyticsEngine {
             entry.messages += session.message_count as u64;
             entry.tokens += session.token_count as u64;
 
-            if entry.last_active.map(|la| session.created_at > la).unwrap_or(true) {
+            if entry
+                .last_active
+                .map(|la| session.created_at > la)
+                .unwrap_or(true)
+            {
                 entry.last_active = Some(session.created_at);
             }
         }
@@ -516,11 +524,14 @@ impl AnalyticsEngine {
         }
 
         let mut result: Vec<_> = stats_map.into_values().collect();
-        result.sort_by(|a, b| b.sessions.cmp(&a.sessions));
+        result.sort_by_key(|r| std::cmp::Reverse(r.sessions));
         result
     }
 
-    fn calculate_provider_breakdown(&self, sessions: &[&SessionAnalyticsData]) -> Vec<ProviderStats> {
+    fn calculate_provider_breakdown(
+        &self,
+        sessions: &[&SessionAnalyticsData],
+    ) -> Vec<ProviderStats> {
         let mut provider_map: HashMap<String, ProviderStats> = HashMap::new();
         let total = sessions.len() as f64;
 
@@ -551,7 +562,7 @@ impl AnalyticsEngine {
         }
 
         let mut result: Vec<_> = provider_map.into_values().collect();
-        result.sort_by(|a, b| b.sessions.cmp(&a.sessions));
+        result.sort_by_key(|r| std::cmp::Reverse(r.sessions));
         result
     }
 
@@ -626,7 +637,7 @@ impl AnalyticsEngine {
                 },
             })
             .collect();
-        top_tags.sort_by(|a, b| b.count.cmp(&a.count));
+        top_tags.sort_by_key(|t| std::cmp::Reverse(t.count));
         top_tags.truncate(10);
 
         SessionAnalytics {
@@ -733,7 +744,8 @@ mod tests {
             joined_at: Utc::now() - Duration::days(30),
         }];
 
-        let dashboard = engine.generate_dashboard(team_id, AnalyticsPeriod::Last7Days, &sessions, &members);
+        let dashboard =
+            engine.generate_dashboard(team_id, AnalyticsPeriod::Last7Days, &sessions, &members);
 
         assert_eq!(dashboard.overview.total_sessions, 1);
         assert_eq!(dashboard.overview.total_messages, 10);

@@ -256,7 +256,7 @@ pub fn find_workspace_by_path(
     }
 
     // Sort by last modified (newest first) and return the most recent
-    matches.sort_by(|a, b| b.3.cmp(&a.3));
+    matches.sort_by_key(|m| std::cmp::Reverse(m.3));
 
     Ok(matches
         .into_iter()
@@ -332,7 +332,7 @@ pub fn find_all_workspaces_for_project(project_name: &str) -> Result<Vec<Workspa
     }
 
     // Sort by last modified (newest first)
-    workspaces.sort_by(|a, b| b.3.cmp(&a.3));
+    workspaces.sort_by_key(|w| std::cmp::Reverse(w.3));
 
     Ok(workspaces)
 }
@@ -483,7 +483,7 @@ pub fn recover_orphaned_sessions_from_old_hashes(project_path: &str) -> Result<u
     }
 
     // Sort by last modified (newest first); first = active
-    all_matches.sort_by(|a, b| b.2.cmp(&a.2));
+    all_matches.sort_by_key(|m| std::cmp::Reverse(m.2));
 
     let active_dir = all_matches[0].1.join("chatSessions");
     if !active_dir.exists() {

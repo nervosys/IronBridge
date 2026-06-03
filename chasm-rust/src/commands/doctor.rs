@@ -187,9 +187,9 @@ pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
                 }
 
                 let chat_sessions_dir = get_vscode_storage_path()
-                        .unwrap_or_default()
-                        .join(&diag.workspace_hash)
-                        .join("chatSessions");
+                    .unwrap_or_default()
+                    .join(&diag.workspace_hash)
+                    .join("chatSessions");
 
                 match repair_workspace_sessions(&diag.workspace_hash, &chat_sessions_dir, true) {
                     Ok((compacted, synced)) => {
@@ -339,13 +339,7 @@ fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<Workspace
                 let issue_summary: Vec<String> = diag
                     .issues
                     .iter()
-                    .map(|i| {
-                        format!(
-                            "{}: {}",
-                            &i.session_id[..8.min(i.session_id.len())],
-                            i.kind
-                        )
-                    })
+                    .map(|i| format!("{}: {}", &i.session_id[..8.min(i.session_id.len())], i.kind))
                     .collect();
 
                 results.push(CheckResult::warn(

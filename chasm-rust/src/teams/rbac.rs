@@ -275,12 +275,29 @@ impl RoleAssignment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Resource {
-    Team { team_id: Uuid },
-    Member { team_id: Uuid, member_id: Uuid },
-    Session { team_id: Uuid, session_id: String, owner_id: Uuid },
-    Comment { team_id: Uuid, comment_id: String, author_id: Uuid },
-    Analytics { team_id: Uuid },
-    Settings { team_id: Uuid },
+    Team {
+        team_id: Uuid,
+    },
+    Member {
+        team_id: Uuid,
+        member_id: Uuid,
+    },
+    Session {
+        team_id: Uuid,
+        session_id: String,
+        owner_id: Uuid,
+    },
+    Comment {
+        team_id: Uuid,
+        comment_id: String,
+        author_id: Uuid,
+    },
+    Analytics {
+        team_id: Uuid,
+    },
+    Settings {
+        team_id: Uuid,
+    },
 }
 
 /// Action being performed
@@ -319,10 +336,8 @@ impl AccessControl {
 
     /// Add a role assignment
     pub fn assign_role(&mut self, assignment: RoleAssignment) {
-        self.assignments.insert(
-            (assignment.team_id, assignment.user_id),
-            assignment,
-        );
+        self.assignments
+            .insert((assignment.team_id, assignment.user_id), assignment);
     }
 
     /// Remove a role assignment
@@ -487,10 +502,16 @@ mod tests {
             session_id: "session-1".to_string(),
             owner_id,
         };
-        assert_eq!(ac.check(user_id, &resource, Action::View), AccessDecision::Allow);
+        assert_eq!(
+            ac.check(user_id, &resource, Action::View),
+            AccessDecision::Allow
+        );
 
         // Cannot edit others' sessions
-        assert_eq!(ac.check(user_id, &resource, Action::Edit), AccessDecision::Deny);
+        assert_eq!(
+            ac.check(user_id, &resource, Action::Edit),
+            AccessDecision::Deny
+        );
 
         // Can edit own sessions
         let own_resource = Resource::Session {
@@ -498,6 +519,9 @@ mod tests {
             session_id: "session-2".to_string(),
             owner_id: user_id,
         };
-        assert_eq!(ac.check(user_id, &own_resource, Action::Edit), AccessDecision::Allow);
+        assert_eq!(
+            ac.check(user_id, &own_resource, Action::Edit),
+            AccessDecision::Allow
+        );
     }
 }

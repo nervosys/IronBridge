@@ -141,8 +141,16 @@ impl ShardRouter {
             if !shard.active {
                 continue;
             }
-            let in_min = shard.range_min.as_ref().map(|m| key >= m.as_str()).unwrap_or(true);
-            let in_max = shard.range_max.as_ref().map(|m| key < m.as_str()).unwrap_or(true);
+            let in_min = shard
+                .range_min
+                .as_ref()
+                .map(|m| key >= m.as_str())
+                .unwrap_or(true);
+            let in_max = shard
+                .range_max
+                .as_ref()
+                .map(|m| key < m.as_str())
+                .unwrap_or(true);
             if in_min && in_max {
                 return shard;
             }
@@ -364,12 +372,14 @@ impl ReplicaManager {
     /// Update replica health status
     pub async fn update_health(&self, replica_id: &str, is_healthy: bool, lag_ms: u64) {
         let mut health = self.health_status.write().await;
-        let entry = health.entry(replica_id.to_string()).or_insert(ReplicaHealth {
-            is_healthy: true,
-            last_check: Utc::now(),
-            lag_ms: 0,
-            error_count: 0,
-        });
+        let entry = health
+            .entry(replica_id.to_string())
+            .or_insert(ReplicaHealth {
+                is_healthy: true,
+                last_check: Utc::now(),
+                lag_ms: 0,
+                error_count: 0,
+            });
 
         entry.is_healthy = is_healthy;
         entry.last_check = Utc::now();

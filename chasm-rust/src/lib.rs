@@ -76,7 +76,6 @@ pub use cli::{
     ListCommands, MergeCommands, MigrationCommands, MoveCommands, ProviderCommands, RunCommands,
     SchemaCommands, ShardCommands, ShowCommands,
 };
-pub use schema::{DetectedSchema, Ontology, ProviderSchema, SchemaRegistry, SchemaVersion};
 pub use database::{ChatDatabase, ShareLinkInfo, ShareLinkParser, ShareLinkProvider};
 pub use error::CsmError;
 pub use models::{
@@ -86,6 +85,7 @@ pub use models::{
 pub use providers::{
     CsmConfig, GenericMessage, GenericSession, ProviderConfig, ProviderRegistry, ProviderType,
 };
+pub use schema::{DetectedSchema, Ontology, ProviderSchema, SchemaRegistry, SchemaVersion};
 pub use storage::{
     add_session_to_index, backup_workspace_sessions, close_vscode_and_wait, compact_session_jsonl,
     is_vscode_running, parse_session_auto, parse_session_file, parse_session_json,

@@ -124,9 +124,9 @@ mod read_chat_session_index_tests {
                     last_response_state: 1,
                     initial_location: "panel".to_string(),
                     is_empty: false,
-                is_imported: None,
-                has_pending_edits: None,
-                is_external: None,
+                    is_imported: None,
+                    has_pending_edits: None,
+                    is_external: None,
                 },
             );
         }
@@ -309,9 +309,9 @@ mod write_chat_session_index_tests {
                         [i as usize % 5]
                         .to_string(),
                     is_empty: i == 0,
-                is_imported: None,
-                has_pending_edits: None,
-                is_external: None,
+                    is_imported: None,
+                    has_pending_edits: None,
+                    is_external: None,
                 },
             );
         }
@@ -1047,7 +1047,7 @@ mod empty_window_sessions_tests {
         ];
 
         // Sort by last_message_date descending (most recent first)
-        sessions.sort_by(|a, b| b.last_message_date.cmp(&a.last_message_date));
+        sessions.sort_by_key(|s| std::cmp::Reverse(s.last_message_date));
 
         assert_eq!(sessions[0].session_id, Some("new".to_string()));
         assert_eq!(sessions[1].session_id, Some("mid".to_string()));

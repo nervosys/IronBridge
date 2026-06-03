@@ -84,8 +84,10 @@ pub use session::{Session, SessionManager, SessionState};
 pub use tools::{BuiltinTools, Tool, ToolBuilder, ToolRegistry};
 
 // Autonomous agent exports
-pub use archival::{ArchivalAgent, ArchivalPolicy, ArchivalResult, ArchivalScheduler, ArchivalStats};
+pub use archival::{
+    ArchivalAgent, ArchivalPolicy, ArchivalResult, ArchivalScheduler, ArchivalStats,
+};
 pub use search_refinement::{
-    EnrichedSearchResult, QueryRefinement, RefinementType, SearchAnalytics,
-    SearchContext, SearchRefinementAgent,
+    EnrichedSearchResult, QueryRefinement, RefinementType, SearchAnalytics, SearchContext,
+    SearchRefinementAgent,
 };

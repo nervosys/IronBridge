@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use uuid::Uuid;
 
-use super::dashboard::{TeamDashboard, AnalyticsPeriod, MemberStats, ProviderStats};
+use super::dashboard::{AnalyticsPeriod, MemberStats, ProviderStats, TeamDashboard};
 
 // ============================================================================
 // Report Types
@@ -137,23 +137,19 @@ impl ReportGenerator {
                 csv.push_str("Metric,Value,Change\n");
                 csv.push_str(&format!(
                     "Total Sessions,{},{:.1}%\n",
-                    dashboard.overview.total_sessions,
-                    dashboard.overview.sessions_change
+                    dashboard.overview.total_sessions, dashboard.overview.sessions_change
                 ));
                 csv.push_str(&format!(
                     "Total Messages,{},{:.1}%\n",
-                    dashboard.overview.total_messages,
-                    dashboard.overview.messages_change
+                    dashboard.overview.total_messages, dashboard.overview.messages_change
                 ));
                 csv.push_str(&format!(
                     "Total Tokens,{},{:.1}%\n",
-                    dashboard.overview.total_tokens,
-                    dashboard.overview.tokens_change
+                    dashboard.overview.total_tokens, dashboard.overview.tokens_change
                 ));
                 csv.push_str(&format!(
                     "Active Members,{},{:.1}%\n",
-                    dashboard.overview.active_members,
-                    dashboard.overview.active_members_change
+                    dashboard.overview.active_members, dashboard.overview.active_members_change
                 ));
                 csv.push_str(&format!(
                     "Avg Sessions/Member,{:.2}\n",
@@ -192,7 +188,10 @@ impl ReportGenerator {
                         member.tokens,
                         member.avg_session_length,
                         member.activity_score,
-                        member.last_active.map(|d| d.to_rfc3339()).unwrap_or_default()
+                        member
+                            .last_active
+                            .map(|d| d.to_rfc3339())
+                            .unwrap_or_default()
                     ));
                 }
             }
@@ -298,7 +297,9 @@ impl ReportGenerator {
         html.push_str(&format!("<title>{}</title>\n", title));
         html.push_str("<style>\n");
         html.push_str("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; color: #333; }\n");
-        html.push_str("h1 { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }\n");
+        html.push_str(
+            "h1 { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }\n",
+        );
         html.push_str("h2 { color: #1f2937; margin-top: 30px; }\n");
         html.push_str("table { border-collapse: collapse; width: 100%; margin: 20px 0; }\n");
         html.push_str("th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; }\n");
@@ -438,7 +439,11 @@ impl ReportGenerator {
     }
 
     /// Generate PDF placeholder (actual PDF generation would require a PDF library)
-    fn generate_pdf_placeholder(&self, request: &ReportRequest, dashboard: &TeamDashboard) -> String {
+    fn generate_pdf_placeholder(
+        &self,
+        request: &ReportRequest,
+        dashboard: &TeamDashboard,
+    ) -> String {
         // In production, use a library like printpdf or wkhtmltopdf
         // For now, return HTML that can be converted to PDF
         self.generate_html(request, dashboard)
@@ -452,10 +457,7 @@ impl ReportGenerator {
             "change-negative"
         };
         let change_str = if change != 0.0 {
-            format!(
-                " <span class=\"{}\">{:+.1}%</span>",
-                change_class, change
-            )
+            format!(" <span class=\"{}\">{:+.1}%</span>", change_class, change)
         } else {
             String::new()
         };

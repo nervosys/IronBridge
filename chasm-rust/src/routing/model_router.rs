@@ -77,39 +77,60 @@ impl TaskType {
         let lower = content.to_lowercase();
 
         // Code-related keywords
-        if lower.contains("```") || lower.contains("code") || lower.contains("function") 
-            || lower.contains("class") || lower.contains("implement") {
+        if lower.contains("```")
+            || lower.contains("code")
+            || lower.contains("function")
+            || lower.contains("class")
+            || lower.contains("implement")
+        {
             if lower.contains("review") || lower.contains("check") {
                 return TaskType::CodeReview;
             }
-            if lower.contains("bug") || lower.contains("fix") || lower.contains("error") 
-                || lower.contains("debug") {
+            if lower.contains("bug")
+                || lower.contains("fix")
+                || lower.contains("error")
+                || lower.contains("debug")
+            {
                 return TaskType::Debugging;
             }
             return TaskType::Coding;
         }
 
         // Math keywords
-        if lower.contains("calculate") || lower.contains("equation") || lower.contains("solve")
-            || lower.contains("math") || lower.contains("formula") {
+        if lower.contains("calculate")
+            || lower.contains("equation")
+            || lower.contains("solve")
+            || lower.contains("math")
+            || lower.contains("formula")
+        {
             return TaskType::Math;
         }
 
         // Analysis keywords
-        if lower.contains("analyze") || lower.contains("analysis") || lower.contains("data")
-            || lower.contains("statistics") || lower.contains("trend") {
+        if lower.contains("analyze")
+            || lower.contains("analysis")
+            || lower.contains("data")
+            || lower.contains("statistics")
+            || lower.contains("trend")
+        {
             return TaskType::Analysis;
         }
 
         // Research keywords
-        if lower.contains("research") || lower.contains("find out") || lower.contains("look up")
-            || lower.contains("search for") {
+        if lower.contains("research")
+            || lower.contains("find out")
+            || lower.contains("look up")
+            || lower.contains("search for")
+        {
             return TaskType::Research;
         }
 
         // Writing keywords
-        if lower.contains("write") || lower.contains("draft") || lower.contains("compose")
-            || lower.contains("edit") {
+        if lower.contains("write")
+            || lower.contains("draft")
+            || lower.contains("compose")
+            || lower.contains("edit")
+        {
             if lower.contains("creative") || lower.contains("story") || lower.contains("poem") {
                 return TaskType::Creative;
             }
@@ -127,20 +148,31 @@ impl TaskType {
         }
 
         // Reasoning
-        if lower.contains("why") || lower.contains("reason") || lower.contains("explain")
-            || lower.contains("logic") {
+        if lower.contains("why")
+            || lower.contains("reason")
+            || lower.contains("explain")
+            || lower.contains("logic")
+        {
             return TaskType::Reasoning;
         }
 
         // Image/vision
-        if lower.contains("image") || lower.contains("picture") || lower.contains("photo")
-            || lower.contains("see") || lower.contains("look at") {
+        if lower.contains("image")
+            || lower.contains("picture")
+            || lower.contains("photo")
+            || lower.contains("see")
+            || lower.contains("look at")
+        {
             return TaskType::Vision;
         }
 
         // Question answering
-        if lower.ends_with('?') || lower.starts_with("what") || lower.starts_with("how")
-            || lower.starts_with("when") || lower.starts_with("where") {
+        if lower.ends_with('?')
+            || lower.starts_with("what")
+            || lower.starts_with("how")
+            || lower.starts_with("when")
+            || lower.starts_with("where")
+        {
             return TaskType::QuestionAnswering;
         }
 
@@ -269,8 +301,7 @@ pub enum RoutingStrategy {
 }
 
 /// Routing constraints
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RoutingConstraints {
     /// Maximum cost per request (USD)
     pub max_cost: Option<f64>,
@@ -287,7 +318,6 @@ pub struct RoutingConstraints {
     /// Require function calling
     pub require_functions: bool,
 }
-
 
 /// Routing configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -443,7 +473,10 @@ impl ModelRouter {
         let selected = scores.first().cloned().unwrap_or_else(|| {
             // Fallback
             ModelScore {
-                model_id: request.config.fallback_model.clone()
+                model_id: request
+                    .config
+                    .fallback_model
+                    .clone()
                     .unwrap_or_else(|| "gpt-4o-mini".to_string()),
                 provider: "openai".to_string(),
                 quality_score: 0.5,
@@ -474,7 +507,11 @@ impl ModelRouter {
     }
 
     /// Check if model meets constraints
-    fn meets_constraints(&self, model: &ModelCapabilities, constraints: &RoutingConstraints) -> bool {
+    fn meets_constraints(
+        &self,
+        model: &ModelCapabilities,
+        constraints: &RoutingConstraints,
+    ) -> bool {
         // Check cost
         if let Some(max_cost) = constraints.max_cost {
             if model.cost_per_1k_output > max_cost * 10.0 {
@@ -522,7 +559,12 @@ impl ModelRouter {
     }
 
     /// Score a model for routing
-    fn score_model(&self, model: &ModelCapabilities, task: TaskType, request: &RoutingRequest) -> ModelScore {
+    fn score_model(
+        &self,
+        model: &ModelCapabilities,
+        task: TaskType,
+        request: &RoutingRequest,
+    ) -> ModelScore {
         let config = &request.config;
 
         // Quality score based on task
@@ -541,9 +583,7 @@ impl ModelRouter {
             RoutingStrategy::BestQuality => quality_score,
             RoutingStrategy::LowestCost => cost_score,
             RoutingStrategy::FastestResponse => latency_score,
-            RoutingStrategy::Balanced => {
-                (quality_score + cost_score + latency_score) / 3.0
-            }
+            RoutingStrategy::Balanced => (quality_score + cost_score + latency_score) / 3.0,
             RoutingStrategy::Custom => {
                 config.quality_weight * quality_score
                     + config.cost_weight * cost_score
@@ -607,7 +647,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Vision, 0.90)
                 .with_task_score(TaskType::Writing, 0.90)
                 .with_task_score(TaskType::Analysis, 0.90),
-
             ModelCapabilities::new("gpt-4o-mini", "openai", "GPT-4o Mini")
                 .with_context_window(128000)
                 .with_vision(true)
@@ -618,7 +657,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Quick, 0.90)
                 .with_task_score(TaskType::QuestionAnswering, 0.85)
                 .with_task_score(TaskType::Coding, 0.80),
-
             ModelCapabilities::new("o1", "openai", "o1")
                 .with_context_window(200000)
                 .with_vision(true)
@@ -629,7 +667,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Math, 0.98)
                 .with_task_score(TaskType::Coding, 0.97)
                 .with_task_score(TaskType::Analysis, 0.95),
-
             // Anthropic models
             ModelCapabilities::new("claude-sonnet-4-20250514", "anthropic", "Claude Sonnet 4")
                 .with_context_window(200000)
@@ -641,7 +678,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Writing, 0.95)
                 .with_task_score(TaskType::Reasoning, 0.92)
                 .with_task_score(TaskType::Analysis, 0.90),
-
             ModelCapabilities::new("claude-3-5-haiku-20241022", "anthropic", "Claude 3.5 Haiku")
                 .with_context_window(200000)
                 .with_vision(true)
@@ -651,7 +687,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Chat, 0.85)
                 .with_task_score(TaskType::Quick, 0.90)
                 .with_task_score(TaskType::Coding, 0.80),
-
             // Google models
             ModelCapabilities::new("gemini-2.5-flash", "google", "Gemini 2.5 Flash")
                 .with_context_window(1000000)
@@ -663,7 +698,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Quick, 0.95)
                 .with_task_score(TaskType::Coding, 0.85)
                 .with_task_score(TaskType::Analysis, 0.85),
-
             ModelCapabilities::new("gemini-2.5-pro", "google", "Gemini 2.5 Pro")
                 .with_context_window(1000000)
                 .with_vision(true)
@@ -674,7 +708,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Reasoning, 0.90)
                 .with_task_score(TaskType::Analysis, 0.90)
                 .with_task_score(TaskType::Research, 0.90),
-
             // Local models (Ollama)
             ModelCapabilities::new("llama3.3:70b", "ollama", "Llama 3.3 70B")
                 .with_context_window(128000)
@@ -685,7 +718,6 @@ impl ModelRouter {
                 .with_task_score(TaskType::Chat, 0.80)
                 .with_task_score(TaskType::Coding, 0.75)
                 .with_task_score(TaskType::Writing, 0.80),
-
             ModelCapabilities::new("qwen2.5-coder:32b", "ollama", "Qwen 2.5 Coder 32B")
                 .with_context_window(32000)
                 .with_vision(false)
@@ -748,11 +780,23 @@ mod tests {
 
     #[test]
     fn test_task_detection() {
-        assert_eq!(TaskType::detect("Write a function to sort an array"), TaskType::Coding);
-        assert_eq!(TaskType::detect("Review this code for bugs"), TaskType::CodeReview);
+        assert_eq!(
+            TaskType::detect("Write a function to sort an array"),
+            TaskType::Coding
+        );
+        assert_eq!(
+            TaskType::detect("Review this code for bugs"),
+            TaskType::CodeReview
+        );
         assert_eq!(TaskType::detect("Calculate 2 + 2"), TaskType::Math);
-        assert_eq!(TaskType::detect("Translate this to Spanish"), TaskType::Translation);
-        assert_eq!(TaskType::detect("What is the weather?"), TaskType::QuestionAnswering);
+        assert_eq!(
+            TaskType::detect("Translate this to Spanish"),
+            TaskType::Translation
+        );
+        assert_eq!(
+            TaskType::detect("What is the weather?"),
+            TaskType::QuestionAnswering
+        );
         assert_eq!(TaskType::detect("Hi"), TaskType::Quick);
     }
 
