@@ -453,7 +453,8 @@ mod http_client_tests {
     fn test_http_client_config_default() {
         let config = HttpClientConfig::default();
 
-        assert_eq!(config.timeout_secs, 30);
+        assert_eq!(config.timeout_secs, 300);
+        assert_eq!(config.connect_timeout_secs, 15);
         assert!(config.user_agent.starts_with("csm/"));
         assert!(!config.accept_invalid_certs);
     }
@@ -462,6 +463,7 @@ mod http_client_tests {
     fn test_http_client_config_custom() {
         let config = HttpClientConfig {
             timeout_secs: 60,
+            connect_timeout_secs: 10,
             user_agent: "custom-agent/1.0".to_string(),
             accept_invalid_certs: true,
         };
