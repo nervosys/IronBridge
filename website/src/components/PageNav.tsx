@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import Link from 'next/link';
 import { flatNav } from '@/lib/navigation';
 

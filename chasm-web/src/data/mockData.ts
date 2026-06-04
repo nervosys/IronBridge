@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Mock data for demo/screenshot mode when API is unavailable
 // This provides realistic-looking data for the UI
 

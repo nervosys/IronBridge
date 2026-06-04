@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // API Context Provider - Global state management for API data
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { configure, connectWebSocket } from '../api/client';

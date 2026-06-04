@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Offline Cache Service
 // Handles local storage of sessions for offline access
 

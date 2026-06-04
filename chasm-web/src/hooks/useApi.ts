@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // React hooks for CSM API data fetching
 // Provides typed, reactive data access with caching and refetching
 

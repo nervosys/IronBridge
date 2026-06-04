@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Chasm Session Tree View Provider
 // Displays chat sessions for a selected workspace
 

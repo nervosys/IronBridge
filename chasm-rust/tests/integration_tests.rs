@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //! Integration tests for Chat System Manager (csm)
 //!
 //! These tests validate the CLI, workspace operations, and end-to-end functionality.

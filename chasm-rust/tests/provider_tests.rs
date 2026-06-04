@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //! Extensive tests for LLM provider integrations
 //!
 //! This test file covers:

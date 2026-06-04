@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { apiClient } from './client';
 import { OAuthProviderType, mapChatProviderToOAuth } from './oauth';
 import { oauthService } from '../services/oauth';

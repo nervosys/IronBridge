@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Export utilities for sessions, chats, and agent runs
 import * as Sharing from 'expo-sharing';
 import { Paths, File } from 'expo-file-system';

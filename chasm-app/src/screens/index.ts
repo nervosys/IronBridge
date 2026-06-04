@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 export { OverviewScreen } from './OverviewScreen';
 export { WorkspacesScreen } from './WorkspacesScreen';
 export { SessionsScreen } from './SessionsScreen';

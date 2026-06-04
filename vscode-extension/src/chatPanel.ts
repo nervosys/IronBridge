@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Chasm Chat Panel - Unified Chat Interface with Agent Support
 // A comprehensive chat interface that rivals Google Agency's Antigravity
 // Types aligned with chasm-shared and chasm-rust Agency

@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Chasm Browser Extension - Microsoft Copilot Content Script
 // Copyright 2025-2026 Nervosys LLC
 

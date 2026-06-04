@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useState, useMemo } from 'react';
 import { Search, FolderOpen, MessageSquare, ExternalLink, MoreVertical, AlertCircle, Loader2 } from 'lucide-react';
 import { useApi } from '../context/ApiContext';

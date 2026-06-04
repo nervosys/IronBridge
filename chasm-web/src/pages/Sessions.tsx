@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useState, useMemo, useCallback } from 'react';
 import { Search, MessageSquare, Calendar, Bot, Filter, AlertCircle, Loader2, FileText, GitCompare, Download, Tag, CheckSquare, SlidersHorizontal } from 'lucide-react';
 import {

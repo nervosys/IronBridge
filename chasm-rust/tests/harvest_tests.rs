@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //! Tests for harvest commands
 //!
 //! Tests for the harvester that collects chat sessions into a database

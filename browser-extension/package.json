@@ -1,1 +1,7 @@
-{}
+{
+  "name": "chasm-browser-extension",
+  "version": "1.0.0",
+  "description": "Chasm browser extension for harvesting AI chat sessions",
+  "license": "AGPL-3.0-only",
+  "private": true
+}
