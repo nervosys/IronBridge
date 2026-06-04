@@ -92,7 +92,8 @@ chasm harvest share <url>          # Import share link
 
 | Type           | Providers                                                                                   |
 | -------------- | ------------------------------------------------------------------------------------------- |
-| **Editors**    | GitHub Copilot, Cursor, Windsurf, Continue.dev, ClaudeCode, OpenCode, OpenClaw, Antigravity |
+| **Editors**    | GitHub Copilot, Cursor, Windsurf, Trae, Continue.dev, Cline, Roo Code, Kilo Code, Antigravity |
+| **CLI Agents** | Claude Code, Codex CLI, Gemini CLI, Antigravity CLI, Cursor CLI, GitHub Copilot CLI, Droid CLI, OpenCode, OpenClaw, Qwen Code, Pi, Goose |
 | **Local LLMs** | Ollama, vLLM, LM Studio, LocalAI, Jan, GPT4All, Llamafile                                   |
 | **Cloud**      | ChatGPT, Claude, Gemini, Perplexity, DeepSeek (via share links)                             |
 

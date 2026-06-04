@@ -306,6 +306,17 @@ fn parse_provider_name(name: &str) -> Result<ProviderType> {
         "opencode" | "open-code" => Ok(ProviderType::OpenCode),
         "openclaw" | "open-claw" | "clawdbot" => Ok(ProviderType::OpenClaw),
         "antigravity" | "ag" => Ok(ProviderType::Antigravity),
+        "antigravitycli" | "antigravity-cli" | "agy" => Ok(ProviderType::AntigravityCli),
+        "cursorcli" | "cursor-cli" | "cursor-agent" => Ok(ProviderType::CursorCli),
+        "copilotcli" | "copilot-cli" => Ok(ProviderType::CopilotCli),
+        "qwencode" | "qwen-code" | "qwen" => Ok(ProviderType::QwenCode),
+        "pi" => Ok(ProviderType::Pi),
+        "goose" => Ok(ProviderType::Goose),
+        "cline" => Ok(ProviderType::Cline),
+        "roocode" | "roo-code" | "roo" => Ok(ProviderType::RooCode),
+        "kilocode" | "kilo-code" | "kilo" => Ok(ProviderType::KiloCode),
+        "windsurf" | "codeium" => Ok(ProviderType::Windsurf),
+        "trae" => Ok(ProviderType::Trae),
         "continuedev" | "continue" | "continue-dev" => Ok(ProviderType::ContinueDev),
         "ollama" => Ok(ProviderType::Ollama),
         "vllm" => Ok(ProviderType::Vllm),
@@ -339,6 +350,17 @@ fn list_provider_types() {
     eprintln!("  opencode     - OpenCode");
     eprintln!("  openclaw     - OpenClaw");
     eprintln!("  antigravity  - Antigravity");
+    eprintln!("  antigravity-cli - Antigravity CLI (Google, ex-Gemini CLI)");
+    eprintln!("  cursor-cli   - Cursor CLI");
+    eprintln!("  copilot-cli  - GitHub Copilot CLI");
+    eprintln!("  qwen-code    - Qwen Code (Alibaba)");
+    eprintln!("  pi           - Pi coding agent");
+    eprintln!("  goose        - Goose (Block)");
+    eprintln!("  cline        - Cline (VS Code extension)");
+    eprintln!("  roocode      - Roo Code (VS Code extension)");
+    eprintln!("  kilocode     - Kilo Code (VS Code extension)");
+    eprintln!("  windsurf     - Windsurf IDE");
+    eprintln!("  trae         - Trae IDE (ByteDance)");
     eprintln!("  continuedev  - Continue.dev");
     eprintln!("  ollama       - Ollama local models");
     eprintln!("  vllm         - vLLM server");

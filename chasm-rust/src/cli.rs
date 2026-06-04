@@ -378,7 +378,7 @@ pub enum ListCommands {
         #[arg(long, short = 's')]
         size: bool,
 
-        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        /// Filter by provider (vscode, cursor, cursorcli, claudecode, codexcli, geminicli, antigravitycli, copilotcli, opencode, openclaw, antigravity, qwencode, pi, goose, cline, roocode, kilocode, windsurf, trae)
         #[arg(long, short = 'p')]
         provider: Option<String>,
 
@@ -402,7 +402,7 @@ pub enum ListCommands {
         #[arg(long, short = 's')]
         size: bool,
 
-        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        /// Filter by provider (vscode, cursor, cursorcli, claudecode, codexcli, geminicli, antigravitycli, copilotcli, opencode, openclaw, antigravity, qwencode, pi, goose, cline, roocode, kilocode, windsurf, trae)
         #[arg(long, short = 'p')]
         provider: Option<String>,
     },
@@ -468,7 +468,7 @@ pub enum FindCommands {
         #[arg(long, short = 'a')]
         all: bool,
 
-        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        /// Filter by provider (vscode, cursor, cursorcli, claudecode, codexcli, geminicli, antigravitycli, copilotcli, opencode, openclaw, antigravity, qwencode, pi, goose, cline, roocode, kilocode, windsurf, trae)
         #[arg(long, short = 'p')]
         provider: Option<String>,
 
@@ -554,7 +554,7 @@ pub enum ShowCommands {
         #[arg(long, short = 'a')]
         agents: bool,
 
-        /// Filter by provider (vscode, cursor, claudecode, opencode, openclaw, antigravity)
+        /// Filter by provider (vscode, cursor, cursorcli, claudecode, codexcli, geminicli, antigravitycli, copilotcli, opencode, openclaw, antigravity, qwencode, pi, goose, cline, roocode, kilocode, windsurf, trae)
         #[arg(long, short = 'p')]
         provider: Option<String>,
 

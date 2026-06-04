@@ -65,8 +65,8 @@ pub(crate) const AGENTS: &[AgentConfig] = &[
     },
     AgentConfig {
         name: "Cursor CLI",
-        provider_type: ProviderType::Cursor,
-        commands: &["cursor"],
+        provider_type: ProviderType::CursorCli,
+        commands: &["cursor-agent", "cursor"],
         default_args: &[],
         harvestable: true,
         storage_hint: "~/.cursor/chats/",
@@ -95,6 +95,46 @@ pub(crate) const AGENTS: &[AgentConfig] = &[
         harvestable: true,
         storage_hint: "~/.gemini/tmp/",
     },
+    AgentConfig {
+        name: "Antigravity CLI",
+        provider_type: ProviderType::AntigravityCli,
+        commands: &["agy"],
+        default_args: &[],
+        harvestable: true,
+        storage_hint: "~/.gemini/antigravity/brain/",
+    },
+    AgentConfig {
+        name: "GitHub Copilot CLI",
+        provider_type: ProviderType::CopilotCli,
+        commands: &["copilot"],
+        default_args: &[],
+        harvestable: true,
+        storage_hint: "~/.copilot/session-state/",
+    },
+    AgentConfig {
+        name: "Qwen Code",
+        provider_type: ProviderType::QwenCode,
+        commands: &["qwen"],
+        default_args: &[],
+        harvestable: true,
+        storage_hint: "~/.qwen/projects/",
+    },
+    AgentConfig {
+        name: "Pi",
+        provider_type: ProviderType::Pi,
+        commands: &["pi"],
+        default_args: &[],
+        harvestable: true,
+        storage_hint: "~/.pi/agent/sessions/",
+    },
+    AgentConfig {
+        name: "Goose",
+        provider_type: ProviderType::Goose,
+        commands: &["goose"],
+        default_args: &[],
+        harvestable: true,
+        storage_hint: "~/.local/share/goose/sessions/",
+    },
 ];
 
 /// Resolve an agent alias to its configuration
@@ -112,6 +152,15 @@ pub(crate) fn resolve_agent(alias: &str) -> Option<&'static AgentConfig> {
             AGENTS.iter().find(|a| a.name == "Droid CLI")
         }
         "gemini" | "gemini-cli" | "geminicli" => AGENTS.iter().find(|a| a.name == "Gemini CLI"),
+        "agy" | "antigravity-cli" | "antigravitycli" => {
+            AGENTS.iter().find(|a| a.name == "Antigravity CLI")
+        }
+        "copilot" | "copilot-cli" | "copilotcli" => {
+            AGENTS.iter().find(|a| a.name == "GitHub Copilot CLI")
+        }
+        "qwen" | "qwen-code" | "qwencode" => AGENTS.iter().find(|a| a.name == "Qwen Code"),
+        "pi" => AGENTS.iter().find(|a| a.name == "Pi"),
+        "goose" => AGENTS.iter().find(|a| a.name == "Goose"),
         _ => None,
     }
 }
@@ -505,6 +554,11 @@ pub fn list_agents_cli() -> Result<()> {
         ("codex", "Codex CLI"),
         ("droid", "Droid CLI"),
         ("gemini", "Gemini CLI"),
+        ("agy", "Antigravity CLI"),
+        ("copilot", "GitHub Copilot CLI"),
+        ("qwen", "Qwen Code"),
+        ("pi", "Pi"),
+        ("goose", "Goose"),
     ];
 
     for (alias, _name) in &aliases {

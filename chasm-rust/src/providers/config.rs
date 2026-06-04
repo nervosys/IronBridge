@@ -42,6 +42,39 @@ pub enum ProviderType {
     /// Antigravity - sessions in workspaceStorage
     #[serde(rename = "antigravity")]
     Antigravity,
+    /// Antigravity CLI (Google, successor to Gemini CLI) - JSONL in ~/.gemini/antigravity/brain/
+    #[serde(rename = "antigravitycli")]
+    AntigravityCli,
+    /// Cursor CLI - sessions in ~/.cursor/chats/
+    #[serde(rename = "cursorcli")]
+    CursorCli,
+    /// GitHub Copilot CLI - sessions in ~/.copilot/session-state/
+    #[serde(rename = "copilotcli")]
+    CopilotCli,
+    /// Qwen Code (Alibaba) - sessions in ~/.qwen/projects/<cwd>/chats/
+    #[serde(rename = "qwencode")]
+    QwenCode,
+    /// Pi coding agent - JSONL sessions in ~/.pi/agent/sessions/
+    #[serde(rename = "pi")]
+    Pi,
+    /// Goose (Block) - legacy JSONL sessions in ~/.local/share/goose/sessions/
+    #[serde(rename = "goose")]
+    Goose,
+    /// Cline VS Code extension - tasks in globalStorage/saoudrizwan.claude-dev/
+    #[serde(rename = "cline")]
+    Cline,
+    /// Roo Code VS Code extension - tasks in globalStorage/rooveterinaryinc.roo-cline/
+    #[serde(rename = "roocode")]
+    RooCode,
+    /// Kilo Code VS Code extension - tasks in globalStorage/kilocode.kilo-code/
+    #[serde(rename = "kilocode")]
+    KiloCode,
+    /// Windsurf IDE (VS Code fork) - sessions in Windsurf workspaceStorage
+    #[serde(rename = "windsurf")]
+    Windsurf,
+    /// Trae IDE (ByteDance, VS Code fork) - sessions in Trae workspaceStorage
+    #[serde(rename = "trae")]
+    Trae,
 
     // ========================================================================
     // Local API Providers
@@ -139,6 +172,17 @@ impl ProviderType {
             Self::OpenCode => "OpenCode",
             Self::OpenClaw => "OpenClaw",
             Self::Antigravity => "Antigravity",
+            Self::AntigravityCli => "Antigravity CLI",
+            Self::CursorCli => "Cursor CLI",
+            Self::CopilotCli => "GitHub Copilot CLI",
+            Self::QwenCode => "Qwen Code",
+            Self::Pi => "Pi",
+            Self::Goose => "Goose",
+            Self::Cline => "Cline",
+            Self::RooCode => "Roo Code",
+            Self::KiloCode => "Kilo Code",
+            Self::Windsurf => "Windsurf",
+            Self::Trae => "Trae",
             // Local API
             Self::Ollama => "Ollama",
             Self::Vllm => "vLLM",
@@ -184,6 +228,17 @@ impl ProviderType {
             Self::OpenCode => None,
             Self::OpenClaw => None,
             Self::Antigravity => None,
+            Self::AntigravityCli => None,
+            Self::CursorCli => None,
+            Self::CopilotCli => None,
+            Self::QwenCode => None,
+            Self::Pi => None,
+            Self::Goose => None,
+            Self::Cline => None,
+            Self::RooCode => None,
+            Self::KiloCode => None,
+            Self::Windsurf => None,
+            Self::Trae => None,
             // Local API
             Self::Ollama => Some("http://localhost:11434"),
             Self::Vllm => Some("http://localhost:8000"),
@@ -229,6 +284,17 @@ impl ProviderType {
                 | Self::OpenCode
                 | Self::OpenClaw
                 | Self::Antigravity
+                | Self::AntigravityCli
+                | Self::CursorCli
+                | Self::CopilotCli
+                | Self::QwenCode
+                | Self::Pi
+                | Self::Goose
+                | Self::Cline
+                | Self::RooCode
+                | Self::KiloCode
+                | Self::Windsurf
+                | Self::Trae
         )
     }
 

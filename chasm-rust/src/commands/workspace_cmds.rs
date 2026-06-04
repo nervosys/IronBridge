@@ -1382,6 +1382,17 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
     let codexcli_path = get_codexcli_storage_path();
     let droidcli_path = get_droidcli_storage_path();
     let geminicli_path = get_geminicli_storage_path();
+    let antigravitycli_path = get_antigravitycli_storage_path();
+    let cursorcli_path = get_cursorcli_storage_path();
+    let copilotcli_path = get_copilotcli_storage_path();
+    let qwencode_path = get_qwencode_storage_path();
+    let pi_path = get_pi_storage_path();
+    let goose_path = get_goose_storage_path();
+    let cline_path = get_cline_storage_path();
+    let roocode_path = get_roocode_storage_path();
+    let kilocode_path = get_kilocode_storage_path();
+    let windsurf_path = get_windsurf_storage_path();
+    let trae_path = get_trae_storage_path();
 
     match provider {
         None => {
@@ -1433,6 +1444,25 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
             if let Some(gc) = geminicli_path {
                 if gc.exists() {
                     paths.push(("geminicli".to_string(), gc));
+                }
+            }
+            for (name, path) in [
+                ("antigravitycli", antigravitycli_path),
+                ("cursorcli", cursorcli_path),
+                ("copilotcli", copilotcli_path),
+                ("qwencode", qwencode_path),
+                ("pi", pi_path),
+                ("goose", goose_path),
+                ("cline", cline_path),
+                ("roocode", roocode_path),
+                ("kilocode", kilocode_path),
+                ("windsurf", windsurf_path),
+                ("trae", trae_path),
+            ] {
+                if let Some(p) = path {
+                    if p.exists() {
+                        paths.push((name.to_string(), p));
+                    }
                 }
             }
         }
@@ -1495,6 +1525,83 @@ fn get_agent_storage_paths(provider: Option<&str>) -> Result<Vec<(String, std::p
                     if let Some(gc) = geminicli_path {
                         if gc.exists() {
                             paths.push(("geminicli".to_string(), gc));
+                        }
+                    }
+                }
+                "antigravitycli" | "antigravity-cli" | "agy" => {
+                    if let Some(agc) = antigravitycli_path {
+                        if agc.exists() {
+                            paths.push(("antigravitycli".to_string(), agc));
+                        }
+                    }
+                }
+                "cursorcli" | "cursor-cli" | "cursor-agent" => {
+                    if let Some(cc) = cursorcli_path {
+                        if cc.exists() {
+                            paths.push(("cursorcli".to_string(), cc));
+                        }
+                    }
+                }
+                "copilotcli" | "copilot-cli" => {
+                    if let Some(cp) = copilotcli_path {
+                        if cp.exists() {
+                            paths.push(("copilotcli".to_string(), cp));
+                        }
+                    }
+                }
+                "qwencode" | "qwen-code" | "qwen" => {
+                    if let Some(qw) = qwencode_path {
+                        if qw.exists() {
+                            paths.push(("qwencode".to_string(), qw));
+                        }
+                    }
+                }
+                "pi" => {
+                    if let Some(pp) = pi_path {
+                        if pp.exists() {
+                            paths.push(("pi".to_string(), pp));
+                        }
+                    }
+                }
+                "goose" => {
+                    if let Some(gp) = goose_path {
+                        if gp.exists() {
+                            paths.push(("goose".to_string(), gp));
+                        }
+                    }
+                }
+                "cline" => {
+                    if let Some(cl) = cline_path {
+                        if cl.exists() {
+                            paths.push(("cline".to_string(), cl));
+                        }
+                    }
+                }
+                "roocode" | "roo-code" | "roo" => {
+                    if let Some(rc) = roocode_path {
+                        if rc.exists() {
+                            paths.push(("roocode".to_string(), rc));
+                        }
+                    }
+                }
+                "kilocode" | "kilo-code" | "kilo" => {
+                    if let Some(kc) = kilocode_path {
+                        if kc.exists() {
+                            paths.push(("kilocode".to_string(), kc));
+                        }
+                    }
+                }
+                "windsurf" | "codeium" => {
+                    if let Some(wp) = windsurf_path {
+                        if wp.exists() {
+                            paths.push(("windsurf".to_string(), wp));
+                        }
+                    }
+                }
+                "trae" => {
+                    if let Some(tp) = trae_path {
+                        if tp.exists() {
+                            paths.push(("trae".to_string(), tp));
                         }
                     }
                 }
@@ -1846,6 +1953,236 @@ fn get_geminicli_storage_path() -> Option<std::path::PathBuf> {
     None
 }
 
+/// Get Antigravity CLI's storage path (Google, successor to Gemini CLI)
+/// Stores JSONL conversation transcripts in ~/.gemini/antigravity/brain/<conversation-id>/
+fn get_antigravitycli_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let brain_path = home.join(".gemini").join("antigravity").join("brain");
+        if brain_path.exists() {
+            return Some(brain_path);
+        }
+        // Early releases used ~/.gemini/antigravity-cli/brain/
+        let alt_path = home.join(".gemini").join("antigravity-cli").join("brain");
+        if alt_path.exists() {
+            return Some(alt_path);
+        }
+    }
+
+    None
+}
+
+/// Get Cursor CLI's storage path (distinct from the Cursor IDE workspaceStorage)
+/// Stores per-session chat data in ~/.cursor/chats/
+fn get_cursorcli_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let chats_path = home.join(".cursor").join("chats");
+        if chats_path.exists() {
+            return Some(chats_path);
+        }
+    }
+
+    None
+}
+
+/// Get GitHub Copilot CLI's storage path
+/// Stores session files in ~/.copilot/session-state/ (legacy: history-session-state/)
+fn get_copilotcli_storage_path() -> Option<std::path::PathBuf> {
+    // XDG_CONFIG_HOME override is respected by Copilot CLI
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        let xdg_path = std::path::PathBuf::from(&xdg)
+            .join("copilot")
+            .join("session-state");
+        if xdg_path.exists() {
+            return Some(xdg_path);
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        let session_path = home.join(".copilot").join("session-state");
+        if session_path.exists() {
+            return Some(session_path);
+        }
+        // Legacy location (pre v0.0.342)
+        let legacy_path = home.join(".copilot").join("history-session-state");
+        if legacy_path.exists() {
+            return Some(legacy_path);
+        }
+    }
+
+    None
+}
+
+/// Get Qwen Code's storage path (Alibaba)
+/// Stores project-scoped chats in ~/.qwen/projects/<sanitized-cwd>/chats/
+fn get_qwencode_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let projects_path = home.join(".qwen").join("projects");
+        if projects_path.exists() {
+            return Some(projects_path);
+        }
+        // Older releases kept per-project temp storage in ~/.qwen/tmp/
+        let tmp_path = home.join(".qwen").join("tmp");
+        if tmp_path.exists() {
+            return Some(tmp_path);
+        }
+    }
+
+    None
+}
+
+/// Get Pi coding agent's storage path
+/// Stores JSONL session trees in ~/.pi/agent/sessions/ (PI_AGENT_DIR override)
+fn get_pi_storage_path() -> Option<std::path::PathBuf> {
+    if let Ok(custom) = std::env::var("PI_AGENT_DIR") {
+        let custom_path = std::path::PathBuf::from(&custom).join("sessions");
+        if custom_path.exists() {
+            return Some(custom_path);
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        let pi_path = home.join(".pi").join("agent").join("sessions");
+        if pi_path.exists() {
+            return Some(pi_path);
+        }
+    }
+
+    None
+}
+
+/// Get Goose's legacy JSONL session path (Block)
+/// Pre-1.10 sessions are JSONL files in ~/.local/share/goose/sessions/
+/// (1.10+ uses a SQLite sessions.db, which requires a dedicated reader)
+fn get_goose_storage_path() -> Option<std::path::PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let goose_path = home
+            .join(".local")
+            .join("share")
+            .join("goose")
+            .join("sessions");
+        if goose_path.exists() {
+            return Some(goose_path);
+        }
+    }
+    if let Some(data) = dirs::data_dir() {
+        let data_path = data.join("goose").join("sessions");
+        if data_path.exists() {
+            return Some(data_path);
+        }
+    }
+    if let Some(local) = dirs::data_local_dir() {
+        let local_path = local.join("goose").join("sessions");
+        if local_path.exists() {
+            return Some(local_path);
+        }
+    }
+
+    None
+}
+
+/// Get a VS Code extension's globalStorage task directory (Cline-family extensions)
+fn get_vscode_global_storage_tasks(extension_id: &str) -> Option<std::path::PathBuf> {
+    let global_storage = {
+        #[cfg(target_os = "windows")]
+        {
+            std::env::var("APPDATA").ok().map(|appdata| {
+                std::path::PathBuf::from(appdata)
+                    .join("Code")
+                    .join("User")
+                    .join("globalStorage")
+            })
+        }
+        #[cfg(target_os = "macos")]
+        {
+            dirs::home_dir().map(|home| {
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Code")
+                    .join("User")
+                    .join("globalStorage")
+            })
+        }
+        #[cfg(target_os = "linux")]
+        {
+            dirs::config_dir().map(|config| config.join("Code").join("User").join("globalStorage"))
+        }
+    }?;
+
+    let tasks_path = global_storage.join(extension_id).join("tasks");
+    if tasks_path.exists() {
+        return Some(tasks_path);
+    }
+
+    None
+}
+
+/// Get Cline's task storage (VS Code extension)
+fn get_cline_storage_path() -> Option<std::path::PathBuf> {
+    get_vscode_global_storage_tasks("saoudrizwan.claude-dev")
+}
+
+/// Get Roo Code's task storage (VS Code extension)
+fn get_roocode_storage_path() -> Option<std::path::PathBuf> {
+    get_vscode_global_storage_tasks("rooveterinaryinc.roo-cline")
+}
+
+/// Get Kilo Code's task storage (VS Code extension)
+fn get_kilocode_storage_path() -> Option<std::path::PathBuf> {
+    get_vscode_global_storage_tasks("kilocode.kilo-code")
+}
+
+/// Get a VS Code fork's workspaceStorage path (Windsurf, Trae)
+fn get_vscode_fork_workspace_storage(app_name: &str) -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(roaming) = std::env::var("APPDATA") {
+            let fork_path = std::path::PathBuf::from(roaming)
+                .join(app_name)
+                .join("User")
+                .join("workspaceStorage");
+            if fork_path.exists() {
+                return Some(fork_path);
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = dirs::home_dir() {
+            let fork_path = home
+                .join("Library")
+                .join("Application Support")
+                .join(app_name)
+                .join("User")
+                .join("workspaceStorage");
+            if fork_path.exists() {
+                return Some(fork_path);
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(config) = dirs::config_dir() {
+            let fork_path = config.join(app_name).join("User").join("workspaceStorage");
+            if fork_path.exists() {
+                return Some(fork_path);
+            }
+        }
+    }
+
+    let _ = app_name;
+    None
+}
+
+/// Get Windsurf IDE's workspace storage path (VS Code fork)
+fn get_windsurf_storage_path() -> Option<std::path::PathBuf> {
+    get_vscode_fork_workspace_storage("Windsurf")
+}
+
+/// Get Trae IDE's workspace storage path (ByteDance, VS Code fork)
+fn get_trae_storage_path() -> Option<std::path::PathBuf> {
+    get_vscode_fork_workspace_storage("Trae")
+}
+
 /// List agent mode sessions (chatEditingSessions / Copilot Edits)
 pub fn list_agents_sessions(
     project_path: Option<&str>,
@@ -1858,7 +2195,7 @@ pub fn list_agents_sessions(
     if storage_paths.is_empty() {
         if let Some(p) = provider {
             println!("No storage found for provider: {}", p);
-            println!("\nSupported providers: vscode, cursor, claudecode, opencode, openclaw, antigravity, codexcli, droidcli, geminicli");
+            println!("\nSupported providers: vscode, cursor, claudecode, opencode, openclaw, antigravity, antigravitycli, codexcli, droidcli, geminicli, cursorcli, copilotcli, qwencode, pi, goose, cline, roocode, kilocode, windsurf, trae");
         } else {
             println!("No workspaces found");
         }

@@ -82,6 +82,7 @@ pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
     results.push(check_claude_code());
     results.push(check_codex_cli());
     results.push(check_gemini_cli());
+    results.extend(check_agent_home_dirs());
 
     // ── Tool checks ────────────────────────────────────────────────
     results.push(check_git());
@@ -552,6 +553,42 @@ fn check_gemini_cli() -> CheckResult {
             "Could not determine home directory",
         ),
     }
+}
+
+/// Detect agent tools that keep session data in a home-relative directory.
+fn check_agent_home_dirs() -> Vec<CheckResult> {
+    // (display name, home-relative session/config dir)
+    const AGENT_DIRS: &[(&str, &[&str])] = &[
+        ("Antigravity CLI", &[".gemini", "antigravity"]),
+        ("Cursor CLI", &[".cursor", "chats"]),
+        ("GitHub Copilot CLI", &[".copilot"]),
+        ("Qwen Code", &[".qwen"]),
+        ("Pi", &[".pi", "agent"]),
+        ("Goose", &[".local", "share", "goose"]),
+        ("OpenCode", &[".opencode"]),
+        ("Droid CLI", &[".factory"]),
+    ];
+
+    let Some(home) = dirs::home_dir() else {
+        return vec![CheckResult::warn(
+            "provider",
+            "Agent CLIs",
+            "Could not determine home directory",
+        )];
+    };
+
+    AGENT_DIRS
+        .iter()
+        .map(|(name, segments)| {
+            let dir = segments.iter().fold(home.clone(), |p, s| p.join(s));
+            if dir.exists() {
+                CheckResult::pass("provider", name)
+                    .with_detail(&format!("Detected at {}", dir.display()))
+            } else {
+                CheckResult::pass("provider", name).with_detail("Not installed")
+            }
+        })
+        .collect()
 }
 
 fn check_git() -> CheckResult {
