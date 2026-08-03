@@ -59,13 +59,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      # Default features only. The `enterprise` feature links libxmlsec1 for
+      # SAML signature verification, which is covered by the Linux-only
+      # `enterprise` job below rather than installed on all three runners.
       - name: Build
         working-directory: chasm-rust
-        run: cargo build --release --all-features
+        run: cargo build --release
 
       - name: Run unit tests
         working-directory: chasm-rust
-        run: cargo test --release --all-features -- --nocapture
+        run: cargo test --release -- --nocapture
 
       - name: Run CLI integration tests
         working-directory: chasm-rust
@@ -90,6 +93,55 @@ jobs:
           if-no-files-found: ignore
 
   # ==========================================================================
+  # Enterprise feature (Linux only)
+  #
+  # `enterprise` pulls in samael, which links libxmlsec1 for XML-DSig
+  # verification on the SAML login path. Rather than provisioning that C
+  # library on the Windows and macOS runners, the feature is built and tested
+  # here and the cross-platform matrix above stays on default features.
+  # ==========================================================================
+  enterprise:
+    name: Enterprise Feature (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XML security libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev libxmlsec1-dev libxmlsec1-openssl pkg-config
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            chasm-rust/target/
+          key: ${{ runner.os }}-cargo-enterprise-${{ hashFiles('chasm-rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-enterprise-
+
+      - name: Build
+        working-directory: chasm-rust
+        run: cargo build --all-features
+
+      - name: Run tests
+        working-directory: chasm-rust
+        run: cargo test --all-features -- --nocapture
+
+      - name: Run Clippy
+        working-directory: chasm-rust
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+  # ==========================================================================
   # Linting and Formatting
   # ==========================================================================
   lint:
@@ -108,9 +160,11 @@ jobs:
         working-directory: chasm-rust
         run: cargo fmt --all -- --check
 
+      # Default features here; --all-features is linted in the enterprise job,
+      # which has the native XML libraries installed.
       - name: Run Clippy
         working-directory: chasm-rust
-        run: cargo clippy --all-features --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
   # ==========================================================================
   # Build Examples
