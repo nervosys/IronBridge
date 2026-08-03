@@ -1469,9 +1469,10 @@ pub trait EmbeddingProvider: Send + Sync {
 
 /// OpenAI embedding provider
 pub struct OpenAIEmbedding {
-    #[allow(dead_code)]
     api_key: String,
     model: String,
+    base_url: String,
+    client: reqwest::Client,
 }
 
 impl OpenAIEmbedding {
@@ -1479,6 +1480,8 @@ impl OpenAIEmbedding {
         Self {
             api_key: api_key.into(),
             model: "text-embedding-3-small".to_string(),
+            base_url: "https://api.openai.com/v1".to_string(),
+            client: reqwest::Client::new(),
         }
     }
 
@@ -1486,22 +1489,99 @@ impl OpenAIEmbedding {
         self.model = model.into();
         self
     }
+
+    /// Override the API base URL (for Azure, a proxy, or a test server).
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    /// POST to /embeddings and return one vector per input, in input order.
+    ///
+    /// The API may return `data` out of order, so entries are sorted by their
+    /// `index` field rather than trusted as received.
+    async fn request_embeddings(&self, inputs: &[String]) -> Result<Vec<Embedding>, MemoryError> {
+        if self.api_key.is_empty() {
+            return Err(MemoryError::Embedding(
+                "no OpenAI API key configured".to_string(),
+            ));
+        }
+        if inputs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        #[derive(serde::Deserialize)]
+        struct EmbeddingData {
+            index: usize,
+            embedding: Vec<f32>,
+        }
+        #[derive(serde::Deserialize)]
+        struct EmbeddingResponse {
+            data: Vec<EmbeddingData>,
+        }
+
+        let response = self
+            .client
+            .post(format!("{}/embeddings", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&serde_json::json!({ "model": self.model, "input": inputs }))
+            .send()
+            .await
+            .map_err(|e| MemoryError::Embedding(format!("request failed: {}", e)))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(MemoryError::Embedding(format!(
+                "embeddings API returned {}: {}",
+                status,
+                body.trim()
+            )));
+        }
+
+        let mut parsed: EmbeddingResponse = response
+            .json()
+            .await
+            .map_err(|e| MemoryError::Embedding(format!("malformed response: {}", e)))?;
+
+        if parsed.data.len() != inputs.len() {
+            return Err(MemoryError::Embedding(format!(
+                "expected {} embeddings, got {}",
+                inputs.len(),
+                parsed.data.len()
+            )));
+        }
+
+        parsed.data.sort_by_key(|d| d.index);
+
+        let expected = self.dimension();
+        for d in &parsed.data {
+            if d.embedding.len() != expected {
+                return Err(MemoryError::Embedding(format!(
+                    "expected {}-dimensional embedding for model {}, got {}",
+                    expected,
+                    self.model,
+                    d.embedding.len()
+                )));
+            }
+        }
+
+        Ok(parsed.data.into_iter().map(|d| d.embedding).collect())
+    }
 }
 
 #[async_trait::async_trait]
 impl EmbeddingProvider for OpenAIEmbedding {
-    async fn embed(&self, _text: &str) -> Result<Embedding, MemoryError> {
-        // Implementation would call OpenAI API
-        // For now, return a placeholder
-        Ok(vec![0.0; 1536])
+    async fn embed(&self, text: &str) -> Result<Embedding, MemoryError> {
+        let mut out = self.request_embeddings(&[text.to_string()]).await?;
+        out.pop()
+            .ok_or_else(|| MemoryError::Embedding("empty response".to_string()))
     }
 
     async fn embed_batch(&self, texts: &[String]) -> Result<Vec<Embedding>, MemoryError> {
-        let mut results = Vec::new();
-        for text in texts {
-            results.push(self.embed(text).await?);
-        }
-        Ok(results)
+        // One request for the whole batch; the previous per-item loop issued
+        // a round trip per text.
+        self.request_embeddings(texts).await
     }
 
     fn dimension(&self) -> usize {
@@ -1584,5 +1664,182 @@ mod tests {
     fn test_estimate_tokens() {
         assert_eq!(estimate_tokens("hello"), 2); // 5 chars / 4 = 1.25 -> 2
         assert_eq!(estimate_tokens("hello world"), 3); // 11 chars / 4 = 2.75 -> 3
+    }
+}
+#[cfg(test)]
+mod openai_embedding_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// A single-purpose HTTP stub.
+    ///
+    /// Hand-rolled rather than pulled from a mocking crate: adding `wiremock`
+    /// as a dev-dependency shifted feature unification enough to trigger an
+    /// internal compiler error in rustc 1.97.1 while building the lib test.
+    struct StubServer {
+        addr: String,
+        hits: Arc<AtomicUsize>,
+    }
+
+    impl StubServer {
+        async fn start(status_line: &'static str, body: String) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = format!("http://{}", listener.local_addr().unwrap());
+            let hits = Arc::new(AtomicUsize::new(0));
+            let hits_task = hits.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    let Ok((mut socket, _)) = listener.accept().await else {
+                        return;
+                    };
+                    hits_task.fetch_add(1, Ordering::SeqCst);
+                    let body = body.clone();
+
+                    tokio::spawn(async move {
+                        // Drain what the client sent; the stub does not need to
+                        // parse it, but the socket must be read for the write
+                        // side to proceed cleanly.
+                        let mut buf = [0u8; 4096];
+                        let _ = socket.read(&mut buf).await;
+
+                        let response = format!(
+                            "HTTP/1.1 {}\r\nContent-Type: application/json\r\n\
+                             Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            status_line,
+                            body.len(),
+                            body
+                        );
+                        let _ = socket.write_all(response.as_bytes()).await;
+                        let _ = socket.shutdown().await;
+                    });
+                }
+            });
+
+            Self { addr, hits }
+        }
+
+        fn provider(&self) -> OpenAIEmbedding {
+            OpenAIEmbedding::new("test-key").with_base_url(&self.addr)
+        }
+
+        fn hits(&self) -> usize {
+            self.hits.load(Ordering::SeqCst)
+        }
+    }
+
+    fn body_with(entries: &[(usize, f32, usize)]) -> String {
+        let data: Vec<serde_json::Value> = entries
+            .iter()
+            .map(|(index, fill, dim)| {
+                serde_json::json!({ "index": index, "embedding": vec![*fill; *dim] })
+            })
+            .collect();
+        serde_json::json!({ "data": data }).to_string()
+    }
+
+    #[tokio::test]
+    async fn embed_returns_the_vector_from_the_api() {
+        let server = StubServer::start("200 OK", body_with(&[(0, 0.25, 1536)])).await;
+
+        let got = server.provider().embed("hello").await.unwrap();
+
+        assert_eq!(got.len(), 1536);
+        assert_eq!(got[0], 0.25);
+    }
+
+    #[tokio::test]
+    async fn embed_batch_reorders_by_index() {
+        // The API may return `data` in any order, so pairing results with
+        // inputs positionally would attach embeddings to the wrong text.
+        let server =
+            StubServer::start("200 OK", body_with(&[(1, 1.0, 1536), (0, 0.0, 1536)])).await;
+
+        let got = server
+            .provider()
+            .embed_batch(&["first".to_string(), "second".to_string()])
+            .await
+            .unwrap();
+
+        assert_eq!(got[0][0], 0.0, "input 0 must get the index-0 embedding");
+        assert_eq!(got[1][0], 1.0, "input 1 must get the index-1 embedding");
+    }
+
+    #[tokio::test]
+    async fn embed_batch_issues_one_request_for_the_whole_batch() {
+        let server = StubServer::start(
+            "200 OK",
+            body_with(&[(0, 0.0, 1536), (1, 0.0, 1536), (2, 0.0, 1536)]),
+        )
+        .await;
+
+        let texts = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        server.provider().embed_batch(&texts).await.unwrap();
+
+        assert_eq!(
+            server.hits(),
+            1,
+            "batch must not fan out into one call per text"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_a_wrong_dimensional_embedding() {
+        let server = StubServer::start("200 OK", body_with(&[(0, 0.0, 64)])).await;
+
+        let err = server.provider().embed("hello").await.unwrap_err();
+
+        assert!(
+            err.to_string().contains("1536-dimensional"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_a_short_batch_response() {
+        let server = StubServer::start("200 OK", body_with(&[(0, 0.0, 1536)])).await;
+
+        let err = server
+            .provider()
+            .embed_batch(&["a".to_string(), "b".to_string()])
+            .await
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("expected 2 embeddings"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn surfaces_api_errors_instead_of_returning_a_vector() {
+        // The bug this replaces returned Ok(vec![0.0; 1536]) unconditionally,
+        // so callers could not tell success from failure.
+        let server = StubServer::start("429 Too Many Requests", "rate limited".to_string()).await;
+
+        let err = server.provider().embed("hello").await.unwrap_err();
+        let msg = err.to_string();
+
+        assert!(msg.contains("429"), "unexpected error: {msg}");
+        assert!(msg.contains("rate limited"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn requires_an_api_key() {
+        let err = OpenAIEmbedding::new("").embed("hello").await.unwrap_err();
+        assert!(err.to_string().contains("no OpenAI API key"));
+    }
+
+    #[tokio::test]
+    async fn empty_batch_makes_no_request() {
+        let server = StubServer::start("500 Internal Server Error", String::new()).await;
+
+        let got = server.provider().embed_batch(&[]).await.unwrap();
+
+        assert!(got.is_empty());
+        assert_eq!(server.hits(), 0);
     }
 }
