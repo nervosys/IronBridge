@@ -4,6 +4,20 @@
 //!
 //! Provides a REST API for the web frontend and mobile app to interact with CSM.
 //! Uses Actix-web for the HTTP server.
+//!
+//! # Status of the `enterprise` feature
+//!
+//! The modules behind `#[cfg(feature = "enterprise")]` (audit, retention, sso)
+//! compile and are unit-tested, but they are **not usable end to end yet**:
+//!
+//! * [`audit::DatabaseOps`] — the persistence contract all three depend on —
+//!   has no implementor in this crate. An embedder must supply one.
+//! * SAML login is disabled at runtime: `SsoService::verify_signature` fails
+//!   closed because XML-DSig verification is unimplemented. Do not relax it
+//!   without a real signature check; `handle_callback` provisions users from
+//!   assertion contents.
+//!
+//! Treat the feature as in-development scaffolding, not a shipped capability.
 
 #[cfg(feature = "enterprise")]
 mod audit;

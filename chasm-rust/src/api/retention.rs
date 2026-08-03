@@ -144,6 +144,13 @@ pub enum RetentionCondition {
 }
 
 /// Fields that can be used for age-based conditions
+///
+/// The shared `At` suffix is intentional: these name timestamp columns, and
+/// `rename_all` turns each variant into the persisted wire name
+/// (`created_at`, `updated_at`, ...). Dropping the suffix to satisfy
+/// `enum_variant_names` would silently change the serialized form and
+/// invalidate stored retention policies.
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgeField {
@@ -332,6 +339,7 @@ impl RetentionService {
         request: CreatePolicyRequest,
     ) -> Result<RetentionPolicy, String> {
         let now = Utc::now().timestamp();
+        let next_run_at = self.calculate_next_run(&request.schedule, None);
 
         let policy = RetentionPolicy {
             id: Uuid::new_v4().to_string(),
@@ -346,7 +354,7 @@ impl RetentionService {
             created_at: now,
             updated_at: now,
             last_run_at: None,
-            next_run_at: self.calculate_next_run(&request.schedule, None),
+            next_run_at,
         };
 
         self.db
@@ -545,14 +553,14 @@ impl RetentionService {
         let mut stats = RetentionStats::default();
 
         // Get expired items based on rules
-        let expired_items = self.get_expired_items(&policy, resource_type).await?;
+        let expired_items = self.get_expired_items(policy, resource_type).await?;
         stats.scanned = expired_items.len();
         stats.expired = expired_items.len();
 
         // Process each expired item
         for item in expired_items {
             let result = self
-                .process_expired_item(&policy, resource_type, &item, &mut stats)
+                .process_expired_item(policy, resource_type, &item, &mut stats)
                 .await;
 
             let action_log = RetentionActionLog {
@@ -707,7 +715,7 @@ impl RetentionService {
                     .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc))
                     .unwrap_or(now);
                 if next <= now {
-                    next = next + Duration::days(1);
+                    next += Duration::days(1);
                 }
                 Some(next.timestamp())
             }

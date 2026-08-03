@@ -14,13 +14,35 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+// Domain types referenced by the `DatabaseOps` contract below.
+use super::auth::User;
+use super::retention::{ExpiredItem, ResourceType, RetentionPolicy};
+use super::sso::{SamlIdpConfig, SsoRequestState, SsoSession};
+
 // use crate::mcp::db::Database;
 // TODO: Database abstraction for Q1 2027
 pub type Database = std::sync::Arc<dyn DatabaseOps + Send + Sync>;
 
+/// Persistence contract for the enterprise API surface.
+///
+/// This trait is the complete set of storage operations that the audit,
+/// retention, and SSO services depend on. It has two layers:
+///
+/// * a generic table-oriented CRUD layer (`create`/`get_by_id`/...), and
+/// * domain-typed operations used directly by the enterprise services.
+///
+/// The domain operations are synchronous because the services call them from
+/// inside otherwise-async methods without awaiting; implementors are expected
+/// to be backed by a blocking store (SQLite) or to bridge internally.
+///
+/// **No implementor ships in-tree yet.** Enterprise services are constructed
+/// with an injected `Database`, so an embedder must supply one before the
+/// `enterprise` feature is functional at runtime. See the tracking note in
+/// `src/api/mod.rs`.
 #[allow(dead_code)]
 #[async_trait::async_trait]
 pub trait DatabaseOps {
+    // -- Generic table operations ------------------------------------------
     async fn create(
         &self,
         table: &str,
@@ -35,6 +57,70 @@ pub trait DatabaseOps {
     async fn count(&self, table: &str, filter: serde_json::Value) -> Result<i64, String>;
     async fn update(&self, table: &str, id: &str, data: serde_json::Value) -> Result<(), String>;
     async fn delete(&self, table: &str, id: &str) -> Result<(), String>;
+
+    // -- Audit log ----------------------------------------------------------
+    fn insert_audit_events(&self, events: &[AuditEvent]) -> Result<(), String>;
+    fn query_audit_events(&self, query: &AuditQuery) -> Result<AuditQueryResult, String>;
+    fn get_audit_event(&self, event_id: &str) -> Result<Option<AuditEvent>, String>;
+    fn get_audit_events_for_resource(
+        &self,
+        resource_type: &str,
+        resource_id: &str,
+        limit: usize,
+    ) -> Result<Vec<AuditEvent>, String>;
+    fn get_audit_events_for_user(
+        &self,
+        user_id: &str,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        limit: usize,
+    ) -> Result<Vec<AuditEvent>, String>;
+
+    // -- Retention policies -------------------------------------------------
+    fn list_retention_policies(
+        &self,
+        organization_id: Option<&str>,
+    ) -> Result<Vec<RetentionPolicy>, String>;
+    fn get_retention_policy(&self, policy_id: &str) -> Result<Option<RetentionPolicy>, String>;
+    fn create_retention_policy(&self, policy: &RetentionPolicy) -> Result<(), String>;
+    fn update_retention_policy(&self, policy: &RetentionPolicy) -> Result<(), String>;
+    fn delete_retention_policy(&self, policy_id: &str) -> Result<(), String>;
+    fn update_retention_policy_execution(
+        &self,
+        policy_id: &str,
+        last_run_at: i64,
+        next_run_at: Option<i64>,
+    ) -> Result<(), String>;
+    fn get_due_retention_policies(&self, now: i64) -> Result<Vec<RetentionPolicy>, String>;
+
+    // -- Retention actions on expired items ---------------------------------
+    fn get_expired_items(
+        &self,
+        resource_type: ResourceType,
+        expiry_threshold: DateTime<Utc>,
+    ) -> Result<Vec<ExpiredItem>, String>;
+    fn delete_item(&self, resource_type: ResourceType, id: &str) -> Result<(), String>;
+    fn archive_item(&self, resource_type: ResourceType, id: &str) -> Result<(), String>;
+    fn soft_delete_item(&self, resource_type: ResourceType, id: &str) -> Result<(), String>;
+    fn anonymize_item(&self, resource_type: ResourceType, id: &str) -> Result<(), String>;
+    fn export_item(&self, resource_type: ResourceType, id: &str) -> Result<(), String>;
+
+    // -- SSO identity providers ---------------------------------------------
+    fn get_sso_idp(&self, idp_id: &str) -> Result<Option<SamlIdpConfig>, String>;
+    fn get_sso_idp_by_domain(&self, domain: &str) -> Result<Option<SamlIdpConfig>, String>;
+    fn list_sso_idps(&self, organization_id: Option<&str>) -> Result<Vec<SamlIdpConfig>, String>;
+    fn create_sso_idp(&self, idp: &SamlIdpConfig) -> Result<(), String>;
+    fn update_sso_idp(&self, idp: &SamlIdpConfig) -> Result<(), String>;
+    fn delete_sso_idp(&self, idp_id: &str) -> Result<(), String>;
+
+    // -- SSO flow state and sessions ----------------------------------------
+    fn store_sso_request_state(&self, state: &SsoRequestState) -> Result<(), String>;
+    fn store_sso_session(&self, session: &SsoSession) -> Result<(), String>;
+
+    // -- Users provisioned through SSO --------------------------------------
+    fn get_user_by_email(&self, email: &str) -> Result<Option<User>, String>;
+    fn create_user(&self, user: &User) -> Result<(), String>;
+    fn update_user_login(&self, user_id: &str) -> Result<(), String>;
 }
 
 // =============================================================================
@@ -189,11 +275,15 @@ pub enum AuditAction {
 }
 
 impl AuditAction {
-    pub fn as_str(&self) -> &str {
-        // Convert enum variant to snake_case string
-        let name = format!("{:?}", self);
-        // This is a simplified conversion - production would use serde
-        &name.to_lowercase()
+    /// snake_case name of the action.
+    ///
+    /// Derived from the serde representation so it can never drift from the
+    /// wire format emitted by `Serialize`.
+    pub fn as_str(&self) -> String {
+        serde_json::to_value(self)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_else(|| format!("{:?}", self).to_lowercase())
     }
 }
 
@@ -406,11 +496,11 @@ impl AuditEventBuilder {
         self.request = Some(AuditRequest {
             method: req.method().to_string(),
             path: req.path().to_string(),
-            query: req
-                .query_string()
-                .is_empty()
-                .then(|| None)
-                .unwrap_or(Some(req.query_string().to_string())),
+            query: if req.query_string().is_empty() {
+                None
+            } else {
+                Some(req.query_string().to_string())
+            },
             ip_address: connection_info.realip_remote_addr().map(|s| s.to_string()),
             user_agent: req
                 .headers()
@@ -662,35 +752,25 @@ impl AuditService {
 
         // Rows
         for event in events {
-            let actor_id = event
-                .actor
-                .as_ref()
-                .map(|a| &a.user_id)
-                .unwrap_or(&String::new());
-            let actor_email = event
-                .actor
-                .as_ref()
-                .map(|a| &a.email)
-                .unwrap_or(&String::new());
+            let actor_id = event.actor.as_ref().map_or("", |a| a.user_id.as_str());
+            let actor_email = event.actor.as_ref().map_or("", |a| a.email.as_str());
             let resource_type = event
                 .resource
                 .as_ref()
-                .map(|r| &r.resource_type)
-                .unwrap_or(&String::new());
+                .map_or("", |r| r.resource_type.as_str());
             let resource_id = event
                 .resource
                 .as_ref()
-                .map(|r| &r.resource_id)
-                .unwrap_or(&String::new());
-            let error = event.error.as_ref().unwrap_or(&String::new());
+                .map_or("", |r| r.resource_id.as_str());
+            let error = event.error.as_deref().unwrap_or("");
 
             output.push_str(&format!(
-                "{},{},{},{},{},{},{},{},{},{},{}\n",
+                "{},{},{},{:?},{:?},{},{},{},{},{},{}\n",
                 event.id,
                 event.timestamp.to_rfc3339(),
                 event.category.as_str(),
-                format!("{:?}", event.action),
-                format!("{:?}", event.outcome),
+                event.action,
+                event.outcome,
                 csv_escape(actor_id),
                 csv_escape(actor_email),
                 resource_type,
