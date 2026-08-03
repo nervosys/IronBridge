@@ -7,12 +7,14 @@
 
 use actix_web::{web, HttpRequest, HttpResponse};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use flate2::read::DeflateDecoder;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::Read;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 use super::audit::Database;
@@ -543,13 +545,18 @@ impl SsoService {
         let assertion = saml_response.assertion.ok_or("No assertion in response")?;
 
         // Validate assertion
-        self.validate_assertion(&assertion)?;
+        Self::validate_assertion(&assertion)?;
 
         // Get IdP config
         let idp = self
             .get_idp_by_domain(&self.extract_domain(&assertion.subject.name_id))
             .await?
             .ok_or("IdP not found")?;
+
+        // Authenticity check. Nothing above this point is trustworthy: the
+        // response is attacker-supplied until its signature is verified
+        // against the IdP certificate.
+        self.verify_signature(&response_str, &idp)?;
 
         // Extract user attributes
         let email = self
@@ -636,13 +643,10 @@ impl SsoService {
     fn parse_saml_response(&self, xml: &str) -> Result<SamlResponse, String> {
         // Simplified parsing - production would use proper XML library
         // This is a placeholder that extracts basic information
-        let id = self
-            .extract_xml_attr(xml, "Response", "ID")
-            .unwrap_or_default();
-        let in_response_to = self
-            .extract_xml_attr(xml, "Response", "InResponseTo")
-            .unwrap_or_default();
-        let issuer = self.extract_xml_element(xml, "Issuer").unwrap_or_default();
+        let id = Self::extract_xml_attr(xml, "Response", "ID").unwrap_or_default();
+        let in_response_to =
+            Self::extract_xml_attr(xml, "Response", "InResponseTo").unwrap_or_default();
+        let issuer = Self::extract_xml_element(xml, "Issuer").unwrap_or_default();
 
         let status = if xml.contains("urn:oasis:names:tc:SAML:2.0:status:Success") {
             SamlStatus::Success
@@ -673,35 +677,25 @@ impl SsoService {
     }
 
     fn parse_assertion(&self, xml: &str) -> Result<SamlAssertion, String> {
-        let id = self
-            .extract_xml_attr(xml, "Assertion", "ID")
-            .unwrap_or_default();
-        let issuer = self.extract_xml_element(xml, "Issuer").unwrap_or_default();
+        let id = Self::extract_xml_attr(xml, "Assertion", "ID").unwrap_or_default();
+        let issuer = Self::extract_xml_element(xml, "Issuer").unwrap_or_default();
 
         // Extract NameID
-        let name_id = self
-            .extract_xml_element(xml, "NameID")
-            .ok_or("NameID not found")?;
-        let name_id_format = self
-            .extract_xml_attr(xml, "NameID", "Format")
-            .unwrap_or_default();
+        let name_id = Self::extract_xml_element(xml, "NameID").ok_or("NameID not found")?;
+        let name_id_format = Self::extract_xml_attr(xml, "NameID", "Format").unwrap_or_default();
 
         // Extract conditions
-        let not_before = self
-            .extract_xml_attr(xml, "Conditions", "NotBefore")
-            .unwrap_or_default();
-        let not_on_or_after = self
-            .extract_xml_attr(xml, "Conditions", "NotOnOrAfter")
-            .unwrap_or_default();
+        let not_before = Self::extract_xml_attr(xml, "Conditions", "NotBefore").unwrap_or_default();
+        let not_on_or_after =
+            Self::extract_xml_attr(xml, "Conditions", "NotOnOrAfter").unwrap_or_default();
 
         // Extract attributes (simplified)
-        let attributes = self.parse_attributes(xml);
+        let attributes = Self::parse_attributes(xml);
 
         // Extract authn statement
-        let authn_instant = self
-            .extract_xml_attr(xml, "AuthnStatement", "AuthnInstant")
-            .unwrap_or_default();
-        let session_index = self.extract_xml_attr(xml, "AuthnStatement", "SessionIndex");
+        let authn_instant =
+            Self::extract_xml_attr(xml, "AuthnStatement", "AuthnInstant").unwrap_or_default();
+        let session_index = Self::extract_xml_attr(xml, "AuthnStatement", "SessionIndex");
 
         Ok(SamlAssertion {
             id,
@@ -724,39 +718,91 @@ impl SsoService {
         })
     }
 
-    fn parse_attributes(&self, xml: &str) -> HashMap<String, Vec<String>> {
-        let mut attributes = HashMap::new();
+    /// Extract `<Attribute Name="...">` elements and their `<AttributeValue>`
+    /// children into a name -> values map.
+    ///
+    /// Namespace prefixes (`saml:Attribute`, `saml2:AttributeValue`, ...) are
+    /// tolerated. This is a pragmatic extractor, not a conforming XML parser;
+    /// it is only ever reached for assertions that have already been rejected
+    /// by [`Self::verify_signature`], which currently fails closed.
+    fn parse_attributes(xml: &str) -> HashMap<String, Vec<String>> {
+        static ATTRIBUTE_BLOCK: OnceLock<Regex> = OnceLock::new();
+        static ATTRIBUTE_VALUE: OnceLock<Regex> = OnceLock::new();
 
-        // Simple regex-like extraction (production would use proper XML parsing)
-        // This finds Attribute elements and their AttributeValue children
-        let attr_pattern = r#"Name="([^"]+)".*?<.*?AttributeValue[^>]*>([^<]+)<"#;
+        let block_re = ATTRIBUTE_BLOCK.get_or_init(|| {
+            Regex::new(
+                r#"(?is)<(?:[A-Za-z0-9_.-]+:)?Attribute\b[^>]*\bName="([^"]*)"[^>]*>(.*?)</(?:[A-Za-z0-9_.-]+:)?Attribute>"#,
+            )
+            .expect("static Attribute regex is valid")
+        });
+        let value_re = ATTRIBUTE_VALUE.get_or_init(|| {
+            Regex::new(
+                r#"(?is)<(?:[A-Za-z0-9_.-]+:)?AttributeValue\b[^>]*>(.*?)</(?:[A-Za-z0-9_.-]+:)?AttributeValue>"#,
+            )
+            .expect("static AttributeValue regex is valid")
+        });
 
-        // For now, return empty - proper implementation would parse XML
+        let mut attributes: HashMap<String, Vec<String>> = HashMap::new();
+        for block in block_re.captures_iter(xml) {
+            let name = block[1].to_string();
+            let values: Vec<String> = value_re
+                .captures_iter(&block[2])
+                .map(|v| v[1].trim().to_string())
+                .collect();
+            attributes.entry(name).or_default().extend(values);
+        }
         attributes
     }
 
-    fn validate_assertion(&self, assertion: &SamlAssertion) -> Result<(), String> {
+    /// Verify the XML signature on a SAML response against the IdP certificate.
+    ///
+    /// # Not implemented — fails closed
+    ///
+    /// Verifying a SAML assertion requires XML-DSig: exclusive canonicalisation
+    /// (xml-c14n11), digest comparison over the `<Reference>` URI, signature
+    /// verification against the IdP's X.509 key, and defences against wrapping
+    /// attacks (XSW). Hand-rolling that on top of regex extraction produces a
+    /// bypass, not a check, so it is refused outright rather than approximated.
+    ///
+    /// Until this is backed by a real XML-DSig implementation, every callback
+    /// is rejected. Do not relax this to `Ok(())`: `handle_callback` provisions
+    /// and authenticates users from the assertion contents, so returning `Ok`
+    /// here accepts forged, unsigned assertions from any origin.
+    fn verify_signature(&self, _response_xml: &str, _idp: &SamlIdpConfig) -> Result<(), String> {
+        Err("SAML signature verification is not implemented; \
+             SSO login is disabled to avoid accepting unsigned assertions"
+            .to_string())
+    }
+
+    /// Validate the assertion's time window.
+    ///
+    /// Fails closed: a missing or unparseable `NotBefore`/`NotOnOrAfter` is
+    /// treated as invalid rather than skipped, so a stripped condition cannot
+    /// buy an attacker an unbounded validity window.
+    fn validate_assertion(assertion: &SamlAssertion) -> Result<(), String> {
         let now = Utc::now();
 
-        // Check time conditions
-        if !assertion.conditions.not_before.is_empty() {
-            if let Ok(not_before) =
-                chrono::DateTime::parse_from_rfc3339(&assertion.conditions.not_before)
-            {
-                if now < not_before.with_timezone(&Utc) {
-                    return Err("Assertion not yet valid".to_string());
-                }
+        let parse = |label: &str, raw: &str| -> Result<DateTime<Utc>, String> {
+            if raw.is_empty() {
+                return Err(format!("Assertion is missing {}", label));
             }
+            chrono::DateTime::parse_from_rfc3339(raw)
+                .map(|t| t.with_timezone(&Utc))
+                .map_err(|e| format!("Assertion has an unparseable {}: {}", label, e))
+        };
+
+        let not_before = parse("NotBefore", &assertion.conditions.not_before)?;
+        if now < not_before {
+            return Err("Assertion not yet valid".to_string());
         }
 
-        if !assertion.conditions.not_on_or_after.is_empty() {
-            if let Ok(not_on_or_after) =
-                chrono::DateTime::parse_from_rfc3339(&assertion.conditions.not_on_or_after)
-            {
-                if now >= not_on_or_after.with_timezone(&Utc) {
-                    return Err("Assertion has expired".to_string());
-                }
-            }
+        let not_on_or_after = parse("NotOnOrAfter", &assertion.conditions.not_on_or_after)?;
+        if now >= not_on_or_after {
+            return Err("Assertion has expired".to_string());
+        }
+
+        if not_on_or_after <= not_before {
+            return Err("Assertion validity window is empty".to_string());
         }
 
         Ok(())
@@ -771,7 +817,7 @@ impl SsoService {
     }
 
     fn extract_domain(&self, email: &str) -> String {
-        email.split('@').last().unwrap_or("").to_string()
+        email.split('@').next_back().unwrap_or("").to_string()
     }
 
     async fn find_or_create_user(
@@ -819,27 +865,35 @@ impl SsoService {
         Ok(user)
     }
 
-    // XML helper methods (simplified - production would use proper XML library)
+    // XML helper methods.
+    //
+    // These are deliberately regex-based rather than backed by a full XML
+    // parser. They are sufficient for reading well-formed IdP responses, but
+    // they are NOT a security boundary: a hostile document can defeat them.
+    // Authenticity must come from [`Self::verify_signature`].
 
-    fn extract_xml_attr(&self, xml: &str, element: &str, attr: &str) -> Option<String> {
-        let pattern = format!(r#"<[^>]*{}[^>]*{}="([^"]+)""#, element, attr);
-        // Simplified extraction
-        None
+    /// Read `attr` off the first `element` start tag, tolerating namespace
+    /// prefixes (`<saml:Conditions NotBefore="..."/>` matches `"Conditions"`).
+    fn extract_xml_attr(xml: &str, element: &str, attr: &str) -> Option<String> {
+        let pattern = format!(
+            r#"(?is)<(?:[A-Za-z0-9_.-]+:)?{}\b[^>]*?\b{}="([^"]*)""#,
+            regex::escape(element),
+            regex::escape(attr),
+        );
+        let re = Regex::new(&pattern).ok()?;
+        re.captures(xml).map(|c| c[1].to_string())
     }
 
-    fn extract_xml_element(&self, xml: &str, element: &str) -> Option<String> {
-        let start_tag = format!("<{}", element);
-        let end_tag = format!("</{}>", element);
-
-        if let Some(start) = xml.find(&start_tag) {
-            if let Some(content_start) = xml[start..].find('>') {
-                let content_start = start + content_start + 1;
-                if let Some(end) = xml[content_start..].find(&end_tag) {
-                    return Some(xml[content_start..content_start + end].to_string());
-                }
-            }
-        }
-        None
+    /// Read the text content of the first `element`, tolerating namespace
+    /// prefixes (`<saml:Issuer>` matches `"Issuer"`).
+    fn extract_xml_element(xml: &str, element: &str) -> Option<String> {
+        let name = regex::escape(element);
+        let pattern = format!(
+            r#"(?is)<(?:[A-Za-z0-9_.-]+:)?{}\b[^>]*>(.*?)</(?:[A-Za-z0-9_.-]+:)?{}>"#,
+            name, name,
+        );
+        let re = Regex::new(&pattern).ok()?;
+        re.captures(xml).map(|c| c[1].trim().to_string())
     }
 }
 
@@ -936,4 +990,166 @@ pub fn configure_sso_routes(cfg: &mut web::ServiceConfig) {
             .route("/idps/{idp_id}", web::put().to(update_idp))
             .route("/idps/{idp_id}", web::delete().to(delete_idp)),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RESPONSE: &str = r#"<?xml version="1.0"?>
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_resp1" InResponseTo="_req9">
+  <saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://idp.example.com</saml:Issuer>
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+  <saml:Assertion ID="_assert7">
+    <saml:Subject>
+      <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">alice@example.com</saml:NameID>
+    </saml:Subject>
+    <saml:Conditions NotBefore="2026-01-01T00:00:00Z" NotOnOrAfter="2026-01-01T01:00:00Z"/>
+    <saml:AttributeStatement>
+      <saml:Attribute Name="email">
+        <saml:AttributeValue>alice@example.com</saml:AttributeValue>
+      </saml:Attribute>
+      <saml:Attribute Name="groups">
+        <saml:AttributeValue>admins</saml:AttributeValue>
+        <saml:AttributeValue>engineering</saml:AttributeValue>
+      </saml:Attribute>
+    </saml:AttributeStatement>
+    <saml:AuthnStatement AuthnInstant="2026-01-01T00:00:05Z" SessionIndex="_sess3"/>
+  </saml:Assertion>
+</samlp:Response>"#;
+
+    fn conditions(not_before: &str, not_on_or_after: &str) -> SamlAssertion {
+        SamlAssertion {
+            id: "a".into(),
+            issuer: "i".into(),
+            subject: SamlSubject {
+                name_id: "alice@example.com".into(),
+                name_id_format: String::new(),
+            },
+            conditions: SamlConditions {
+                not_before: not_before.into(),
+                not_on_or_after: not_on_or_after.into(),
+                audience: vec![],
+            },
+            attributes: HashMap::new(),
+            authn_statement: SamlAuthnStatement {
+                authn_instant: String::new(),
+                session_index: None,
+                session_not_on_or_after: None,
+            },
+        }
+    }
+
+    // -- XML extraction ----------------------------------------------------
+
+    #[test]
+    fn extracts_attributes_through_namespace_prefixes() {
+        assert_eq!(
+            SsoService::extract_xml_attr(RESPONSE, "Response", "ID").as_deref(),
+            Some("_resp1")
+        );
+        assert_eq!(
+            SsoService::extract_xml_attr(RESPONSE, "Assertion", "ID").as_deref(),
+            Some("_assert7")
+        );
+        assert_eq!(
+            SsoService::extract_xml_attr(RESPONSE, "Conditions", "NotOnOrAfter").as_deref(),
+            Some("2026-01-01T01:00:00Z")
+        );
+        assert_eq!(
+            SsoService::extract_xml_attr(RESPONSE, "AuthnStatement", "SessionIndex").as_deref(),
+            Some("_sess3")
+        );
+    }
+
+    #[test]
+    fn missing_attribute_yields_none() {
+        assert_eq!(
+            SsoService::extract_xml_attr(RESPONSE, "Conditions", "Nope"),
+            None
+        );
+        assert_eq!(SsoService::extract_xml_attr(RESPONSE, "Absent", "ID"), None);
+    }
+
+    #[test]
+    fn extracts_element_text_through_namespace_prefixes() {
+        assert_eq!(
+            SsoService::extract_xml_element(RESPONSE, "Issuer").as_deref(),
+            Some("https://idp.example.com")
+        );
+        assert_eq!(
+            SsoService::extract_xml_element(RESPONSE, "NameID").as_deref(),
+            Some("alice@example.com")
+        );
+    }
+
+    #[test]
+    fn parses_multi_valued_attribute_statements() {
+        let attrs = SsoService::parse_attributes(RESPONSE);
+        assert_eq!(
+            attrs.get("email").map(Vec::as_slice),
+            Some(["alice@example.com".to_string()].as_slice())
+        );
+        assert_eq!(
+            attrs.get("groups").map(Vec::as_slice),
+            Some(["admins".to_string(), "engineering".to_string()].as_slice())
+        );
+    }
+
+    // -- Assertion validity window: fails closed ---------------------------
+
+    #[test]
+    fn rejects_assertion_with_missing_conditions() {
+        // Regression: empty conditions used to skip the check and return Ok,
+        // giving a stripped-condition assertion an unbounded validity window.
+        let err = SsoService::validate_assertion(&conditions("", "")).unwrap_err();
+        assert!(err.contains("NotBefore"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rejects_assertion_with_unparseable_conditions() {
+        let err =
+            SsoService::validate_assertion(&conditions("not-a-date", "also-not")).unwrap_err();
+        assert!(err.contains("unparseable"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rejects_expired_assertion() {
+        let err = SsoService::validate_assertion(&conditions(
+            "2020-01-01T00:00:00Z",
+            "2020-01-01T01:00:00Z",
+        ))
+        .unwrap_err();
+        assert_eq!(err, "Assertion has expired");
+    }
+
+    #[test]
+    fn rejects_not_yet_valid_assertion() {
+        let start = Utc::now() + Duration::hours(1);
+        let end = Utc::now() + Duration::hours(2);
+        let err =
+            SsoService::validate_assertion(&conditions(&start.to_rfc3339(), &end.to_rfc3339()))
+                .unwrap_err();
+        assert_eq!(err, "Assertion not yet valid");
+    }
+
+    #[test]
+    fn accepts_assertion_inside_validity_window() {
+        let start = Utc::now() - Duration::minutes(5);
+        let end = Utc::now() + Duration::minutes(5);
+        assert!(SsoService::validate_assertion(&conditions(
+            &start.to_rfc3339(),
+            &end.to_rfc3339()
+        ))
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_validity_window() {
+        let t = Utc::now() - Duration::minutes(5);
+        let err = SsoService::validate_assertion(&conditions(&t.to_rfc3339(), &t.to_rfc3339()))
+            .unwrap_err();
+        // NotOnOrAfter == NotBefore means the window is already closed.
+        assert_eq!(err, "Assertion has expired");
+    }
 }
