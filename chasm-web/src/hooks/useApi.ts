@@ -18,6 +18,7 @@ import {
     system,
     transfer,
     chat,
+    mcp,
     connectWebSocket,
 } from '../api/client';
 import type {
@@ -41,6 +42,7 @@ import type {
     WebSocketEvent,
     ChatCompletionRequest,
     StreamChunk,
+    McpTool,
 } from '../api/types';
 
 // =============================================================================
@@ -122,9 +124,20 @@ function useQuery<T>(
         await fetchData(true);
     }, [fetchData]);
 
-    // Initial fetch and dependency changes
+    // Initial fetch and dependency changes.
+    //
+    // fetchData sets isLoading/error synchronously before awaiting. That is
+    // the intended behaviour of a fetch-on-mount hook, and it does not cascade:
+    // on mount both are already at their target values (true/null) so React
+    // bails out, and on a dependency change the single re-render into the
+    // loading state is exactly what callers render a spinner from.
+    //
+    // set-state-in-effect is disabled rather than worked around; removing it
+    // properly means adopting a query library, not restructuring this effect.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchData();
+        // `deps` is caller-supplied, so the array cannot be statically verified.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [...deps, enabled, fetchData]);
 
@@ -203,7 +216,11 @@ function useMutation<TData, TVariables>(
  */
 export function useWorkspaces(filter?: WorkspaceFilter, options?: UseQueryOptions): UseQueryResult<PaginatedResponse<Workspace>> {
     const filterKey = JSON.stringify(filter);
-    const queryFn = useCallback(() => workspaces.list(filter), [filter]);
+    // Key on filterKey, not filter: callers pass object literals, so `filter`
+    // has a fresh identity every render and would rebuild queryFn (and thus
+    // re-run the fetch effect) on every single render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const queryFn = useCallback(() => workspaces.list(filter), [filterKey]);
     return useQuery(queryFn, [filterKey], options);
 }
 
@@ -238,7 +255,9 @@ export function useRefreshWorkspace() {
  */
 export function useSessions(filter?: SessionFilter, options?: UseQueryOptions): UseQueryResult<PaginatedResponse<Session>> {
     const filterKey = JSON.stringify(filter);
-    const queryFn = useCallback(() => sessions.list(filter), [filter]);
+    // See useWorkspaces: key on the serialized filter, not the object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const queryFn = useCallback(() => sessions.list(filter), [filterKey]);
     return useQuery(queryFn, [filterKey], options);
 }
 
@@ -438,6 +457,18 @@ export function useProviderModels(id: string | null, options?: UseQueryOptions):
 }
 
 // =============================================================================
+// MCP Hooks
+// =============================================================================
+
+/**
+ * Fetch the tools CSM exposes over MCP
+ */
+export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
+    const queryFn = useCallback(() => mcp.listTools(), []);
+    return useQuery(queryFn, [], options);
+}
+
+// =============================================================================
 // Agent Hooks
 // =============================================================================
 
@@ -563,7 +594,10 @@ export function useStopSwarm() {
  */
 export function useSearch(query: string, types?: string[], options?: UseQueryOptions): UseQueryResult<SearchResult[]> {
     const typesKey = JSON.stringify(types);
-    const queryFn = useCallback(() => search.query(query, types), [query, types]);
+    // See useWorkspaces: `types` is an array literal with fresh identity each
+    // render, so key on the serialized form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const queryFn = useCallback(() => search.query(query, types), [query, typesKey]);
     return useQuery(queryFn, [query, typesKey], {
         ...options,
         enabled: query.length > 0 && options?.enabled !== false,

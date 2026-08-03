@@ -8,7 +8,7 @@
  * Supports permissions, expiration, and access controls.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type {
     Session,
     SessionShare,
@@ -376,9 +376,18 @@ export function ShareSessionModal({
     const [createdShareUrl, setCreatedShareUrl] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
 
+    // Expiry needs a clock, but reading Date.now() during render is impure and
+    // would also freeze the cutoff at the last existingShares change — a share
+    // expiring while the modal is open would stay listed. Tick it instead.
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 30_000);
+        return () => clearInterval(timer);
+    }, []);
+
     const activeShares = useMemo<SessionShare[]>(
-        () => existingShares.filter((s: SessionShare) => !s.expiresAt || s.expiresAt > Date.now()),
-        [existingShares]
+        () => existingShares.filter((s: SessionShare) => !s.expiresAt || s.expiresAt > now),
+        [existingShares, now]
     );
 
     const activeAccess = useMemo<SessionAccess[]>(

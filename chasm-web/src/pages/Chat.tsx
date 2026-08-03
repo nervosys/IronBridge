@@ -196,13 +196,11 @@ export default function Chat() {
     }, [showSettings]);
 
     // New chat function - defined before useEffect that uses it
-    /* eslint-disable react-hooks/preserve-manual-memoization */
     const newChat = useCallback(() => {
         setActiveSessionId(null);
         setInput('');
         chatStream.reset();
     }, [chatStream]);
-    /* eslint-enable react-hooks/preserve-manual-memoization */
 
     // Keyboard shortcuts
     useEffect(() => {
