@@ -270,33 +270,31 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
         }
     }, [lastEvent, refetchSessions, refetchStatistics, refetchHealth]);
 
-    // Memoized context value - use mock data as fallback when API fails or is unavailable
-    // Check for connection errors early (network errors happen fast)
-    const hasConnectionError = error !== null && (
-        error.message?.includes('fetch') ||
-        error.message?.includes('network') ||
-        error.message?.includes('ECONNREFUSED') ||
-        error.message?.includes('Failed to fetch') ||
-        error.message?.includes('Network Error')
-    );
-    // Demo mode immediately uses mock data without waiting for API
-    const useMockData = config.enableDemoMode || hasConnectionError || (error !== null) || (!isLoading && !workspacesData?.items?.length);
+    // Mock data is a demo-mode affordance ONLY, opted into with
+    // VITE_ENABLE_DEMO_MODE. It must never stand in for a real backend:
+    // an empty list means the backend is empty, and an error means an error.
+    //
+    // This previously also triggered on any error and on an empty workspace
+    // list, so a reachable-but-empty (or failing) API rendered a fully
+    // populated dashboard of fixtures, while `error` was forced to null and
+    // hid the failure from the error states the pages already implement.
+    const demoMode = config.enableDemoMode;
 
     const value = useMemo<ApiContextValue>(
         () => ({
-            isConnected: useMockData ? true : wsConnected, // Show connected in demo mode
-            isLoading: useMockData ? false : isLoading, // Don't show loading if using mock data
-            error: useMockData ? null : error, // Hide error when using mock data
-            workspaces: (workspacesData?.items?.length && !config.enableDemoMode) ? workspacesData.items : (useMockData ? mockWorkspaces : []),
-            sessions: (sessionsData?.items?.length && !config.enableDemoMode) ? sessionsData.items : (useMockData ? mockSessions : []),
-            providers: (providersData?.length && !config.enableDemoMode) ? providersData : (useMockData ? mockProviders : []),
-            providerHealth: (providerHealthData?.length && !config.enableDemoMode) ? providerHealthData : (useMockData ? mockProviderHealth : []),
-            agents: (agentsData?.length && !config.enableDemoMode) ? agentsData : (useMockData ? mockAgents : []),
-            swarms: (swarmsData?.length && !config.enableDemoMode) ? swarmsData : (useMockData ? mockSwarms : []),
-            accounts: (accountsData?.length && !config.enableDemoMode) ? accountsData : (useMockData ? mockAccounts : []),
-            statistics: (!config.enableDemoMode && statisticsData) ? statisticsData : (useMockData ? mockStatistics : null),
+            isConnected: demoMode ? true : wsConnected,
+            isLoading: demoMode ? false : isLoading,
+            error: demoMode ? null : error,
+            workspaces: demoMode ? mockWorkspaces : (workspacesData?.items ?? []),
+            sessions: demoMode ? mockSessions : (sessionsData?.items ?? []),
+            providers: demoMode ? mockProviders : (providersData ?? []),
+            providerHealth: demoMode ? mockProviderHealth : (providerHealthData ?? []),
+            agents: demoMode ? mockAgents : (agentsData ?? []),
+            swarms: demoMode ? mockSwarms : (swarmsData ?? []),
+            accounts: demoMode ? mockAccounts : (accountsData ?? []),
+            statistics: demoMode ? mockStatistics : (statisticsData ?? null),
             settings: settingsData ?? null,
-            systemStatus: (!config.enableDemoMode && systemStatusData) ? systemStatusData : (useMockData ? mockSystemStatus : null),
+            systemStatus: demoMode ? mockSystemStatus : (systemStatusData ?? null),
             refetchWorkspaces,
             refetchSessions,
             refetchProviders,
@@ -315,7 +313,7 @@ export function ApiProvider({ children, baseUrl, autoConnect = true }: ApiProvid
             wsConnected,
             isLoading,
             error,
-            useMockData,
+            demoMode,
             workspacesData,
             sessionsData,
             providersData,

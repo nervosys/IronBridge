@@ -29,6 +29,7 @@ import {
     ExternalLink,
 } from 'lucide-react';
 import { formatRelativeTime } from '@csm/shared';
+import { config } from '../config/env';
 
 // =============================================================================
 // Types
@@ -187,10 +188,17 @@ const STATUS_CONFIG: Record<string, { color: string; bgColor: string }> = {
 };
 
 // =============================================================================
-// Mock Data (replace with real data source)
+// Demo Fixtures
+//
+// There is no live source for any of this yet: the backend exposes no
+// notification, inbox-message, permission-request, or workflow-run endpoints,
+// and nothing in CSM emits those events. These fixtures exist to exercise the
+// UI and are shown ONLY when VITE_ENABLE_DEMO_MODE is set. With demo mode off
+// (the default) the inbox renders its real, empty state rather than presenting
+// fabricated agent activity as if it were live.
 // =============================================================================
 
-const mockNotifications: AgentNotification[] = [
+const demoNotifications: AgentNotification[] = [
     {
         id: 'notif-1',
         category: 'workflow_complete',
@@ -229,7 +237,7 @@ const mockNotifications: AgentNotification[] = [
     },
 ];
 
-const mockMessages: InboxMessage[] = [
+const demoMessages: InboxMessage[] = [
     {
         id: 'msg-1',
         type: 'agent_to_user',
@@ -257,7 +265,7 @@ const mockMessages: InboxMessage[] = [
     },
 ];
 
-const mockPermissions: PermissionRequest[] = [
+const demoPermissions: PermissionRequest[] = [
     {
         id: 'perm-1',
         type: 'shell_command',
@@ -292,7 +300,7 @@ const mockPermissions: PermissionRequest[] = [
     },
 ];
 
-const mockWorkflows: WorkflowProgress[] = [
+const demoWorkflows: WorkflowProgress[] = [
     {
         runId: 'run-128',
         swarmId: 'swarm-1',
@@ -361,10 +369,11 @@ interface AgentInboxProps {
 
 export function AgentInbox({ onViewRun }: AgentInboxProps) {
     const [activeTab, setActiveTab] = useState<InboxTab>('all');
-    const [notifications, setNotifications] = useState<AgentNotification[]>(mockNotifications);
-    const [messages, setMessages] = useState<InboxMessage[]>(mockMessages);
-    const [permissions, setPermissions] = useState<PermissionRequest[]>(mockPermissions);
-    const [workflows, setWorkflows] = useState<WorkflowProgress[]>(mockWorkflows);
+    const demoMode = config.enableDemoMode;
+    const [notifications, setNotifications] = useState<AgentNotification[]>(demoMode ? demoNotifications : []);
+    const [messages, setMessages] = useState<InboxMessage[]>(demoMode ? demoMessages : []);
+    const [permissions, setPermissions] = useState<PermissionRequest[]>(demoMode ? demoPermissions : []);
+    const [workflows, setWorkflows] = useState<WorkflowProgress[]>(demoMode ? demoWorkflows : []);
     const [selectedMessage, setSelectedMessage] = useState<InboxMessage | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -406,14 +415,18 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
         ));
     };
 
+    // No inbox endpoints exist to refetch from yet, so this only spins the
+    // indicator. Point it at the real fetch once a backend is available.
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 300));
         setIsRefreshing(false);
     };
 
-    // Simulate real-time updates
+    // Advance the demo fixtures so the progress UI animates. This fabricates
+    // progress and token counts, so it must never run outside demo mode.
     useEffect(() => {
+        if (!demoMode) return;
         const interval = setInterval(() => {
             setWorkflows(prev => prev.map(w => {
                 if (w.status !== 'running') return w;
@@ -432,7 +445,7 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [demoMode]);
 
     // Tab badges
     const tabs: { key: InboxTab; label: string; count: number }[] = [
