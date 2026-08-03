@@ -1,0 +1,13 @@
+import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
+
+// Kept separate from vite.config.ts so the production build config (manual
+// chunking, tailwind) stays untouched by test settings.
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: false,
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
+})

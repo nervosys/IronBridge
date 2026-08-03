@@ -353,7 +353,7 @@ function extractFirstLine(text, maxLength = 50) {
   return truncate(firstLine, maxLength);
 }
 function stripMarkdown(text) {
-  return text.replace(/#{1,6}\s?/g, "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1").replace(/`(.+?)`/g, "$1").replace(/```[\s\S]*?```/g, "").replace(/\[(.+?)\]\(.+?\)/g, "$1").replace(/!\[.*?\]\(.+?\)/g, "").replace(/^\s*[-*+]\s/gm, "").replace(/^\s*\d+\.\s/gm, "").replace(/^\s*>/gm, "").trim();
+  return text.replace(/```[\s\S]*?```/g, "").replace(/!\[.*?\]\(.+?\)/g, "").replace(/\[(.+?)\]\(.+?\)/g, "$1").replace(/#{1,6}\s?/g, "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1").replace(/`(.+?)`/g, "$1").replace(/^\s*[-*+]\s/gm, "").replace(/^\s*\d+\.\s/gm, "").replace(/^\s*>/gm, "").trim();
 }
 function formatNumber(num) {
   return num.toLocaleString();

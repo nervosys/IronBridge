@@ -52,6 +52,10 @@ jobs:
         working-directory: chasm-shared
         run: npm run typecheck
 
+      - name: Test
+        working-directory: chasm-shared
+        run: npm test
+
       - name: Build
         working-directory: chasm-shared
         run: npm run build
@@ -85,6 +89,10 @@ jobs:
       - name: Lint
         working-directory: chasm-web
         run: npm run lint
+
+      - name: Test
+        working-directory: chasm-web
+        run: npm test
 
       - name: Build (typecheck + bundle)
         working-directory: chasm-web

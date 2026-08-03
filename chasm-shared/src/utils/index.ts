@@ -187,14 +187,19 @@ export function extractFirstLine(text: string, maxLength: number = 50): string {
  * Strip Markdown formatting from text
  */
 export function stripMarkdown(text: string): string {
+    // Order matters here, and two pairs must not be swapped:
+    //   - code blocks before inline code, or the inline rule matches the
+    //     ``` fence itself and collapses it to a stray backtick;
+    //   - images before links, or the link rule consumes `[alt](src)` and
+    //     leaves the image's leading `!` behind as text.
     return text
+        .replace(/```[\s\S]*?```/g, '') // Code blocks
+        .replace(/!\[.*?\]\(.+?\)/g, '') // Images
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Links
         .replace(/#{1,6}\s?/g, '') // Headers
         .replace(/\*\*(.+?)\*\*/g, '$1') // Bold
         .replace(/\*(.+?)\*/g, '$1') // Italic
         .replace(/`(.+?)`/g, '$1') // Inline code
-        .replace(/```[\s\S]*?```/g, '') // Code blocks
-        .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Links
-        .replace(/!\[.*?\]\(.+?\)/g, '') // Images
         .replace(/^\s*[-*+]\s/gm, '') // Lists
         .replace(/^\s*\d+\.\s/gm, '') // Numbered lists
         .replace(/^\s*>/gm, '') // Blockquotes
