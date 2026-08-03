@@ -15,11 +15,14 @@
 - 🎛️ **Interactive TUI** — Browse workspaces and sessions in the terminal
 - 🤖 **MCP Server** — Model Context Protocol integration for AI agents
 - 📦 **Git Integration** — Version control your chat histories
-- 🌐 **REST & GraphQL API** — Build custom integrations
-- 🔐 **Enterprise Features** — SSO, audit logging, compliance (SOC2, HIPAA, GDPR)
+- 🌐 **REST API** — Build custom integrations
 - 👥 **Team Collaboration** — Workspaces, RBAC, session sharing
-- 🧠 **AI Intelligence** — Topic extraction, summarization, recommendations
+- 🧠 **Conversation Analysis** — Heuristic topic extraction, insights, similarity scoring
 - 🔌 **Plugin System** — Extensible architecture with event hooks
+
+> **Also in the tree, but not yet shippable:** GraphQL API, enterprise SSO /
+> audit / retention. See [Implementation status](#implementation-status) before
+> depending on either.
 
 ## Install
 
@@ -99,17 +102,21 @@ chasm harvest share <url>          # Import share link
 
 ## Ecosystem
 
-| Component             | Description                       | Status   |
-| --------------------- | --------------------------------- | -------- |
-| **chasm-rust**        | Core Rust library and CLI         | ✅ Stable |
-| **chasm-web**         | React web application             | ✅ Stable |
-| **chasm-app**         | React Native mobile app           | ✅ Stable |
-| **chasm-desktop**     | Tauri desktop application         | ✅ Stable |
-| **vscode-extension**  | VS Code extension                 | ✅ Stable |
-| **browser-extension** | Chrome/Firefox extension          | ✅ Stable |
-| **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable |
-| **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable |
-| **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable |
+| Component             | Description                       | Status         |
+| --------------------- | --------------------------------- | -------------- |
+| **chasm-rust**        | Core Rust library and CLI         | ✅ Stable       |
+| **chasm-web**         | React web application             | ✅ Stable       |
+| **chasm-app**         | React Native mobile app           | ✅ Stable       |
+| **chasm-desktop**     | Tauri desktop application         | 🚧 Shell only   |
+| **vscode-extension**  | VS Code extension                 | ✅ Stable       |
+| **browser-extension** | Chrome/Firefox extension          | ✅ Stable       |
+| **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable       |
+| **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
+| **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
+
+"Stable" describes the CLI, library, and the clients built on the working REST
+routes. It does not cover the REST routes, GraphQL resolvers, and enterprise
+services listed under [Implementation status](#implementation-status).
 
 ## API Server
 
@@ -130,17 +137,12 @@ chasm api serve --port 8787
 | POST   | `/api/harvest`      | Trigger harvest           |
 | GET    | `/api/stats`        | Database statistics       |
 
-### GraphQL
+### GraphQL — not available
 
-```bash
-# GraphQL endpoint
-curl -X POST http://localhost:8787/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query": "{ sessions { id title provider } }"}'
-
-# GraphQL Playground
-open http://localhost:8787/graphql/playground
-```
+`src/api/graphql.rs` defines a schema, but `configure_graphql_routes` is never
+called, so nothing is mounted: `/graphql` and `/graphql/playground` return 404.
+Its resolvers are also unimplemented (16 of them are `TODO` stubs returning
+fixed values rather than querying the database). Use the REST endpoints above.
 
 ## MCP Server
 
@@ -169,13 +171,48 @@ chasm agency run --agent researcher "What are the latest AI trends?"
 chasm agency run --orchestration swarm "Build a REST API"
 ```
 
-## Enterprise Features
+## Enterprise Features (`--features enterprise`) — in development
 
-- **SSO/SAML**: Okta, Azure AD, Google, OneLogin, Auth0
-- **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS
-- **Audit Logging**: Comprehensive event tracking with data classification
-- **Multi-tenancy**: Subscription tiers, tenant isolation, white-labeling
-- **Team Workspaces**: RBAC, activity feeds, session sharing
+Behind the `enterprise` feature flag. These modules compile and are unit-tested,
+but they are **not usable end to end** and should not be relied on:
+
+- **SSO/SAML**: SAML 2.0 flow for Okta, Azure AD, Google, OneLogin, Auth0.
+  **Login is disabled at runtime.** XML-DSig signature verification is
+  unimplemented, so `verify_signature` rejects every callback rather than
+  accept assertions it cannot authenticate.
+- **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
+- **Data Retention**: policy model, scheduling, and expiry actions.
+- **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS —
+  reporting scaffolding, not certification.
+- **Multi-tenancy**: Subscription tiers, tenant isolation, white-labeling.
+
+All three services depend on the `api::audit::DatabaseOps` trait, which **has no
+implementor in this crate** — an embedder must supply one before any of it
+persists anything.
+
+**Team Workspaces** (RBAC, activity feeds, session sharing) is not gated behind
+this flag and does not depend on `DatabaseOps`.
+
+## Implementation status
+
+The CLI and core library are the mature part of this project. The server and
+enterprise layers are scaffolding at varying stages. Concretely:
+
+| Area                            | State                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 887 tests passing.                                                                            |
+| Providers                       | **Working.** 12 local/OpenAI-compatible + 6 cloud share-link parsers.                                                     |
+| MCP server, TUI                 | **Working.**                                                                                                              |
+| REST API                        | **Partial.** 76 routes registered; 24 return `"not yet implemented"` — all Agents, all Swarms, provider CRUD, chat completions, import/export, harvest, sync, settings, accounts. The 6 endpoints documented above work. |
+| GraphQL                         | **Not mounted.** Routes never registered; resolvers are `TODO` stubs.                                                     |
+| Enterprise (SSO/audit/retention)| **Not usable.** Compiles and is unit-tested, but `DatabaseOps` has no implementor and SAML login fails closed.            |
+| Conversation analysis           | **Working, but heuristic.** Keyword matching, lexicon sentiment, Jaccard similarity — no model inference despite the "AI" framing. |
+| Embeddings / semantic search    | **Placeholder.** `OpenAIEmbedding::embed` returns a zero vector, so anything ranking on it is degenerate.                 |
+| chasm-desktop                   | **Shell only.** 176 LOC across `main.rs` and `commands.rs`.                                                               |
+| chasm-web                       | **Working.** `AgentInbox` (notifications, messages, permissions, workflows) has no backend and renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
+
+Mock data in chasm-web is opt-in via `VITE_ENABLE_DEMO_MODE`; an empty or
+failing backend renders as empty or as an error, never as fixtures.
 
 ## Project Structure
 

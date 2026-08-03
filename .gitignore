@@ -88,6 +88,9 @@ config.local.json
 # Large sample/scratch files
 jsonl_sample_raw.txt
 
+# Captured tool output (e.g. `npx eslint ... > lint.txt`)
+**/lint.txt
+
 # Diagnostic/debug scripts and output (contain hardcoded local paths, session IDs,
 # workspace hashes, and other private data — never commit)
 diag*.py

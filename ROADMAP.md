@@ -1,8 +1,32 @@
 # Chasm Roadmap
 
-> **Last Updated:** February 10, 2026
+> **Last Updated:** July 31, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
+
+> **Reading the checkboxes.** A `[x]` below means the feature was built, not
+> necessarily that it is wired up and usable. Items marked `[~]` are present in
+> the tree but incomplete — see [Known gaps](#known-gaps) for what is actually
+> shippable today. `README.md` carries the same summary under
+> "Implementation status".
+
+## Known gaps
+
+Verified against the tree as of July 31, 2026:
+
+| Item | Reality |
+| --- | --- |
+| GraphQL API | `configure_graphql_routes` is never called — `/graphql` and `/graphql/playground` 404. 16 resolvers are `TODO` stubs. |
+| REST API | 24 of 76 registered routes return `"not yet implemented"`: all Agents, all Swarms, provider CRUD, chat completions, import/export, harvest, sync, settings, accounts. |
+| SSO/SAML | No XML-DSig verification exists, so SAML login fails closed and rejects every callback. Do not enable it expecting working SSO. |
+| Audit logging, retention | Compile and are unit-tested, but `api::audit::DatabaseOps` has no implementor — nothing persists. |
+| AI & Intelligence | Heuristic, not model-backed: substring keyword matching, lexicon sentiment, Jaccard similarity. |
+| Embeddings / semantic search | `OpenAIEmbedding::embed` returns `vec![0.0; 1536]` — a placeholder. Any ranking built on it is degenerate. |
+| Desktop application | Tauri shell only (176 LOC). |
+| Agent inbox | No notification, inbox-message, permission-request, or workflow-run endpoints exist, and nothing emits those events. The view renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
+
+The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
+and TUI are complete and covered by 887 passing tests.
 
 ## Overview
 
@@ -18,7 +42,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | **chasm-web**         | 🟢 Active | React web application                    |
 | **chasm-app**         | 🟢 Active | React Native mobile app                  |
 | **chasm-shared**      | 🟢 Active | Shared TypeScript types and utilities    |
-| **chasm-desktop**     | 🟢 Active | Tauri desktop application                |
+| **chasm-desktop**     | 🚧 Shell  | Tauri shell only (176 LOC)               |
 | **vscode-extension**  | 🟢 Active | VS Code extension for session management |
 | **browser-extension** | 🟢 Active | Chrome/Firefox extension for web AI chat |
 | **jetbrains-plugin**  | 🟢 Active | IntelliJ/JetBrains IDE plugin            |
@@ -53,7 +77,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Developer tools
 - [x] Research interface
 - [x] Dark mode theme system (CSS variables)
-- [x] Demo mode with mock data fallback
+- [x] Demo mode (opt-in via `VITE_ENABLE_DEMO_MODE`; never substitutes for a live backend)
 - [x] Real-time sync status indicators
 - [x] Advanced session search and filtering
 - [x] Session diff/comparison view
@@ -145,8 +169,8 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Multi-user collaboration
 - [x] Team workspaces
 - [x] Session sharing with permissions
-- [x] AI-powered session summarization
-- [x] Semantic search across sessions
+- [~] AI-powered session summarization — heuristic key-point extraction only; no model inference
+- [~] Semantic search across sessions — `OpenAIEmbedding::embed` returns a zero vector, so ranking is degenerate
 - [x] Custom tagging and organization
 
 ### Q2 2026
@@ -160,17 +184,17 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Local LLM providers (Ollama, LM Studio, etc.)
 
 #### Platform
-- [x] Desktop application (Tauri)
+- [~] Desktop application (Tauri) — shell only (176 LOC)
 - [x] CLI tool for automation (chasm-cli v1.3.2 on crates.io)
 - [x] Browser extension for web-based AI tools (Chrome/Firefox Manifest V3)
 
 ### Q3 2026
 
 #### Enterprise Features
-- [x] SSO/SAML authentication (SAML 2.0 IdP integration)
-- [x] Audit logging (comprehensive event tracking)
-- [x] Data retention policies (configurable lifecycle management)
-- [x] Admin dashboard (React admin UI with system management)
+- [~] SSO/SAML authentication (SAML 2.0 IdP integration) — flow built; signature verification unimplemented, login fails closed
+- [~] Audit logging (comprehensive event tracking) — no `DatabaseOps` implementor, nothing persists
+- [~] Data retention policies (configurable lifecycle management) — no `DatabaseOps` implementor, nothing persists
+- [~] Admin dashboard (React admin UI with system management) — the agent-inbox view has no backend
 - [x] Usage analytics (event tracking, metrics, time series, dashboards)
 
 #### Advanced Features
@@ -187,11 +211,11 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Provider-specific sync adapters (VSCode, extensible to others)
 
 #### AI & Intelligence
-- [x] Topic extraction and categorization
+- [~] Topic extraction and categorization (keyword substring matching, not model-backed)
 - [x] Conversation insights generation
-- [x] Sentiment analysis (lexicon-based)
+- [~] Sentiment analysis (lexicon-based, not model-backed)
 - [x] Quality scoring for sessions
-- [x] Similarity detection (Jaccard-based)
+- [~] Similarity detection (Jaccard-based, not model-backed)
 - [x] Session recommendation engine
 
 #### Platform Maturity
@@ -207,7 +231,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Firefox Manifest V2 compatibility
 
 #### API Enhancements
-- [x] GraphQL API endpoint
+- [~] GraphQL API endpoint — schema defined but routes never mounted; resolvers are stubs
 - [x] Webhook integrations
 - [x] OpenAPI/Swagger documentation
 
@@ -226,7 +250,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 #### Team Features
 - [x] Workspace sharing and permissions
 - [x] Team session templates
-- [x] Audit logging for compliance
+- [~] Audit logging for compliance — see Known gaps
 
 #### Analytics Dashboard
 - [x] Usage metrics and insights
