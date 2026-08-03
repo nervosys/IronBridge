@@ -6,7 +6,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { navigation } from '@/lib/navigation';
-import { useState } from 'react';
 
 export function Header() {
     return (
