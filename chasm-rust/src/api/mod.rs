@@ -43,6 +43,7 @@ pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
 };
 pub use auth::configure_auth_routes;
+pub use docs::configure_docs_routes;
 pub use recording::{configure_recording_routes, create_recording_state};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
@@ -50,6 +51,7 @@ pub use retention::{configure_retention_routes, RetentionPolicy, RetentionServic
 pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
+pub use webhooks::{configure_webhook_routes, WebhookState};
 pub use websocket::{configure_websocket_routes, WebSocketState};
 
 use actix_cors::Cors;
@@ -235,6 +237,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     let sync_state = web::Data::new(create_sync_state());
     let ws_state = web::Data::new(WebSocketState::new());
     let recording_state = web::Data::new(create_recording_state());
+    let webhook_state = web::Data::new(std::sync::Arc::new(WebhookState::new()));
     let cors_origins = config.cors_origins.clone();
 
     println!("[*] CSM API Server starting...");
@@ -296,7 +299,9 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)
             .configure(configure_recording_routes)
+            .configure(configure_docs_routes)
             .configure(|cfg| configure_websocket_routes(cfg, ws_state.clone()))
+            .configure(|cfg| configure_webhook_routes(cfg, webhook_state.clone()))
     });
 
     eprintln!("[DEBUG] Binding to {}:{}...", config.host, config.port);
