@@ -1,11 +1,11 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useMcpTools } from '../hooks/useApi';
 import {
     Server,
-    Plus,
     Settings,
     Trash2,
     Power,
@@ -22,10 +22,7 @@ import {
     Search,
     Filter,
     Terminal,
-    Globe,
-    Database,
     Code,
-    Folder,
     Network,
     Cpu,
     Workflow,
@@ -457,120 +454,54 @@ const protocolCategories = [
     },
 ];
 
-// Mock MCP servers data
-const mockServers = [
-    {
-        id: 'mcp-1',
-        name: 'filesystem',
-        displayName: 'File System Server',
-        description: 'Access and manipulate local file system',
-        status: 'connected',
-        type: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-filesystem', '/home/user/projects'],
-        tools: [
-            { name: 'read_file', description: 'Read contents of a file' },
-            { name: 'write_file', description: 'Write content to a file' },
-            { name: 'list_directory', description: 'List contents of a directory' },
-            { name: 'create_directory', description: 'Create a new directory' },
-            { name: 'delete_file', description: 'Delete a file' },
-            { name: 'move_file', description: 'Move or rename a file' },
-        ],
-        resources: [
-            { name: 'file:///*', description: 'File system resources' },
-        ],
-        prompts: [],
-        lastConnected: '2024-12-11T14:30:00',
-    },
-    {
-        id: 'mcp-2',
-        name: 'github',
-        displayName: 'GitHub Server',
-        description: 'Interact with GitHub repositories',
-        status: 'connected',
-        type: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-github'],
-        tools: [
-            { name: 'search_repositories', description: 'Search GitHub repositories' },
-            { name: 'get_file_contents', description: 'Get contents of a file' },
-            { name: 'create_issue', description: 'Create a new issue' },
-            { name: 'create_pull_request', description: 'Create a pull request' },
-            { name: 'list_commits', description: 'List commits in a repo' },
-        ],
-        resources: [
-            { name: 'github://repo/*', description: 'Repository resources' },
-        ],
-        prompts: [
-            { name: 'review-code', description: 'Code review assistant prompt' },
-        ],
-        lastConnected: '2024-12-11T14:25:00',
-    },
-    {
-        id: 'mcp-3',
-        name: 'postgres',
-        displayName: 'PostgreSQL Server',
-        description: 'Query PostgreSQL databases',
-        status: 'disconnected',
-        type: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-postgres', 'postgresql://localhost/mydb'],
-        tools: [
-            { name: 'query', description: 'Execute SQL query' },
-            { name: 'list_tables', description: 'List all tables' },
-            { name: 'describe_table', description: 'Describe table schema' },
-        ],
-        resources: [
-            { name: 'postgres://table/*', description: 'Database table resources' },
-        ],
-        prompts: [],
-        lastConnected: '2024-12-10T09:00:00',
-    },
-    {
-        id: 'mcp-4',
-        name: 'brave-search',
-        displayName: 'Brave Search Server',
-        description: 'Web search using Brave Search API',
-        status: 'connected',
-        type: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-brave-search'],
-        tools: [
-            { name: 'brave_web_search', description: 'Search the web' },
-            { name: 'brave_local_search', description: 'Search local businesses' },
-        ],
-        resources: [],
-        prompts: [],
-        lastConnected: '2024-12-11T14:20:00',
-    },
-    {
-        id: 'mcp-5',
-        name: 'memory',
-        displayName: 'Memory Server',
-        description: 'Persistent key-value memory storage',
-        status: 'error',
-        type: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-memory'],
-        tools: [
-            { name: 'store', description: 'Store a key-value pair' },
-            { name: 'retrieve', description: 'Retrieve a value by key' },
-            { name: 'delete', description: 'Delete a key-value pair' },
-            { name: 'list', description: 'List all stored keys' },
-        ],
-        resources: [],
-        prompts: [],
-        lastConnected: null,
-        error: 'Connection timeout - server not responding',
-    },
-];
+// CSM is itself an MCP server: it exposes tools to MCP clients, and does not
+// act as an MCP client managing external servers. So there is exactly one
+// server to describe here, and its tool list comes from the live backend.
+interface McpServerView {
+    id: string;
+    name: string;
+    displayName: string;
+    description: string;
+    status: 'connected' | 'disconnected' | 'error';
+    type: string;
+    command: string;
+    args: string[];
+    tools: { name: string; description: string }[];
+    resources: { name: string; description: string }[];
+    prompts: { name: string; description: string }[];
+    error?: string;
+}
 
 export default function Protocols() {
-    const [servers] = useState(mockServers);
+    const { data: mcpData, isLoading: mcpLoading, error: mcpError, refetch: refetchMcp } = useMcpTools();
+
+    const servers = useMemo<McpServerView[]>(() => {
+        if (mcpLoading || (!mcpData && !mcpError)) return [];
+        const tools = (mcpData?.mcp_tools ?? []).map(t => ({
+            name: t.name,
+            description: t.description ?? '',
+        }));
+        return [{
+            id: 'csm',
+            name: 'csm',
+            displayName: 'CSM MCP Server',
+            description: 'Chat session tools this instance exposes to MCP clients',
+            status: mcpError ? 'error' : 'connected',
+            type: 'stdio',
+            command: 'csm',
+            args: ['mcp'],
+            tools,
+            // The HTTP API exposes tools only; resources and prompts are served
+            // over the stdio transport and are not enumerable from here.
+            resources: [],
+            prompts: [],
+            ...(mcpError ? { error: mcpError.message } : {}),
+        }];
+    }, [mcpData, mcpLoading, mcpError]);
+
     const [selectedServer, setSelectedServer] = useState<string | null>(null);
     const [selectedProtocol, setSelectedProtocol] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [showAddModal, setShowAddModal] = useState(false);
     const [activeTab, setActiveTab] = useState<'protocols' | 'mcp'>('protocols');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -631,16 +562,8 @@ export default function Protocols() {
 
     const getServerIcon = (name: string) => {
         switch (name) {
-            case 'filesystem':
-                return <Folder size={20} />;
-            case 'github':
-                return <Code size={20} />;
-            case 'postgres':
-                return <Database size={20} />;
-            case 'brave-search':
-                return <Globe size={20} />;
-            case 'memory':
-                return <Database size={20} />;
+            case 'csm':
+                return <Terminal size={20} />;
             default:
                 return <Server size={20} />;
         }
@@ -689,11 +612,12 @@ export default function Protocols() {
                 </div>
                 {activeTab === 'mcp' && (
                     <button
-                        onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 transition-colors"
+                        onClick={() => { void refetchMcp(); }}
+                        disabled={mcpLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 transition-colors disabled:opacity-50"
                     >
-                        <Plus size={18} />
-                        Add Server
+                        <RefreshCw size={18} className={mcpLoading ? 'animate-spin' : undefined} />
+                        Refresh
                     </button>
                 )}
             </div>
@@ -1079,6 +1003,9 @@ export default function Protocols() {
                         {/* Server List */}
                         <div className="lg:col-span-1 space-y-3">
                             <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Servers</h2>
+                            {mcpLoading && (
+                                <p className="text-sm text-[hsl(var(--muted-foreground))]">Loading MCP tools…</p>
+                            )}
                             {filteredServers.map(server => (
                                 <div
                                     key={server.id}
@@ -1275,61 +1202,6 @@ export default function Protocols() {
                 </>
             )}
 
-            {/* Add Server Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-[hsl(var(--card))] rounded-xl p-6 w-full max-w-lg border shadow-xl">
-                        <h2 className="text-xl font-semibold text-[hsl(var(--foreground))] mb-4">Add MCP Server</h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Name</label>
-                                <input
-                                    type="text"
-                                    placeholder="my-server"
-                                    className="w-full px-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Command</label>
-                                <input
-                                    type="text"
-                                    placeholder="npx -y @modelcontextprotocol/server-name"
-                                    className="w-full px-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Arguments (optional)</label>
-                                <input
-                                    type="text"
-                                    placeholder="/path/to/resources"
-                                    className="w-full px-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Type</label>
-                                <select className="w-full px-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
-                                    <option value="stdio">stdio</option>
-                                    <option value="sse">sse</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-end gap-3 mt-6">
-                            <button
-                                onClick={() => setShowAddModal(false)}
-                                className="px-4 py-2 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => setShowAddModal(false)}
-                                className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 transition-colors"
-                            >
-                                Add Server
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

@@ -776,6 +776,30 @@ export const settings = {
 };
 
 // =============================================================================
+// MCP API
+//
+// These describe the MCP surface that CSM itself exposes to MCP clients. CSM
+// is an MCP *server*; it does not act as a client, so there is no registry of
+// external MCP servers to enumerate here.
+// =============================================================================
+
+export const mcp = {
+    /**
+     * List the tools CSM exposes over MCP
+     */
+    async listTools(): Promise<ApiResponse<{ mcp_tools: import('./types').McpTool[] }>> {
+        return get('/api/mcp/tools');
+    },
+
+    /**
+     * Fetch the system prompt CSM advertises to MCP clients
+     */
+    async systemPrompt(): Promise<ApiResponse<{ system_prompt: string }>> {
+        return get('/api/mcp/system-prompt');
+    },
+};
+
+// =============================================================================
 // Health & System API
 // =============================================================================
 
@@ -906,6 +930,7 @@ export const api = {
     stats,
     transfer,
     settings,
+    mcp,
     system,
     connectWebSocket,
     sendWebSocketMessage,
