@@ -1146,7 +1146,7 @@ pub fn harvest_list(
             .unwrap_or_default();
 
         println!("\n{} {}", "[S]".cyan(), title.bold());
-        println!("   ID: {}", &id[..16.min(id.len())].dimmed());
+        println!("   ID: {}", id[..16.min(id.len())].dimmed());
         println!(
             "   Provider: {} | Messages: {} | Updated: {}",
             prov.cyan(),
@@ -2350,10 +2350,10 @@ fn download_chatgpt_files_for_session(
                 let base = sanitize_file_name(&name);
                 let mut final_name = base.clone();
                 if !taken.insert(final_name.clone()) {
-                    final_name = format!("{}-{}", &fref.file_id, base);
+                    final_name = format!("{}-{}", fref.file_id, base);
                     let mut i = 1;
                     while !taken.insert(final_name.clone()) {
-                        final_name = format!("{}-{}-{}", &fref.file_id, i, base);
+                        final_name = format!("{}-{}-{}", fref.file_id, i, base);
                         i += 1;
                     }
                 }
@@ -3248,11 +3248,11 @@ fn write_pull_bundle(
         let base = sanitize_file_name(&f.name);
         let mut name = base.clone();
         if !taken.insert(name.clone()) {
-            name = format!("{}-{}", &f.file_id, base);
+            name = format!("{}-{}", f.file_id, base);
             // If still collides (extremely unlikely), append index.
             let mut i = 1;
             while !taken.insert(name.clone()) {
-                name = format!("{}-{}-{}", &f.file_id, i, base);
+                name = format!("{}-{}-{}", f.file_id, i, base);
                 i += 1;
             }
         }

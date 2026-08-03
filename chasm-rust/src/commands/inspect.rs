@@ -1271,7 +1271,7 @@ pub fn inspect_rebuild(
         println!(
             "  {} {} ({} req, {}) \"{}\"",
             status,
-            &s.session_id[..12.min(s.session_id.len())].bright_black(),
+            s.session_id[..12.min(s.session_id.len())].bright_black(),
             s.request_count.to_string().cyan(),
             size_str.bright_black(),
             title_display

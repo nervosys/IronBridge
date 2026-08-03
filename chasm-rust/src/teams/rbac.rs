@@ -397,7 +397,7 @@ impl AccessControl {
             (Resource::Member { .. }, Action::Edit) => Permission::EditMemberRoles,
 
             // Sessions
-            (Resource::Session { owner_id: _, .. }, Action::View) => Permission::ViewSessions,
+            (Resource::Session { .. }, Action::View) => Permission::ViewSessions,
             (Resource::Session { .. }, Action::Create) => Permission::CreateSession,
             (Resource::Session { owner_id, .. }, Action::Edit) => {
                 if *owner_id == user_id {
@@ -417,7 +417,7 @@ impl AccessControl {
             (Resource::Session { .. }, Action::Export) => Permission::ExportSessions,
 
             // Comments
-            (Resource::Comment { author_id: _, .. }, Action::Create) => Permission::AddComments,
+            (Resource::Comment { .. }, Action::Create) => Permission::AddComments,
             (Resource::Comment { author_id, .. }, Action::Edit) => {
                 if *author_id == user_id {
                     Permission::EditOwnComments

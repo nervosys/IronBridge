@@ -38,7 +38,7 @@ fn main() -> anyhow::Result<()> {
                 Ok(index) => {
                     println!("   Sessions in index: {}", index.entries.len());
                     for (id, entry) in index.entries.iter().take(3) {
-                        println!("     - {} ({})", &id[..16.min(id.len())], &entry.title);
+                        println!("     - {} ({})", &id[..16.min(id.len())], entry.title);
                     }
                 }
                 Err(e) => {
