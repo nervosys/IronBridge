@@ -1,0 +1,179 @@
+name: Web CI
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'chasm-shared/**'
+      - 'chasm-web/**'
+      - 'chasm-app/**'
+      - 'website/**'
+      - 'vscode-extension/**'
+      - '.github/workflows/web-ci.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'chasm-shared/**'
+      - 'chasm-web/**'
+      - 'chasm-app/**'
+      - 'website/**'
+      - 'vscode-extension/**'
+      - '.github/workflows/web-ci.yml'
+  workflow_dispatch:
+
+env:
+  CI: true
+  NODE_VERSION: '20'
+
+jobs:
+  # ==========================================================================
+  # Shared types package — a `file:` dependency of chasm-web and chasm-app,
+  # so it must build before either of them.
+  # ==========================================================================
+  shared:
+    name: chasm-shared
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: chasm-shared/package-lock.json
+
+      - name: Install dependencies
+        working-directory: chasm-shared
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: chasm-shared
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: chasm-shared
+        run: npm run build
+
+  # ==========================================================================
+  # Web dashboard (React + Vite)
+  # ==========================================================================
+  web:
+    name: chasm-web
+    runs-on: ubuntu-latest
+    needs: shared
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: chasm-web/package-lock.json
+
+      - name: Build shared package
+        working-directory: chasm-shared
+        run: npm ci && npm run build
+
+      - name: Install dependencies
+        working-directory: chasm-web
+        run: npm ci
+
+      - name: Lint
+        working-directory: chasm-web
+        run: npm run lint
+
+      - name: Build (typecheck + bundle)
+        working-directory: chasm-web
+        run: npm run build
+
+  # ==========================================================================
+  # Mobile/desktop app (Expo). No typecheck script, so tsc is invoked directly.
+  # ==========================================================================
+  app:
+    name: chasm-app
+    runs-on: ubuntu-latest
+    needs: shared
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: chasm-app/package-lock.json
+
+      - name: Build shared package
+        working-directory: chasm-shared
+        run: npm ci && npm run build
+
+      - name: Install dependencies
+        working-directory: chasm-app
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: chasm-app
+        run: npx tsc --noEmit
+
+  # ==========================================================================
+  # Marketing site (Next.js)
+  # ==========================================================================
+  website:
+    name: website
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Lint
+        working-directory: website
+        run: npm run lint
+
+      - name: Build
+        working-directory: website
+        run: npm run build
+
+  # ==========================================================================
+  # VS Code extension
+  # ==========================================================================
+  vscode-extension:
+    name: vscode-extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Lint
+        working-directory: vscode-extension
+        run: npm run lint
+
+      - name: Compile
+        working-directory: vscode-extension
+        run: npm run compile

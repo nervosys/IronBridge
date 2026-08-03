@@ -110,8 +110,7 @@ jobs:
 
       - name: Run Clippy
         working-directory: chasm-rust
-        run: cargo clippy --all-features -- -D warnings
-        continue-on-error: true  # Don't fail on clippy warnings for now
+        run: cargo clippy --all-features --all-targets -- -D warnings
 
   # ==========================================================================
   # Build Examples
