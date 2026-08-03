@@ -27,28 +27,28 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: csm
-            asset_name: csm-linux-x86_64
+            artifact_name: chasm
+            asset_name: chasm-linux-x86_64
 
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact_name: csm
-            asset_name: csm-linux-aarch64
+            artifact_name: chasm
+            asset_name: chasm-linux-aarch64
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: csm.exe
-            asset_name: csm-windows-x86_64.exe
+            artifact_name: chasm.exe
+            asset_name: chasm-windows-x86_64.exe
 
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: csm
-            asset_name: csm-macos-x86_64
+            artifact_name: chasm
+            asset_name: chasm-macos-x86_64
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: csm
-            asset_name: csm-macos-aarch64
+            artifact_name: chasm
+            asset_name: chasm-macos-aarch64
 
     steps:
       - name: Checkout repository
@@ -100,37 +100,31 @@ jobs:
 
       - name: Prepare release assets
         run: |
+          set -euo pipefail
           mkdir -p release
-          
-          # Linux x86_64
-          if [ -f artifacts/csm-linux-x86_64/csm ]; then
-            chmod +x artifacts/csm-linux-x86_64/csm
-            tar -czvf release/csm-linux-x86_64.tar.gz -C artifacts/csm-linux-x86_64 csm
+
+          # Every expected binary must exist. These steps used to be wrapped in
+          # `if [ -f ... ]`, so renaming the cargo bin target (csm -> chasm)
+          # silently produced green runs with empty releases -- v0.2.1 shipped
+          # zero assets this way.
+          for asset in chasm-linux-x86_64 chasm-linux-aarch64 \
+                       chasm-macos-x86_64 chasm-macos-aarch64; do
+            src="artifacts/$asset/chasm"
+            if [ ! -f "$src" ]; then
+              echo "::error::missing build artifact: $src" >&2
+              exit 1
+            fi
+            chmod +x "$src"
+            tar -czvf "release/$asset.tar.gz" -C "artifacts/$asset" chasm
+          done
+
+          win="artifacts/chasm-windows-x86_64.exe/chasm.exe"
+          if [ ! -f "$win" ]; then
+            echo "::error::missing build artifact: $win" >&2
+            exit 1
           fi
-          
-          # Linux aarch64
-          if [ -f artifacts/csm-linux-aarch64/csm ]; then
-            chmod +x artifacts/csm-linux-aarch64/csm
-            tar -czvf release/csm-linux-aarch64.tar.gz -C artifacts/csm-linux-aarch64 csm
-          fi
-          
-          # macOS x86_64
-          if [ -f artifacts/csm-macos-x86_64/csm ]; then
-            chmod +x artifacts/csm-macos-x86_64/csm
-            tar -czvf release/csm-macos-x86_64.tar.gz -C artifacts/csm-macos-x86_64 csm
-          fi
-          
-          # macOS aarch64
-          if [ -f artifacts/csm-macos-aarch64/csm ]; then
-            chmod +x artifacts/csm-macos-aarch64/csm
-            tar -czvf release/csm-macos-aarch64.tar.gz -C artifacts/csm-macos-aarch64 csm
-          fi
-          
-          # Windows
-          if [ -f "artifacts/csm-windows-x86_64.exe/csm.exe" ]; then
-            cp "artifacts/csm-windows-x86_64.exe/csm.exe" release/csm-windows-x86_64.exe
-          fi
-          
+          cp "$win" release/chasm-windows-x86_64.exe
+
           ls -la release/
 
       - name: Generate checksums
@@ -149,7 +143,7 @@ jobs:
           fi
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: CSM ${{ steps.version.outputs.version }}
@@ -164,24 +158,24 @@ jobs:
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | Linux | x86_64 | [csm-linux-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/csm-linux-x86_64.tar.gz) |
-            | Linux | ARM64 | [csm-linux-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/csm-linux-aarch64.tar.gz) |
-            | macOS | x86_64 (Intel) | [csm-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/csm-macos-x86_64.tar.gz) |
-            | macOS | ARM64 (Apple Silicon) | [csm-macos-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/csm-macos-aarch64.tar.gz) |
-            | Windows | x86_64 | [csm-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/csm-windows-x86_64.exe) |
+            | Linux | x86_64 | [chasm-linux-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-linux-x86_64.tar.gz) |
+            | Linux | ARM64 | [chasm-linux-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-linux-aarch64.tar.gz) |
+            | macOS | x86_64 (Intel) | [chasm-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-macos-x86_64.tar.gz) |
+            | macOS | ARM64 (Apple Silicon) | [chasm-macos-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-macos-aarch64.tar.gz) |
+            | Windows | x86_64 | [chasm-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-windows-x86_64.exe) |
 
             ### Installation
 
             #### Linux/macOS
             ```bash
             # Download and extract
-            tar -xzf csm-linux-x86_64.tar.gz
-            chmod +x csm
-            sudo mv csm /usr/local/bin/
+            tar -xzf chasm-linux-x86_64.tar.gz
+            chmod +x chasm
+            sudo mv chasm /usr/local/bin/
             ```
 
             #### Windows
-            Download `csm-windows-x86_64.exe` and add to your PATH.
+            Download `chasm-windows-x86_64.exe` and add to your PATH.
 
             ### Changelog
 
