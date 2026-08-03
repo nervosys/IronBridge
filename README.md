@@ -177,9 +177,10 @@ Behind the `enterprise` feature flag. These modules compile and are unit-tested,
 but they are **not usable end to end** and should not be relied on:
 
 - **SSO/SAML**: SAML 2.0 flow for Okta, Azure AD, Google, OneLogin, Auth0.
-  **Login is disabled at runtime.** XML-DSig signature verification is
-  unimplemented, so `verify_signature` rejects every callback rather than
-  accept assertions it cannot authenticate.
+  Assertion signatures are verified with samael/libxmlsec1, and the response is
+  re-parsed from the signature-reduced document so wrapped forgeries cannot
+  reach the session. Building this needs `libxmlsec1` and `clang`; CI builds it
+  on Linux only. Sessions and IdP config still do not persist — see below.
 - **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
 - **Data Retention**: policy model, scheduling, and expiry actions.
 - **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS —
@@ -205,7 +206,7 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | MCP server, TUI                 | **Working.**                                                                                                              |
 | REST API                        | **Partial.** ~69 routes are actually served: 46 in `api/mod.rs` plus auth, sync, recording, and websocket. A second, larger implementation in `api/handlers.rs` and `api/routes.rs` — including the 24 `"not yet implemented"` stubs — is never compiled, because neither file has a `mod` declaration. The 6 endpoints documented above work. |
 | GraphQL                         | **Not mounted.** Routes never registered; resolvers are `TODO` stubs.                                                     |
-| Enterprise (SSO/audit/retention)| **Not usable.** Compiles and is unit-tested, but `DatabaseOps` has no implementor and SAML login fails closed.            |
+| Enterprise (SSO/audit/retention)| **Not usable.** Compiles and is unit-tested, and SAML signatures are now genuinely verified, but `DatabaseOps` has no implementor so nothing persists. |
 | Conversation analysis           | **Working, but heuristic.** Keyword matching, lexicon sentiment, Jaccard similarity — no model inference despite the "AI" framing. |
 | Embeddings / semantic search    | **Placeholder.** `OpenAIEmbedding::embed` returns a zero vector, so anything ranking on it is degenerate.                 |
 | chasm-desktop                   | **Shell only.** 176 LOC across `main.rs` and `commands.rs`.                                                               |

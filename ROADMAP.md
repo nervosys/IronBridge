@@ -20,10 +20,10 @@ Verified against the tree as of July 31, 2026:
 | REST API | Two parallel implementations exist and the larger one is orphaned. `api/handlers.rs` (2049 LOC, where the 24 `"not yet implemented"` stubs live) and `api/routes.rs` (76 routes) have no `mod` declaration, so rustc never compiles them. The served API is the 46 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
 | Orphaned API modules | 5989 LOC across `api/{handlers,routes,analytics,backup,branching,device_sync,versioning}.rs` is absent from the crate's dependency graph — verified against rustc's own dep-info, not by grep. |
 | Compiled but unmounted | `api/docs.rs` (4 routes) and `api/webhooks.rs` (8 routes) compile, but `configure_docs_routes` and `configure_webhook_routes` are never called and the modules are private, so the routes are unreachable. |
-| SSO/SAML | No XML-DSig verification exists, so SAML login fails closed and rejects every callback. Do not enable it expecting working SSO. |
+| SSO/SAML | Signature verification is implemented (samael/libxmlsec1) and covered by wrapping-attack tests. Still not end-to-end usable: `DatabaseOps` has no implementor, so IdP config and sessions do not persist. Requires libxmlsec1; built on Linux only in CI. |
 | Audit logging, retention | Compile and are unit-tested, but `api::audit::DatabaseOps` has no implementor — nothing persists. |
 | AI & Intelligence | Heuristic, not model-backed: substring keyword matching, lexicon sentiment, Jaccard similarity. |
-| Embeddings / semantic search | `OpenAIEmbedding::embed` returns `vec![0.0; 1536]` — a placeholder. Any ranking built on it is degenerate. |
+| Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation. Requires an API key; without one, embedding calls error rather than returning zeros. |
 | Desktop application | Tauri shell only (176 LOC). |
 | Agent inbox | No notification, inbox-message, permission-request, or workflow-run endpoints exist, and nothing emits those events. The view renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
 
@@ -193,7 +193,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 ### Q3 2026
 
 #### Enterprise Features
-- [~] SSO/SAML authentication (SAML 2.0 IdP integration) — flow built; signature verification unimplemented, login fails closed
+- [~] SSO/SAML authentication (SAML 2.0 IdP integration) — flow and signature verification done; blocked on `DatabaseOps` persistence
 - [~] Audit logging (comprehensive event tracking) — no `DatabaseOps` implementor, nothing persists
 - [~] Data retention policies (configurable lifecycle management) — no `DatabaseOps` implementor, nothing persists
 - [~] Admin dashboard (React admin UI with system management) — the agent-inbox view has no backend
