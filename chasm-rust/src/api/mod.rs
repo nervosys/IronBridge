@@ -12,10 +12,13 @@
 //!
 //! * [`audit::DatabaseOps`] — the persistence contract all three depend on —
 //!   has no implementor in this crate. An embedder must supply one.
-//! * SAML login is disabled at runtime: `SsoService::verify_signature` fails
-//!   closed because XML-DSig verification is unimplemented. Do not relax it
-//!   without a real signature check; `handle_callback` provisions users from
-//!   assertion contents.
+//! * SAML signature verification is implemented, via samael/xmlsec1.
+//!   `handle_callback` verifies the response and then re-parses it from the
+//!   *reduced* document containing only signed content, which is what makes it
+//!   resistant to XML Signature Wrapping. Preserve that ordering: reading the
+//!   original document after verification reintroduces the bypass.
+//!   Because this links libxmlsec1, `enterprise` is built and tested on Linux
+//!   only in CI.
 //!
 //! Treat the feature as in-development scaffolding, not a shipped capability.
 

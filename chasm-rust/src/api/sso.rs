@@ -17,6 +17,8 @@ use std::io::Read;
 use std::sync::OnceLock;
 use uuid::Uuid;
 
+use samael::crypto::{decode_x509_cert, CertificateDer, Crypto, CryptoProvider, ReduceMode};
+
 use super::audit::Database;
 use super::auth::{AuthResponse, Claims, PublicUser, SubscriptionTier, User};
 
@@ -532,8 +534,32 @@ impl SsoService {
         let response_str =
             String::from_utf8(response_xml).map_err(|e| format!("Invalid UTF-8: {}", e))?;
 
-        // Parse SAML Response (simplified - production would use proper XML parsing)
-        let saml_response = self.parse_saml_response(&response_str)?;
+        // Selecting which IdP to check against necessarily reads the untrusted
+        // document, because the certificate is not known until the issuer is.
+        // This is safe on its own: naming an IdP only chooses whose public key
+        // must validate the signature, and a wrong or attacker-chosen guess
+        // makes verification fail below. Nothing from `unverified` is allowed
+        // to reach the session.
+        let unverified = self.parse_saml_response(&response_str)?;
+        let unverified_assertion = unverified
+            .assertion
+            .as_ref()
+            .ok_or("No assertion in response")?;
+
+        let idp = self
+            .get_idp_by_domain(&self.extract_domain(&unverified_assertion.subject.name_id))
+            .await?
+            .ok_or("IdP not found")?;
+
+        // Authenticity boundary. Everything above is attacker-supplied. The
+        // reduced document contains only what the IdP actually signed, so the
+        // response is re-parsed from it and `unverified` is dropped -- see
+        // `verify_and_reduce` for why re-reading the original would reintroduce
+        // an XML Signature Wrapping bypass.
+        let verified_xml = Self::verify_and_reduce(&response_str, &idp)?;
+        drop(unverified);
+
+        let saml_response = self.parse_saml_response(&verified_xml)?;
 
         if saml_response.status != SamlStatus::Success {
             return Err(format!(
@@ -542,21 +568,10 @@ impl SsoService {
             ));
         }
 
-        let assertion = saml_response.assertion.ok_or("No assertion in response")?;
+        let assertion = saml_response.assertion.ok_or("No signed assertion")?;
 
-        // Validate assertion
+        // Validate the signed assertion's time window.
         Self::validate_assertion(&assertion)?;
-
-        // Get IdP config
-        let idp = self
-            .get_idp_by_domain(&self.extract_domain(&assertion.subject.name_id))
-            .await?
-            .ok_or("IdP not found")?;
-
-        // Authenticity check. Nothing above this point is trustworthy: the
-        // response is attacker-supplied until its signature is verified
-        // against the IdP certificate.
-        self.verify_signature(&response_str, &idp)?;
 
         // Extract user attributes
         let email = self
@@ -723,8 +738,9 @@ impl SsoService {
     ///
     /// Namespace prefixes (`saml:Attribute`, `saml2:AttributeValue`, ...) are
     /// tolerated. This is a pragmatic extractor, not a conforming XML parser;
-    /// it is only ever reached for assertions that have already been rejected
-    /// by [`Self::verify_signature`], which currently fails closed.
+    /// it is only ever reached for content that [`Self::verify_and_reduce`] has
+    /// already cut down to signed material, so a hostile document cannot reach
+    /// it with unsigned elements intact.
     fn parse_attributes(xml: &str) -> HashMap<String, Vec<String>> {
         static ATTRIBUTE_BLOCK: OnceLock<Regex> = OnceLock::new();
         static ATTRIBUTE_VALUE: OnceLock<Regex> = OnceLock::new();
@@ -756,22 +772,48 @@ impl SsoService {
 
     /// Verify the XML signature on a SAML response against the IdP certificate.
     ///
-    /// # Not implemented — fails closed
+    /// Returns the *reduced* document: the subset of `response_xml` that
+    /// xmlsec actually verified, with every unsigned element removed.
     ///
-    /// Verifying a SAML assertion requires XML-DSig: exclusive canonicalisation
-    /// (xml-c14n11), digest comparison over the `<Reference>` URI, signature
-    /// verification against the IdP's X.509 key, and defences against wrapping
-    /// attacks (XSW). Hand-rolling that on top of regex extraction produces a
-    /// bypass, not a check, so it is refused outright rather than approximated.
+    /// Callers must parse the returned string and discard the input. That is
+    /// the defence against XML Signature Wrapping: an attacker who wraps a
+    /// legitimately signed assertion alongside a forged one still produces a
+    /// valid signature over the genuine fragment, so a checker that verifies
+    /// the document and then re-reads the *original* will happily consume the
+    /// forgery. Reducing to signed content makes the forged elements cease to
+    /// exist before parsing.
     ///
-    /// Until this is backed by a real XML-DSig implementation, every callback
-    /// is rejected. Do not relax this to `Ok(())`: `handle_callback` provisions
-    /// and authenticates users from the assertion contents, so returning `Ok`
-    /// here accepts forged, unsigned assertions from any origin.
-    fn verify_signature(&self, _response_xml: &str, _idp: &SamlIdpConfig) -> Result<(), String> {
-        Err("SAML signature verification is not implemented; \
-             SSO login is disabled to avoid accepting unsigned assertions"
-            .to_string())
+    /// `ReduceMode::ValidateAndMarkNoAncestors` is deliberate. samael also
+    /// offers `ValidateAndMark`, whose own documentation notes that unsigned
+    /// ancestors can survive reduction; that is precisely the hole this
+    /// function exists to close.
+    fn verify_and_reduce(response_xml: &str, idp: &SamlIdpConfig) -> Result<String, String> {
+        let cert = Self::certificate_der(&idp.certificate)?;
+
+        Crypto::reduce_xml_to_signed(
+            response_xml,
+            &[cert],
+            ReduceMode::ValidateAndMarkNoAncestors,
+        )
+        .map_err(|e| format!("SAML signature verification failed: {}", e))
+    }
+
+    /// Decode the IdP's configured X.509 certificate to DER.
+    ///
+    /// Accepts either a PEM block or a bare base64 body, since IdP metadata
+    /// exports differ on whether they include the armour.
+    fn certificate_der(certificate: &str) -> Result<CertificateDer, String> {
+        let body: String = certificate
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("-----"))
+            .flat_map(|line| line.split_whitespace())
+            .collect();
+
+        if body.is_empty() {
+            return Err("IdP certificate is empty".to_string());
+        }
+
+        decode_x509_cert(&body).map_err(|e| format!("Invalid IdP certificate: {}", e))
     }
 
     /// Validate the assertion's time window.
@@ -870,7 +912,8 @@ impl SsoService {
     // These are deliberately regex-based rather than backed by a full XML
     // parser. They are sufficient for reading well-formed IdP responses, but
     // they are NOT a security boundary: a hostile document can defeat them.
-    // Authenticity must come from [`Self::verify_signature`].
+    // Authenticity must come from [`Self::verify_and_reduce`], which is applied
+    // before any of these run.
 
     /// Read `attr` off the first `element` start tag, tolerating namespace
     /// prefixes (`<saml:Conditions NotBefore="..."/>` matches `"Conditions"`).
@@ -1151,5 +1194,223 @@ mod tests {
             .unwrap_err();
         // NotOnOrAfter == NotBefore means the window is already closed.
         assert_eq!(err, "Assertion has expired");
+    }
+}
+
+/// Signature-verification tests.
+///
+/// These cover the authentication boundary in `handle_callback`: a SAML
+/// response is only trustworthy after `verify_and_reduce` has cut it down to
+/// what the IdP actually signed. They use a throwaway RSA keypair generated by
+/// `tests/fixtures/genkeys.sh` -- test-only credentials that grant nothing.
+#[cfg(test)]
+mod signature_tests {
+    use super::*;
+
+    const TEST_KEY_B64: &str = include_str!("../../tests/fixtures/saml_test_key.b64");
+    const TEST_CERT_B64: &str = include_str!("../../tests/fixtures/saml_test_cert.b64");
+    /// An unrelated IdP certificate, for proving the trust anchor is enforced.
+    const OTHER_CERT_B64: &str = include_str!("../../tests/fixtures/saml_other_cert.b64");
+
+    fn private_key_der() -> Vec<u8> {
+        BASE64
+            .decode(TEST_KEY_B64.trim())
+            .expect("test key fixture is valid base64")
+    }
+
+    fn idp() -> SamlIdpConfig {
+        SamlIdpConfig {
+            id: "test".into(),
+            name: "Test IdP".into(),
+            entity_id: "https://idp.example.com".into(),
+            sso_url: "https://idp.example.com/sso".into(),
+            slo_url: None,
+            certificate: TEST_CERT_B64.trim().to_string(),
+            enabled: true,
+            organization_id: None,
+            auto_provision: true,
+            ..Default::default()
+        }
+    }
+
+    /// A SAML response whose Assertion carries an enveloped-signature template
+    /// for xmlsec to fill in.
+    fn unsigned_response(email: &str) -> String {
+        // `r##"..."##`: the signature template contains `URI="#_assert7"`, and
+        // the `"#` in that would close an `r#"..."#` literal early.
+        format!(
+            r##"<?xml version="1.0"?>
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_resp1">
+  <saml:Issuer>https://idp.example.com</saml:Issuer>
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>
+  <saml:Assertion ID="_assert7">
+    <saml:Issuer>https://idp.example.com</saml:Issuer>
+    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+      <ds:SignedInfo>
+        <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+        <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+        <ds:Reference URI="#_assert7">
+          <ds:Transforms>
+            <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+            <ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+          </ds:Transforms>
+          <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+          <ds:DigestValue></ds:DigestValue>
+        </ds:Reference>
+      </ds:SignedInfo>
+      <ds:SignatureValue></ds:SignatureValue>
+      <ds:KeyInfo><ds:X509Data><ds:X509Certificate></ds:X509Certificate></ds:X509Data></ds:KeyInfo>
+    </ds:Signature>
+    <saml:Subject>
+      <saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">{email}</saml:NameID>
+    </saml:Subject>
+    <saml:Conditions NotBefore="2020-01-01T00:00:00Z" NotOnOrAfter="2099-01-01T00:00:00Z"/>
+    <saml:AttributeStatement>
+      <saml:Attribute Name="email">
+        <saml:AttributeValue>{email}</saml:AttributeValue>
+      </saml:Attribute>
+    </saml:AttributeStatement>
+  </saml:Assertion>
+</samlp:Response>"##
+        )
+    }
+
+    fn signed_response(email: &str) -> String {
+        Crypto::sign_xml(unsigned_response(email), &private_key_der())
+            .expect("signing the test response should succeed")
+    }
+
+    #[test]
+    fn accepts_a_correctly_signed_response() {
+        let signed = signed_response("alice@example.com");
+
+        let reduced = SsoService::verify_and_reduce(&signed, &idp())
+            .expect("a response signed by the IdP key must verify");
+
+        assert!(
+            reduced.contains("alice@example.com"),
+            "verified content should retain the signed subject"
+        );
+    }
+
+    #[test]
+    fn rejects_a_tampered_response() {
+        // Flip the email after signing. The digest over the assertion no longer
+        // matches, so verification must fail rather than trust the content.
+        let tampered =
+            signed_response("alice@example.com").replace("alice@example.com", "attacker@evil.com");
+
+        assert!(
+            SsoService::verify_and_reduce(&tampered, &idp()).is_err(),
+            "content modified after signing must not verify"
+        );
+    }
+
+    #[test]
+    fn rejects_a_signature_that_does_not_match_the_configured_certificate() {
+        // The trust anchor is the certificate configured for the IdP. A
+        // response signed by a different (also valid) key must be rejected,
+        // otherwise anyone able to sign anything could impersonate this IdP.
+        //
+        // This needs a genuinely different keypair. Perturbing a byte of the
+        // real certificate does not work: it corrupts that certificate's own
+        // signature while leaving the embedded public key unchanged, so
+        // verification still legitimately succeeds.
+        let signed = signed_response("alice@example.com");
+
+        let mut wrong = idp();
+        wrong.certificate = OTHER_CERT_B64.trim().to_string();
+
+        assert!(
+            SsoService::verify_and_reduce(&signed, &wrong).is_err(),
+            "a signature not matching the configured certificate must be rejected"
+        );
+    }
+
+    #[test]
+    fn strips_a_wrapped_forged_assertion() {
+        // XML Signature Wrapping: keep the IdP's genuinely signed assertion so
+        // the signature still validates, and splice in an unsigned forged one.
+        // A checker that verifies the document and then re-reads the *original*
+        // would find the forged assertion and authenticate the attacker.
+        let signed = signed_response("alice@example.com");
+
+        let forged = concat!(
+            "<saml:Assertion ID=\"_forged\">",
+            "<saml:Subject><saml:NameID>attacker@evil.com</saml:NameID></saml:Subject>",
+            "<saml:Conditions NotBefore=\"2020-01-01T00:00:00Z\" ",
+            "NotOnOrAfter=\"2099-01-01T00:00:00Z\"/>",
+            "<saml:AttributeStatement><saml:Attribute Name=\"email\">",
+            "<saml:AttributeValue>attacker@evil.com</saml:AttributeValue>",
+            "</saml:Attribute></saml:AttributeStatement>",
+            "</saml:Assertion>"
+        );
+
+        let anchor = "<saml:Assertion ID=\"_assert7\">";
+        let wrapped = signed.replace(anchor, &format!("{forged}{anchor}"));
+        assert!(
+            wrapped.contains("attacker@evil.com"),
+            "precondition: the wrapped document contains the forgery"
+        );
+
+        match SsoService::verify_and_reduce(&wrapped, &idp()) {
+            // Either outcome is safe. What must never happen is verification
+            // succeeding with the forged assertion still reachable.
+            Err(_) => {}
+            Ok(reduced) => {
+                assert!(
+                    !reduced.contains("attacker@evil.com"),
+                    "reduction must drop the unsigned forged assertion; got: {reduced}"
+                );
+                assert!(
+                    reduced.contains("alice@example.com"),
+                    "reduction should keep the genuinely signed assertion"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_an_unsigned_response() {
+        assert!(
+            SsoService::verify_and_reduce(&unsigned_response("alice@example.com"), &idp()).is_err(),
+            "a response with an unfilled signature template must not verify"
+        );
+    }
+
+    #[test]
+    fn rejects_an_empty_certificate() {
+        let mut broken = idp();
+        broken.certificate = String::new();
+
+        let err = SsoService::verify_and_reduce(&signed_response("alice@example.com"), &broken)
+            .unwrap_err();
+
+        assert!(
+            err.contains("certificate is empty"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn accepts_a_pem_armoured_certificate() {
+        // IdP metadata exports differ on whether the armour is included.
+        let der = BASE64.decode(TEST_CERT_B64.trim()).unwrap();
+        let encoded = BASE64.encode(&der);
+
+        let mut pem = String::from("-----BEGIN CERTIFICATE-----\n");
+        for chunk in encoded.as_bytes().chunks(64) {
+            pem.push_str(std::str::from_utf8(chunk).unwrap());
+            pem.push('\n');
+        }
+        pem.push_str("-----END CERTIFICATE-----\n");
+
+        let mut armoured = idp();
+        armoured.certificate = pem;
+
+        assert!(
+            SsoService::verify_and_reduce(&signed_response("alice@example.com"), &armoured).is_ok(),
+            "a PEM-armoured certificate should be accepted"
+        );
     }
 }

@@ -20,7 +20,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-enterprise = []
+enterprise = ["dep:samael"]
 
 [dependencies]
 # CLI framework
@@ -84,6 +84,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # HTTP client for cloud API providers (using rustls for cross-compilation compatibility)
+samael = { version = "0.0.22", optional = true }
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "blocking",

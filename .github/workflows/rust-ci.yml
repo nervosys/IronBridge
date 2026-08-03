@@ -107,10 +107,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # clang/libclang are required because samael generates its xmlsec
+      # bindings with bindgen at build time.
       - name: Install XML security libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxml2-dev libxmlsec1-dev libxmlsec1-openssl pkg-config
+          sudo apt-get install -y \
+            libxml2-dev libxmlsec1-dev libxmlsec1-openssl pkg-config \
+            clang libclang-dev
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
