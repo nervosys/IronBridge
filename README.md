@@ -203,7 +203,7 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 887 tests passing.                                                                            |
 | Providers                       | **Working.** 12 local/OpenAI-compatible + 6 cloud share-link parsers.                                                     |
 | MCP server, TUI                 | **Working.**                                                                                                              |
-| REST API                        | **Partial.** 76 routes registered; 24 return `"not yet implemented"` — all Agents, all Swarms, provider CRUD, chat completions, import/export, harvest, sync, settings, accounts. The 6 endpoints documented above work. |
+| REST API                        | **Partial.** ~69 routes are actually served: 46 in `api/mod.rs` plus auth, sync, recording, and websocket. A second, larger implementation in `api/handlers.rs` and `api/routes.rs` — including the 24 `"not yet implemented"` stubs — is never compiled, because neither file has a `mod` declaration. The 6 endpoints documented above work. |
 | GraphQL                         | **Not mounted.** Routes never registered; resolvers are `TODO` stubs.                                                     |
 | Enterprise (SSO/audit/retention)| **Not usable.** Compiles and is unit-tested, but `DatabaseOps` has no implementor and SAML login fails closed.            |
 | Conversation analysis           | **Working, but heuristic.** Keyword matching, lexicon sentiment, Jaccard similarity — no model inference despite the "AI" framing. |

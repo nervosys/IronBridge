@@ -17,7 +17,9 @@ Verified against the tree as of July 31, 2026:
 | Item | Reality |
 | --- | --- |
 | GraphQL API | `configure_graphql_routes` is never called — `/graphql` and `/graphql/playground` 404. 16 resolvers are `TODO` stubs. |
-| REST API | 24 of 76 registered routes return `"not yet implemented"`: all Agents, all Swarms, provider CRUD, chat completions, import/export, harvest, sync, settings, accounts. |
+| REST API | Two parallel implementations exist and the larger one is orphaned. `api/handlers.rs` (2049 LOC, where the 24 `"not yet implemented"` stubs live) and `api/routes.rs` (76 routes) have no `mod` declaration, so rustc never compiles them. The served API is the 46 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
+| Orphaned API modules | 5989 LOC across `api/{handlers,routes,analytics,backup,branching,device_sync,versioning}.rs` is absent from the crate's dependency graph — verified against rustc's own dep-info, not by grep. |
+| Compiled but unmounted | `api/docs.rs` (4 routes) and `api/webhooks.rs` (8 routes) compile, but `configure_docs_routes` and `configure_webhook_routes` are never called and the modules are private, so the routes are unreachable. |
 | SSO/SAML | No XML-DSig verification exists, so SAML login fails closed and rejects every callback. Do not enable it expecting working SSO. |
 | Audit logging, retention | Compile and are unit-tested, but `api::audit::DatabaseOps` has no implementor — nothing persists. |
 | AI & Intelligence | Heuristic, not model-backed: substring keyword matching, lexicon sentiment, Jaccard similarity. |
