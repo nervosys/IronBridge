@@ -2177,7 +2177,14 @@ pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
     sys.refresh_processes();
 
     let mut signaled = 0u32;
-    for (pid, process) in sys.processes() {
+    // The key is read only by the Windows `taskkill` branch below, so on other
+    // platforms it is genuinely unused. The underscore silences
+    // `unused_variables` there (an underscore-prefixed binding is still usable
+    // by name, which is what the Windows branch does), and `for_kv_map` is
+    // allowed because switching to `.values()` would drop the pid that Windows
+    // needs.
+    #[allow(clippy::for_kv_map)]
+    for (_pid, process) in sys.processes() {
         let name = process.name().to_lowercase();
         if name.contains("code") && !name.contains("codec") {
             // On Windows, kill() sends TerminateProcess; there's no graceful
@@ -2187,7 +2194,7 @@ pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
             #[cfg(windows)]
             {
                 let _ = std::process::Command::new("taskkill")
-                    .args(["/PID", &pid.as_u32().to_string()])
+                    .args(["/PID", &_pid.as_u32().to_string()])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .status();
