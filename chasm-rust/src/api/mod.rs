@@ -27,6 +27,8 @@ mod audit;
 mod auth;
 pub mod caching;
 mod docs;
+#[cfg(feature = "enterprise")]
+mod enterprise_store;
 mod graphql;
 mod handlers_simple;
 mod handlers_swe;
@@ -47,6 +49,8 @@ pub use audit::{
 };
 pub use auth::configure_auth_routes;
 pub use docs::configure_docs_routes;
+#[cfg(feature = "enterprise")]
+pub use enterprise_store::SqliteEnterpriseStore;
 pub use recording::{configure_recording_routes, create_recording_state};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};

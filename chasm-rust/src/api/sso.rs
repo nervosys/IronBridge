@@ -43,6 +43,13 @@ pub struct SamlIdpConfig {
     pub certificate: String,
     /// Whether this IdP is enabled
     pub enabled: bool,
+    /// Email domains routed to this IdP (e.g. `["example.com"]`).
+    ///
+    /// `handle_callback` resolves an IdP from the assertion's email domain, so
+    /// without this there is nothing to match on. Defaulted so existing stored
+    /// configurations continue to deserialize.
+    #[serde(default)]
+    pub domains: Vec<String>,
     /// Organization/tenant ID this IdP is associated with
     pub organization_id: Option<String>,
     /// Attribute mappings (IdP attribute -> Chasm field)
@@ -84,6 +91,7 @@ impl Default for SamlIdpConfig {
             slo_url: None,
             certificate: String::new(),
             enabled: false,
+            domains: Vec::new(),
             organization_id: None,
             attribute_mappings: AttributeMappings {
                 email: "email".to_string(),
@@ -334,6 +342,10 @@ pub struct CreateIdpRequest {
     pub organization_id: Option<String>,
     pub attribute_mappings: Option<AttributeMappings>,
     pub auto_provision: Option<bool>,
+    /// Email domains to route to this IdP. Optional so existing callers keep
+    /// working, but an IdP with none can only be reached by explicit id.
+    #[serde(default)]
+    pub domains: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -406,6 +418,7 @@ impl SsoService {
             slo_url: request.slo_url,
             certificate: request.certificate,
             enabled: true,
+            domains: request.domains.unwrap_or_default(),
             organization_id: request.organization_id,
             attribute_mappings: request.attribute_mappings.unwrap_or_default(),
             default_tier: SubscriptionTier::Enterprise,
