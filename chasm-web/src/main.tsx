@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from 'react-error-boundary'
 import './index.css'
 import App from './App.tsx'
+import { configureDesktopApi } from './api/desktop'
 
 function ErrorFallback({ error }: { error: unknown }) {
   const errorMessage = error instanceof Error ? error.message : String(error);
@@ -25,6 +26,16 @@ function ErrorFallback({ error }: { error: unknown }) {
     </div>
   )
 }
+
+// Under the desktop app, redirect the API client to the embedded server
+// before the first request goes out. A no-op in the browser. Rendering is not
+// blocked on it: a failure here should surface as the app's normal
+// "backend unreachable" state, not a blank window.
+configureDesktopApi().then(status => {
+  if (status && !status.running) {
+    console.error('[chasm] embedded API server unavailable:', status.error);
+  }
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

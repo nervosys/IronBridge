@@ -13,6 +13,7 @@ use tauri::{
 };
 
 mod commands;
+mod server;
 
 fn main() {
     tauri::Builder::default()
@@ -25,6 +26,34 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Bring the API server up before the window shows anything.
+            // Without this the app opens onto a UI whose every request fails
+            // until the user separately runs `chasm api serve`.
+            //
+            // Spawned rather than blocked on: a slow first-run database
+            // migration would otherwise freeze the app before it drew a
+            // frame. The UI polls `get_api_server_status` and can show
+            // "starting" honestly instead.
+            std::thread::spawn(|| {
+                let runtime = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        eprintln!("[ERROR] could not start API supervisor: {}", e);
+                        return;
+                    }
+                };
+                let status = runtime.block_on(server::ensure_running(server::default_port()));
+                if !status.running {
+                    eprintln!(
+                        "[ERROR] API server unavailable: {}",
+                        status.error.as_deref().unwrap_or("unknown reason")
+                    );
+                }
+            });
+
             // Build tray menu
             let show = MenuItem::with_id(app, "show", "Show Chasm", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
@@ -76,6 +105,8 @@ fn main() {
             commands::open_devtools,
             commands::minimize_to_tray,
             commands::check_api_health,
+            commands::get_api_server_status,
+            commands::start_api_server,
         ])
         .on_window_event(|window, event| {
             // Intercept window close → hide to tray instead of quitting

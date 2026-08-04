@@ -54,6 +54,24 @@ pub fn minimize_to_tray<R: Runtime>(app: AppHandle<R>) {
     }
 }
 
+/// Where the embedded API server is listening, and how it got there.
+///
+/// The frontend needs this before its first request: it cannot assume the
+/// CLI's default port, because the app deliberately uses a different one.
+#[tauri::command]
+pub fn get_api_server_status() -> crate::server::ServerStatus {
+    crate::server::current_status()
+}
+
+/// Start the embedded API server if it is not already up.
+///
+/// Exposed as well as being called at startup so the UI can offer a retry
+/// rather than requiring a restart when the first attempt failed.
+#[tauri::command]
+pub async fn start_api_server() -> crate::server::ServerStatus {
+    crate::server::ensure_running(crate::server::default_port()).await
+}
+
 /// Check if the chasm API is healthy
 #[tauri::command]
 pub async fn check_api_health(api_url: String) -> ApiHealth {

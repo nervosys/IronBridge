@@ -24,6 +24,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
+# The API server runs in-process rather than as a bundled sidecar binary, so
+# the app cannot ship in a state where the UI works but its backend is missing.
+# The package is `chasm-cli`; its library target is renamed `chasm`, which is
+# what the `use` paths below refer to.
+chasm = { path = "../chasm-rust", package = "chasm-cli" }
 
 [features]
 default = ["custom-protocol"]
