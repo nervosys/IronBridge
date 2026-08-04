@@ -9,22 +9,16 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-mod agency;
-mod api;
-mod browser;
-mod cli;
-mod commands;
-mod copilot_version;
-mod database;
-mod error;
-mod mcp;
-mod models;
-mod providers;
-mod schema;
-mod storage;
-mod telemetry;
-mod tui;
-mod workspace;
+// These come from the library crate rather than being re-declared with
+// `mod`. Declaring them here compiled a second, independent copy of every
+// module into the binary: slower builds, and unit tests inside them ran twice
+// (once under `lib.rs`, once under `main.rs`), inflating the reported test
+// count. `crate::` paths inside the modules resolve against the library
+// either way.
+use chasm::{
+    agency, api, browser, cli, commands, copilot_version, database, error, mcp, models, providers,
+    schema, storage, telemetry, tui, workspace,
+};
 
 use anyhow::Result;
 use clap::Parser;
