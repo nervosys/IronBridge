@@ -26,9 +26,13 @@ info:
     url: https://www.gnu.org/licenses/agpl-3.0.html
 
 servers:
-  - url: http://localhost:8787/api/v1
+  # The server mounts everything under /api. There is no /api/v1 namespace --
+  # `grep -r 'scope("/api/v1"' src/` finds nothing, and every documented path
+  # returned 404 under that base when probed against a running server, which
+  # made every "Try it" in the Swagger UI fail.
+  - url: http://localhost:8787/api
     description: Local development server
-  - url: https://api.chasm.io/v1
+  - url: https://api.chasm.io/api
     description: Production server (when deployed)
 
 tags:
@@ -785,13 +789,7 @@ paths:
         "200":
           description: Settings updated
 
-  # The inbox is served under /api, not the /api/v1 base these paths default
-  # to, so each entry overrides the server rather than being documented at a
-  # URL that does not exist.
   /inbox:
-    servers:
-      - url: http://localhost:8787/api
-        description: Local development server
     get:
       tags: [Inbox]
       summary: Get the whole inbox
@@ -802,8 +800,6 @@ paths:
           description: Inbox contents
 
   /inbox/counts:
-    servers:
-      - url: http://localhost:8787/api
     get:
       tags: [Inbox]
       summary: Unread and pending counts
@@ -814,8 +810,6 @@ paths:
           description: Counts
 
   /inbox/notifications/{id}/read:
-    servers:
-      - url: http://localhost:8787/api
     post:
       tags: [Inbox]
       summary: Mark a notification read
@@ -833,8 +827,6 @@ paths:
           description: No notification with that id
 
   /inbox/messages/{id}/star:
-    servers:
-      - url: http://localhost:8787/api
     post:
       tags: [Inbox]
       summary: Toggle a message's star
@@ -853,8 +845,6 @@ paths:
           description: No message with that id
 
   /inbox/permissions/{id}/respond:
-    servers:
-      - url: http://localhost:8787/api
     post:
       tags: [Inbox]
       summary: Approve or deny a permission request

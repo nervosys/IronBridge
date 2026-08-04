@@ -238,17 +238,17 @@ Full CRUD operations for AI agents and swarm orchestration.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/agents` | List all agents |
-| `POST` | `/api/v1/agents` | Create an agent |
-| `GET` | `/api/v1/agents/:id` | Get agent details |
-| `PUT` | `/api/v1/agents/:id` | Update an agent |
-| `DELETE` | `/api/v1/agents/:id` | Delete an agent |
-| `POST` | `/api/v1/agents/:id/clone` | Clone an agent |
+| `GET` | `/api/agents` | List all agents |
+| `POST` | `/api/agents` | Create an agent |
+| `GET` | `/api/agents/:id` | Get agent details |
+| `PUT` | `/api/agents/:id` | Update an agent |
+| `DELETE` | `/api/agents/:id` | Delete an agent |
+| `POST` | `/api/agents/:id/clone` | Clone an agent |
 
 #### Create Agent
 
 ```bash
-curl -X POST http://localhost:8787/api/v1/agents \
+curl -X POST http://localhost:8787/api/agents \
   -H "Content-Type: application/json" \
   -d '{
     "name": "code-assistant",
@@ -264,18 +264,18 @@ curl -X POST http://localhost:8787/api/v1/agents \
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/swarms` | List all swarms |
-| `POST` | `/api/v1/swarms` | Create a swarm |
-| `POST` | `/api/v1/swarms/:id/start` | Start swarm execution |
-| `POST` | `/api/v1/swarms/:id/pause` | Pause swarm |
-| `POST` | `/api/v1/swarms/:id/resume` | Resume swarm |
-| `POST` | `/api/v1/swarms/:id/stop` | Stop swarm |
+| `GET` | `/api/swarms` | List all swarms |
+| `POST` | `/api/swarms` | Create a swarm |
+| `POST` | `/api/swarms/:id/start` | Start swarm execution |
+| `POST` | `/api/swarms/:id/pause` | Pause swarm |
+| `POST` | `/api/swarms/:id/resume` | Resume swarm |
+| `POST` | `/api/swarms/:id/stop` | Stop swarm |
 
 #### Create and Run a Swarm
 
 ```bash
 # Create
-curl -X POST http://localhost:8787/api/v1/swarms \
+curl -X POST http://localhost:8787/api/swarms \
   -H "Content-Type: application/json" \
   -d '{
     "name": "dev-team",
@@ -285,7 +285,7 @@ curl -X POST http://localhost:8787/api/v1/swarms \
   }'
 
 # Start
-curl -X POST http://localhost:8787/api/v1/swarms/{id}/start \
+curl -X POST http://localhost:8787/api/swarms/{id}/start \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Build a todo app with user authentication"}'
 ```
