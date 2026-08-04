@@ -274,6 +274,49 @@ chasm run chatgpt --model gpt-4o
 
 ---
 
+## Analysis
+
+Extract topics, sentiment and key points from a session.
+
+| Command | Description |
+|---|---|
+| `chasm analyze <file>` | Analyze a session file |
+| `chasm analyze <file> --json` | Emit the analysis as JSON |
+| `chasm analyze <file> --require-model` | Fail rather than fall back to heuristics |
+
+Analysis uses a language model when `OPENAI_API_KEY` is set, and offline
+heuristics otherwise. **The output always names which one ran.** The
+heuristics recognise only a couple of languages and write no summary, so a
+thin-looking result usually means no model was configured rather than a
+featureless conversation. Use `--require-model` in scripts that treat the
+summary as meaningful.
+
+### Environment
+
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | Enables model-backed analysis. Blank counts as unset. |
+| `OPENAI_BASE_URL` | Any OpenAI-compatible endpoint, including a local one. |
+| `CHASM_ANALYSIS_MODEL` | Model name; defaults to `gpt-4o-mini`. |
+
+### Examples
+
+```bash
+# Offline heuristics
+chasm analyze session.json
+
+# Against a local Ollama server
+export OPENAI_API_KEY=local          # local servers ignore the value
+export OPENAI_BASE_URL=http://127.0.0.1:11434/v1
+export CHASM_ANALYSIS_MODEL=gemma4:latest
+chasm analyze session.json --require-model
+
+# Machine-readable, for a pipeline
+chasm analyze session.json --json | jq .topics
+```
+
+---
+
 ## Server
 
 Commands for running Chasm as a service.

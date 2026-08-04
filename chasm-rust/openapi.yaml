@@ -52,6 +52,8 @@ tags:
     description: Search operations
   - name: Statistics
     description: Usage statistics
+  - name: Inbox
+    description: Agent notifications, messages, permission requests and workflow runs
   - name: Settings
     description: Application settings
 
@@ -782,6 +784,113 @@ paths:
       responses:
         "200":
           description: Settings updated
+
+  # The inbox is served under /api, not the /api/v1 base these paths default
+  # to, so each entry overrides the server rather than being documented at a
+  # URL that does not exist.
+  /inbox:
+    servers:
+      - url: http://localhost:8787/api
+        description: Local development server
+    get:
+      tags: [Inbox]
+      summary: Get the whole inbox
+      description: Notifications, agent messages, permission requests and workflow runs in one response.
+      operationId: getInbox
+      responses:
+        "200":
+          description: Inbox contents
+
+  /inbox/counts:
+    servers:
+      - url: http://localhost:8787/api
+    get:
+      tags: [Inbox]
+      summary: Unread and pending counts
+      description: Badge counts only; cheaper than fetching records to length-filter them.
+      operationId: getInboxCounts
+      responses:
+        "200":
+          description: Counts
+
+  /inbox/notifications/{id}/read:
+    servers:
+      - url: http://localhost:8787/api
+    post:
+      tags: [Inbox]
+      summary: Mark a notification read
+      operationId: markNotificationRead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked read
+        "404":
+          description: No notification with that id
+
+  /inbox/messages/{id}/star:
+    servers:
+      - url: http://localhost:8787/api
+    post:
+      tags: [Inbox]
+      summary: Toggle a message's star
+      description: Toggles server-side, so concurrent viewers cannot disagree on the state.
+      operationId: toggleMessageStar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Toggled
+        "404":
+          description: No message with that id
+
+  /inbox/permissions/{id}/respond:
+    servers:
+      - url: http://localhost:8787/api
+    post:
+      tags: [Inbox]
+      summary: Approve or deny a permission request
+      description: >-
+        Expiry is applied on read, so a lapsed request reports `expired` rather
+        than staying approvable. Responding to one returns 409 instead of a
+        misleading success, because the agent that raised it has moved on.
+      operationId: respondToPermission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved]
+              properties:
+                approved:
+                  type: boolean
+                scope:
+                  type: string
+                  enum: [once, session, run, always]
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Recorded
+        "404":
+          description: No pending request with that id
+        "409":
+          description: The request expired before it was answered
 
 components:
   parameters:

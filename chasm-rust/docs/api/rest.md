@@ -292,6 +292,51 @@ curl -X POST http://localhost:8787/api/v1/swarms/{id}/start \
 
 ---
 
+## Agent Inbox API
+
+Notifications, agent messages, permission requests and workflow runs. The
+agency runtime writes to this as it executes agents; these endpoints are the
+read side plus the user's responses.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/inbox` | All four collections in one response |
+| `GET` | `/api/inbox/counts` | Unread and pending counts for badges |
+| `GET` | `/api/inbox/notifications` | Notifications only |
+| `POST` | `/api/inbox/notifications/:id/read` | Mark one read |
+| `POST` | `/api/inbox/notifications/:id/dismiss` | Dismiss one |
+| `POST` | `/api/inbox/notifications/read-all` | Mark every unread one read |
+| `GET` | `/api/inbox/messages` | Agent messages |
+| `POST` | `/api/inbox/messages/:id/read` | Mark read |
+| `POST` | `/api/inbox/messages/:id/star` | Toggle the star |
+| `POST` | `/api/inbox/messages/:id/archive` | Archive |
+| `POST` | `/api/inbox/messages/:id/respond` | Reply to a message |
+| `GET` | `/api/inbox/permissions` | Permission requests |
+| `POST` | `/api/inbox/permissions/:id/respond` | Approve or deny |
+| `GET` | `/api/inbox/workflows` | Workflow runs |
+
+### Permission expiry
+
+Requests carry an expiry, and it is applied **on read**: a request whose
+deadline has passed reports `expired` even though it is still stored as
+`pending`. Without that, a lapsed request would sit in the UI looking
+approvable long after the agent that raised it had moved on.
+
+Responding to an expired request returns `409 Conflict` rather than a
+misleading success:
+
+```bash
+curl -X POST http://localhost:8787/api/inbox/permissions/{id}/respond \
+  -H "Content-Type: application/json" \
+  -d '{"approved": true, "scope": "run", "note": "looks safe"}'
+```
+
+`scope` is one of `once`, `session`, `run`, `always`. Mutating an id that does
+not exist returns `404`, so a caller can distinguish "recorded" from "no such
+record" instead of getting `200` either way.
+
+---
+
 ## WebSocket
 
 For real-time recording, connect via WebSocket:
