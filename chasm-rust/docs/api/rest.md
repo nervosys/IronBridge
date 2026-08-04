@@ -369,3 +369,31 @@ All errors follow a consistent format:
 | `400` | Bad request / invalid parameters |
 | `404` | Resource not found |
 | `500` | Internal server error |
+
+---
+
+## Endpoints in the spec that are not served
+
+`openapi.yaml` documents surface that was never implemented. Verified against
+route registrations in `src/api/`, not by probing -- this server answers `404`
+for a method mismatch as well as an unknown path, so a `404` alone cannot tell
+the two apart.
+
+| Documented | Methods |
+|---|---|
+| `/system/vacuum`, `/system/cache/clear` | POST |
+| `/workspaces/discover`, `/workspaces/{id}/refresh` | POST |
+| `/sessions/merge`, `/sessions/{id}/archive`, `/sessions/{id}/fork` | POST |
+| `/sessions/{id}/export` | GET |
+| `/sessions/{id}/messages` | GET, POST |
+| `/providers/{id}`, `/providers/{id}/health`, `/providers/{id}/models` | GET (+PUT/DELETE) |
+| `/chat/completions`, `/harvest`, `/sync` | POST |
+| `/search`, `/search/sessions`, `/search/semantic` | GET |
+| `/stats/providers`, `/stats/timeline` | GET |
+
+Search is really `GET /api/sessions/search?q=`. Semantic search exists as a
+library capability but is not exposed over REST.
+
+`/workspaces/{id}` **is** served, despite an earlier note here claiming
+otherwise: it returns 404 for an id that does not match a stored workspace,
+which is indistinguishable from a missing route when probing.

@@ -127,14 +127,19 @@ chasm api serve --port 8787
 
 ### REST Endpoints
 
-| Method | Endpoint            | Description               |
-| ------ | ------------------- | ------------------------- |
-| GET    | `/api/health`       | Health check              |
-| GET    | `/api/workspaces`   | List workspaces           |
-| GET    | `/api/sessions`     | List sessions             |
-| GET    | `/api/sessions/:id` | Get session with messages |
-| POST   | `/api/harvest`      | Trigger harvest           |
-| GET    | `/api/stats`        | Database statistics       |
+| Method | Endpoint               | Description               |
+| ------ | ---------------------- | ------------------------- |
+| GET    | `/api/health`          | Health check              |
+| GET    | `/api/workspaces`      | List workspaces           |
+| GET    | `/api/workspaces/:id`  | Get one workspace         |
+| GET    | `/api/sessions`        | List sessions             |
+| GET    | `/api/sessions/:id`    | Get session with messages |
+| GET    | `/api/sessions/search` | Full-text search (`?q=`)  |
+| GET    | `/api/stats`           | Database statistics       |
+
+There is no `POST /api/harvest`; harvesting runs through the CLI
+(`chasm harvest run`). It was listed here previously but no such route is
+registered.
 
 ### GraphQL
 
