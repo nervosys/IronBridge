@@ -16,7 +16,7 @@ Verified against the tree as of July 31, 2026:
 
 | Item | Reality |
 | --- | --- |
-| GraphQL API | `configure_graphql_routes` is never called — `/graphql` and `/graphql/playground` 404. 16 resolvers are `TODO` stubs. |
+| GraphQL API | Mounted and backed by the database. `harvest` and `sync` mutations return errors by design (use the CLI or REST). `tags` is rejected on session updates -- no column exists for it. |
 | REST API | Two parallel implementations exist and the larger one is orphaned. `api/handlers.rs` (2049 LOC, where the 24 `"not yet implemented"` stubs live) and `api/routes.rs` (76 routes) have no `mod` declaration, so rustc never compiles them. The served API is the 46 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
 | Orphaned API modules | 5989 LOC across `api/{handlers,routes,analytics,backup,branching,device_sync,versioning}.rs` is absent from the crate's dependency graph — verified against rustc's own dep-info, not by grep. |
 | Compiled but unmounted | `api/docs.rs` (4 routes) and `api/webhooks.rs` (8 routes) compile, but `configure_docs_routes` and `configure_webhook_routes` are never called and the modules are private, so the routes are unreachable. |
@@ -233,7 +233,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Firefox Manifest V2 compatibility
 
 #### API Enhancements
-- [~] GraphQL API endpoint — schema defined but routes never mounted; resolvers are stubs
+- [x] GraphQL API endpoint — mounted at /graphql with database-backed resolvers
 - [x] Webhook integrations
 - [x] OpenAPI/Swagger documentation
 

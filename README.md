@@ -20,9 +20,9 @@
 - 🧠 **Conversation Analysis** — Heuristic topic extraction, insights, similarity scoring
 - 🔌 **Plugin System** — Extensible architecture with event hooks
 
-> **Also in the tree, but not yet shippable:** GraphQL API, enterprise SSO /
-> audit / retention. See [Implementation status](#implementation-status) before
-> depending on either.
+> **Also in the tree, but not yet shippable:** enterprise SSO / audit /
+> retention. See [Implementation status](#implementation-status) before
+> depending on them.
 
 ## Install
 
@@ -137,12 +137,26 @@ chasm api serve --port 8787
 | POST   | `/api/harvest`      | Trigger harvest           |
 | GET    | `/api/stats`        | Database statistics       |
 
-### GraphQL — not available
+### GraphQL
 
-`src/api/graphql.rs` defines a schema, but `configure_graphql_routes` is never
-called, so nothing is mounted: `/graphql` and `/graphql/playground` return 404.
-Its resolvers are also unimplemented (16 of them are `TODO` stubs returning
-fixed values rather than querying the database). Use the REST endpoints above.
+| Endpoint               | Description                    |
+| ---------------------- | ------------------------------ |
+| `/graphql`             | Queries and mutations (GET/POST) |
+| `/graphql/playground`  | Interactive explorer           |
+| `/graphql/sdl`         | Schema in SDL form             |
+
+Queries (`workspaces`, `sessions`, `messages`, `providers`, `agents`, `stats`,
+`search`) read the same database as the REST routes. Session and agent
+mutations perform real writes.
+
+Two deliberate exceptions: the `harvest` and `sync` mutations return an error
+directing you to `chasm harvest run` / `chasm sync`, because a multi-minute
+directory scan does not belong in a synchronous GraphQL field. Updating a
+session with `tags` is also rejected — no column exists to store them.
+
+On databases created by the harvest pipeline, `model`, `tokenCount` and
+`archived` are absent from the underlying tables and are reported as null, 0
+and false respectively.
 
 ## MCP Server
 
@@ -205,7 +219,7 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | Providers                       | **Working.** 12 local/OpenAI-compatible + 6 cloud share-link parsers.                                                     |
 | MCP server, TUI                 | **Working.**                                                                                                              |
 | REST API                        | **Partial.** ~69 routes are actually served: 46 in `api/mod.rs` plus auth, sync, recording, and websocket. A second, larger implementation in `api/handlers.rs` and `api/routes.rs` — including the 24 `"not yet implemented"` stubs — is never compiled, because neither file has a `mod` declaration. The 6 endpoints documented above work. |
-| GraphQL                         | **Not mounted.** Routes never registered; resolvers are `TODO` stubs.                                                     |
+| GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
 | Enterprise (SSO/audit/retention)| **Not usable.** Compiles and is unit-tested, and SAML signatures are now genuinely verified, but `DatabaseOps` has no implementor so nothing persists. |
 | Conversation analysis           | **Working, but heuristic.** Keyword matching, lexicon sentiment, Jaccard similarity — no model inference despite the "AI" framing. |
 | Embeddings / semantic search    | **Placeholder.** `OpenAIEmbedding::embed` returns a zero vector, so anything ranking on it is degenerate.                 |
