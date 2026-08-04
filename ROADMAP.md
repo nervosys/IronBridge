@@ -1,6 +1,6 @@
 # Chasm Roadmap
 
-> **Last Updated:** July 31, 2026
+> **Last Updated:** August 4, 2026
 
 This document tracks the development progress and future plans for Chasm (Chat Session Manager).
 
@@ -12,23 +12,23 @@ This document tracks the development progress and future plans for Chasm (Chat S
 
 ## Known gaps
 
-Verified against the tree as of July 31, 2026:
+Verified against the tree as of August 4, 2026:
 
 | Item | Reality |
 | --- | --- |
 | GraphQL API | Mounted and backed by the database. `harvest` and `sync` mutations return errors by design (use the CLI or REST). `tags` is rejected on session updates -- no column exists for it. |
-| REST API | Two parallel implementations exist and the larger one is orphaned. `api/handlers.rs` (2049 LOC, where the 24 `"not yet implemented"` stubs live) and `api/routes.rs` (76 routes) have no `mod` declaration, so rustc never compiles them. The served API is the 46 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
-| Orphaned API modules | 5989 LOC across `api/{handlers,routes,analytics,backup,branching,device_sync,versioning}.rs` is absent from the crate's dependency graph — verified against rustc's own dep-info, not by grep. |
-| Compiled but unmounted | `api/docs.rs` (4 routes) and `api/webhooks.rs` (8 routes) compile, but `configure_docs_routes` and `configure_webhook_routes` are never called and the modules are private, so the routes are unreachable. |
-| SSO/SAML | Signature verification is implemented (samael/libxmlsec1) and covered by wrapping-attack tests. Still not end-to-end usable: `DatabaseOps` has no implementor, so IdP config and sessions do not persist. Requires libxmlsec1; built on Linux only in CI. |
-| Audit logging, retention | Compile and are unit-tested, but `api::audit::DatabaseOps` has no implementor — nothing persists. |
+| REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted; the served API is the 47 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
+| SSO/SAML | Signature verification is implemented (samael/libxmlsec1) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Requires libxmlsec1; built on Linux only in CI. |
+| Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
 | AI & Intelligence | Heuristic, not model-backed: substring keyword matching, lexicon sentiment, Jaccard similarity. |
 | Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation. Requires an API key; without one, embedding calls error rather than returning zeros. |
 | Desktop application | Tauri shell only (176 LOC). |
 | Agent inbox | No notification, inbox-message, permission-request, or workflow-run endpoints exist, and nothing emits those events. The view renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
 
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
-and TUI are complete and covered by 887 passing tests.
+and TUI are complete and covered by 780 passing tests on Windows. Earlier
+figures in the 880–960 range double-counted: `main.rs` re-declared modules that
+`lib.rs` already owned, so their unit tests ran in both targets.
 
 ## Overview
 
@@ -172,7 +172,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Team workspaces
 - [x] Session sharing with permissions
 - [~] AI-powered session summarization — heuristic key-point extraction only; no model inference
-- [~] Semantic search across sessions — `OpenAIEmbedding::embed` returns a zero vector, so ranking is degenerate
+- [x] Semantic search across sessions — backed by the OpenAI embeddings API; requires an API key
 - [x] Custom tagging and organization
 
 ### Q2 2026

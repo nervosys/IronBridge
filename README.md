@@ -20,9 +20,10 @@
 - 🧠 **Conversation Analysis** — Heuristic topic extraction, insights, similarity scoring
 - 🔌 **Plugin System** — Extensible architecture with event hooks
 
-> **Also in the tree, but not yet shippable:** enterprise SSO / audit /
-> retention. See [Implementation status](#implementation-status) before
-> depending on them.
+> **Also in the tree, but not yet shippable:** the Tauri desktop app (shell
+> only) and the web Agent Inbox (no backend). Conversation analysis is
+> heuristic rather than model-backed. See
+> [Implementation status](#implementation-status) before depending on them.
 
 ## Install
 
@@ -114,9 +115,9 @@ chasm harvest share <url>          # Import share link
 | **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
 | **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
 
-"Stable" describes the CLI, library, and the clients built on the working REST
-routes. It does not cover the REST routes, GraphQL resolvers, and enterprise
-services listed under [Implementation status](#implementation-status).
+"Stable" describes the CLI, library, and the clients built on them. It does not
+cover the desktop shell or the web Agent Inbox — see
+[Implementation status](#implementation-status).
 
 ## API Server
 
@@ -185,25 +186,24 @@ chasm agency run --agent researcher "What are the latest AI trends?"
 chasm agency run --orchestration swarm "Build a REST API"
 ```
 
-## Enterprise Features (`--features enterprise`) — in development
+## Enterprise Features (`--features enterprise`)
 
-Behind the `enterprise` feature flag. These modules compile and are unit-tested,
-but they are **not usable end to end** and should not be relied on:
+Behind the `enterprise` feature flag. Building these needs `libxmlsec1` and
+`clang`, so CI builds them on Linux only.
 
 - **SSO/SAML**: SAML 2.0 flow for Okta, Azure AD, Google, OneLogin, Auth0.
   Assertion signatures are verified with samael/libxmlsec1, and the response is
   re-parsed from the signature-reduced document so wrapped forgeries cannot
-  reach the session. Building this needs `libxmlsec1` and `clang`; CI builds it
-  on Linux only. Sessions and IdP config still do not persist — see below.
+  reach the session.
 - **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
 - **Data Retention**: policy model, scheduling, and expiry actions.
 - **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS —
   reporting scaffolding, not certification.
 - **Multi-tenancy**: Subscription tiers, tenant isolation, white-labeling.
 
-All three services depend on the `api::audit::DatabaseOps` trait, which **has no
-implementor in this crate** — an embedder must supply one before any of it
-persists anything.
+All three services persist through `api::audit::DatabaseOps`. The crate ships
+`SqliteEnterpriseStore`, which implements all 35 methods against the same SQLite
+database as the rest of Chasm; an embedder can substitute its own implementor.
 
 **Team Workspaces** (RBAC, activity feeds, session sharing) is not gated behind
 this flag and does not depend on `DatabaseOps`.
@@ -215,14 +215,14 @@ enterprise layers are scaffolding at varying stages. Concretely:
 
 | Area                            | State                                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 887 tests passing.                                                                            |
+| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 780 tests passing.                                                                            |
 | Providers                       | **Working.** 12 local/OpenAI-compatible + 6 cloud share-link parsers.                                                     |
 | MCP server, TUI                 | **Working.**                                                                                                              |
-| REST API                        | **Partial.** ~69 routes are actually served: 46 in `api/mod.rs` plus auth, sync, recording, and websocket. A second, larger implementation in `api/handlers.rs` and `api/routes.rs` — including the 24 `"not yet implemented"` stubs — is never compiled, because neither file has a `mod` declaration. The 6 endpoints documented above work. |
+| REST API                        | **Working.** ~70 routes served: 47 in `api/mod.rs` plus auth, sync, recording, websocket, docs, and webhooks. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
-| Enterprise (SSO/audit/retention)| **Not usable.** Compiles and is unit-tested, and SAML signatures are now genuinely verified, but `DatabaseOps` has no implementor so nothing persists. |
+| Enterprise (SSO/audit/retention)| **Working, Linux-only build.** SAML signatures are verified against wrapping attacks, and `SqliteEnterpriseStore` implements all 35 `DatabaseOps` methods, so IdP config, sessions, audit events and retention policies persist. Needs `libxmlsec1`. |
 | Conversation analysis           | **Working, but heuristic.** Keyword matching, lexicon sentiment, Jaccard similarity — no model inference despite the "AI" framing. |
-| Embeddings / semantic search    | **Placeholder.** `OpenAIEmbedding::embed` returns a zero vector, so anything ranking on it is degenerate.                 |
+| Embeddings / semantic search    | **Working, needs a key.** Backed by the OpenAI embeddings API with index-order and dimension validation; without `OPENAI_API_KEY` the calls error rather than silently returning zeros. |
 | chasm-desktop                   | **Shell only.** 176 LOC across `main.rs` and `commands.rs`.                                                               |
 | chasm-web                       | **Working.** `AgentInbox` (notifications, messages, permissions, workflows) has no backend and renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
 
