@@ -51,6 +51,7 @@ pub use auth::configure_auth_routes;
 pub use docs::configure_docs_routes;
 #[cfg(feature = "enterprise")]
 pub use enterprise_store::SqliteEnterpriseStore;
+pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
 pub use recording::{configure_recording_routes, create_recording_state};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
@@ -245,6 +246,9 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     let ws_state = web::Data::new(WebSocketState::new());
     let recording_state = web::Data::new(create_recording_state());
     let webhook_state = web::Data::new(std::sync::Arc::new(WebhookState::new()));
+    // Built once and cloned into each worker: the schema is immutable and
+    // Clone is cheap, but constructing it per worker would be wasteful.
+    let graphql_schema = graphql::create_schema(state.clone().into_inner());
     let cors_origins = config.cors_origins.clone();
 
     println!("[*] CSM API Server starting...");
@@ -309,6 +313,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(configure_docs_routes)
             .configure(|cfg| configure_websocket_routes(cfg, ws_state.clone()))
             .configure(|cfg| configure_webhook_routes(cfg, webhook_state.clone()))
+            .configure(|cfg| configure_graphql_routes(cfg, graphql_schema.clone()))
     });
 
     eprintln!("[DEBUG] Binding to {}:{}...", config.host, config.port);
