@@ -20,10 +20,8 @@
 - 🧠 **Conversation Analysis** — Heuristic topic extraction, insights, similarity scoring
 - 🔌 **Plugin System** — Extensible architecture with event hooks
 
-> **Also in the tree, but not yet shippable:** the Tauri desktop app (shell
-> only) and the web Agent Inbox (no backend). Conversation analysis is
-> heuristic rather than model-backed. See
-> [Implementation status](#implementation-status) before depending on them.
+> See [Implementation status](#implementation-status) for what each part of
+> the tree actually does today.
 
 ## Install
 
@@ -108,16 +106,16 @@ chasm harvest share <url>          # Import share link
 | **chasm-rust**        | Core Rust library and CLI         | ✅ Stable       |
 | **chasm-web**         | React web application             | ✅ Stable       |
 | **chasm-app**         | React Native mobile app           | ✅ Stable       |
-| **chasm-desktop**     | Tauri desktop application         | 🚧 Shell only   |
+| **chasm-desktop**     | Tauri desktop application         | ✅ Stable       |
 | **vscode-extension**  | VS Code extension                 | ✅ Stable       |
 | **browser-extension** | Chrome/Firefox extension          | ✅ Stable       |
 | **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable       |
 | **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
 | **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
 
-"Stable" describes the CLI, library, and the clients built on them. It does not
-cover the desktop shell or the web Agent Inbox — see
-[Implementation status](#implementation-status).
+See [Implementation status](#implementation-status) for the per-area detail
+behind these labels, including which features need an API key or a
+Linux-only build.
 
 ## API Server
 
@@ -159,6 +157,41 @@ On databases created by the harvest pipeline, `model`, `tokenCount` and
 `archived` are absent from the underlying tables and are reported as null, 0
 and false respectively.
 
+### Agent Inbox
+
+| Method | Endpoint                                | Description                        |
+| ------ | --------------------------------------- | ---------------------------------- |
+| GET    | `/api/inbox`                            | Notifications, messages, permissions, workflows |
+| GET    | `/api/inbox/counts`                     | Unread and pending badge counts    |
+| POST   | `/api/inbox/notifications/{id}/read`    | Mark read                          |
+| POST   | `/api/inbox/messages/{id}/star`         | Toggle star                        |
+| POST   | `/api/inbox/permissions/{id}/respond`   | Approve or deny                    |
+
+The agency runtime writes to this as it runs agents. Permission requests
+expire: responding to a lapsed one returns 409 rather than a misleading
+success, because the agent that asked has already moved on.
+
+## Conversation Analysis
+
+```bash
+chasm analyze session.json                  # topics, sentiment, key points
+chasm analyze session.json --json           # machine-readable
+chasm analyze session.json --require-model  # fail rather than fall back
+```
+
+Uses a language model when `OPENAI_API_KEY` is set, and offline heuristics
+otherwise. **The output always states which one ran** — the heuristics only
+recognise a couple of languages and write no summary, so a result that looks
+thin may simply mean no model was configured.
+
+Point it at any OpenAI-compatible endpoint, including a local one:
+
+```bash
+export OPENAI_API_KEY=local                        # local servers ignore it
+export OPENAI_BASE_URL=http://127.0.0.1:11434/v1   # e.g. Ollama
+export CHASM_ANALYSIS_MODEL=gemma4:latest
+```
+
 ## MCP Server
 
 AI agent integration via Model Context Protocol:
@@ -178,6 +211,20 @@ Tools: `chasm_list_workspaces`, `chasm_list_sessions`, `chasm_show_session`, `ch
 ```bash
 chasm run tui    # Interactive browser (↑↓/jk to navigate, Enter to select, ? for help)
 ```
+
+## Desktop App
+
+```bash
+cd chasm-desktop && cargo tauri dev     # or `cargo tauri build`
+```
+
+The desktop app is chasm-web in a Tauri window. It starts the API server
+in-process on `127.0.0.1:8788`, so there is no separate backend to launch. If
+a Chasm API is already listening there it is shared rather than duplicated —
+two processes writing one SQLite file is worse than one.
+
+The port differs from the CLI's 8787 deliberately, so the app and a
+`chasm api serve` you started yourself do not contend for the same database.
 
 ## Agency (AI Agent Framework)
 
@@ -221,10 +268,10 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | REST API                        | **Working.** ~70 routes served: 47 in `api/mod.rs` plus auth, sync, recording, websocket, docs, and webhooks. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
 | Enterprise (SSO/audit/retention)| **Working, Linux-only build.** SAML signatures are verified against wrapping attacks, and `SqliteEnterpriseStore` implements all 35 `DatabaseOps` methods, so IdP config, sessions, audit events and retention policies persist. Needs `libxmlsec1`. |
-| Conversation analysis           | **Working, but heuristic.** Keyword matching, lexicon sentiment, Jaccard similarity — no model inference despite the "AI" framing. |
+| Conversation analysis           | **Model-backed.** `chasm analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
 | Embeddings / semantic search    | **Working, needs a key.** Backed by the OpenAI embeddings API with index-order and dimension validation; without `OPENAI_API_KEY` the calls error rather than silently returning zeros. |
-| chasm-desktop                   | **Shell only.** 176 LOC across `main.rs` and `commands.rs`.                                                               |
-| chasm-web                       | **Working.** `AgentInbox` (notifications, messages, permissions, workflows) has no backend and renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
+| chasm-desktop                   | **Working.** Wraps chasm-web and runs the API server in-process on 127.0.0.1:8788, so it needs no separately started backend. No desktop-specific UI. |
+| chasm-web                       | **Working.** `AgentInbox` is backed by `/api/inbox`.                                                                      |
 
 Mock data in chasm-web is opt-in via `VITE_ENABLE_DEMO_MODE`; an empty or
 failing backend renders as empty or as an error, never as fixtures.

@@ -20,10 +20,10 @@ Verified against the tree as of August 4, 2026:
 | REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted; the served API is the 47 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
 | SSO/SAML | Signature verification is implemented (samael/libxmlsec1) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Requires libxmlsec1; built on Linux only in CI. |
 | Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
-| AI & Intelligence | Heuristic, not model-backed: substring keyword matching, lexicon sentiment, Jaccard similarity. |
+| AI & Intelligence | Model-backed via `chasm analyze`, against any OpenAI-compatible endpoint. Falls back to the old heuristics without a key, and every result states which produced it. |
 | Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation. Requires an API key; without one, embedding calls error rather than returning zeros. |
-| Desktop application | Tauri shell only (176 LOC). |
-| Agent inbox | No notification, inbox-message, permission-request, or workflow-run endpoints exist, and nothing emits those events. The view renders empty unless `VITE_ENABLE_DEMO_MODE` is set. |
+| Desktop application | Runs the API server in-process, so it works standalone. The UI is chasm-web; there is no desktop-specific interface. |
+| Agent inbox | Backed by `/api/inbox`. The agency runtime emits run and message events; permission requests expire rather than lingering as approvable. |
 
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
 and TUI are complete and covered by 780 passing tests on Windows. Earlier
@@ -44,7 +44,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 | **chasm-web**         | 🟢 Active | React web application                    |
 | **chasm-app**         | 🟢 Active | React Native mobile app                  |
 | **chasm-shared**      | 🟢 Active | Shared TypeScript types and utilities    |
-| **chasm-desktop**     | 🚧 Shell  | Tauri shell only (176 LOC)               |
+| **chasm-desktop**     | 🟢 Active | Tauri app wrapping chasm-web             |
 | **vscode-extension**  | 🟢 Active | VS Code extension for session management |
 | **browser-extension** | 🟢 Active | Chrome/Firefox extension for web AI chat |
 | **jetbrains-plugin**  | 🟢 Active | IntelliJ/JetBrains IDE plugin            |
@@ -171,7 +171,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Multi-user collaboration
 - [x] Team workspaces
 - [x] Session sharing with permissions
-- [~] AI-powered session summarization — heuristic key-point extraction only; no model inference
+- [x] AI-powered session summarization — `chasm analyze`, model-backed with a heuristic fallback
 - [x] Semantic search across sessions — backed by the OpenAI embeddings API; requires an API key
 - [x] Custom tagging and organization
 
@@ -186,7 +186,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Local LLM providers (Ollama, LM Studio, etc.)
 
 #### Platform
-- [~] Desktop application (Tauri) — shell only (176 LOC)
+- [x] Desktop application (Tauri) — wraps chasm-web with an in-process API server
 - [x] CLI tool for automation (chasm-cli v1.3.2 on crates.io)
 - [x] Browser extension for web-based AI tools (Chrome/Firefox Manifest V3)
 
