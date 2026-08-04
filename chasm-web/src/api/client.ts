@@ -916,9 +916,88 @@ export function sendWebSocketMessage(message: unknown): void {
 // Export namespace
 // =============================================================================
 
+// =============================================================================
+// Agent Inbox API
+// =============================================================================
+
+/** Shape returned by `GET /api/inbox`, mirroring `api::inbox` on the server. */
+export interface InboxSnapshot<N, M, P, W> {
+    notifications: N[];
+    messages: M[];
+    permissions: P[];
+    workflows: W[];
+}
+
+export interface InboxCounts {
+    unreadNotifications: number;
+    unreadMessages: number;
+    pendingPermissions: number;
+    activeWorkflows: number;
+}
+
+export const inbox = {
+    /** Everything in one round trip, which is what the inbox view needs. */
+    async all<N, M, P, W>(): Promise<ApiResponse<InboxSnapshot<N, M, P, W>>> {
+        return get('/api/inbox');
+    },
+
+    /** Badge counts only — far cheaper than fetching records to length-filter. */
+    async counts(): Promise<ApiResponse<InboxCounts>> {
+        return get('/api/inbox/counts');
+    },
+
+    async markNotificationRead(id: string): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/notifications/${encodeURIComponent(id)}/read`);
+    },
+
+    async dismissNotification(id: string): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/notifications/${encodeURIComponent(id)}/dismiss`);
+    },
+
+    async markAllNotificationsRead(): Promise<ApiResponse<unknown>> {
+        return post('/api/inbox/notifications/read-all');
+    },
+
+    async markMessageRead(id: string): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/messages/${encodeURIComponent(id)}/read`);
+    },
+
+    /** Server-side toggle, so concurrent viewers cannot disagree on the state. */
+    async toggleMessageStar(id: string): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/messages/${encodeURIComponent(id)}/star`);
+    },
+
+    async archiveMessage(id: string): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/messages/${encodeURIComponent(id)}/archive`);
+    },
+
+    async respondToMessage(id: string, response: string): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/messages/${encodeURIComponent(id)}/respond`, { response });
+    },
+
+    /**
+     * Answer a permission request. Fails with HTTP 409 if it expired first —
+     * the agent has already been told no, so a late approval must not appear
+     * to have worked.
+     */
+    async respondToPermission(
+        id: string,
+        approved: boolean,
+        scope?: 'once' | 'session' | 'run' | 'always',
+        note?: string
+    ): Promise<ApiResponse<unknown>> {
+        return post(`/api/inbox/permissions/${encodeURIComponent(id)}/respond`, {
+            approved,
+            scope,
+            note,
+        });
+    },
+};
+
 export const api = {
     configure,
     getConfig,
+    inbox,
     workspaces,
     sessions,
     messages,

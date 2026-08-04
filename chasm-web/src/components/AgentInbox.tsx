@@ -6,7 +6,7 @@
 // =============================================================================
 // Real-time agent workflow tracking, notifications, and permission management
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     Inbox,
     Bell,
@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime } from '@csm/shared';
 import { config } from '../config/env';
+import { inbox as inboxApi } from '../api/client';
 
 // =============================================================================
 // Types
@@ -376,6 +377,40 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
     const [workflows, setWorkflows] = useState<WorkflowProgress[]>(demoMode ? demoWorkflows : []);
     const [selectedMessage, setSelectedMessage] = useState<InboxMessage | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+
+    // Demo mode is self-contained fixture data; hitting the API would
+    // overwrite it with an empty inbox and defeat the point.
+    const load = useCallback(async () => {
+        if (demoMode) return;
+        const res = await inboxApi.all<
+            AgentNotification,
+            InboxMessage,
+            PermissionRequest,
+            WorkflowProgress
+        >();
+        if (!res.success || !res.data) {
+            setLoadError(res.error?.message ?? 'Could not reach the inbox API');
+            return;
+        }
+        setLoadError(null);
+        setNotifications(res.data.notifications ?? []);
+        setMessages(res.data.messages ?? []);
+        setPermissions(res.data.permissions ?? []);
+        setWorkflows(res.data.workflows ?? []);
+    }, [demoMode]);
+
+    // Runs and permission requests appear while the user is looking at the
+    // page, so the view polls rather than waiting for a manual refresh. The
+    // first fetch rides the same timer so there is a single code path.
+    useEffect(() => {
+        if (demoMode) return;
+        (async () => {
+            await load();
+        })();
+        const timer = setInterval(() => void load(), 10_000);
+        return () => clearInterval(timer);
+    }, [demoMode, load]);
 
     // Counts
     const unreadNotifications = useMemo(() => notifications.filter(n => !n.read && !n.dismissed).length, [notifications]);
@@ -384,42 +419,61 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
     const activeWorkflows = useMemo(() => workflows.filter(w => w.status === 'running' || w.status === 'paused').length, [workflows]);
 
     // Handlers
+    //
+    // Each one updates local state first so the UI stays responsive, then
+    // persists. In demo mode the write is skipped entirely -- there is no
+    // server record behind fixture data to update. If the write fails the
+    // optimistic edit is rolled back by reloading from the server, so the
+    // screen never keeps showing a change that did not stick.
+    const persist = async (call: () => Promise<{ success: boolean }>) => {
+        if (demoMode) return;
+        const res = await call();
+        if (!res.success) await load();
+    };
+
     const handleMarkNotificationRead = (id: string) => {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true, readAt: Date.now() } : n));
+        void persist(() => inboxApi.markNotificationRead(id));
     };
 
     const handleDismissNotification = (id: string) => {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, dismissed: true } : n));
+        void persist(() => inboxApi.dismissNotification(id));
     };
 
     const handleMarkAllRead = () => {
         setNotifications(prev => prev.map(n => ({ ...n, read: true, readAt: Date.now() })));
+        void persist(() => inboxApi.markAllNotificationsRead());
     };
 
     const handleMessageRead = (id: string) => {
         setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
+        void persist(() => inboxApi.markMessageRead(id));
     };
 
     const handleToggleStar = (id: string) => {
         setMessages(prev => prev.map(m => m.id === id ? { ...m, starred: !m.starred } : m));
+        void persist(() => inboxApi.toggleMessageStar(id));
     };
 
     const handleRespondToMessage = (id: string, response: string) => {
         setMessages(prev => prev.map(m => m.id === id ? { ...m, userResponse: response, respondedAt: Date.now() } : m));
         setSelectedMessage(null);
+        void persist(() => inboxApi.respondToMessage(id, response));
     };
 
     const handlePermissionResponse = (id: string, approved: boolean, scope?: 'once' | 'session' | 'run' | 'always') => {
         setPermissions(prev => prev.map(p =>
             p.id === id ? { ...p, status: approved ? 'approved' : 'denied', respondedAt: Date.now(), scope } : p
         ));
+        // A request that expired server-side comes back 409; reloading shows
+        // the user the real outcome rather than a fake approval.
+        void persist(() => inboxApi.respondToPermission(id, approved, scope));
     };
 
-    // No inbox endpoints exist to refetch from yet, so this only spins the
-    // indicator. Point it at the real fetch once a backend is available.
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await load();
         setIsRefreshing(false);
     };
 
@@ -457,6 +511,17 @@ export function AgentInbox({ onViewRun }: AgentInboxProps) {
 
     return (
         <div className="flex flex-col h-full bg-[hsl(var(--background))]">
+            {/* An unreachable API must not look like a genuinely empty inbox,
+                which is exactly how it used to read. */}
+            {loadError && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border-b border-red-500/30 text-sm text-red-600 dark:text-red-400">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{loadError}</span>
+                    <button onClick={handleRefresh} className="ml-auto underline hover:no-underline">
+                        Retry
+                    </button>
+                </div>
+            )}
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(var(--border))]">
                 <div className="flex items-center gap-2">

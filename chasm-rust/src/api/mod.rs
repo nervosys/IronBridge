@@ -32,6 +32,7 @@ mod enterprise_store;
 mod graphql;
 mod handlers_simple;
 mod handlers_swe;
+pub mod inbox;
 mod recording;
 #[cfg(feature = "enterprise")]
 mod retention;
@@ -52,6 +53,7 @@ pub use docs::configure_docs_routes;
 #[cfg(feature = "enterprise")]
 pub use enterprise_store::SqliteEnterpriseStore;
 pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
+pub use inbox::{configure_inbox_routes, init_inbox_tables, InboxEmitter};
 pub use recording::{configure_recording_routes, create_recording_state};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
@@ -239,6 +241,9 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
         if let Err(e) = auth::init_auth_tables(&conn) {
             eprintln!("[WARN] Failed to initialize Auth tables: {}", e);
         }
+        if let Err(e) = inbox::init_inbox_tables(&conn) {
+            eprintln!("[WARN] Failed to initialize Inbox tables: {}", e);
+        }
     }
 
     let state = web::Data::new(AppState::new(db, db_path));
@@ -306,6 +311,10 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .app_data(recording_state.clone())
             .wrap(cors)
             .wrap(middleware::Logger::default())
+            // Ahead of `configure_routes`, whose broad `/api` scope would
+            // otherwise match `/api/inbox/...` first and return 404 -- actix
+            // resolves scopes in registration order, not by specificity.
+            .configure(configure_inbox_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

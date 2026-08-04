@@ -58,6 +58,9 @@ pub struct Runtime {
     executor: Arc<Executor>,
     orchestrator: Orchestrator,
     agents: HashMap<String, Arc<Agent>>,
+    /// Feeds the Agent Inbox. `None` for in-memory runtimes, which have no
+    /// database to write to and whose runs are not user-visible anyway.
+    inbox: Option<crate::api::InboxEmitter>,
 }
 
 impl Runtime {
@@ -72,6 +75,7 @@ impl Runtime {
         let session_manager = Arc::new(SessionManager::new(&config.db_path)?);
         let executor = Arc::new(Executor::new(tool_registry.clone()));
         let orchestrator = Orchestrator::new(executor.clone());
+        let inbox = Some(crate::api::InboxEmitter::new(&config.db_path));
 
         Ok(Self {
             config,
@@ -80,6 +84,7 @@ impl Runtime {
             executor,
             orchestrator,
             agents: HashMap::new(),
+            inbox,
         })
     }
 
@@ -97,6 +102,7 @@ impl Runtime {
             executor,
             orchestrator,
             agents: HashMap::new(),
+            inbox: None,
         })
     }
 
@@ -158,11 +164,42 @@ impl Runtime {
         ctx.max_tool_calls = options.max_tool_calls.unwrap_or(self.config.max_tool_calls);
         ctx.event_sender = options.event_sender;
 
+        // The Agent Inbox keys everything off the session id, so the run is
+        // opened before execution rather than recorded after it -- a run that
+        // never returns still needs to be visible as `running`.
+        let run_id = session.id.clone();
+        if let Some(inbox) = &self.inbox {
+            inbox.workflow_started(&run_id, agent_name, None);
+        }
+
         // Execute
         let result = self
             .executor
             .execute(agent_arc.as_ref(), &mut session, message, &mut ctx)
-            .await?;
+            .await;
+
+        if let Some(inbox) = &self.inbox {
+            match &result {
+                Ok(r) => {
+                    inbox.workflow_finished(
+                        &run_id,
+                        agent_name,
+                        r.success,
+                        r.token_usage.total_tokens as i64,
+                    );
+                    // The response is what the user actually wants to read,
+                    // so it lands in the inbox as a message rather than only
+                    // as a "finished" notification.
+                    if r.success && !r.response.trim().is_empty() {
+                        inbox.message_from_agent(agent_name, message, &r.response, Some(&run_id));
+                    }
+                }
+                // An error here means the run died, not that it finished
+                // unsuccessfully; both read as `failed` to the client.
+                Err(_) => inbox.workflow_finished(&run_id, agent_name, false, 0),
+            }
+        }
+        let result = result?;
 
         // Save session
         self.session_manager.save(&session)?;
@@ -200,9 +237,16 @@ impl Runtime {
         ctx.allow_tools = options.allow_tools;
         ctx.event_sender = options.event_sender;
 
-        self.orchestrator
+        let run_id = session.id.clone();
+        if let Some(inbox) = &self.inbox {
+            inbox.workflow_started(&run_id, &pipeline.name, None);
+        }
+        let result = self
+            .orchestrator
             .run_pipeline(pipeline, input, &mut ctx)
-            .await
+            .await;
+        self.record_orchestration(&run_id, &pipeline.name, &result);
+        result
     }
 
     /// Run a swarm
@@ -220,7 +264,50 @@ impl Runtime {
         ctx.allow_tools = options.allow_tools;
         ctx.event_sender = options.event_sender;
 
-        self.orchestrator.run_swarm(swarm, input, &mut ctx).await
+        let run_id = session.id.clone();
+        if let Some(inbox) = &self.inbox {
+            // A swarm is its own grouping, so the run doubles as the swarm id
+            // and the client can collapse its agents under one entry.
+            inbox.workflow_started(&run_id, &swarm.name, Some(&run_id));
+        }
+        let result = self.orchestrator.run_swarm(swarm, input, &mut ctx).await;
+        self.record_orchestration(&run_id, &swarm.name, &result);
+        result
+    }
+
+    /// Close out a pipeline or swarm run in the inbox.
+    ///
+    /// Orchestrator results carry no `success` flag -- reaching the end
+    /// without an error is the success condition -- so that is what is
+    /// recorded.
+    fn record_orchestration(
+        &self,
+        run_id: &str,
+        name: &str,
+        result: &AgencyResult<OrchestratorResult>,
+    ) {
+        let Some(inbox) = &self.inbox else {
+            return;
+        };
+        match result {
+            Ok(r) => {
+                inbox.workflow_finished(run_id, name, true, r.token_usage.total_tokens as i64);
+                if !r.response.trim().is_empty() {
+                    inbox.message_from_agent(name, name, &r.response, Some(run_id));
+                }
+            }
+            Err(e) => {
+                inbox.workflow_finished(run_id, name, false, 0);
+                inbox.notify(
+                    "workflow_error",
+                    "high",
+                    &format!("{} failed", name),
+                    &e.to_string(),
+                    Some(run_id),
+                    Some(name),
+                );
+            }
+        }
     }
 
     /// Create a new session for an agent
