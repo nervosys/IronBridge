@@ -170,6 +170,27 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // Analyze Commands
+    // ============================================================================
+    /// Analyze a session's topics, sentiment and key points
+    ///
+    /// Uses a language model when OPENAI_API_KEY is set, and offline
+    /// heuristics otherwise. The output always states which one ran.
+    Analyze {
+        /// Session file to analyze (.json or .jsonl)
+        file: String,
+
+        /// Emit the analysis as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Fail instead of falling back to heuristics when the model is
+        /// unavailable, for callers that must not receive keyword counts
+        #[arg(long)]
+        require_model: bool,
+    },
+
+    // ============================================================================
     // Register Commands
     // ============================================================================
     /// Add on-disk sessions to VS Code's database index (makes orphaned sessions visible)

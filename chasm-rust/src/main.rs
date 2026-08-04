@@ -537,6 +537,19 @@ fn main() -> Result<()> {
         // ====================================================================
         // Detect Commands
         // ====================================================================
+        Commands::Analyze {
+            file,
+            json,
+            require_model,
+        } => {
+            // `main` is sync; the analyzer is async because it may call out
+            // to a model. Same runtime pattern as `api serve` below.
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            rt.block_on(commands::analyze_session_file(&file, json, require_model))
+        }
+
         Commands::Detect { command } => match command {
             Some(DetectCommands::Workspace { path }) => commands::detect_workspace(path.as_deref()),
             Some(DetectCommands::Providers { with_sessions }) => {

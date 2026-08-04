@@ -3,6 +3,7 @@
 //! Command implementations
 
 mod agency;
+mod analyze;
 mod detect;
 mod doctor;
 mod export_import;
@@ -22,6 +23,7 @@ mod watch;
 mod workspace_cmds;
 
 pub use agency::*;
+pub use analyze::*;
 pub use detect::*;
 pub use doctor::*;
 pub use export_import::*;

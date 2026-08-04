@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! AI Intelligence Module
 
+pub mod model;
+
+pub use model::{
+    heuristic_analysis, AnalysisError, AnalysisSource, Analyzer, ModelAnalyzer, SessionAnalysis,
+};
+
 use crate::models::ChatSession;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
