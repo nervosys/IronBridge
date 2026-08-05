@@ -354,6 +354,16 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let db_path = dir.path().join("shapes.db");
         crate::commands::create_harvest_database(&db_path).expect("harvest schema");
+
+        // Mirror what `start_server` does. Without this the inbox tables do
+        // not exist and its endpoints answer 500 -- a difference between the
+        // harness and the real server, not a difference in the spec.
+        {
+            let conn = rusqlite::Connection::open(&db_path).expect("open conn");
+            super::super::inbox::init_inbox_tables(&conn).expect("inbox tables");
+            super::super::handlers_swe::init_swe_tables(&conn).expect("swe tables");
+        }
+
         let db = ChatDatabase::open(&db_path).expect("open");
         let state = Data::new(AppState::new(db, db_path));
 
@@ -380,7 +390,10 @@ mod tests {
                 continue;
             };
 
-            let uri = format!("/api{path}{}", if path == "/search" { "?q=x" } else { "" });
+            // The search endpoints require a query; without one they answer
+            // 400 and there is no body to compare.
+            let query = if path.ends_with("search") { "?q=x" } else { "" };
+            let uri = format!("/api{path}{query}");
             let resp = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
             if resp.status() != StatusCode::OK {
                 problems.push(format!("GET {uri} answered {}", resp.status()));

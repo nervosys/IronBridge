@@ -67,6 +67,10 @@ tags:
     description: Agent notifications, messages, permission requests and workflow runs
   - name: Settings
     description: Application settings
+  - name: MCP
+    description: Model Context Protocol tool discovery and invocation
+  - name: SWE
+    description: Software-engineering project context -- projects, memory and rules
 
 paths:
   /health:
@@ -516,7 +520,85 @@ paths:
                         items:
                           $ref: "#/components/schemas/SearchResult"
 
+  /swarms:
+    get:
+      tags: [Swarms]
+      summary: List swarms
+      operationId: listSwarms
+      responses:
+        "200":
+          description: Swarms
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+    post:
+      tags: [Swarms]
+      summary: Create a swarm
+      operationId: createSwarm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, orchestration, agents]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                orchestration:
+                  type: string
+                  enum: [sequential, parallel, hierarchical, debate]
+                agents:
+                  type: array
+                  items:
+                    type: object
+                max_iterations:
+                  type: integer
+      responses:
+        "200":
+          description: Swarm created
+
   /swarms/{id}:
+    get:
+      tags: [Swarms]
+      summary: Get a swarm
+      operationId: getSwarm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Swarm
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Swarms]
+      summary: Delete a swarm
+      operationId: deleteSwarm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       tags: [Swarms]
       summary: Update a swarm
@@ -664,6 +746,732 @@ paths:
         "200":
           description: Settings updated
 
+  /stats:
+    get:
+      tags: [Statistics]
+      summary: Database statistics
+      description: Identical payload to `/stats/overview`; both are served by the same handler.
+      operationId: getStats
+      responses:
+        "200":
+          description: Statistics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/StatsOverview"
+
+  /sessions/search:
+    get:
+      tags: [Search]
+      summary: Search session titles
+      description: >
+        Substring match over session titles. This is the endpoint the web
+        client's search box uses; `/search` additionally covers message
+        content.
+      operationId: searchSessions
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limitParam"
+      responses:
+        "200":
+          description: Matching sessions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          query:
+                            type: string
+                          results:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Session"
+
+  /system/health:
+    get:
+      tags: [System]
+      summary: Server and database health
+      operationId: getSystemHealth
+      responses:
+        "200":
+          description: Health report
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SystemHealth"
+
+  /system/providers/health:
+    get:
+      tags: [Providers]
+      summary: Provider connectivity
+      description: >
+        Locally hosted providers are probed at their declared endpoint.
+        Cloud providers report `unknown`: the server holds no credentials for
+        them, so any other verdict would be a guess.
+      operationId: getProviderHealth
+      responses:
+        "200":
+          description: One row per provider
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ProviderHealth"
+
+  /settings/accounts:
+    get:
+      tags: [Settings]
+      summary: List provider accounts
+      operationId: listAccounts
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+    post:
+      tags: [Settings]
+      summary: Add a provider account
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Account created
+
+  /settings/accounts/{id}:
+    delete:
+      tags: [Settings]
+      summary: Remove a provider account
+      operationId: deleteAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Account removed
+
+  /mcp/tools:
+    get:
+      tags: [MCP]
+      summary: List MCP tools
+      description: Tool definitions in OpenAI function-calling form, for use as chat tools.
+      operationId: listMcpTools
+      responses:
+        "200":
+          description: Tool definitions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          mcp_tools:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/McpTool"
+                          # The same tools again, wrapped as OpenAI function
+                          # definitions for passing straight to a chat model.
+                          tools:
+                            type: array
+                            items:
+                              type: object
+
+  /mcp/system-prompt:
+    get:
+      tags: [MCP]
+      summary: System prompt describing the available tools
+      operationId: getMcpSystemPrompt
+      responses:
+        "200":
+          description: Prompt text and the tool list it describes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          system_prompt:
+                            type: string
+                          available_tools:
+                            type: array
+                            items:
+                              type: string
+
+  /mcp/call:
+    post:
+      tags: [MCP]
+      summary: Invoke one MCP tool
+      operationId: callMcpTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                arguments:
+                  type: object
+      responses:
+        "200":
+          description: Tool result
+
+  /mcp/batch:
+    post:
+      tags: [MCP]
+      summary: Invoke several MCP tools in one request
+      operationId: callMcpToolsBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Tool results
+
+  /inbox/notifications:
+    get:
+      tags: [Inbox]
+      summary: List notifications
+      operationId: listNotifications
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+
+  /inbox/notifications/read-all:
+    post:
+      tags: [Inbox]
+      summary: Mark every notification read
+      operationId: markAllNotificationsRead
+      responses:
+        "200":
+          description: Marked
+
+  /inbox/notifications/{id}/dismiss:
+    post:
+      tags: [Inbox]
+      summary: Dismiss a notification
+      operationId: dismissNotification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dismissed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /inbox/messages:
+    get:
+      tags: [Inbox]
+      summary: List agent messages
+      operationId: listInboxMessages
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+
+  /inbox/messages/{id}/read:
+    post:
+      tags: [Inbox]
+      summary: Mark a message read
+      operationId: markMessageRead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /inbox/messages/{id}/archive:
+    post:
+      tags: [Inbox]
+      summary: Archive a message
+      operationId: archiveMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Archived
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /inbox/messages/{id}/respond:
+    post:
+      tags: [Inbox]
+      summary: Reply to an agent message
+      operationId: respondToMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                response:
+                  type: string
+      responses:
+        "200":
+          description: Response recorded
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /inbox/permissions:
+    get:
+      tags: [Inbox]
+      summary: List permission requests
+      description: >
+        A request whose expiry has passed reads as `expired` rather than
+        `pending`; the status is derived on read, not written by a sweeper.
+      operationId: listPermissions
+      responses:
+        "200":
+          description: Permission requests
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+
+  /inbox/workflows:
+    get:
+      tags: [Inbox]
+      summary: List workflow runs
+      operationId: listWorkflows
+      responses:
+        "200":
+          description: Workflow runs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+
+  /swe/projects:
+    get:
+      tags: [SWE]
+      summary: List SWE projects
+      operationId: listSweProjects
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SweProject"
+    post:
+      tags: [SWE]
+      summary: Register a SWE project
+      description: The path must exist on disk; the server rejects one that does not.
+      operationId: createSweProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, path]
+              properties:
+                name:
+                  type: string
+                path:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "200":
+          description: Project registered
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SweProject"
+
+  /swe/projects/{id}:
+    get:
+      tags: [SWE]
+      summary: Get a SWE project
+      operationId: getSweProject
+      parameters:
+        - $ref: "#/components/parameters/sweProjectId"
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SweProject"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SWE]
+      summary: Delete a SWE project
+      operationId: deleteSweProject
+      parameters:
+        - $ref: "#/components/parameters/sweProjectId"
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /swe/projects/{id}/open:
+    post:
+      tags: [SWE]
+      summary: Mark a project opened
+      description: Updates `lastOpened`.
+      operationId: openSweProject
+      parameters:
+        - $ref: "#/components/parameters/sweProjectId"
+      responses:
+        "200":
+          description: Recorded
+
+  /swe/projects/{id}/context:
+    get:
+      tags: [SWE]
+      summary: Assembled project context
+      description: Memory and rules for the project, plus a system-prompt fragment built from them.
+      operationId: getSweContext
+      parameters:
+        - $ref: "#/components/parameters/sweProjectId"
+      responses:
+        "200":
+          description: Context
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SweContext"
+
+  /swe/projects/{id}/execute:
+    post:
+      tags: [SWE]
+      summary: Execute a tool in the project
+      operationId: executeSweTool
+      parameters:
+        - $ref: "#/components/parameters/sweProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Tool result
+
+  /swe/projects/{project_id}/memory:
+    get:
+      tags: [SWE]
+      summary: List project memory
+      operationId: listSweMemory
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+      responses:
+        "200":
+          description: Memory entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SweMemory"
+    post:
+      tags: [SWE]
+      summary: Store a memory entry
+      operationId: createSweMemory
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+                category:
+                  type: string
+                importance:
+                  type: string
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SweMemory"
+
+  /swe/projects/{project_id}/memory/{id}:
+    get:
+      tags: [SWE]
+      summary: Get a memory entry
+      operationId: getSweMemory
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+        - $ref: "#/components/parameters/sweEntryId"
+      responses:
+        "200":
+          description: Memory entry
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [SWE]
+      summary: Update a memory entry
+      operationId: updateSweMemory
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+        - $ref: "#/components/parameters/sweEntryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SWE]
+      summary: Delete a memory entry
+      operationId: deleteSweMemory
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+        - $ref: "#/components/parameters/sweEntryId"
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /swe/projects/{project_id}/rules:
+    get:
+      tags: [SWE]
+      summary: List project rules
+      operationId: listSweRules
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SweRule"
+    post:
+      tags: [SWE]
+      summary: Add a rule
+      operationId: createSweRule
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rule]
+              properties:
+                rule:
+                  type: string
+                description:
+                  type: string
+                category:
+                  type: string
+                priority:
+                  type: integer
+      responses:
+        "200":
+          description: Rule added
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SweRule"
+
+  /swe/projects/{project_id}/rules/{id}:
+    put:
+      tags: [SWE]
+      summary: Update a rule
+      operationId: updateSweRule
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+        - $ref: "#/components/parameters/sweEntryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SWE]
+      summary: Delete a rule
+      operationId: deleteSweRule
+      parameters:
+        - $ref: "#/components/parameters/sweProjectIdAlt"
+        - $ref: "#/components/parameters/sweEntryId"
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /inbox:
     get:
       tags: [Inbox]
@@ -779,6 +1587,28 @@ components:
       schema:
         type: string
         format: uuid
+    sweProjectId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    # The SWE routes are registered with two different names for the project
+    # id -- `{id}` on the project itself, `{project_id}` on its memory and
+    # rules. Both are reproduced here because the router matches on the
+    # literal template, so a single spelling would not describe the server.
+    sweProjectIdAlt:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+    sweEntryId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
     limitParam:
       name: limit
       in: query
@@ -1203,6 +2033,188 @@ components:
           nullable: true
         variable_data:
           nullable: true
+
+    SystemHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded]
+        version:
+          type: string
+        uptime:
+          type: integer
+          description: Seconds since the server started.
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [ok, error]
+            api:
+              type: string
+              enum: [ok, error]
+
+    ProviderHealth:
+      type: object
+      properties:
+        providerId:
+          type: string
+        status:
+          type: string
+          enum: [connected, disconnected, error, unknown]
+        latency:
+          type: integer
+          nullable: true
+          description: Milliseconds. Null unless the provider answered.
+        lastChecked:
+          type: integer
+          format: int64
+          description: Epoch milliseconds.
+        error:
+          type: string
+          nullable: true
+        models:
+          type: array
+          items:
+            type: string
+
+    McpTool:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        inputSchema:
+          type: object
+          description: JSON Schema for the tool's arguments.
+
+    SweProject:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        description:
+          type: string
+          nullable: true
+        gitRemote:
+          type: string
+          nullable: true
+        gitBranch:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        framework:
+          type: string
+          nullable: true
+        lastOpened:
+          type: integer
+          format: int64
+          description: Epoch milliseconds.
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        memoryCount:
+          type: integer
+        ruleCount:
+          type: integer
+        sessionCount:
+          type: integer
+
+    SweMemory:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        key:
+          type: string
+        value:
+          type: string
+        category:
+          type: string
+        importance:
+          type: string
+        source:
+          type: string
+        sourceMessageId:
+          type: string
+          nullable: true
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true
+        accessCount:
+          type: integer
+        lastAccessed:
+          type: integer
+          format: int64
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    SweRule:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        rule:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        scope:
+          type: string
+          nullable: true
+        conditions:
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    SweContext:
+      type: object
+      properties:
+        memory:
+          type: array
+          items:
+            $ref: "#/components/schemas/SweMemory"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/SweRule"
+        memoryCount:
+          type: integer
+        ruleCount:
+          type: integer
+        systemPromptAddition:
+          type: string
 
     WorkspaceList:
       type: object

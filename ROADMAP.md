@@ -75,13 +75,21 @@ alone cannot tell the two apart. `api::docs` now enforces this with
 sentinel `default_service` and fails if any documented operation reaches it --
 that test is what found the seven above.
 
-The inverse gap narrowed but still stands: `GET`/`POST /swarms` and the
-`/swe/projects/*` tree are served but undocumented, as are the `/auth`,
-`/sync`, `/recording`, `/webhooks`, `/audit`, `/retention`, and `/sso` scopes.
-(`PUT /swarms/{id}` is now both served and documented.) 40 operations under
-`/api` and roughly 29 in the root-mounted scopes remain undocumented; the
-enterprise ones (`/audit`, `/retention`, `/sso`) are feature-gated and would
-fail the route test on a default build, so they need separate handling.
+The inverse gap is **closed for `/api`**. All 40 operations that were served
+there but undocumented -- the `/swe/projects/*` tree, the inbox sub-resources,
+MCP, swarms, settings accounts, `/system/health`, `/system/providers/health`,
+`/stats` and `/sessions/search` -- are now in the spec, taking it from 32
+operations to 72. Response shapes were read off a running server, including
+creating a SWE project, a memory entry and a rule so their schemas describe
+real records rather than guesses.
+
+Still undocumented: roughly 29 operations in the root-mounted `/auth`,
+`/sync`, `/recording` and `/webhooks` scopes. Those need more than a copy of
+this work, because the spec's single base URL is `.../api` and those scopes
+live at the server root -- they need per-path `servers` overrides, and the
+route test needs to understand them. The enterprise scopes (`/audit`,
+`/retention`, `/sso`) are feature-gated and would fail the route test on a
+default build, so they need separate handling again.
 
 ### The spec described responses the server has never sent
 
@@ -158,6 +166,13 @@ Four bugs surfaced while building this, all pre-existing:
   joins one -- so that endpoint answered `500` against every harvested
   install. Opening a harvest database now creates it, alongside the `agents`
   and `metadata` tables it already backfilled.
+- `GET /api/system/health` checked the database with
+  `conn.execute("SELECT 1")`. rusqlite's `execute` rejects any statement that
+  returns rows, so the check could never succeed: the endpoint reported
+  `status: degraded` and `database: error` on every install it has ever run
+  on, however healthy the database was. It uses `query_row` now, and a test
+  asserts the *green* path -- the only kind that catches a check which can
+  never pass.
 - Registering the write handlers in their own `web::scope("/api")` shadowed
   every read route: actix matches scopes in registration order, and a matching
   scope handles the request even when no resource inside it matches, so it

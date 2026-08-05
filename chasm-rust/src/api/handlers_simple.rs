@@ -2507,9 +2507,18 @@ pub async fn get_system_health(state: web::Data<AppState>) -> impl Responder {
     let start = START_TIME.get_or_init(std::time::Instant::now);
     let uptime = start.elapsed().as_secs();
 
-    // Try a simple DB query to verify connection
+    // Try a simple DB query to verify connection.
+    //
+    // `query_row`, not `execute`: rusqlite's `execute` is for statements that
+    // return no rows and fails with "Execute returned results" on any SELECT.
+    // This check therefore always reported the database as broken -- it has
+    // never once answered "healthy", on any install, however fine the database
+    // was.
     let db = state.db.lock().unwrap();
-    let db_ok = db.conn.execute("SELECT 1", []).is_ok();
+    let db_ok = db
+        .conn
+        .query_row("SELECT 1", [], |row| row.get::<_, i64>(0))
+        .is_ok();
 
     ApiResponse::success(serde_json::json!({
         "status": if db_ok { "healthy" } else { "degraded" },
@@ -2650,6 +2659,36 @@ mod provider_health_tests {
             .as_array()
             .expect("data is an array")
             .clone()
+    }
+
+    /// The database check must be able to succeed.
+    ///
+    /// It was written with `execute("SELECT 1")`, which rusqlite rejects for
+    /// any statement that returns rows, so `db_ok` was always false: the
+    /// endpoint reported `degraded` on every install it has ever run on,
+    /// however healthy the database. A green-path assertion is the only kind
+    /// that catches a check that can never pass.
+    #[tokio::test]
+    async fn system_health_reports_healthy_against_a_working_database() {
+        use crate::api::AppState;
+        use crate::ChatDatabase;
+        use actix_web::{body::to_bytes, web::Data, Responder};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("health.db");
+        let db = ChatDatabase::open(&path).unwrap();
+        let state = Data::new(AppState::new(db, path));
+
+        let req = actix_web::test::TestRequest::default().to_http_request();
+        let resp = get_system_health(state).await.respond_to(&req);
+        let body = match to_bytes(resp.into_body()).await {
+            Ok(b) => b,
+            Err(_) => panic!("could not read the response body"),
+        };
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(parsed["data"]["status"], "healthy");
+        assert_eq!(parsed["data"]["checks"]["database"], "ok");
     }
 
     #[test]
