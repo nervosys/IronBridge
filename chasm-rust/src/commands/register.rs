@@ -688,9 +688,9 @@ pub fn list_orphaned(project_path: Option<&str>) -> Result<()> {
     }
 
     println!("\n{} To register all orphaned sessions:", "->".cyan());
-    println!("   csm register all --force");
+    println!("   chasm register all --force");
     println!("\n{} To register specific sessions:", "->".cyan());
-    println!("   csm register session <ID1> <ID2> ... --force");
+    println!("   chasm register session <ID1> <ID2> ... --force");
 
     Ok(())
 }

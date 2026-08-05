@@ -266,7 +266,7 @@ pub fn history_fetch(project_path: Option<&str>, force: bool, no_register: bool)
                 "{} VS Code is running. Sessions may not appear until restart.",
                 "[!]".yellow()
             );
-            println!("   Run 'csm history fetch --force' after closing VS Code to register.");
+            println!("   Run 'chasm fetch path --force' after closing VS Code to register.");
         } else {
             let registered =
                 register_all_sessions_from_directory(&current_ws_id, &chat_sessions_dir, true)?;

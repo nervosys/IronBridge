@@ -384,7 +384,7 @@ pub fn harvest_init(path: Option<&str>, git_init: bool) -> Result<()> {
             "[!]".yellow(),
             db_path.display()
         );
-        println!("   Use 'csm harvest run' to update it");
+        println!("   Use 'chasm harvest run' to update it");
         return Ok(());
     }
 
@@ -399,10 +399,10 @@ pub fn harvest_init(path: Option<&str>, git_init: bool) -> Result<()> {
 
     println!("\n{} Harvest database initialized!", "[+]".green().bold());
     println!("\nNext steps:");
-    println!("  1. Run 'csm harvest scan' to see available providers");
-    println!("  2. Run 'csm harvest run' to collect sessions");
+    println!("  1. Run 'chasm harvest scan' to see available providers");
+    println!("  2. Run 'chasm harvest run' to collect sessions");
     if !git_init {
-        println!("  3. Run 'csm harvest git init' to enable version tracking");
+        println!("  3. Run 'chasm harvest git init' to enable version tracking");
     }
 
     Ok(())
@@ -929,7 +929,7 @@ pub fn harvest_status(path: Option<&str>) -> Result<()> {
             "[!]".yellow(),
             db_path.display()
         );
-        println!("   Run 'csm harvest init' to create one");
+        println!("   Run 'chasm harvest init' to create one");
         return Ok(());
     }
 
@@ -1056,7 +1056,7 @@ pub fn harvest_status(path: Option<&str>) -> Result<()> {
                     println!("   {} No uncommitted changes", "[+]".green());
                 } else {
                     println!("   {} Uncommitted changes detected", "[!]".yellow());
-                    println!("   Run 'csm harvest git commit' to save changes");
+                    println!("   Run 'chasm harvest git commit' to save changes");
                 }
             }
             Err(_) => {
@@ -1065,7 +1065,7 @@ pub fn harvest_status(path: Option<&str>) -> Result<()> {
         }
     } else {
         println!("\n{} Git tracking not enabled", "[i]".dimmed());
-        println!("   Run 'csm harvest git init' to enable version tracking");
+        println!("   Run 'chasm harvest git init' to enable version tracking");
     }
 
     Ok(())
@@ -2631,8 +2631,8 @@ fn init_git_tracking(db_path: &Path) -> Result<()> {
     }
 
     println!("\n{} Git tracking enabled!", "[+]".green().bold());
-    println!("   Run 'csm harvest git commit -m \"message\"' to save changes");
-    println!("   Run 'csm harvest git log' to view history");
+    println!("   Run 'chasm harvest git commit -m \"message\"' to save changes");
+    println!("   Run 'chasm harvest git log' to view history");
 
     Ok(())
 }
@@ -2787,9 +2787,9 @@ pub fn harvest_share(
     println!("   For now, you can:");
     println!("   1. Open the share link in your browser");
     println!("   2. Export the conversation manually");
-    println!("   3. Import with: csm import <file>");
+    println!("   3. Import with: chasm import <file>");
     println!();
-    println!("   Or use 'csm harvest shares' to view pending links.");
+    println!("   Or use 'chasm harvest shares' to view pending links.");
 
     Ok(())
 }
@@ -3392,7 +3392,7 @@ pub fn harvest_shares(
         } else {
             println!("{} No share links found", "[i]".blue());
         }
-        println!("   Use 'csm harvest share <url>' to add a share link");
+        println!("   Use 'chasm harvest share <url>' to add a share link");
         return Ok(());
     }
 
@@ -3488,7 +3488,7 @@ pub fn harvest_checkpoint(
         Some(s) => s,
         None => {
             println!("{} Session not found: {}", "[!]".red(), session_id);
-            println!("   Use 'csm harvest list' to see available sessions");
+            println!("   Use 'chasm harvest list' to see available sessions");
             anyhow::bail!("Session not found");
         }
     };

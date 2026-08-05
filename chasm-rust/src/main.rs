@@ -196,8 +196,8 @@ fn main() -> Result<()> {
                 no_register,
             }) => commands::history_fetch(project_path.as_deref(), force, no_register),
             None => {
-                eprintln!("Usage: csm fetch <workspace|session|path> ...");
-                eprintln!("Run 'csm fetch --help' for more information.");
+                eprintln!("Usage: chasm fetch <workspace|session|path> ...");
+                eprintln!("Run 'chasm fetch --help' for more information.");
                 Ok(())
             }
         },
@@ -297,8 +297,8 @@ fn main() -> Result<()> {
                 no_backup,
             ),
             None => {
-                eprintln!("Usage: csm merge <workspace|workspaces|sessions|path|provider|providers|all> ...");
-                eprintln!("Run 'csm merge --help' for more information.");
+                eprintln!("Usage: chasm merge <workspace|workspaces|sessions|path|provider|providers|all> ...");
+                eprintln!("Run 'chasm merge --help' for more information.");
                 Ok(())
             }
         },
@@ -328,8 +328,8 @@ fn main() -> Result<()> {
                 project_paths,
             }) => commands::export_batch(&destination, &project_paths),
             None => {
-                eprintln!("Usage: csm export <workspace|sessions|path|batch> ...");
-                eprintln!("Run 'csm export --help' for more information.");
+                eprintln!("Usage: chasm export <workspace|sessions|path|batch> ...");
+                eprintln!("Run 'chasm export --help' for more information.");
                 Ok(())
             }
         },
@@ -354,8 +354,8 @@ fn main() -> Result<()> {
                 force,
             }) => commands::import_sessions(&source, None, target_path.as_deref(), force),
             None => {
-                eprintln!("Usage: csm import <workspace|sessions|path> ...");
-                eprintln!("Run 'csm import --help' for more information.");
+                eprintln!("Usage: chasm import <workspace|sessions|path> ...");
+                eprintln!("Run 'chasm import --help' for more information.");
                 Ok(())
             }
         },
@@ -377,8 +377,8 @@ fn main() -> Result<()> {
                 target_path,
             }) => commands::move_by_path(&source_path, &target_path),
             None => {
-                eprintln!("Usage: csm move <workspace|sessions|path> ...");
-                eprintln!("Run 'csm move --help' for more information.");
+                eprintln!("Usage: chasm move <workspace|sessions|path> ...");
+                eprintln!("Run 'chasm move --help' for more information.");
                 Ok(())
             }
         },
