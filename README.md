@@ -15,9 +15,11 @@
 - 🎛️ **Interactive TUI** — Browse workspaces and sessions in the terminal
 - 🤖 **MCP Server** — Model Context Protocol integration for AI agents
 - 📦 **Git Integration** — Version control your chat histories
-- 🌐 **REST API** — Build custom integrations
-- 👥 **Team Collaboration** — Workspaces, RBAC, session sharing
-- 🧠 **Conversation Analysis** — Heuristic topic extraction, insights, similarity scoring
+- 🌐 **REST API** — 130 documented operations, every one verified as routed
+- 🔗 **Local Share Links** — Revocable, expiring tokens that read a session
+  back through your own server. Nothing is uploaded anywhere
+- 🧠 **Conversation Analysis** — Model-backed against any OpenAI-compatible
+  endpoint, with offline heuristics as a clearly-labelled fallback
 - 🔌 **Plugin System** — Extensible architecture with event hooks
 
 > See [Implementation status](#implementation-status) for what each part of
@@ -138,6 +140,7 @@ chasm api serve --port 8787
 | GET    | `/api/search`          | Search sessions and messages (`?q=`) |
 | GET    | `/api/stats`           | Database statistics       |
 | GET    | `/api/stats/providers` | Per-provider counts       |
+| GET    | `/api/stats/timeline`  | Sessions and messages per day (`?days=`) |
 
 Writes:
 
@@ -146,21 +149,95 @@ Writes:
 | POST   | `/api/sessions`                   | Create a session                |
 | DELETE | `/api/sessions/:id`               | Delete a session                |
 | POST   | `/api/sessions/:id/messages`      | Append a message                |
+| POST   | `/api/sessions/:id/fork`          | Copy a session                  |
+| POST   | `/api/sessions/merge`             | Merge sessions into a new one   |
+| GET    | `/api/sessions/:id/export`        | Download (`?format=json\|markdown`) |
 | GET    | `/api/sessions/:id/checkpoints`   | List checkpoints                |
 | POST   | `/api/sessions/:id/checkpoints`   | Create a checkpoint             |
 | GET    | `/api/sessions/:id/commits`       | Git commits for the workspace   |
+| POST   | `/api/workspaces`                 | Create a workspace              |
+| PUT    | `/api/workspaces/:id`             | Update a workspace              |
+| DELETE | `/api/workspaces/:id`             | Delete a workspace              |
 | PUT    | `/api/swarms/:id`                 | Update a swarm                  |
 | POST   | `/api/providers/:id/test`         | Test provider connectivity      |
 | POST   | `/api/chat/completions`           | Proxy a completion              |
 | POST   | `/api/harvest`                    | Run an incremental harvest      |
 
-`POST /api/chat/completions` needs `OPENAI_API_KEY` (and `OPENAI_BASE_URL` for a
-local endpoint) set on the server; without one it returns 503 rather than a
-canned reply. `POST /api/providers/:id/test` only knows how to reach locally
-hosted providers and returns 501 for the rest.
+Endpoints that refuse rather than guess:
 
-The full spec is `chasm-rust/openapi.yaml`, and a test asserts every path in it
-is actually routed.
+- `POST /api/chat/completions` needs `OPENAI_API_KEY` (and `OPENAI_BASE_URL`
+  for a local endpoint). Without one it returns `503` naming the variable,
+  never a canned reply.
+- `POST /api/providers/:id/test` only knows how to reach locally hosted
+  providers; anything else returns `501` rather than a success that tested
+  nothing.
+- `GET /api/stats/providers` reports `tokens: 0` where the store holds no
+  token counts, rather than estimating.
+
+Deleting a workspace **detaches** its sessions rather than deleting them.
+Merging leaves its sources intact. A fork is an independent copy, not an alias.
+
+### Response envelope
+
+Every endpoint **except `GET /api/health`** wraps its payload:
+
+```json
+{ "success": true, "data": { ... }, "error": null }
+```
+
+Errors carry `{"success": false, "error": "..."}` with no `data`.
+
+The full spec is `chasm-rust/openapi.yaml` — 101 paths, 130 operations. Two
+tests keep it honest: one fails if a documented path is not routed, the other
+if a response body no longer matches its schema.
+
+### Sharing
+
+```bash
+curl -X POST localhost:8787/api/sessions/$ID/share -d '{"expiresInHours":24}'
+curl localhost:8787/api/shared/$TOKEN          # read it back
+curl -X DELETE localhost:8787/api/shared/$TOKEN # revoke
+```
+
+| Method | Endpoint                     | Description                       |
+| ------ | ---------------------------- | --------------------------------- |
+| POST   | `/api/sessions/:id/share`    | Create a link                     |
+| GET    | `/api/sessions/:id/share`    | List links, with status           |
+| GET    | `/api/shared/:token`         | Read the session (no auth)        |
+| DELETE | `/api/shared/:token`         | Revoke                            |
+
+**A share link is local.** The token grants read access *through your own
+server* — nothing is uploaded anywhere, and the link only works while your
+server is reachable by the recipient. That is deliberate: Chasm holds your
+entire chat history on your machine, and transmitting a conversation to a
+third party is a decision that should be yours to make explicitly.
+
+The token is a bearer credential: 256 bits of OS randomness, and anyone
+holding it can read that session. Expiry is evaluated on every read, so a
+link dies on time without needing a cleanup job, and unknown, revoked and
+expired tokens are all answered with `404` so probing cannot tell them apart.
+
+### Semantic search
+
+```bash
+export OPENAI_API_KEY=...                       # or a local endpoint
+curl -X POST localhost:8787/api/search/semantic/index -d '{}'
+curl "localhost:8787/api/search/semantic?q=how+did+we+fix+the+deadlock"
+```
+
+Indexing is a separate, explicit step — embedding a whole store costs money and
+time proportional to its size, so a query never triggers one silently. The
+response reports how many vectors it searched, so an empty index is
+distinguishable from no matches.
+
+There is no lexical fallback: without a key both routes return `503`. An
+endpoint called "semantic" quietly returning substring matches would be
+indistinguishable from a broken index, and `/api/search` already does substring
+matching honestly.
+
+> **Not yet proven.** The refusal path, vector storage and similarity maths are
+> tested, but the embed–index–rank path has never run against a real embedding
+> endpoint. Treat it as unverified until you have run it with a key.
 
 ### GraphQL
 
@@ -288,14 +365,15 @@ enterprise layers are scaffolding at varying stages. Concretely:
 
 | Area                            | State                                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 780 tests passing.                                                                            |
-| Providers                       | **Working.** 12 local/OpenAI-compatible + 6 cloud share-link parsers.                                                     |
+| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 879 tests passing.                                                                            |
+| Providers                       | **Working.** 11 local/OpenAI-compatible endpoints in the catalogue, 21 cloud providers listed, and 5 cloud share-link parsers (ChatGPT, Claude, Gemini, Perplexity, Poe). |
 | MCP server, TUI                 | **Working.**                                                                                                              |
-| REST API                        | **Working.** ~70 routes served: 47 in `api/mod.rs` plus auth, sync, recording, websocket, docs, and webhooks. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
+| REST API                        | **Working.** 130 operations across 101 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
 | Enterprise (SSO/audit/retention)| **Working, Linux-only build.** SAML signatures are verified against wrapping attacks, and `SqliteEnterpriseStore` implements all 35 `DatabaseOps` methods, so IdP config, sessions, audit events and retention policies persist. Needs `libxmlsec1`. |
 | Conversation analysis           | **Model-backed.** `chasm analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
-| Embeddings / semantic search    | **Working, needs a key.** Backed by the OpenAI embeddings API with index-order and dimension validation; without `OPENAI_API_KEY` the calls error rather than silently returning zeros. |
+| Embeddings / semantic search    | **Built, unproven.** `POST /api/search/semantic/index` embeds sessions and `GET /api/search/semantic` ranks them by cosine similarity. Refusal, vector storage and the similarity maths are tested; the embed–index–rank path has never run against a real embedding endpoint, so treat it as unverified. This row previously read "Working" while nothing in the tree ever wrote an embedding. |
+| Session sharing                 | **Working, local only.** Revocable, optionally-expiring tokens readable through your own server. Nothing is uploaded anywhere — see [Sharing](#sharing). |
 | chasm-desktop                   | **Working.** Wraps chasm-web and runs the API server in-process on 127.0.0.1:8788, so it needs no separately started backend. No desktop-specific UI. |
 | chasm-web                       | **Working.** `AgentInbox` is backed by `/api/inbox`.                                                                      |
 
