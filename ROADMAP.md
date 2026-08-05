@@ -148,8 +148,13 @@ arrived. It now probes each locally hosted provider at its declared endpoint
 concurrently and reports `unknown` for cloud providers, which this server holds
 no credentials for and therefore cannot honestly assess.
 
-Still open: `ShareSessionModal` is a fully tested component that nothing
-renders. Removing it is a product call, so it was left in place.
+`ShareSessionModal` -- a fully tested component that nothing rendered, driving
+a share API that does not exist -- has been deleted along with its five tests.
+It was never imported, so the production bundle is byte-for-byte the same size
+without it, which is the clearest evidence it was dead. The `ShareLink` and
+`SessionShare` types stay: `Harvest.tsx` still uses them. Session sharing over
+REST remains unimplemented, and would need decisions about link expiry,
+visibility and whether links leave the machine before it is worth building.
 
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
 and TUI are complete. The suite is 841 passing tests on Windows (199 lib plus
