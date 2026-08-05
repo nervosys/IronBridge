@@ -431,7 +431,9 @@ pub async fn get_session(state: web::Data<AppState>, path: web::Path<String>) ->
 }
 
 /// Extract messages from session_json.requests array with full markdown and tool invocations
-fn extract_messages_from_session(session_json: &serde_json::Value) -> Vec<serde_json::Value> {
+pub(super) fn extract_messages_from_session(
+    session_json: &serde_json::Value,
+) -> Vec<serde_json::Value> {
     let mut messages = Vec::new();
 
     if let Some(requests) = session_json.get("requests").and_then(|r| r.as_array()) {

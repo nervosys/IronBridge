@@ -995,6 +995,1123 @@ fn table_exists(conn: &Connection, name: &str) -> bool {
     .unwrap_or(false)
 }
 
+
+// =============================================================================
+// Timeline statistics
+// =============================================================================
+
+#[derive(Deserialize)]
+pub struct TimelineQuery {
+    #[serde(default)]
+    pub days: Option<u32>,
+}
+
+/// `GET /api/stats/timeline`
+///
+/// Sessions and messages per calendar day, oldest first. Days with no
+/// activity are omitted rather than zero-filled: the store knows nothing
+/// about a day on which nothing happened, and inventing rows would make an
+/// empty database look like a quiet one.
+pub async fn timeline_stats(
+    state: web::Data<AppState>,
+    query: web::Query<TimelineQuery>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let days = query.days.unwrap_or(30).clamp(1, 365) as i64;
+    let cutoff = now_secs() - days * 86_400;
+
+    let result = (|| -> rusqlite::Result<Vec<Value>> {
+        let mut stmt = db.conn.prepare(
+            "SELECT date(created_at, 'unixepoch') AS day,
+                    COUNT(*) AS sessions,
+                    COALESCE(SUM(message_count), 0) AS messages
+             FROM sessions
+             WHERE created_at >= ?1
+             GROUP BY day
+             ORDER BY day",
+        )?;
+        let rows = stmt.query_map(params![cutoff], |row| {
+            Ok(json!({
+                "date": row.get::<_, String>(0)?,
+                "sessions": row.get::<_, i64>(1)?,
+                "messages": row.get::<_, i64>(2)?,
+            }))
+        })?;
+        rows.collect()
+    })();
+
+    match result {
+        Ok(rows) => ok(json!({ "days": days, "points": rows })),
+        Err(e) => db_error(e),
+    }
+}
+
+// =============================================================================
+// Workspace writes
+// =============================================================================
+
+#[derive(Deserialize)]
+pub struct WorkspaceBody {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
+}
+
+/// `POST /api/workspaces`
+pub async fn create_workspace(
+    state: web::Data<AppState>,
+    body: web::Json<WorkspaceBody>,
+) -> impl Responder {
+    let Some(name) = body.name.clone().filter(|n| !n.trim().is_empty()) else {
+        return fail(StatusCode::BAD_REQUEST, "name is required");
+    };
+
+    let db = state.db.lock().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now_secs();
+
+    let inserted = db.conn.execute(
+        "INSERT INTO workspaces (id, name, path, provider, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+        params![id, name, body.path, body.provider, now],
+    );
+
+    match inserted {
+        Ok(_) => created(json!({
+            "id": id,
+            "name": name,
+            "path": body.path,
+            "provider": body.provider,
+            "created_at": now,
+            "updated_at": now,
+        })),
+        Err(e) => db_error(e),
+    }
+}
+
+/// `PUT /api/workspaces/{id}`
+pub async fn update_workspace(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: web::Json<WorkspaceBody>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let id = path.into_inner();
+
+    // COALESCE so an omitted field keeps its stored value.
+    let updated = db.conn.execute(
+        "UPDATE workspaces SET
+            name = COALESCE(?1, name),
+            path = COALESCE(?2, path),
+            provider = COALESCE(?3, provider),
+            updated_at = ?4
+         WHERE id = ?5",
+        params![body.name, body.path, body.provider, now_secs(), id],
+    );
+
+    match updated {
+        Ok(0) => not_found("Workspace"),
+        Ok(_) => ok(json!({ "id": id, "updated": true })),
+        Err(e) => db_error(e),
+    }
+}
+
+/// `DELETE /api/workspaces/{id}`
+///
+/// Sessions that belonged to it are kept and detached, not deleted. Removing
+/// a workspace record is a bookkeeping act; destroying the conversations
+/// filed under it is not, and should never be a side effect of one.
+pub async fn delete_workspace(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let id = path.into_inner();
+
+    if let Err(e) = db.conn.execute(
+        "UPDATE sessions SET workspace_id = NULL WHERE workspace_id = ?1",
+        params![id],
+    ) {
+        return db_error(e);
+    }
+
+    match db
+        .conn
+        .execute("DELETE FROM workspaces WHERE id = ?1", params![id])
+    {
+        Ok(0) => not_found("Workspace"),
+        Ok(_) => ok(json!({ "id": id, "deleted": true, "sessionsDetached": true })),
+        Err(e) => db_error(e),
+    }
+}
+
+// =============================================================================
+// Fork, merge and export
+// =============================================================================
+
+/// Read a session's stored blob and denormalized title.
+fn load_session(conn: &Connection, id: &str) -> rusqlite::Result<Option<(String, String, String)>> {
+    conn.query_row(
+        "SELECT title, provider, session_json FROM sessions WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .optional()
+}
+
+fn request_count(session: &Value) -> i64 {
+    session
+        .get("requests")
+        .and_then(|r| r.as_array())
+        .map(|r| {
+            r.iter()
+                .map(|req| {
+                    i64::from(req.get("message").is_some()) + i64::from(req.get("response").is_some())
+                })
+                .sum()
+        })
+        .unwrap_or(0)
+}
+
+#[derive(Deserialize)]
+pub struct ForkBody {
+    #[serde(default)]
+    pub title: Option<String>,
+}
+
+/// `POST /api/sessions/{id}/fork`
+///
+/// Copies the conversation into a new session. The copy is independent --
+/// appending to either afterwards does not affect the other -- and records
+/// its origin in `parentSessionId` so the lineage is not lost.
+pub async fn fork_session(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: web::Json<ForkBody>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let source_id = path.into_inner();
+
+    let loaded = match load_session(&db.conn, &source_id) {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    let Some((title, provider, raw)) = loaded else {
+        return not_found("Session");
+    };
+
+    let mut session: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({ "requests": [] }));
+    session["forkedFrom"] = json!(source_id);
+
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let new_title = body
+        .title
+        .clone()
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| format!("{title} (fork)"));
+    let now = now_secs();
+    let count = request_count(&session);
+
+    let inserted = db.conn.execute(
+        "INSERT INTO sessions
+            (id, provider, workspace_id, workspace_path, title, message_count,
+             created_at, updated_at, harvested_at, session_json)
+         SELECT ?1, ?2, workspace_id, workspace_path, ?3, ?4, ?5, ?5, ?5, ?6
+         FROM sessions WHERE id = ?7",
+        params![new_id, provider, new_title, count, now, session.to_string(), source_id],
+    );
+
+    match inserted {
+        Ok(_) => created(json!({
+            "id": new_id,
+            "title": new_title,
+            "provider": provider,
+            "parentSessionId": source_id,
+            "message_count": count,
+            "created_at": now,
+        })),
+        Err(e) => db_error(e),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MergeBody {
+    #[serde(default, alias = "sessionIds")]
+    pub session_ids: Vec<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+}
+
+/// `POST /api/sessions/merge`
+///
+/// Concatenates several sessions into a new one, in the order given. The
+/// sources are left untouched: a merge that consumed its inputs would make
+/// an accidental merge unrecoverable, and the caller can delete them after
+/// checking the result.
+pub async fn merge_sessions(
+    state: web::Data<AppState>,
+    body: web::Json<MergeBody>,
+) -> impl Responder {
+    if body.session_ids.len() < 2 {
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "sessionIds must name at least two sessions",
+        );
+    }
+
+    let db = state.db.lock().unwrap();
+    let mut requests: Vec<Value> = Vec::new();
+    let mut provider = String::from("chasm");
+
+    for (i, id) in body.session_ids.iter().enumerate() {
+        let loaded = match load_session(&db.conn, id) {
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        };
+        let Some((_, source_provider, raw)) = loaded else {
+            return fail(StatusCode::NOT_FOUND, format!("Session {id} not found"));
+        };
+        if i == 0 {
+            provider = source_provider;
+        }
+        let session: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({}));
+        if let Some(rs) = session.get("requests").and_then(|r| r.as_array()) {
+            // Tag each turn with where it came from, so a merged transcript
+            // can still be traced back.
+            for r in rs {
+                let mut r = r.clone();
+                r["mergedFrom"] = json!(id);
+                requests.push(r);
+            }
+        }
+    }
+
+    let merged = json!({ "requests": requests, "mergedFrom": body.session_ids });
+    let count = request_count(&merged);
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let title = body
+        .title
+        .clone()
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| format!("Merge of {} sessions", body.session_ids.len()));
+    let now = now_secs();
+
+    let inserted = db.conn.execute(
+        "INSERT INTO sessions
+            (id, provider, title, message_count, created_at, updated_at,
+             harvested_at, session_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?5, ?6)",
+        params![new_id, provider, title, count, now, merged.to_string()],
+    );
+
+    match inserted {
+        Ok(_) => created(json!({
+            "id": new_id,
+            "title": title,
+            "provider": provider,
+            "message_count": count,
+            "mergedFrom": body.session_ids,
+            "created_at": now,
+        })),
+        Err(e) => db_error(e),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ExportQuery {
+    #[serde(default)]
+    pub format: Option<String>,
+}
+
+/// `GET /api/sessions/{id}/export`
+///
+/// `format=json` returns the stored blob; `format=markdown` renders the
+/// transcript. Served as a download with a filename, because the point of
+/// this endpoint is to get a file out.
+pub async fn export_session(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    query: web::Query<ExportQuery>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let id = path.into_inner();
+
+    let loaded = match load_session(&db.conn, &id) {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    let Some((title, _, raw)) = loaded else {
+        return not_found("Session");
+    };
+
+    let format = query.format.clone().unwrap_or_else(|| "json".into());
+    let session: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({}));
+
+    let (body, mime, ext) = match format.as_str() {
+        "json" => (raw, "application/json", "json"),
+        "markdown" | "md" => (render_markdown(&title, &session), "text/markdown", "md"),
+        other => {
+            return fail(
+                StatusCode::BAD_REQUEST,
+                format!("unsupported format '{other}'; expected json or markdown"),
+            )
+        }
+    };
+
+    HttpResponse::Ok()
+        .content_type(mime)
+        .insert_header((
+            "Content-Disposition",
+            format!("attachment; filename=\"{}.{ext}\"", safe_filename(&title)),
+        ))
+        .body(body)
+}
+
+/// Render the transcript the same way the read path reconstructs it, so an
+/// export matches what `GET /sessions/{id}` shows.
+fn render_markdown(title: &str, session: &Value) -> String {
+    let mut out = format!("# {title}\n\n");
+    if let Some(requests) = session.get("requests").and_then(|r| r.as_array()) {
+        for request in requests {
+            if let Some(text) = request
+                .pointer("/message/text")
+                .and_then(|t| t.as_str())
+                .filter(|t| !t.is_empty())
+            {
+                out.push_str("## User\n\n");
+                out.push_str(text);
+                out.push_str("\n\n");
+            }
+            if let Some(response) = request.get("response") {
+                let text = response
+                    .as_array()
+                    .map(|parts| {
+                        parts
+                            .iter()
+                            .filter_map(|p| p.get("value").and_then(|v| v.as_str()))
+                            .collect::<Vec<_>>()
+                            .join("")
+                    })
+                    .or_else(|| response.as_str().map(|s| s.to_string()))
+                    .unwrap_or_default();
+                if !text.is_empty() {
+                    out.push_str("## Assistant\n\n");
+                    out.push_str(&text);
+                    out.push_str("\n\n");
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Strip anything that would make a filename awkward or unsafe on any of the
+/// three platforms this runs on.
+fn safe_filename(title: &str) -> String {
+    let cleaned: String = title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let trimmed = cleaned.trim_matches('-');
+    if trimmed.is_empty() {
+        "session".to_string()
+    } else {
+        trimmed.chars().take(60).collect()
+    }
+}
+
+// =============================================================================
+// Session sharing
+// =============================================================================
+//
+// A share is a token that grants read access to one session *through this
+// server*. Nothing is uploaded anywhere.
+//
+// That is a deliberate choice, not a shortcut. Chasm holds a person's entire
+// chat history on their own machine; making "share" mean "transmit a
+// conversation to a third party" is a decision with privacy consequences that
+// belongs to whoever runs it, not to the code. A local token is useful for the
+// cases that motivated the feature -- opening a session in another tab, handing
+// a colleague a URL on the same network, embedding a link in a ticket on an
+// internal host -- and it cannot leak anything the server was not already
+// serving.
+//
+// Consequences worth knowing:
+//   - A link only works while this server is reachable by the recipient.
+//   - Anyone who has the token can read that session. It is a bearer
+//     credential, which is why it is 256 bits from the OS random source and
+//     why expiry and revocation both exist.
+
+/// Table for outbound share tokens.
+///
+/// Distinct from the existing `share_links`, which records *inbound* provider
+/// URLs (a ChatGPT or Claude share someone imported). Reusing that table would
+/// conflate "a link I was given" with "a link I handed out".
+fn ensure_shares_table(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS session_shares (
+            token TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            access_count INTEGER NOT NULL DEFAULT 0,
+            last_accessed INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_session_shares_session
+            ON session_shares(session_id);",
+    )
+}
+
+/// 256 bits from the OS random source, hex encoded.
+///
+/// `uuid::Uuid::new_v4` would be 122 bits and is designed for uniqueness, not
+/// unguessability. This value is a bearer credential.
+fn new_share_token() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[derive(Deserialize)]
+pub struct CreateShareBody {
+    /// Hours until the link stops working. Omit for a link that does not
+    /// expire on its own -- revocation is then the only way to close it.
+    #[serde(default, alias = "expiresInHours")]
+    pub expires_in_hours: Option<i64>,
+}
+
+/// `POST /api/sessions/{id}/share`
+pub async fn create_share(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: web::Json<CreateShareBody>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let session_id = path.into_inner();
+
+    let exists: Option<i64> = match db
+        .conn
+        .query_row(
+            "SELECT 1 FROM sessions WHERE id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .optional()
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    if exists.is_none() {
+        return not_found("Session");
+    }
+
+    if let Err(e) = ensure_shares_table(&db.conn) {
+        return db_error(e);
+    }
+
+    let hours = body.expires_in_hours;
+    if matches!(hours, Some(h) if h <= 0) {
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "expiresInHours must be positive; omit it for a link that does not expire",
+        );
+    }
+
+    let token = new_share_token();
+    let now = now_secs();
+    let expires_at = hours.map(|h| now + h * 3600);
+
+    if let Err(e) = db.conn.execute(
+        "INSERT INTO session_shares (token, session_id, created_at, expires_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![token, session_id, now, expires_at],
+    ) {
+        return db_error(e);
+    }
+
+    created(json!({
+        "token": token,
+        "sessionId": session_id,
+        "path": format!("/api/shared/{token}"),
+        "createdAt": now,
+        "expiresAt": expires_at,
+        "revoked": false,
+        "note": "Readable through this server only; nothing was uploaded.",
+    }))
+}
+
+/// `GET /api/sessions/{id}/share`
+///
+/// Lists the links handed out for a session so they can be audited and
+/// revoked. The token is returned in full: this is the owner's own view, and
+/// a list of links you cannot copy is not much use.
+pub async fn list_shares(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let session_id = path.into_inner();
+
+    if let Err(e) = ensure_shares_table(&db.conn) {
+        return db_error(e);
+    }
+
+    let now = now_secs();
+    let result = (|| -> rusqlite::Result<Vec<Value>> {
+        let mut stmt = db.conn.prepare(
+            "SELECT token, created_at, expires_at, revoked, access_count, last_accessed
+             FROM session_shares WHERE session_id = ?1 ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map(params![session_id], |row| {
+            let expires_at: Option<i64> = row.get(2)?;
+            let revoked: i64 = row.get(3)?;
+            // Derived on read, like the inbox's permission expiry: a sweeper
+            // that has not run yet must never make a dead link look live.
+            let status = if revoked != 0 {
+                "revoked"
+            } else if expires_at.is_some_and(|e| e <= now) {
+                "expired"
+            } else {
+                "active"
+            };
+            Ok(json!({
+                "token": row.get::<_, String>(0)?,
+                "createdAt": row.get::<_, i64>(1)?,
+                "expiresAt": expires_at,
+                "status": status,
+                "accessCount": row.get::<_, i64>(4)?,
+                "lastAccessed": row.get::<_, Option<i64>>(5)?,
+            }))
+        })?;
+        rows.collect()
+    })();
+
+    match result {
+        Ok(rows) => ok(rows),
+        Err(e) => db_error(e),
+    }
+}
+
+/// `DELETE /api/shared/{token}`
+///
+/// Revokes rather than deletes, so the access count and creation time survive
+/// as a record that the link existed.
+pub async fn revoke_share(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let token = path.into_inner();
+
+    if let Err(e) = ensure_shares_table(&db.conn) {
+        return db_error(e);
+    }
+
+    match db.conn.execute(
+        "UPDATE session_shares SET revoked = 1 WHERE token = ?1",
+        params![token],
+    ) {
+        Ok(0) => not_found("Share link"),
+        Ok(_) => ok(json!({ "revoked": true })),
+        Err(e) => db_error(e),
+    }
+}
+
+/// `GET /api/shared/{token}`
+///
+/// Read a shared session. Answers 404 for a token that is unknown, revoked or
+/// expired -- all three indistinguishable from outside, so a probe cannot use
+/// the response to tell a real-but-closed link from a guess.
+pub async fn read_shared(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let db = state.db.lock().unwrap();
+    let token = path.into_inner();
+
+    if let Err(e) = ensure_shares_table(&db.conn) {
+        return db_error(e);
+    }
+
+    let now = now_secs();
+    let row: Option<(String, Option<i64>, i64)> = match db
+        .conn
+        .query_row(
+            "SELECT session_id, expires_at, revoked FROM session_shares WHERE token = ?1",
+            params![token],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
+    let Some((session_id, expires_at, revoked)) = row else {
+        return not_found("Share link");
+    };
+    if revoked != 0 || expires_at.is_some_and(|e| e <= now) {
+        return not_found("Share link");
+    }
+
+    let loaded = match load_session(&db.conn, &session_id) {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    let Some((title, provider, raw)) = loaded else {
+        // The session was deleted after the link was made.
+        return not_found("Session");
+    };
+
+    // Best-effort: a failed bookkeeping update must not deny a valid read.
+    let _ = db.conn.execute(
+        "UPDATE session_shares
+         SET access_count = access_count + 1, last_accessed = ?1
+         WHERE token = ?2",
+        params![now, token],
+    );
+
+    let session: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({}));
+    ok(json!({
+        "id": session_id,
+        "title": title,
+        "provider": provider,
+        "messages": super::handlers_simple::extract_messages_from_session(&session),
+        "readOnly": true,
+    }))
+}
+
+// =============================================================================
+// Semantic search
+// =============================================================================
+//
+// Indexing is a separate, explicit step. Embedding every message in a store
+// costs money and time proportional to its size, so a query must never
+// silently trigger one: `GET /search/semantic` searches whatever has been
+// indexed and says how much that was, and `POST /search/semantic/index` is
+// what does the work.
+//
+// Without OPENAI_API_KEY both answer 503 naming the variable, exactly like
+// /chat/completions. There is no lexical fallback here on purpose -- returning
+// substring matches from an endpoint called "semantic" is how the old
+// zero-vector embeddings bug looked from the outside: plausible output that
+// silently was not the thing requested. `/search` already does substring
+// matching and is the honest place for it.
+
+/// Where vectors live. Shares the `embeddings` table from `sql/schema.sql`,
+/// which has existed unused since the schema was written -- nothing in the
+/// tree ever inserted a row.
+fn ensure_embeddings_table(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS embeddings (
+            id TEXT PRIMARY KEY,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            model TEXT NOT NULL,
+            dimensions INTEGER NOT NULL,
+            vector BLOB NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            metadata TEXT,
+            UNIQUE(source_type, source_id, model)
+        );
+        CREATE INDEX IF NOT EXISTS idx_embeddings_source
+            ON embeddings(source_type, model);",
+    )
+}
+
+fn embedding_model() -> String {
+    std::env::var("CHASM_EMBEDDING_MODEL")
+        .unwrap_or_else(|_| "text-embedding-3-small".to_string())
+}
+
+/// Little-endian f32 blob. SQLite has no vector type; this keeps the encoding
+/// in one place so the reader cannot disagree with the writer.
+fn encode_vector(v: &[f32]) -> Vec<u8> {
+    v.iter().flat_map(|f| f.to_le_bytes()).collect()
+}
+
+fn decode_vector(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
+/// Cosine similarity. Returns 0.0 for a zero-magnitude vector rather than
+/// NaN, so one degenerate row cannot poison a whole ranking.
+fn cosine(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+    let (mut dot, mut na, mut nb) = (0.0f32, 0.0f32, 0.0f32);
+    for (x, y) in a.iter().zip(b.iter()) {
+        dot += x * y;
+        na += x * x;
+        nb += y * y;
+    }
+    if na == 0.0 || nb == 0.0 {
+        return 0.0;
+    }
+    dot / (na.sqrt() * nb.sqrt())
+}
+
+struct Embedder {
+    client: reqwest::Client,
+    api_key: String,
+    base_url: String,
+    model: String,
+}
+
+impl Embedder {
+    /// `None` when no key is configured -- the caller turns that into a 503
+    /// rather than proceeding with something that cannot work.
+    fn from_env() -> Option<Self> {
+        let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+        if api_key.trim().is_empty() {
+            return None;
+        }
+        Some(Self {
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(60))
+                .build()
+                .ok()?,
+            api_key,
+            base_url: std::env::var("OPENAI_BASE_URL")
+                .unwrap_or_else(|_| "https://api.openai.com/v1".into())
+                .trim_end_matches('/')
+                .to_string(),
+            model: embedding_model(),
+        })
+    }
+
+    /// One vector per input, in input order.
+    ///
+    /// The order check is not paranoia: the API returns an `index` per item and
+    /// nothing guarantees the array arrives sorted. Trusting position silently
+    /// attaches every embedding to the wrong text, which looks like a working
+    /// index that returns nonsense.
+    async fn embed(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, String> {
+        #[derive(serde::Deserialize)]
+        struct Item {
+            embedding: Vec<f32>,
+            index: usize,
+        }
+        #[derive(serde::Deserialize)]
+        struct Resp {
+            data: Vec<Item>,
+        }
+
+        let response = self
+            .client
+            .post(format!("{}/embeddings", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&json!({ "model": self.model, "input": inputs }))
+            .send()
+            .await
+            .map_err(|e| format!("embedding request failed: {e}"))?;
+
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(format!("embedding API returned {status}: {}", snippet(&text, 200)));
+        }
+
+        let parsed: Resp = serde_json::from_str(&text)
+            .map_err(|e| format!("embedding API returned unparseable JSON: {e}"))?;
+        if parsed.data.len() != inputs.len() {
+            return Err(format!(
+                "embedding API returned {} vectors for {} inputs",
+                parsed.data.len(),
+                inputs.len()
+            ));
+        }
+
+        let mut out = vec![Vec::new(); inputs.len()];
+        for item in parsed.data {
+            if item.index >= out.len() {
+                return Err(format!("embedding API returned out-of-range index {}", item.index));
+            }
+            out[item.index] = item.embedding;
+        }
+        if out.iter().any(|v| v.is_empty()) {
+            return Err("embedding API skipped an input".to_string());
+        }
+        Ok(out)
+    }
+}
+
+/// Sessions rendered to one text per session, for embedding.
+fn indexable_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, session_json FROM sessions ORDER BY updated_at DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |row| {
+        let id: String = row.get(0)?;
+        let title: String = row.get(1)?;
+        let raw: String = row.get(2)?;
+        Ok((id, title, raw))
+    })?;
+    rows.collect()
+}
+
+/// Title plus transcript, truncated. Embedding endpoints have token limits and
+/// a whole session can exceed them; the head of a conversation is the part
+/// that characterises it.
+fn session_text(title: &str, raw: &str) -> String {
+    let session: Value = serde_json::from_str(raw).unwrap_or_else(|_| json!({}));
+    let mut text = String::from(title);
+    if let Some(requests) = session.get("requests").and_then(|r| r.as_array()) {
+        for request in requests {
+            if let Some(t) = request.pointer("/message/text").and_then(|t| t.as_str()) {
+                text.push('\n');
+                text.push_str(t);
+            }
+            if let Some(parts) = request.get("response").and_then(|r| r.as_array()) {
+                for p in parts {
+                    if let Some(v) = p.get("value").and_then(|v| v.as_str()) {
+                        text.push('\n');
+                        text.push_str(v);
+                    }
+                }
+            }
+            if text.chars().count() > 6000 {
+                break;
+            }
+        }
+    }
+    text.chars().take(6000).collect()
+}
+
+#[derive(Deserialize)]
+pub struct IndexBody {
+    /// How many of the most recently updated sessions to consider.
+    #[serde(default)]
+    pub limit: Option<i64>,
+    /// Re-embed sessions that already have a vector for this model.
+    #[serde(default)]
+    pub force: Option<bool>,
+}
+
+/// `POST /api/search/semantic/index`
+///
+/// Embeds sessions that have no vector yet and reports what it did. Runs
+/// synchronously: it is an explicit administrative action, and a caller that
+/// asked to build an index should be told when it finished and what it cost.
+pub async fn build_semantic_index(
+    state: web::Data<AppState>,
+    body: web::Json<IndexBody>,
+) -> impl Responder {
+    let Some(embedder) = Embedder::from_env() else {
+        return fail(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "No embedding model configured. Set OPENAI_API_KEY (and OPENAI_BASE_URL \
+             for a local or self-hosted endpoint) on the server.",
+        );
+    };
+
+    let limit = body.limit.unwrap_or(200).clamp(1, 2000);
+    let force = body.force.unwrap_or(false);
+    let model = embedder.model.clone();
+
+    // Collect the work under the lock, then release it: embedding is a network
+    // round trip and holding the database mutex across it would stall every
+    // other request.
+    let pending: Vec<(String, String)> = {
+        let db = state.db.lock().unwrap();
+        if let Err(e) = ensure_embeddings_table(&db.conn) {
+            return db_error(e);
+        }
+        let sessions = match indexable_sessions(&db.conn, limit) {
+            Ok(s) => s,
+            Err(e) => return db_error(e),
+        };
+        let mut pending = Vec::new();
+        for (id, title, raw) in sessions {
+            if !force {
+                let seen: Option<i64> = db
+                    .conn
+                    .query_row(
+                        "SELECT 1 FROM embeddings
+                         WHERE source_type = 'session' AND source_id = ?1 AND model = ?2",
+                        params![id, model],
+                        |r| r.get(0),
+                    )
+                    .optional()
+                    .unwrap_or(None);
+                if seen.is_some() {
+                    continue;
+                }
+            }
+            pending.push((id, session_text(&title, &raw)));
+        }
+        pending
+    };
+
+    if pending.is_empty() {
+        return ok(json!({
+            "model": model,
+            "indexed": 0,
+            "skipped": 0,
+            "note": "Everything in range already has a vector for this model. Pass force to rebuild.",
+        }));
+    }
+
+    // Batched: one request per session would be needlessly slow and costly.
+    let mut indexed = 0usize;
+    for chunk in pending.chunks(32) {
+        let texts: Vec<String> = chunk.iter().map(|(_, t)| t.clone()).collect();
+        let vectors = match embedder.embed(&texts).await {
+            Ok(v) => v,
+            Err(e) => {
+                // Report partial progress rather than pretending nothing
+                // happened: the rows already written are real.
+                return fail(
+                    StatusCode::BAD_GATEWAY,
+                    format!("{e} (indexed {indexed} before this failure)"),
+                );
+            }
+        };
+
+        let db = state.db.lock().unwrap();
+        for ((id, _), vector) in chunk.iter().zip(vectors.iter()) {
+            let blob = encode_vector(vector);
+            let row_id = uuid::Uuid::new_v4().to_string();
+            if let Err(e) = db.conn.execute(
+                "INSERT INTO embeddings
+                    (id, source_type, source_id, model, dimensions, vector, created_at)
+                 VALUES (?1, 'session', ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(source_type, source_id, model)
+                 DO UPDATE SET vector = excluded.vector,
+                               dimensions = excluded.dimensions,
+                               created_at = excluded.created_at",
+                params![row_id, id, model, vector.len() as i64, blob, now_secs()],
+            ) {
+                return db_error(e);
+            }
+            indexed += 1;
+        }
+    }
+
+    ok(json!({ "model": model, "indexed": indexed }))
+}
+
+#[derive(Deserialize)]
+pub struct SemanticQuery {
+    #[serde(default)]
+    pub q: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+/// `GET /api/search/semantic`
+///
+/// Ranks indexed sessions by cosine similarity to the query. Reports how many
+/// vectors it searched, so an empty result from an empty index is
+/// distinguishable from an empty result from a real one -- the difference
+/// between "nothing matched" and "nothing to match against".
+pub async fn semantic_search(
+    state: web::Data<AppState>,
+    query: web::Query<SemanticQuery>,
+) -> impl Responder {
+    let q = query.q.trim().to_string();
+    if q.is_empty() {
+        return fail(StatusCode::BAD_REQUEST, "q is required");
+    }
+    let limit = query.limit.unwrap_or(10).clamp(1, 100);
+
+    let Some(embedder) = Embedder::from_env() else {
+        return fail(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "No embedding model configured. Set OPENAI_API_KEY (and OPENAI_BASE_URL \
+             for a local or self-hosted endpoint) on the server.",
+        );
+    };
+    let model = embedder.model.clone();
+
+    let rows: Vec<(String, Vec<f32>)> = {
+        let db = state.db.lock().unwrap();
+        if let Err(e) = ensure_embeddings_table(&db.conn) {
+            return db_error(e);
+        }
+        let collected = (|| -> rusqlite::Result<Vec<(String, Vec<f32>)>> {
+            let mut stmt = db.conn.prepare(
+                "SELECT source_id, vector FROM embeddings
+                 WHERE source_type = 'session' AND model = ?1",
+            )?;
+            let it = stmt.query_map(params![model], |row| {
+                let id: String = row.get(0)?;
+                let blob: Vec<u8> = row.get(1)?;
+                Ok((id, decode_vector(&blob)))
+            })?;
+            it.collect()
+        })();
+        match collected {
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        }
+    };
+
+    if rows.is_empty() {
+        return ok(json!({
+            "query": q,
+            "model": model,
+            "searched": 0,
+            "results": [],
+            "note": "No sessions are indexed for this model. POST /api/search/semantic/index first.",
+        }));
+    }
+
+    let query_vector = match embedder.embed(std::slice::from_ref(&q)).await {
+        Ok(v) => v.into_iter().next().unwrap_or_default(),
+        Err(e) => return fail(StatusCode::BAD_GATEWAY, e),
+    };
+
+    let mut scored: Vec<(String, f32)> = rows
+        .into_iter()
+        .map(|(id, v)| {
+            let s = cosine(&query_vector, &v);
+            (id, s)
+        })
+        .collect();
+    let searched = scored.len();
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
+    scored.truncate(limit);
+
+    // Titles for the winners only.
+    let db = state.db.lock().unwrap();
+    let results: Vec<Value> = scored
+        .into_iter()
+        .map(|(id, score)| {
+            let title: Option<String> = db
+                .conn
+                .query_row(
+                    "SELECT title FROM sessions WHERE id = ?1",
+                    params![id],
+                    |r| r.get(0),
+                )
+                .optional()
+                .unwrap_or(None);
+            json!({
+                "type": "session",
+                "id": id,
+                "title": title,
+                "score": score,
+            })
+        })
+        .collect();
+
+    ok(json!({
+        "query": q,
+        "model": model,
+        "searched": searched,
+        "results": results,
+    }))
+}
 /// Add these routes to the server's existing `/api` scope.
 ///
 /// Deliberately *not* a second `web::scope("/api")`. Actix matches scopes in
@@ -1025,6 +2142,22 @@ pub(super) fn attach_write_routes(scope: actix_web::Scope) -> actix_web::Scope {
         .route("/providers/{id}/test", web::post().to(test_provider))
         .route("/chat/completions", web::post().to(chat_completion))
         .route("/harvest", web::post().to(run_harvest))
+        .route("/stats/timeline", web::get().to(timeline_stats))
+        .route("/workspaces", web::post().to(create_workspace))
+        .route("/workspaces/{id}", web::put().to(update_workspace))
+        .route("/workspaces/{id}", web::delete().to(delete_workspace))
+        .route("/sessions/{id}/fork", web::post().to(fork_session))
+        .route("/sessions/merge", web::post().to(merge_sessions))
+        .route("/sessions/{id}/export", web::get().to(export_session))
+        .route("/sessions/{id}/share", web::post().to(create_share))
+        .route("/sessions/{id}/share", web::get().to(list_shares))
+        .route("/shared/{token}", web::get().to(read_shared))
+        .route("/shared/{token}", web::delete().to(revoke_share))
+        .route("/search/semantic", web::get().to(semantic_search))
+        .route(
+            "/search/semantic/index",
+            web::post().to(build_semantic_index),
+        )
 }
 
 /// Test-only: these routes alone, under their own `/api` scope.
@@ -1483,5 +2616,629 @@ mod tests {
         let out = snippet(&text, 200);
         assert!(out.ends_with("..."));
         assert_eq!(out.chars().count(), 203);
+    }
+
+    // ---------------------------------------------------------------------
+    // Timeline
+    // ---------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn the_timeline_groups_sessions_by_day() {
+        let (state, _d) = temp_state("timeline");
+        let app = app!(state);
+        for _ in 0..3 {
+            make_session(&app).await;
+        }
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/stats/timeline?days=7")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_json(resp).await;
+        let points = body["data"]["points"].as_array().expect("points");
+        assert_eq!(points.len(), 1, "three sessions today is one day");
+        assert_eq!(points[0]["sessions"], 3);
+    }
+
+    /// Quiet days are omitted rather than zero-filled, so an empty store reads
+    /// as empty instead of as a run of zeroes it never recorded.
+    #[tokio::test]
+    async fn an_empty_store_has_no_timeline_points() {
+        let (state, _d) = temp_state("timeline-empty");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/stats/timeline")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(body_json(resp).await["data"]["points"], json!([]));
+    }
+
+    // ---------------------------------------------------------------------
+    // Workspaces
+    // ---------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn a_workspace_round_trips_and_deleting_it_keeps_its_sessions() {
+        let (state, _d) = temp_state("ws");
+        let app = app!(state);
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/workspaces")
+                .set_json(json!({ "name": "proj", "path": "/tmp/proj" }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let ws_id = body_json(resp).await["data"]["id"]
+            .as_str()
+            .expect("id")
+            .to_string();
+
+        // A session filed under it.
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions")
+                .set_json(json!({ "title": "s", "workspaceId": ws_id }))
+                .to_request(),
+        )
+        .await;
+        let session_id = body_json(resp).await["data"]["id"]
+            .as_str()
+            .expect("id")
+            .to_string();
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::delete()
+                .uri(&format!("/api/workspaces/{ws_id}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // The conversation must survive; only its filing is undone.
+        let db = state.db.lock().unwrap();
+        let (count, workspace): (i64, Option<String>) = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*), MAX(workspace_id) FROM sessions WHERE id = ?1",
+                params![session_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "deleting a workspace must not delete its sessions");
+        assert!(workspace.is_none(), "the session should be detached");
+    }
+
+    #[tokio::test]
+    async fn a_workspace_needs_a_name() {
+        let (state, _d) = temp_state("ws-noname");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/workspaces")
+                .set_json(json!({ "path": "/tmp/x" }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn updating_a_missing_workspace_is_404() {
+        let (state, _d) = temp_state("ws-404");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/workspaces/ghost")
+                .set_json(json!({ "name": "x" }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    // ---------------------------------------------------------------------
+    // Fork, merge, export
+    // ---------------------------------------------------------------------
+
+    async fn session_with_exchange<S>(app: &S) -> String
+    where
+        S: actix_web::dev::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+    {
+        let id = make_session(app).await;
+        for (role, content) in [("user", "ping"), ("assistant", "pong")] {
+            test::call_service(
+                app,
+                test::TestRequest::post()
+                    .uri(&format!("/api/sessions/{id}/messages"))
+                    .set_json(json!({ "role": role, "content": content }))
+                    .to_request(),
+            )
+            .await;
+        }
+        id
+    }
+
+    /// A fork must be independent: appending to the copy must not touch the
+    /// original, or "fork" would mean "alias".
+    #[tokio::test]
+    async fn a_fork_is_independent_of_its_source() {
+        let (state, _d) = temp_state("fork");
+        let app = app!(state);
+        let source = session_with_exchange(&app).await;
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/sessions/{source}/fork"))
+                .set_json(json!({}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        let fork = body["data"]["id"].as_str().expect("id").to_string();
+        assert_eq!(body["data"]["parentSessionId"], source);
+        assert_eq!(body["data"]["message_count"], 2);
+
+        test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/sessions/{fork}/messages"))
+                .set_json(json!({ "role": "user", "content": "only in the fork" }))
+                .to_request(),
+        )
+        .await;
+
+        let db = state.db.lock().unwrap();
+        let source_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT message_count FROM sessions WHERE id = ?1",
+                params![source],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(source_count, 2, "the source must be untouched");
+    }
+
+    #[tokio::test]
+    async fn forking_a_missing_session_is_404() {
+        let (state, _d) = temp_state("fork404");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions/ghost/fork")
+                .set_json(json!({}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// Merging must not consume its inputs -- an accidental merge has to be
+    /// recoverable.
+    #[tokio::test]
+    async fn merging_leaves_the_sources_intact() {
+        let (state, _d) = temp_state("merge");
+        let app = app!(state);
+        let a = session_with_exchange(&app).await;
+        let b = session_with_exchange(&app).await;
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions/merge")
+                .set_json(json!({ "sessionIds": [a, b], "title": "combined" }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        assert_eq!(body["data"]["message_count"], 4);
+        assert_eq!(body["data"]["title"], "combined");
+
+        let db = state.db.lock().unwrap();
+        let remaining: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM sessions WHERE id IN (?1, ?2)",
+                params![a, b],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining, 2, "merge must not delete its sources");
+    }
+
+    #[tokio::test]
+    async fn merging_fewer_than_two_sessions_is_rejected() {
+        let (state, _d) = temp_state("merge-one");
+        let app = app!(state);
+        let a = make_session(&app).await;
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions/merge")
+                .set_json(json!({ "sessionIds": [a] }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn merging_names_the_session_it_could_not_find() {
+        let (state, _d) = temp_state("merge-missing");
+        let app = app!(state);
+        let a = make_session(&app).await;
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions/merge")
+                .set_json(json!({ "sessionIds": [a, "ghost"] }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn export_renders_markdown_and_json() {
+        let (state, _d) = temp_state("export");
+        let app = app!(state);
+        let id = session_with_exchange(&app).await;
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/sessions/{id}/export?format=markdown"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
+        assert!(body.contains("## User"), "missing user turn:\n{body}");
+        assert!(body.contains("ping"), "missing prompt text");
+        assert!(body.contains("pong"), "missing reply text");
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/sessions/{id}/export?format=json"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_export_format_is_rejected() {
+        let (state, _d) = temp_state("export-bad");
+        let app = app!(state);
+        let id = make_session(&app).await;
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/sessions/{id}/export?format=pdf"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn a_filename_is_stripped_of_path_characters() {
+        assert_eq!(safe_filename("../../etc/passwd"), "etc-passwd");
+        assert_eq!(safe_filename("a/b\\c:d"), "a-b-c-d");
+        assert_eq!(safe_filename("   "), "session");
+        assert!(safe_filename(&"x".repeat(200)).chars().count() <= 60);
+    }
+
+    // ---------------------------------------------------------------------
+    // Sharing
+    // ---------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn a_share_link_reads_the_session_then_stops_when_revoked() {
+        let (state, _d) = temp_state("share");
+        let app = app!(state);
+        let id = session_with_exchange(&app).await;
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/sessions/{id}/share"))
+                .set_json(json!({}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        let token = body["data"]["token"].as_str().expect("token").to_string();
+        assert_eq!(token.len(), 64, "expected 256 bits of hex");
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/shared/{token}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let shared = body_json(resp).await;
+        assert_eq!(shared["data"]["id"], id);
+        assert_eq!(shared["data"]["readOnly"], true);
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::delete()
+                .uri(&format!("/api/shared/{token}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/shared/{token}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::NOT_FOUND,
+            "a revoked link must stop working"
+        );
+    }
+
+    /// Expiry is derived on read. Without that, a link stays live until some
+    /// sweeper runs -- which is exactly the failure the inbox had.
+    #[tokio::test]
+    async fn an_expired_link_is_dead_without_anything_having_swept_it() {
+        let (state, _d) = temp_state("share-exp");
+        let app = app!(state);
+        let id = make_session(&app).await;
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/sessions/{id}/share"))
+                .set_json(json!({ "expiresInHours": 1 }))
+                .to_request(),
+        )
+        .await;
+        let token = body_json(resp).await["data"]["token"]
+            .as_str()
+            .expect("token")
+            .to_string();
+
+        // Backdate it rather than sleeping.
+        {
+            let db = state.db.lock().unwrap();
+            db.conn
+                .execute(
+                    "UPDATE session_shares SET expires_at = ?1 WHERE token = ?2",
+                    params![now_secs() - 60, token],
+                )
+                .unwrap();
+        }
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/shared/{token}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        // And the owner's listing should say so, not show it as active.
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/sessions/{id}/share"))
+                .to_request(),
+        )
+        .await;
+        let rows = body_json(resp).await;
+        assert_eq!(rows["data"][0]["status"], "expired");
+    }
+
+    #[tokio::test]
+    async fn an_unknown_share_token_is_404_not_500() {
+        let (state, _d) = temp_state("share-unknown");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/shared/deadbeef")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn sharing_a_missing_session_is_404() {
+        let (state, _d) = temp_state("share-404");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions/ghost/share")
+                .set_json(json!({}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn a_non_positive_expiry_is_rejected() {
+        let (state, _d) = temp_state("share-badexp");
+        let app = app!(state);
+        let id = make_session(&app).await;
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/sessions/{id}/share"))
+                .set_json(json!({ "expiresInHours": 0 }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn share_tokens_do_not_repeat() {
+        let a = new_share_token();
+        let b = new_share_token();
+        assert_ne!(a, b);
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    // ---------------------------------------------------------------------
+    // Semantic search
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn cosine_is_one_for_identical_vectors_and_zero_for_orthogonal() {
+        assert!((cosine(&[1.0, 0.0], &[1.0, 0.0]) - 1.0).abs() < 1e-6);
+        assert!(cosine(&[1.0, 0.0], &[0.0, 1.0]).abs() < 1e-6);
+        assert!((cosine(&[1.0, 0.0], &[-1.0, 0.0]) + 1.0).abs() < 1e-6);
+    }
+
+    /// A zero vector must score 0, not NaN -- one degenerate row would
+    /// otherwise scramble the whole ranking when sorted.
+    #[test]
+    fn cosine_handles_degenerate_input() {
+        assert_eq!(cosine(&[0.0, 0.0], &[1.0, 1.0]), 0.0);
+        assert_eq!(cosine(&[1.0], &[1.0, 2.0]), 0.0, "length mismatch scores 0");
+    }
+
+    #[test]
+    fn vectors_survive_the_blob_round_trip() {
+        let v = vec![0.5f32, -1.25, 0.0, 3.75];
+        assert_eq!(decode_vector(&encode_vector(&v)), v);
+    }
+
+    #[tokio::test]
+    async fn semantic_search_without_a_key_says_what_to_set() {
+        if !std::env::var("OPENAI_API_KEY")
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            return; // a real key is configured; this contract does not apply
+        }
+        let (state, _d) = temp_state("sem");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/search/semantic?q=hello")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = body_json(resp).await;
+        assert!(body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("OPENAI_API_KEY"));
+    }
+
+    /// It must refuse rather than quietly falling back to substring matching.
+    /// `/search` is where that behaviour lives, and an endpoint called
+    /// "semantic" returning lexical hits is the failure this codebase already
+    /// had once with zero-vector embeddings.
+    #[tokio::test]
+    async fn semantic_search_does_not_fall_back_to_substring_matching() {
+        if !std::env::var("OPENAI_API_KEY")
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            return;
+        }
+        let (state, _d) = temp_state("sem-nofallback");
+        let app = app!(state);
+        test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/sessions")
+                .set_json(json!({ "title": "hello world" }))
+                .to_request(),
+        )
+        .await;
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/search/semantic?q=hello")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "an exact-title match must not be returned as a semantic result"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_empty_semantic_query_is_rejected_before_any_network_call() {
+        let (state, _d) = temp_state("sem-empty");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/search/semantic?q=")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn indexing_without_a_key_says_what_to_set() {
+        if !std::env::var("OPENAI_API_KEY")
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            return;
+        }
+        let (state, _d) = temp_state("sem-index");
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/search/semantic/index")
+                .set_json(json!({}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }

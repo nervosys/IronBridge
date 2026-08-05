@@ -479,10 +479,15 @@ mod tests {
                 continue;
             };
 
-            // The search endpoints require a query; without one they answer
-            // 400 and there is no body to compare.
-            let query = if path.ends_with("search") { "?q=x" } else { "" };
-            let uri = format!("{}{path}{query}", mount_prefix(item));
+            // Supply every query parameter the spec marks required, read from
+            // the spec rather than guessed from the path. A name-based rule
+            // ("paths ending in search need q") silently missed
+            // /search/semantic and reported its correct 400 as drift.
+            let uri = format!(
+                "{}{path}{}",
+                mount_prefix(item),
+                required_query_string(op)
+            );
             let resp = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
 
             // An endpoint that documents a 401 and answers 401 to an
@@ -492,6 +497,14 @@ mod tests {
             // here rather than wrongly reported as drift.
             if resp.status() == StatusCode::UNAUTHORIZED
                 && op.pointer("/responses/401").is_some()
+            {
+                continue;
+            }
+            // Same reasoning for an endpoint that needs a model configured and
+            // says so: 503 here is the documented behaviour of a server
+            // without OPENAI_API_KEY, not a spec that has drifted.
+            if resp.status() == StatusCode::SERVICE_UNAVAILABLE
+                && op.pointer("/responses/503").is_some()
             {
                 continue;
             }
@@ -543,6 +556,35 @@ mod tests {
              A client generated from this spec fails to deserialize these.",
             problems.join("\n  ")
         );
+    }
+
+    /// `?a=x&b=x` for the operation's required query parameters, or empty.
+    ///
+    /// The value does not matter -- these probes only need the request to be
+    /// well-formed enough to reach the handler's success path.
+    fn required_query_string(op: &serde_json::Value) -> String {
+        let Some(params) = op.get("parameters").and_then(|p| p.as_array()) else {
+            return String::new();
+        };
+        let names: Vec<&str> = params
+            .iter()
+            .filter(|p| {
+                p.get("in").and_then(|i| i.as_str()) == Some("query")
+                    && p.get("required").and_then(|r| r.as_bool()) == Some(true)
+            })
+            .filter_map(|p| p.get("name").and_then(|n| n.as_str()))
+            .collect();
+        if names.is_empty() {
+            return String::new();
+        }
+        format!(
+            "?{}",
+            names
+                .iter()
+                .map(|n| format!("{n}=x"))
+                .collect::<Vec<_>>()
+                .join("&")
+        )
     }
 
     fn object_keys(value: &serde_json::Value) -> Option<Vec<String>> {

@@ -10,6 +10,56 @@ This document tracks the development progress and future plans for Chasm (Chat S
 > shippable today. `README.md` carries the same summary under
 > "Implementation status".
 
+## Recently built
+
+The five features previously listed as unbuilt are implemented, with the
+design decisions recorded here because they were made in the code rather than
+handed down:
+
+| Feature | Endpoints | Decision |
+| --- | --- | --- |
+| Timeline stats | `GET /stats/timeline` | Quiet days are omitted, not zero-filled. The store knows nothing about a day on which nothing happened, and inventing rows makes an empty database look like a quiet one. |
+| Workspace writes | `POST /workspaces`, `PUT`/`DELETE /workspaces/{id}` | Deleting a workspace **detaches** its sessions rather than deleting them. Removing a filing record should never destroy the conversations filed under it. |
+| Fork | `POST /sessions/{id}/fork` | The copy is fully independent and records `parentSessionId`. |
+| Merge | `POST /sessions/merge` | Sources are left intact -- an accidental merge has to be recoverable. Each turn carries `mergedFrom`. |
+| Export | `GET /sessions/{id}/export` | `json` or `markdown`, served as an attachment. Filenames are stripped of path characters. |
+| Sharing | `POST`/`GET /sessions/{id}/share`, `GET`/`DELETE /shared/{token}` | **Local only.** A share is a token granting read access *through this server*; nothing is uploaded anywhere. See below. |
+| Semantic search | `GET /search/semantic`, `POST /search/semantic/index` | Indexing is explicit and separate. No lexical fallback. |
+
+### Why sharing is local-only
+
+Chasm holds a person's entire chat history on their own machine. Making
+"share" mean "transmit a conversation to a third party" has privacy
+consequences that belong to whoever runs it, not to whoever wrote the code, so
+the implementation does the useful thing that cannot leak: a revocable,
+optionally-expiring bearer token that reads the session back through this same
+server.
+
+The token is 256 bits from the OS random source rather than a UUID, because it
+is a credential and not an identifier. Expiry is derived on read, so a link is
+dead the moment it expires whether or not anything has swept it. Unknown,
+revoked and expired tokens all answer `404`, so probing cannot distinguish a
+closed link from a guess. A link only works while this server is reachable by
+the recipient -- which is the point.
+
+### What is verified, and what is not
+
+All five are covered by 26 new tests and were exercised against a running
+server: the timeline groups real sessions, a workspace delete leaves its
+sessions behind, a fork diverges from its source, a merge leaves both inputs
+intact, markdown export renders the transcript, and a share link reads, lists
+as active, revokes, and then 404s.
+
+**Semantic search's success path is not verified.** No embedding API was
+reachable from the machine this was written on, so what has been exercised is
+the refusal path (`503` naming `OPENAI_API_KEY`), the vector encode/decode
+round trip, and the cosine arithmetic including its degenerate cases. The
+embed-index-rank path has never run against a real embedding endpoint. It is
+written to fail loudly rather than quietly -- mismatched vector counts and
+out-of-order indices are errors, not silent corruption -- but it has not been
+proven end to end, and the first person with a key should treat it as
+unproven.
+
 ## Known gaps
 
 Verified against the tree as of August 4, 2026:

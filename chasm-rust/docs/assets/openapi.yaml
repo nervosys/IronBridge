@@ -67,6 +67,8 @@ tags:
     description: Agent notifications, messages, permission requests and workflow runs
   - name: Settings
     description: Application settings
+  - name: Sharing
+    description: Local, revocable share links -- readable through this server only
   - name: MCP
     description: Model Context Protocol tool discovery and invocation
   - name: SWE
@@ -1579,6 +1581,314 @@ paths:
         "409":
           description: The request expired before it was answered
 
+  /stats/timeline:
+    get:
+      tags: [Statistics]
+      summary: Sessions and messages per day
+      description: >
+        Days with no activity are omitted rather than zero-filled: the store
+        knows nothing about a day on which nothing happened.
+      operationId: getTimeline
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+            minimum: 1
+            maximum: 365
+      responses:
+        "200":
+          description: Activity per day, oldest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          days:
+                            type: integer
+                          points:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                date:
+                                  type: string
+                                  format: date
+                                sessions:
+                                  type: integer
+                                messages:
+                                  type: integer
+
+  /sessions/merge:
+    post:
+      tags: [Sessions]
+      summary: Merge sessions into a new one
+      description: >
+        Concatenates the named sessions in order. The sources are left intact
+        -- a merge that consumed its inputs would make an accidental merge
+        unrecoverable. Each turn records `mergedFrom`.
+      operationId: mergeSessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionIds]
+              properties:
+                sessionIds:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 2
+                title:
+                  type: string
+      responses:
+        "201":
+          description: Merged session created
+        "400":
+          description: Fewer than two sessions named
+        "404":
+          description: One of the named sessions does not exist
+
+  /sessions/{id}/fork:
+    post:
+      tags: [Sessions]
+      summary: Copy a session
+      description: >
+        The copy is independent; appending to either afterwards does not
+        affect the other. Records its origin in `parentSessionId`.
+      operationId: forkSession
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+      responses:
+        "201":
+          description: Fork created
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/export:
+    get:
+      tags: [Sessions]
+      summary: Download a session
+      description: Served as an attachment. Markdown renders the transcript; json returns the stored blob.
+      operationId: exportSession
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, markdown]
+            default: json
+      responses:
+        "200":
+          description: The session file
+          content:
+            application/json:
+              schema:
+                type: object
+            text/markdown:
+              schema:
+                type: string
+        "400":
+          description: Unsupported format
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/share:
+    post:
+      tags: [Sharing]
+      summary: Create a share link
+      description: >
+        Returns a token granting read access to this session **through this
+        server**. Nothing is uploaded anywhere. The token is a bearer
+        credential: anyone holding it can read the session until it expires or
+        is revoked.
+      operationId: createShare
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInHours:
+                  type: integer
+                  minimum: 1
+                  description: Omit for a link that only revocation can close.
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ShareLinkCreated"
+        "400":
+          description: expiresInHours was not positive
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Sharing]
+      summary: List a session's share links
+      description: Includes revoked and expired links, so they can be audited.
+      operationId: listShares
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Share links, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ShareLink"
+
+  /shared/{token}:
+    get:
+      tags: [Sharing]
+      summary: Read a shared session
+      description: >
+        Requires no authentication -- the token is the credential. Answers 404
+        for a token that is unknown, revoked or expired alike, so a probe
+        cannot tell a closed link from a guess.
+      operationId: readShared
+      parameters:
+        - $ref: "#/components/parameters/shareToken"
+      responses:
+        "200":
+          description: The session, read-only
+        "404":
+          description: Unknown, revoked or expired
+    delete:
+      tags: [Sharing]
+      summary: Revoke a share link
+      description: Revokes rather than deletes, keeping the access record.
+      operationId: revokeShare
+      parameters:
+        - $ref: "#/components/parameters/shareToken"
+      responses:
+        "200":
+          description: Revoked
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /search/semantic:
+    get:
+      tags: [Search]
+      summary: Rank indexed sessions by meaning
+      description: >
+        Cosine similarity against embedded sessions. Only searches what has
+        been indexed -- `searched` reports how many vectors that was, so an
+        empty index is distinguishable from no matches. Never falls back to
+        substring matching; `/search` is where that lives.
+      operationId: semanticSearch
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked matches
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SemanticResults"
+        "400":
+          description: q is missing or empty
+        "502":
+          description: The embedding endpoint was unreachable or errored
+        "503":
+          description: No embedding model configured on the server
+
+  /search/semantic/index:
+    post:
+      tags: [Search]
+      summary: Embed sessions for semantic search
+      description: >
+        Explicit because it costs money and time proportional to the store's
+        size; a query never triggers one. Skips sessions already embedded for
+        the current model unless `force` is set. Reports partial progress if
+        the embedding endpoint fails mid-run.
+      operationId: buildSemanticIndex
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  default: 200
+                  maximum: 2000
+                  description: How many of the most recently updated sessions to consider.
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Indexing finished
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          model:
+                            type: string
+                          indexed:
+                            type: integer
+        "502":
+          description: The embedding endpoint was unreachable or errored
+        "503":
+          description: No embedding model configured on the server
+
   # ===========================================================================
   # Root-mounted scopes.
   #
@@ -2484,6 +2794,12 @@ components:
       required: true
       schema:
         type: string
+    shareToken:
+      name: token
+      in: path
+      required: true
+      schema:
+        type: string
     retentionPolicyId:
       name: policy_id
       in: path
@@ -3050,6 +3366,79 @@ components:
               type: integer
             session_timeout_secs:
               type: integer
+
+    ShareLinkCreated:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Bearer credential. 256 bits, hex encoded.
+        sessionId:
+          type: string
+        path:
+          type: string
+          description: Where to read it on this server.
+        createdAt:
+          type: integer
+          format: int64
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true
+        revoked:
+          type: boolean
+        note:
+          type: string
+
+    ShareLink:
+      type: object
+      properties:
+        token:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+          enum: [active, expired, revoked]
+          description: Derived on read, so a link past its expiry never reads as active.
+        accessCount:
+          type: integer
+        lastAccessed:
+          type: integer
+          format: int64
+          nullable: true
+
+    SemanticResults:
+      type: object
+      properties:
+        query:
+          type: string
+        model:
+          type: string
+        searched:
+          type: integer
+          description: How many vectors were compared. Zero means nothing is indexed.
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+              title:
+                type: string
+                nullable: true
+              score:
+                type: number
+                format: float
+                description: Cosine similarity, -1 to 1.
 
     SystemHealth:
       type: object
