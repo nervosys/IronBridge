@@ -17,7 +17,7 @@ Verified against the tree as of August 4, 2026:
 | Item | Reality |
 | --- | --- |
 | GraphQL API | Mounted and backed by the database. `harvest` and `sync` mutations return errors by design (use the CLI or REST). `tags` is rejected on session updates -- no column exists for it. |
-| REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted; the served API is the 47 routes in `api/mod.rs` plus auth, sync, recording, and websocket. |
+| REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted. The served API is 92 routes across `api/mod.rs` and `api/handlers_write.rs`, plus the root-mounted auth, sync, recording, webhook and websocket scopes. (This said 47 until the write handlers landed; the count is now asserted by `openapi.yaml` and its route test rather than kept by hand.) |
 | SSO/SAML | Signature verification is implemented (samael/libxmlsec1) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Requires libxmlsec1; built on Linux only in CI. |
 | Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
 | AI & Intelligence | Model-backed via `chasm analyze`, against any OpenAI-compatible endpoint. Falls back to the old heuristics without a key, and every result states which produced it. |
