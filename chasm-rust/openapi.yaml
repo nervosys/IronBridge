@@ -71,6 +71,14 @@ tags:
     description: Model Context Protocol tool discovery and invocation
   - name: SWE
     description: Software-engineering project context -- projects, memory and rules
+  - name: Auth
+    description: Accounts, sessions and subscription state (mounted at the server root)
+  - name: Sync
+    description: Change feed and state snapshots (mounted at the server root)
+  - name: Recording
+    description: Live session recording and recovery (mounted at the server root)
+  - name: Webhooks
+    description: Outbound webhook registration and delivery history (mounted at the server root)
 
 paths:
   /health:
@@ -1565,6 +1573,575 @@ paths:
         "409":
           description: The request expired before it was answered
 
+  # ===========================================================================
+  # Root-mounted scopes.
+  #
+  # Everything below is registered on the App, not inside the `/api` scope, so
+  # it does not sit under this document's base URL. Each path therefore carries
+  # a `servers` override pointing at the server root -- OpenAPI 3's way of
+  # saying "this path is not under the global base".
+  #
+  # These scopes are also less consistent than /api: /auth and /sync wrap their
+  # payloads in the usual envelope, /recording and /webhooks answer bare. That
+  # is recorded as it is rather than smoothed over.
+  # ===========================================================================
+
+  /auth/register:
+    servers: &rootServer
+      - url: http://localhost:8787
+        description: Local development server (paths below the server root)
+    post:
+      tags: [Auth]
+      summary: Create an account
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, display_name]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                display_name:
+                  type: string
+      responses:
+        "200":
+          description: Account created and signed in
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AuthSession"
+        "400":
+          description: Invalid request or the email is already registered
+
+  /auth/login:
+    servers: *rootServer
+    post:
+      tags: [Auth]
+      summary: Sign in
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Invalid email or password
+
+  /auth/logout:
+    servers: *rootServer
+    post:
+      tags: [Auth]
+      summary: Sign out
+      operationId: logout
+      responses:
+        "200":
+          description: Signed out
+
+  /auth/refresh:
+    servers: *rootServer
+    post:
+      tags: [Auth]
+      summary: Exchange a refresh token for a new access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: New tokens
+        "401":
+          description: Refresh token invalid or expired
+
+  /auth/profile:
+    servers: *rootServer
+    get:
+      tags: [Auth]
+      summary: Get the signed-in user
+      operationId: getProfile
+      responses:
+        "200":
+          description: The user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+    put:
+      tags: [Auth]
+      summary: Update the signed-in user
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                avatar_url:
+                  type: string
+      responses:
+        "200":
+          description: Updated
+        "401":
+          description: Not authenticated
+
+  /auth/password:
+    servers: *rootServer
+    put:
+      tags: [Auth]
+      summary: Change password
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+      responses:
+        "200":
+          description: Password changed
+        "401":
+          description: Not authenticated
+
+  /auth/subscription:
+    servers: *rootServer
+    get:
+      tags: [Auth]
+      summary: Get subscription state
+      operationId: getSubscription
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Subscription"
+        "401":
+          description: Not authenticated
+
+  /auth/subscription/upgrade:
+    servers: *rootServer
+    post:
+      tags: [Auth]
+      summary: Change subscription tier
+      operationId: upgradeSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tier:
+                  type: string
+      responses:
+        "200":
+          description: Tier changed
+        "401":
+          description: Not authenticated
+
+  /sync/version:
+    servers: *rootServer
+    get:
+      tags: [Sync]
+      summary: Current sync version
+      operationId: getSyncVersion
+      responses:
+        "200":
+          description: Version and event count
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          version:
+                            type: integer
+                          eventCount:
+                            type: integer
+
+  /sync/delta:
+    servers: *rootServer
+    get:
+      tags: [Sync]
+      summary: Changes since a version
+      description: >
+        Note the mixed casing -- `from_version` and `to_version` are
+        snake_case where the rest of the payload is not. That is what the
+        server sends.
+      operationId: getSyncDelta
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Delta
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SyncDelta"
+
+  /sync/snapshot:
+    servers: *rootServer
+    get:
+      tags: [Sync]
+      summary: Full state snapshot
+      operationId: getSyncSnapshot
+      responses:
+        "200":
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SyncSnapshot"
+
+  /sync/event:
+    servers: *rootServer
+    post:
+      tags: [Sync]
+      summary: Record one sync event
+      operationId: postSyncEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Event recorded
+
+  /sync/batch:
+    servers: *rootServer
+    post:
+      tags: [Sync]
+      summary: Record several sync events
+      operationId: postSyncBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Events recorded
+
+  /sync/subscribe:
+    servers: *rootServer
+    get:
+      tags: [Sync]
+      summary: Server-sent event stream of sync changes
+      description: >
+        An SSE stream, not a JSON document -- the response never completes
+        while the client stays connected.
+      operationId: subscribeSync
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /recording/status:
+    servers: *rootServer
+    get:
+      tags: [Recording]
+      summary: Recorder status
+      description: This scope answers bare, without the `{success, data}` envelope.
+      operationId: getRecordingStatus
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingStatus"
+
+  /recording/sessions:
+    servers: *rootServer
+    get:
+      tags: [Recording]
+      summary: Sessions currently being recorded
+      operationId: listRecordingSessions
+      responses:
+        "200":
+          description: Active sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_sessions:
+                    type: array
+                    items:
+                      type: object
+                  total:
+                    type: integer
+
+  /recording/session/{id}:
+    servers: *rootServer
+    get:
+      tags: [Recording]
+      summary: A recorded session
+      operationId: getRecordingSession
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Recorded session
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /recording/session/{id}/recovery:
+    servers: *rootServer
+    get:
+      tags: [Recording]
+      summary: Recovery data for a session
+      operationId: getRecordingRecovery
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Recovery data
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /recording/events:
+    servers: *rootServer
+    post:
+      tags: [Recording]
+      summary: Record events
+      operationId: recordEvents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Recorded
+
+  /recording/snapshot:
+    servers: *rootServer
+    post:
+      tags: [Recording]
+      summary: Store a recording snapshot
+      operationId: storeRecordingSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Stored
+
+  /recording/ws:
+    servers: *rootServer
+    get:
+      tags: [Recording]
+      summary: WebSocket for live recording
+      description: >
+        A WebSocket upgrade, not an HTTP response. A plain GET without the
+        upgrade headers is rejected. Distinct from `/ws`, which carries
+        general real-time updates.
+      operationId: recordingWebSocket
+      responses:
+        "101":
+          description: Switching protocols
+        "400":
+          description: Not a WebSocket handshake
+
+  /webhooks:
+    servers: *rootServer
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      description: This scope answers bare, without the `{success, data}` envelope.
+      operationId: listWebhooks
+      responses:
+        "200":
+          description: Webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+    post:
+      tags: [Webhooks]
+      summary: Register a webhook
+      operationId: createWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Registered
+
+  /webhooks/deliveries:
+    servers: *rootServer
+    get:
+      tags: [Webhooks]
+      summary: Delivery attempts across all webhooks
+      operationId: listAllDeliveries
+      responses:
+        "200":
+          description: Deliveries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /webhooks/{id}:
+    servers: *rootServer
+    get:
+      tags: [Webhooks]
+      summary: Get a webhook
+      operationId: getWebhook
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Webhook
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Webhooks]
+      summary: Update a webhook
+      operationId: updateWebhook
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook
+      operationId: deleteWebhook
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /webhooks/{id}/test:
+    servers: *rootServer
+    post:
+      tags: [Webhooks]
+      summary: Send a test delivery
+      operationId: testWebhook
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Test dispatched
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /webhooks/{id}/deliveries:
+    servers: *rootServer
+    get:
+      tags: [Webhooks]
+      summary: Delivery attempts for one webhook
+      operationId: listWebhookDeliveries
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Deliveries
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   parameters:
     workspaceId:
@@ -2033,6 +2610,136 @@ components:
           nullable: true
         variable_data:
           nullable: true
+
+    # The auth payloads are snake_case, except Subscription, which is not.
+    # Recorded as the server sends them.
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        email_verified:
+          type: boolean
+        subscription_tier:
+          type: string
+        subscription_expires_at:
+          type: integer
+          format: int64
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: integer
+          format: int64
+
+    AuthSession:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Seconds until the access token expires.
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    Subscription:
+      type: object
+      properties:
+        tier:
+          type: string
+        isActive:
+          type: boolean
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+
+    SyncDelta:
+      type: object
+      properties:
+        from_version:
+          type: integer
+        to_version:
+          type: integer
+        created:
+          type: array
+          items:
+            type: object
+        updated:
+          type: array
+          items:
+            type: object
+        deleted:
+          type: array
+          items:
+            type: object
+        timestamp:
+          type: integer
+          format: int64
+
+    SyncSnapshot:
+      type: object
+      properties:
+        version:
+          type: integer
+        timestamp:
+          type: integer
+          format: int64
+        workspaces:
+          type: array
+          items:
+            type: object
+        sessions:
+          type: array
+          items:
+            type: object
+        agents:
+          type: array
+          items:
+            type: object
+        swarms:
+          type: array
+          items:
+            type: object
+        providers:
+          type: array
+          items:
+            type: object
+
+    RecordingStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        active_sessions:
+          type: integer
+        dirty_sessions:
+          type: integer
+        config:
+          type: object
+          properties:
+            max_memory_messages:
+              type: integer
+            persist_interval_secs:
+              type: integer
+            session_timeout_secs:
+              type: integer
 
     SystemHealth:
       type: object

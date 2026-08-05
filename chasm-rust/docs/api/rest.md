@@ -398,6 +398,24 @@ Three endpoints deliberately refuse rather than guess:
 `GET /search` is substring matching over titles and message content. Semantic
 search remains a library capability with no REST route.
 
+### Scopes outside `/api`
+
+`/auth`, `/sync`, `/recording` and `/webhooks` are registered on the App, not
+inside the `/api` scope, so they sit at the server root: `POST /auth/login`,
+not `POST /api/auth/login`. In `openapi.yaml` each of those paths carries a
+path-level `servers` override; the spec tests read it rather than assuming the
+global base.
+
+They are also less uniform than `/api`. `/auth` and `/sync` use the response
+envelope; `/recording` and `/webhooks` answer bare. `/auth` payloads are
+snake_case except the subscription object, which is camelCase. `/sync/delta`
+mixes both in a single object. `/sync/subscribe` is an SSE stream and
+`/recording/ws` is a WebSocket upgrade, so neither is JSON.
+
+The enterprise scopes (`/audit`, `/retention`, `/sso`) are feature-gated and
+are deliberately absent from the spec: documenting them unconditionally would
+fail the route test on a default build.
+
 ### Adding a route
 
 Add it to the **existing** `web::scope("/api")` in `api::mod::configure_routes`

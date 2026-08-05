@@ -83,13 +83,25 @@ operations to 72. Response shapes were read off a running server, including
 creating a SWE project, a memory entry and a rule so their schemas describe
 real records rather than guesses.
 
-Still undocumented: roughly 29 operations in the root-mounted `/auth`,
-`/sync`, `/recording` and `/webhooks` scopes. Those need more than a copy of
-this work, because the spec's single base URL is `.../api` and those scopes
-live at the server root -- they need per-path `servers` overrides, and the
-route test needs to understand them. The enterprise scopes (`/audit`,
-`/retention`, `/sso`) are feature-gated and would fail the route test on a
-default build, so they need separate handling again.
+The root-mounted scopes are documented too. `/auth`, `/sync`, `/recording` and
+`/webhooks` are registered on the App rather than inside the `/api` scope, so
+each of their paths carries an OpenAPI 3 path-level `servers` override
+pointing at the server root; both spec tests honour that override rather than
+blindly prefixing `/api`. The spec is now 80 paths and 102 operations, up from
+32 when this work started.
+
+Those scopes are less consistent than `/api`, and the spec records it rather
+than smoothing it over: `/auth` and `/sync` use the envelope, `/recording` and
+`/webhooks` answer bare. `/auth` payloads are snake_case except `Subscription`,
+which is camelCase, and `/sync/delta` mixes both in one object.
+
+Two are not JSON at all and are documented as such: `/sync/subscribe` is an SSE
+stream and `/recording/ws` is a WebSocket upgrade.
+
+Still undocumented: the enterprise scopes (`/audit`, `/retention`, `/sso`).
+They are `#[cfg(feature = "enterprise")]`, so documenting them unconditionally
+would fail the route test on a default build. They need the spec, or the test,
+to become feature-aware -- a design decision rather than more transcription.
 
 ### The spec described responses the server has never sent
 

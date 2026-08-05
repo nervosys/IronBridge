@@ -230,11 +230,28 @@ mod tests {
         let db = ChatDatabase::open(&db_path).expect("open db");
         let state = Data::new(AppState::new(db, db_path));
 
+        // The root-mounted scopes must be here too, or every path carrying a
+        // `servers` override would be reported unrouted -- a failure of the
+        // harness rather than of the spec.
+        let sync_state = Data::new(super::super::create_sync_state());
+        let recording_state = Data::new(super::super::create_recording_state());
+        let webhook_state = Data::new(std::sync::Arc::new(
+            super::super::WebhookState::new(),
+        ));
+
         let app = test::init_service(
             App::new()
                 .app_data(state)
+                .app_data(sync_state)
+                .app_data(recording_state)
                 .configure(configure_inbox_routes)
                 .configure(super::super::configure_routes)
+                .configure(super::super::configure_sync_routes)
+                .configure(super::super::configure_auth_routes)
+                .configure(super::super::configure_recording_routes)
+                .configure(move |cfg| {
+                    super::super::configure_webhook_routes(cfg, webhook_state.clone())
+                })
                 .default_service(web::to(|| async { HttpResponse::ImATeapot().finish() })),
         )
         .await;
@@ -255,6 +272,7 @@ mod tests {
             // Path parameters match any value, so the placeholder only has to
             // be non-empty -- routing does not care whether the record exists.
             let concrete = substitute_params(path);
+            let prefix = mount_prefix(item);
             let methods = item.as_object().expect("path item is a map");
 
             for method in methods.keys() {
@@ -274,7 +292,7 @@ mod tests {
                     // parameters, summary, description and friends
                     _ => continue,
                 };
-                let uri = format!("/api{concrete}");
+                let uri = format!("{prefix}{concrete}");
                 let resp = test::call_service(&app, req.uri(&uri).to_request()).await;
                 if resp.status() == UNROUTED {
                     unrouted.push(format!("{} {}", method.to_uppercase(), uri));
@@ -315,6 +333,22 @@ mod tests {
         const SOURCE: &str = include_str!("handlers_write.rs");
         let needle = format!("\"{path}\", web::{method}()");
         SOURCE.contains(&needle)
+    }
+
+    /// Where a documented path is actually mounted.
+    ///
+    /// The document's base URL ends in `/api`, but `/auth`, `/sync`,
+    /// `/recording` and `/webhooks` are registered on the App rather than
+    /// inside the `/api` scope. Those carry a path-level `servers` override
+    /// pointing at the server root, which is how OpenAPI 3 expresses a path
+    /// that does not sit under the global base. Honour it here, or the probe
+    /// would ask for `/api/auth/login` and correctly find nothing.
+    fn mount_prefix(item: &serde_json::Value) -> &'static str {
+        if item.get("servers").is_some() {
+            ""
+        } else {
+            "/api"
+        }
     }
 
     fn substitute_params(path: &str) -> String {
@@ -367,11 +401,25 @@ mod tests {
         let db = ChatDatabase::open(&db_path).expect("open");
         let state = Data::new(AppState::new(db, db_path));
 
+        let sync_state = Data::new(super::super::create_sync_state());
+        let recording_state = Data::new(super::super::create_recording_state());
+        let webhook_state = Data::new(std::sync::Arc::new(
+            super::super::WebhookState::new(),
+        ));
+
         let app = test::init_service(
             App::new()
                 .app_data(state)
+                .app_data(sync_state)
+                .app_data(recording_state)
                 .configure(configure_inbox_routes)
-                .configure(super::super::configure_routes),
+                .configure(super::super::configure_routes)
+                .configure(super::super::configure_sync_routes)
+                .configure(super::super::configure_auth_routes)
+                .configure(super::super::configure_recording_routes)
+                .configure(move |cfg| {
+                    super::super::configure_webhook_routes(cfg, webhook_state.clone())
+                }),
         )
         .await;
 
@@ -393,8 +441,19 @@ mod tests {
             // The search endpoints require a query; without one they answer
             // 400 and there is no body to compare.
             let query = if path.ends_with("search") { "?q=x" } else { "" };
-            let uri = format!("/api{path}{query}");
+            let uri = format!("{}{path}{query}", mount_prefix(item));
             let resp = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
+
+            // An endpoint that documents a 401 and answers 401 to an
+            // unauthenticated probe is behaving exactly as described. Reading
+            // its success body would need a real session, which this test
+            // deliberately does not build -- so its 200 shape is unverified
+            // here rather than wrongly reported as drift.
+            if resp.status() == StatusCode::UNAUTHORIZED
+                && op.pointer("/responses/401").is_some()
+            {
+                continue;
+            }
             if resp.status() != StatusCode::OK {
                 problems.push(format!("GET {uri} answered {}", resp.status()));
                 continue;
