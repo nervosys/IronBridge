@@ -57,6 +57,10 @@ tags:
     description: AI agent management
   - name: Swarms
     description: Agent swarm orchestration
+  - name: Chat
+    description: Chat completions
+  - name: Search
+    description: Search operations
   - name: Statistics
     description: Usage statistics
   - name: Inbox
@@ -155,6 +159,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SessionList"
+    post:
+      tags: [Sessions]
+      summary: Create a session
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSession"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
 
   /sessions/{id}:
     get:
@@ -170,6 +191,102 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Sessions]
+      summary: Delete a session
+      description: Also removes the session's rows from the normalized message table.
+      operationId: deleteSession
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Session deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/messages:
+    post:
+      tags: [Sessions]
+      summary: Append a message to a session
+      description: >
+        An assistant message attaches to the trailing prompt rather than
+        starting a new exchange, matching how sessions are read back.
+      operationId: createMessage
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMessage"
+      responses:
+        "201":
+          description: Message appended
+        "400":
+          description: Empty content or unsupported role
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/checkpoints:
+    get:
+      tags: [Sessions]
+      summary: List checkpoints for a session
+      operationId: listCheckpoints
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Checkpoints, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Checkpoint"
+    post:
+      tags: [Sessions]
+      summary: Create a checkpoint
+      operationId: createCheckpoint
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckpoint"
+      responses:
+        "201":
+          description: Checkpoint created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Checkpoint"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/commits:
+    get:
+      tags: [Sessions]
+      summary: Git commits for the session's workspace
+      description: >
+        Empty when the workspace is not a git repository or git is unavailable;
+        that is the honest answer, not an error.
+      operationId: listSessionCommits
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Commits, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GitCommit"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -271,6 +388,157 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StatsOverview"
+
+  /stats/providers:
+    get:
+      tags: [Statistics]
+      summary: Per-provider session and message counts
+      description: >
+        Token counts are reported as 0 where the store holds none, rather than
+        being estimated.
+      operationId: getProviderStats
+      responses:
+        "200":
+          description: Counts keyed by provider
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/ProviderStats"
+
+  /search:
+    get:
+      tags: [Search]
+      summary: Search sessions and messages
+      description: >
+        Substring matching over session titles and, where the normalized
+        message table exists, message content. Not semantic search -- there is
+        no embedding index behind this route.
+      operationId: search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+      responses:
+        "200":
+          description: Matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchResult"
+
+  /swarms/{id}:
+    put:
+      tags: [Swarms]
+      summary: Update a swarm
+      description: Omitted fields keep their stored value.
+      operationId: updateSwarm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSwarm"
+      responses:
+        "200":
+          description: Swarm updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /providers/{id}/test:
+    post:
+      tags: [Providers]
+      summary: Test provider connectivity
+      description: >
+        Only locally hosted providers (ollama, lmstudio) expose an endpoint this
+        server can reach; anything else returns 501 rather than a success that
+        tested nothing.
+      operationId: testProvider
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider reachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  latency:
+                    type: integer
+                    description: Round-trip time in milliseconds
+        "501":
+          description: No connectivity test exists for this provider
+        "502":
+          description: Provider unreachable
+
+  /chat/completions:
+    post:
+      tags: [Chat]
+      summary: Proxy a completion to the configured model
+      description: >
+        Forwards to an OpenAI-compatible endpoint configured with
+        OPENAI_API_KEY and OPENAI_BASE_URL. Returns 503 when no model is
+        configured; it never substitutes a canned reply.
+      operationId: chatCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCompletionRequest"
+      responses:
+        "200":
+          description: Completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletionResponse"
+        "400":
+          description: No messages supplied
+        "502":
+          description: Model unreachable or returned an error
+        "503":
+          description: No model configured on the server
+
+  /harvest:
+    post:
+      tags: [System]
+      summary: Run an incremental harvest
+      description: >
+        Walks the filesystem for new sessions. Can take minutes; runs on a
+        blocking thread.
+      operationId: runHarvest
+      responses:
+        "200":
+          description: Harvest finished
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HarvestResult"
 
   /settings:
     get:
@@ -444,6 +712,213 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
+    CreateSession:
+      type: object
+      properties:
+        title:
+          type: string
+        provider:
+          type: string
+        workspaceId:
+          type: string
+        workspacePath:
+          type: string
+        model:
+          type: string
+
+    CreateMessage:
+      type: object
+      required: [content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+          default: user
+        content:
+          type: string
+        modelId:
+          type: string
+
+    Checkpoint:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        messageId:
+          type: string
+          nullable: true
+        gitCommit:
+          type: string
+          nullable: true
+        gitBranch:
+          type: string
+          nullable: true
+        createdAt:
+          type: integer
+          format: int64
+        metadata:
+          type: object
+          nullable: true
+
+    CreateCheckpoint:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        messageId:
+          type: string
+        gitCommit:
+          type: string
+        gitBranch:
+          type: string
+        metadata:
+          type: object
+
+    GitCommit:
+      type: object
+      properties:
+        hash:
+          type: string
+        shortHash:
+          type: string
+        message:
+          type: string
+        author:
+          type: string
+        email:
+          type: string
+        timestamp:
+          type: integer
+          format: int64
+        branch:
+          type: string
+        sessionId:
+          type: string
+          nullable: true
+        messageId:
+          type: string
+          nullable: true
+
+    SearchResult:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [session, message, workspace]
+        id:
+          type: string
+        title:
+          type: string
+        snippet:
+          type: string
+        sessionId:
+          type: string
+        provider:
+          type: string
+        workspaceId:
+          type: string
+        timestamp:
+          type: integer
+          format: int64
+
+    ProviderStats:
+      type: object
+      properties:
+        sessions:
+          type: integer
+        messages:
+          type: integer
+        tokens:
+          type: integer
+
+    UpdateSwarm:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        orchestration:
+          type: string
+        agents:
+          type: array
+          items:
+            type: object
+        maxIterations:
+          type: integer
+        status:
+          type: string
+
+    ChatCompletionRequest:
+      type: object
+      required: [messages]
+      properties:
+        model:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        temperature:
+          type: number
+          format: float
+        maxTokens:
+          type: integer
+
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        model:
+          type: string
+        content:
+          type: string
+        message:
+          $ref: "#/components/schemas/ChatMessage"
+        finishReason:
+          type: string
+        usage:
+          type: object
+          nullable: true
+
+    HarvestResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sessionsImported:
+          type: integer
+        messagesImported:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+
     Error:
       type: object
       properties:

@@ -2063,7 +2063,7 @@ pub struct CreateSwarmRequest {
     pub max_iterations: Option<i32>,
 }
 
-fn init_swarms_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+pub(super) fn init_swarms_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS swarms (
             id TEXT PRIMARY KEY,

@@ -243,7 +243,14 @@ mod tests {
         let paths = spec["paths"].as_object().expect("spec has paths");
         assert!(!paths.is_empty());
 
+        // Probing a route means executing its handler -- there is no
+        // match-without-invoke in actix. These do real work (a filesystem-wide
+        // harvest taking minutes), so they are asserted by registration
+        // instead, below, rather than by being called.
+        const TOO_EXPENSIVE_TO_PROBE: &[(&str, &str)] = &[("post", "/harvest")];
+
         let mut unrouted = Vec::new();
+        let mut skipped = Vec::new();
         for (path, item) in paths {
             // Path parameters match any value, so the placeholder only has to
             // be non-empty -- routing does not care whether the record exists.
@@ -251,6 +258,13 @@ mod tests {
             let methods = item.as_object().expect("path item is a map");
 
             for method in methods.keys() {
+                if TOO_EXPENSIVE_TO_PROBE
+                    .iter()
+                    .any(|(m, p)| *m == method && *p == path)
+                {
+                    skipped.push(format!("{} {}", method.to_uppercase(), path));
+                    continue;
+                }
                 let req = match method.as_str() {
                     "get" => test::TestRequest::get(),
                     "post" => test::TestRequest::post(),
@@ -273,6 +287,34 @@ mod tests {
             "openapi.yaml documents paths the server does not route: {unrouted:#?}\n\
              Either implement them or remove them from the spec."
         );
+
+        // Not silent: an endpoint excluded from the probe must still be
+        // accounted for, or "the suite passed" would quietly stop meaning
+        // "everything documented is reachable".
+        assert_eq!(
+            skipped.len(),
+            TOO_EXPENSIVE_TO_PROBE.len(),
+            "the skip list is stale -- it names operations the spec no longer \
+             documents. Skipped: {skipped:?}"
+        );
+        for (method, path) in TOO_EXPENSIVE_TO_PROBE {
+            assert!(
+                registered_in_write_routes(method, path),
+                "{} {path} is skipped by the probe but not registered either",
+                method.to_uppercase()
+            );
+        }
+    }
+
+    /// Registration check for the handful of routes the probe cannot call.
+    ///
+    /// Reads the source rather than the router because actix exposes no route
+    /// introspection; it is weaker than an actual request, which is exactly why
+    /// the skip list is kept to one entry.
+    fn registered_in_write_routes(method: &str, path: &str) -> bool {
+        const SOURCE: &str = include_str!("handlers_write.rs");
+        let needle = format!("\"{path}\", web::{method}()");
+        SOURCE.contains(&needle)
     }
 
     fn substitute_params(path: &str) -> String {

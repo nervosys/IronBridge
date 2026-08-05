@@ -381,13 +381,39 @@ no longer emits methods that 404 on every call. The removed list, and why each
 one went, is kept in
 [`ROADMAP.md`](../../../ROADMAP.md#rest-surface-removed-from-the-spec-in-200).
 
-Notably, the REST API is **read-only** for workspaces, sessions and providers.
-The `POST`, `PUT` and `DELETE` operations the spec used to advertise on those
-paths were never implemented; use the CLI to mutate them.
+Sessions are now writable over REST -- create, delete, append messages,
+checkpoints and commits all exist. Workspaces and providers remain
+**read-only**: the `POST`, `PUT` and `DELETE` operations the spec once
+advertised on those paths were never implemented, and use the CLI instead.
+
+Three endpoints deliberately refuse rather than guess:
+
+- `POST /chat/completions` returns `503` when no model is configured, naming
+  `OPENAI_API_KEY`. It never substitutes a canned reply.
+- `POST /providers/{id}/test` returns `501` for any provider whose endpoint
+  this server cannot reach, rather than a `success: true` that tested nothing.
+- `GET /stats/providers` reports `tokens: 0` where the store holds no token
+  counts, rather than estimating one.
+
+`GET /search` is substring matching over titles and message content. Semantic
+search remains a library capability with no REST route.
+
+### Adding a route
+
+Add it to the **existing** `web::scope("/api")` in `api::mod::configure_routes`
+(the write handlers do this via `handlers_write::attach_write_routes`). Do not
+register a second `web::scope("/api")`.
+
+Actix matches scopes in registration order, and a scope whose prefix matches
+handles the request even when no resource inside it matches -- it does not fall
+through to a later scope with the same prefix. A second `/api` scope registered
+first therefore shadows every route in the other one, and the entire API
+returns 404. `/api/inbox` is the exception that proves the rule: its prefix is
+narrower, so it can only shadow paths that are genuinely its own.
 
 `api::docs::every_documented_path_is_actually_routed` keeps this honest: it
 builds the real app behind a sentinel `default_service` and fails if any
-documented operation reaches it. `published_docs_copy_matches_the_served_spec`
+documented operation reaches it. It caught exactly this shadowing bug. `published_docs_copy_matches_the_served_spec`
 covers the other half -- `docs/assets/openapi.yaml`, which MkDocs publishes, is
 a copy of the root spec and had silently drifted a full release behind it.
 

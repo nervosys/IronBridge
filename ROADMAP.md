@@ -32,27 +32,41 @@ generated client compiled fine and then 404'd at runtime. They were removed so
 the spec describes only what is served. Recorded here because deleting them
 from the spec also deletes the only record that they were once intended:
 
+Seven of them were **implemented afterwards** rather than left deleted, once
+the web-client audit below showed the UI depended on them: `POST /sessions`,
+`DELETE /sessions/{id}`, `POST /sessions/{id}/messages`, `GET /search`,
+`GET /stats/providers`, `POST /chat/completions` and `POST /harvest`. Those
+rows are marked below; the rest stay out of the spec.
+
+(The twelve endpoints in the web-client section are these seven plus five that
+had never been documented at all: `GET` and `POST /sessions/{id}/checkpoints`,
+`GET /sessions/{id}/commits`, `PUT /swarms/{id}` and
+`POST /providers/{id}/test`.)
+
 | Removed | Methods | Note |
 | --- | --- | --- |
 | `/system/vacuum`, `/system/cache/clear` | POST | No maintenance endpoints exist. |
 | `/workspaces/discover`, `/workspaces/{id}/refresh` | POST | Discovery is CLI-only (`chasm detect`). |
 | `/sessions/merge`, `/sessions/{id}/archive`, `/sessions/{id}/fork` | POST | Merge exists as a library and CLI capability, not over REST. |
 | `/sessions/{id}/export` | GET | Export is CLI-only. |
-| `/sessions/{id}/messages` | GET, POST | Messages come back embedded in `GET /sessions/{id}`. |
-| `/providers/{id}`, `/providers/{id}/health`, `/providers/{id}/models` | GET, PUT, DELETE | Only `GET /providers` and `GET /system/providers/health` are served. |
-| `/chat/completions` | POST | Chasm is not an inference proxy. |
-| `/harvest`, `/sync` | POST | Harvest is CLI-only; sync is served as `/sync/*` subroutes, never as bare `POST /sync`. |
-| `/search`, `/search/sessions`, `/search/semantic` | GET | Search is `GET /sessions/search?q=`. Semantic search is a library capability with no REST route. |
-| `/stats/providers`, `/stats/timeline` | GET | Only `/stats` and `/stats/overview` are served. |
+| `/sessions/{id}/messages` | GET | GET stays out; messages come back embedded in `GET /sessions/{id}`. **POST is now implemented.** |
+| `/providers/{id}`, `/providers/{id}/health`, `/providers/{id}/models` | GET, PUT, DELETE | Only `GET /providers` and `GET /system/providers/health` are served. **`POST /providers/{id}/test` is now implemented.** |
+| `/chat/completions` | POST | **Now implemented** as a proxy to a configured OpenAI-compatible endpoint. Chasm still hosts no inference of its own. |
+| `/sync` | POST | Served as `/sync/*` subroutes, never as bare `POST /sync`. |
+| `/harvest` | POST | **Now implemented** -- runs the incremental CLI harvest. |
+| `/search/sessions`, `/search/semantic` | GET | Semantic search remains a library capability with no REST route. **`GET /search` is now implemented** as substring matching. |
+| `/stats/timeline` | GET | No timeline data is stored. **`GET /stats/providers` is now implemented.** |
 
-Seven further operations were removed from paths that are otherwise served. The
-REST API is read-only for these resources; writes go through the CLI:
+Seven further operations were removed from paths that are otherwise served.
+Workspaces and providers stay read-only over REST; sessions did not, because the
+Chat page cannot function without writing them:
 
-| Removed | Kept on the same path |
+| Removed | Status |
 | --- | --- |
-| `POST /workspaces`, `PUT /workspaces/{id}`, `DELETE /workspaces/{id}` | `GET` |
-| `POST /sessions`, `PUT /sessions/{id}`, `DELETE /sessions/{id}` | `GET` |
-| `POST /providers` | `GET` |
+| `POST /workspaces`, `PUT /workspaces/{id}`, `DELETE /workspaces/{id}` | Still removed; `GET` only. |
+| `PUT /sessions/{id}` | Still removed. |
+| `POST /sessions`, `DELETE /sessions/{id}` | **Now implemented.** |
+| `POST /providers` | Still removed; `GET` only. |
 
 Determined from route registrations in `src/api/`, not by probing: this server
 answers `404` for a method mismatch as well as for an unknown path, so a `404`
@@ -61,9 +75,10 @@ alone cannot tell the two apart. `api::docs` now enforces this with
 sentinel `default_service` and fails if any documented operation reaches it --
 that test is what found the seven above.
 
-The inverse gap still stands -- `/swarms` and the `/swe/projects/*` tree are
-served but undocumented, as are the `/auth`, `/sync`, `/recording`, `/webhooks`,
-`/audit`, `/retention`, and `/sso` scopes.
+The inverse gap narrowed but still stands: `GET`/`POST /swarms` and the
+`/swe/projects/*` tree are served but undocumented, as are the `/auth`,
+`/sync`, `/recording`, `/webhooks`, `/audit`, `/retention`, and `/sso` scopes.
+(`PUT /swarms/{id}` is now both served and documented.)
 
 ### Web UI calling endpoints that do not exist
 
@@ -76,24 +91,53 @@ path against an endpoint that does exist (`/api/providers/health`, served as
 Separately, `connectWebSocket` pointed at `/api/ws` when `/ws` is mounted at the
 server root, so the socket never connected at all. Fixed.
 
-Twelve remain, and these are live -- the UI calls them and gets a 404. They are
-listed rather than removed because each one is a product decision, not cleanup:
+The remaining twelve were live -- the UI called them and got a 404 -- and are
+now **implemented** in `src/api/handlers_write.rs`:
 
-| Page | Broken by | Endpoint |
-| --- | --- | --- |
-| `pages/Chat.tsx` | `useCreateSession`, `useDeleteSession` | `POST /sessions`, `DELETE /sessions/{id}` |
-| `pages/Chat.tsx` | `useSessionCheckpoints`, `useCreateCheckpoint` | `GET`/`POST /sessions/{id}/checkpoints` |
-| `pages/Chat.tsx` | `useSessionCommits` | `GET /sessions/{id}/commits` |
-| `pages/Chat.tsx` | `useCreateMessage` | `POST /sessions/{id}/messages` |
-| `pages/Chat.tsx` | `useChatCompletion` | `POST /chat/completions` |
-| `pages/Harvest.tsx` | `useHarvest` | `POST /harvest` |
-| `pages/Accounts.tsx` | `useTestProvider`, `useProviderStats` | `POST /providers/{id}/test`, `GET /stats/providers` |
-| `pages/Agents.tsx` | `useUpdateSwarm` | `PUT /swarms/{id}` |
-| `components/SemanticSearchPanel.tsx` | `useSearch` | `GET /search` (server has `GET /sessions/search?q=`) |
+| Endpoint | Notes |
+| --- | --- |
+| `POST /sessions`, `DELETE /sessions/{id}` | Delete also clears the session's `messages_v2` rows; that table has no cascade. |
+| `POST /sessions/{id}/messages` | Appends into `session_json.requests`. An assistant reply attaches to the trailing prompt instead of opening a new exchange, so the read path pairs them correctly. |
+| `GET`/`POST /sessions/{id}/checkpoints` | Backed by `api_checkpoints`, created on demand -- the harvest schema predates checkpoints. |
+| `GET /sessions/{id}/commits` | Shells out to `git` in the session's workspace. Empty, not an error, when there is no repository. |
+| `GET /search` | Substring over titles and `messages_v2` content. Explicitly *not* semantic: there is no embedding index behind REST. |
+| `GET /stats/providers` | Real counts. Tokens report 0 rather than an estimate, because an invented number renders in the UI as fact. |
+| `PUT /swarms/{id}` | `COALESCE` per field, so a partial update does not null the rest. |
+| `POST /providers/{id}/test` | Measures a real request for locally hosted providers. Anything else returns 501 rather than a success that tested nothing. |
+| `POST /chat/completions` | Proxies an OpenAI-compatible endpoint via `OPENAI_API_KEY`/`OPENAI_BASE_URL`. Without a key it returns 503 and says what to set -- never a canned reply. |
+| `POST /harvest` | Runs the incremental CLI harvest on a blocking thread; counts come from differencing the session table. |
 
-The Chat page is the worst affected: creating a session, sending a message and
-getting a completion all 404, so it cannot hold a conversation at all. Either
-these endpoints get implemented or the features come out of the UI.
+All twelve are in `openapi.yaml` and covered by 20 tests.
+
+Four bugs surfaced while building this, all pre-existing:
+
+- `ChatDatabase::initialize` detected a harvest database with
+  `SELECT 1 FROM sessions LIMIT 1`, which returns no rows on an *empty* harvest
+  table. A harvested-but-empty database was therefore treated as fresh, the full
+  `sql/schema.sql` ran against harvest-shaped tables, and
+  `CREATE INDEX idx_sessions_model ON sessions(model)` failed against a table
+  with no `model` column -- so opening it errored outright. Both checks now read
+  `sqlite_master`/`pragma_table_info` instead of probing for rows.
+- The API server never ensured the harvest schema existed. Every read handler
+  parses `sessions.session_json`, which only that schema has, so on a machine
+  that had never run `chasm harvest` the session endpoints failed on a missing
+  column. `start_server` now creates the harvest tables before opening.
+- The harvest schema has no `workspaces` table, but `GET /api/workspaces`
+  joins one -- so that endpoint answered `500` against every harvested
+  install. Opening a harvest database now creates it, alongside the `agents`
+  and `metadata` tables it already backfilled.
+- Registering the write handlers in their own `web::scope("/api")` shadowed
+  every read route: actix matches scopes in registration order, and a matching
+  scope handles the request even when no resource inside it matches, so it
+  never falls through to a second scope with the same prefix. The whole API
+  returned 404. They now join the existing scope via
+  `handlers_write::attach_write_routes`. This was caught by
+  `every_documented_path_is_actually_routed`, not by hand.
+
+Verified against a running server on a fresh database, not only by unit test:
+all nineteen read routes answer 200, a message written through
+`POST /sessions/{id}/messages` is visible in `GET /sessions/{id}`, and the
+three refusal paths return 404/501/503 rather than a false success.
 
 Two smaller things found in the same pass and left alone: `ShareSessionModal` is
 a fully tested component that nothing renders, and `GET /api/system/providers/health`

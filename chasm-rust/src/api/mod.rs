@@ -32,6 +32,7 @@ mod enterprise_store;
 mod graphql;
 mod handlers_simple;
 mod handlers_swe;
+mod handlers_write;
 pub mod inbox;
 mod recording;
 #[cfg(feature = "enterprise")]
@@ -109,7 +110,12 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
     eprintln!("[DEBUG] Configuring routes...");
 
     // Routes for /api
+    //
+    // The write endpoints join this same scope rather than registering their
+    // own: a second `web::scope("/api")` would match the prefix first and
+    // shadow everything here.
     cfg.service(
+        handlers_write::attach_write_routes(
         web::scope("/api")
             .route("/health", web::get().to(health_check))
             .route("/workspaces", web::get().to(list_workspaces))
@@ -211,6 +217,7 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
                 "/swe/projects/{project_id}/rules/{id}",
                 web::delete().to(handlers_swe::delete_rule),
             ),
+        ),
     );
 
     eprintln!("[DEBUG] Added /api routes");
@@ -222,6 +229,16 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     let db_path = PathBuf::from(&config.database_path);
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
+    }
+
+    // Before opening: every handler here reads `sessions.session_json`, which
+    // only the harvest schema defines. If this runs on a database that has
+    // never been harvested into, `ChatDatabase::open` applies `sql/schema.sql`
+    // -- a sessions table with no such column -- and the session endpoints
+    // fail on every request. Creating the harvest tables first makes `open`
+    // take its harvest-compatible branch and leave them alone.
+    if let Err(e) = crate::commands::create_harvest_database(&db_path) {
+        eprintln!("[WARN] Failed to ensure harvest schema: {}", e);
     }
 
     // Open database

@@ -10,7 +10,8 @@ use crate::database::ChatDatabase;
 /// Shared application state
 pub struct AppState {
     pub db: Mutex<ChatDatabase>,
-    #[allow(dead_code)] // Reserved for future use (e.g., reopening database)
+    /// Used by `POST /api/harvest` so the harvest writes into the database
+    /// this server opened rather than the CLI's default path.
     pub db_path: PathBuf,
 }
 

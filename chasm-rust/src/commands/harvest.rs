@@ -1453,7 +1453,14 @@ fn get_db_path(path: Option<&str>) -> Result<PathBuf> {
     Ok(std::env::current_dir()?.join("chat_sessions.db"))
 }
 
-fn create_harvest_database(path: &Path) -> Result<()> {
+/// Create the harvest-format tables if they are absent.
+///
+/// Idempotent, and also called by the API server at startup: every read
+/// handler parses `sessions.session_json`, which only the harvest schema has.
+/// On a machine that has never run `chasm harvest`, `ChatDatabase::open` would
+/// otherwise apply `sql/schema.sql` instead and every session endpoint would
+/// fail on a missing column.
+pub(crate) fn create_harvest_database(path: &Path) -> Result<()> {
     let conn = Connection::open(path)?;
 
     // Use larger page size and WAL mode for better performance with large session data

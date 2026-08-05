@@ -249,16 +249,32 @@ impl ChatDatabase {
     /// Initialize the database schema
     fn initialize(&self) -> Result<()> {
         // Check if this is a harvest database (has sessions but missing 'model' column)
-        // If so, skip full schema initialization to preserve harvest data
-        let is_harvest_db = self
+        // If so, skip full schema initialization to preserve harvest data.
+        //
+        // Both checks read the schema rather than the data. Probing with
+        // `SELECT 1 FROM sessions LIMIT 1` looks equivalent but returns
+        // `QueryReturnedNoRows` on an empty table, so a harvested-but-empty
+        // database was classified as "not harvest"; the full schema then ran
+        // against harvest-shaped tables and died on
+        // `CREATE INDEX idx_sessions_model ON sessions(model)`.
+        let sessions_table_exists = self
             .conn
-            .query_row("SELECT 1 FROM sessions LIMIT 1", [], |_| Ok(true))
-            .is_ok();
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sessions'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
 
-        let has_model_column = self
-            .conn
-            .query_row("SELECT model FROM sessions LIMIT 1", [], |_| Ok(true))
-            .is_ok();
+        let has_model_column = sessions_table_exists
+            && self
+                .conn
+                .prepare("SELECT * FROM pragma_table_info('sessions') WHERE name = 'model'")
+                .and_then(|mut stmt| stmt.exists([]))
+                .unwrap_or(false);
+
+        let is_harvest_db = sessions_table_exists;
 
         // Only apply full schema if not a harvest database, or if it's a fresh database
         if !is_harvest_db || has_model_column {
@@ -295,6 +311,24 @@ impl ChatDatabase {
                     tools TEXT,
                     sub_agents TEXT,
                     is_active INTEGER DEFAULT 1,
+                    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    metadata TEXT
+                );
+
+                -- Workspaces. The harvest schema has no such table, so
+                -- `GET /api/workspaces` answered 500 against every harvest
+                -- database: its query joins `workspaces` and the table simply
+                -- was not there. Columns match sql/schema.sql so the two
+                -- schemas stay compatible.
+                CREATE TABLE IF NOT EXISTS workspaces (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    path TEXT,
+                    provider TEXT,
+                    provider_workspace_id TEXT,
+                    git_repo TEXT,
+                    git_branch TEXT,
                     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                     updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                     metadata TEXT
@@ -1007,5 +1041,94 @@ mod tests {
         let stats = db.get_statistics().unwrap();
         assert_eq!(stats.workspace_count, 0);
         assert_eq!(stats.session_count, 0);
+    }
+}
+
+#[cfg(test)]
+mod harvest_compat_tests {
+    use super::*;
+
+    /// A harvest database is detected by schema, not by content.
+    ///
+    /// Probing with `SELECT 1 FROM sessions LIMIT 1` returns no rows on an
+    /// empty harvest table, so an empty one was classified as fresh; the full
+    /// schema then ran against harvest-shaped tables and
+    /// `CREATE INDEX idx_sessions_model ON sessions(model)` failed outright.
+    #[test]
+    fn an_empty_harvest_database_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty-harvest.db");
+        crate::commands::create_harvest_database(&path).unwrap();
+
+        // No rows inserted -- this is the case that used to fail.
+        let db = ChatDatabase::open(&path).expect("an empty harvest db must open");
+
+        let has_blob: bool = db
+            .conn
+            .prepare("SELECT * FROM pragma_table_info('sessions') WHERE name = 'session_json'")
+            .and_then(|mut s| s.exists([]))
+            .unwrap();
+        assert!(
+            has_blob,
+            "opening must not replace the harvest sessions table"
+        );
+    }
+
+    /// Every table the REST API reads must exist after opening a harvest
+    /// database. `workspaces` was missing, so `GET /api/workspaces` answered
+    /// 500 against every harvested install.
+    #[test]
+    fn a_harvest_database_has_the_tables_the_api_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("api-tables.db");
+        crate::commands::create_harvest_database(&path).unwrap();
+        let db = ChatDatabase::open(&path).unwrap();
+
+        for table in ["sessions", "workspaces", "agents", "metadata"] {
+            let exists: bool = db
+                .conn
+                .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1")
+                .and_then(|mut s| s.exists([table]))
+                .unwrap();
+            assert!(exists, "harvest database is missing `{table}`");
+        }
+    }
+
+    /// The join `GET /api/workspaces` runs must actually execute.
+    #[test]
+    fn the_workspaces_join_runs_against_a_harvest_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ws-join.db");
+        crate::commands::create_harvest_database(&path).unwrap();
+        let db = ChatDatabase::open(&path).unwrap();
+
+        let rows: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM (
+                    SELECT w.id FROM workspaces w
+                    LEFT JOIN sessions s ON w.id = s.workspace_id
+                    GROUP BY w.id
+                 )",
+                [],
+                |r| r.get(0),
+            )
+            .expect("the workspaces join must execute");
+        assert_eq!(rows, 0);
+    }
+
+    /// A genuinely fresh database still gets the full schema.
+    #[test]
+    fn a_fresh_database_still_gets_the_full_schema() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fresh.db");
+        let db = ChatDatabase::open(&path).unwrap();
+
+        let has_model: bool = db
+            .conn
+            .prepare("SELECT * FROM pragma_table_info('sessions') WHERE name = 'model'")
+            .and_then(|mut s| s.exists([]))
+            .unwrap();
+        assert!(has_model, "a fresh database should use sql/schema.sql");
     }
 }

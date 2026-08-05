@@ -135,11 +135,32 @@ chasm api serve --port 8787
 | GET    | `/api/sessions`        | List sessions             |
 | GET    | `/api/sessions/:id`    | Get session with messages |
 | GET    | `/api/sessions/search` | Full-text search (`?q=`)  |
+| GET    | `/api/search`          | Search sessions and messages (`?q=`) |
 | GET    | `/api/stats`           | Database statistics       |
+| GET    | `/api/stats/providers` | Per-provider counts       |
 
-There is no `POST /api/harvest`; harvesting runs through the CLI
-(`chasm harvest run`). It was listed here previously but no such route is
-registered.
+Writes:
+
+| Method | Endpoint                          | Description                     |
+| ------ | --------------------------------- | ------------------------------- |
+| POST   | `/api/sessions`                   | Create a session                |
+| DELETE | `/api/sessions/:id`               | Delete a session                |
+| POST   | `/api/sessions/:id/messages`      | Append a message                |
+| GET    | `/api/sessions/:id/checkpoints`   | List checkpoints                |
+| POST   | `/api/sessions/:id/checkpoints`   | Create a checkpoint             |
+| GET    | `/api/sessions/:id/commits`       | Git commits for the workspace   |
+| PUT    | `/api/swarms/:id`                 | Update a swarm                  |
+| POST   | `/api/providers/:id/test`         | Test provider connectivity      |
+| POST   | `/api/chat/completions`           | Proxy a completion              |
+| POST   | `/api/harvest`                    | Run an incremental harvest      |
+
+`POST /api/chat/completions` needs `OPENAI_API_KEY` (and `OPENAI_BASE_URL` for a
+local endpoint) set on the server; without one it returns 503 rather than a
+canned reply. `POST /api/providers/:id/test` only knows how to reach locally
+hosted providers and returns 501 for the rest.
+
+The full spec is `chasm-rust/openapi.yaml`, and a test asserts every path in it
+is actually routed.
 
 ### GraphQL
 
