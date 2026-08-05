@@ -65,6 +65,40 @@ The inverse gap still stands -- `/swarms` and the `/swe/projects/*` tree are
 served but undocumented, as are the `/auth`, `/sync`, `/recording`, `/webhooks`,
 `/audit`, `/retention`, and `/sso` scopes.
 
+### Web UI calling endpoints that do not exist
+
+Auditing `chasm-web/src/api/client.ts` against the route registrations found 51
+client methods aimed at endpoints the server does not route. Of those, 38 had no
+consumer anywhere and were deleted along with their 24 hooks; one was a wrong
+path against an endpoint that does exist (`/api/providers/health`, served as
+`/api/system/providers/health`) and was corrected; 12 remain live.
+
+Separately, `connectWebSocket` pointed at `/api/ws` when `/ws` is mounted at the
+server root, so the socket never connected at all. Fixed.
+
+Twelve remain, and these are live -- the UI calls them and gets a 404. They are
+listed rather than removed because each one is a product decision, not cleanup:
+
+| Page | Broken by | Endpoint |
+| --- | --- | --- |
+| `pages/Chat.tsx` | `useCreateSession`, `useDeleteSession` | `POST /sessions`, `DELETE /sessions/{id}` |
+| `pages/Chat.tsx` | `useSessionCheckpoints`, `useCreateCheckpoint` | `GET`/`POST /sessions/{id}/checkpoints` |
+| `pages/Chat.tsx` | `useSessionCommits` | `GET /sessions/{id}/commits` |
+| `pages/Chat.tsx` | `useCreateMessage` | `POST /sessions/{id}/messages` |
+| `pages/Chat.tsx` | `useChatCompletion` | `POST /chat/completions` |
+| `pages/Harvest.tsx` | `useHarvest` | `POST /harvest` |
+| `pages/Accounts.tsx` | `useTestProvider`, `useProviderStats` | `POST /providers/{id}/test`, `GET /stats/providers` |
+| `pages/Agents.tsx` | `useUpdateSwarm` | `PUT /swarms/{id}` |
+| `components/SemanticSearchPanel.tsx` | `useSearch` | `GET /search` (server has `GET /sessions/search?q=`) |
+
+The Chat page is the worst affected: creating a session, sending a message and
+getting a completion all 404, so it cannot hold a conversation at all. Either
+these endpoints get implemented or the features come out of the UI.
+
+Two smaller things found in the same pass and left alone: `ShareSessionModal` is
+a fully tested component that nothing renders, and `GET /api/system/providers/health`
+returns hardcoded provider statuses rather than checking anything.
+
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
 and TUI are complete and covered by 780 passing tests on Windows. Earlier
 figures in the 880–960 range double-counted: `main.rs` re-declared modules that

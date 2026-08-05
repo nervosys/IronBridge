@@ -14,7 +14,6 @@ import type {
     Agent,
     Swarm,
     GitCommit,
-    GitRepository,
     Statistics,
     SearchResult,
     SessionFilter,
@@ -24,12 +23,9 @@ import type {
     ChatCompletionRequest,
     ChatCompletionResponse,
     StreamChunk,
-    ImportSource,
     ImportResult,
-    ExportOptions,
     AppSettings,
     ProviderAccount,
-    ShareLink,
 } from './types';
 
 // =============================================================================
@@ -171,40 +167,6 @@ export const workspaces = {
         return get(`/api/workspaces/${encodeURIComponent(id)}`);
     },
 
-    /**
-     * Get workspace by path
-     */
-    async getByPath(path: string): Promise<ApiResponse<Workspace>> {
-        return get('/api/workspaces/by-path', { path });
-    },
-
-    /**
-     * Discover workspaces from VS Code storage
-     */
-    async discover(): Promise<ApiResponse<Workspace[]>> {
-        return post('/api/workspaces/discover');
-    },
-
-    /**
-     * Refresh workspace sessions
-     */
-    async refresh(id: string): Promise<ApiResponse<Workspace>> {
-        return post(`/api/workspaces/${encodeURIComponent(id)}/refresh`);
-    },
-
-    /**
-     * Link workspace to current project
-     */
-    async link(id: string, projectPath: string): Promise<ApiResponse<Workspace>> {
-        return post(`/api/workspaces/${encodeURIComponent(id)}/link`, { projectPath });
-    },
-
-    /**
-     * Get workspace git info
-     */
-    async gitInfo(id: string): Promise<ApiResponse<GitRepository>> {
-        return get(`/api/workspaces/${encodeURIComponent(id)}/git`);
-    },
 };
 
 // =============================================================================
@@ -240,58 +202,10 @@ export const sessions = {
         return post('/api/sessions', data);
     },
 
-    /**
-     * Update a session
-     */
-    async update(id: string, data: Partial<Session>): Promise<ApiResponse<Session>> {
-        return put(`/api/sessions/${encodeURIComponent(id)}`, data);
-    },
-
-    /**
-     * Delete a session
-     */
     async delete(id: string): Promise<ApiResponse<void>> {
         return del(`/api/sessions/${encodeURIComponent(id)}`);
     },
 
-    /**
-     * Archive/unarchive a session
-     */
-    async archive(id: string, archived: boolean = true): Promise<ApiResponse<Session>> {
-        return post(`/api/sessions/${encodeURIComponent(id)}/archive`, { archived });
-    },
-
-    /**
-     * Fork a session (create a copy)
-     */
-    async fork(id: string, fromMessageId?: string): Promise<ApiResponse<Session>> {
-        return post(`/api/sessions/${encodeURIComponent(id)}/fork`, { fromMessageId });
-    },
-
-    /**
-     * Merge sessions
-     */
-    async merge(sessionIds: string[], title: string): Promise<ApiResponse<Session>> {
-        return post('/api/sessions/merge', { sessionIds, title });
-    },
-
-    /**
-     * Export session
-     */
-    async export(id: string, format: ExportOptions['format']): Promise<ApiResponse<Blob>> {
-        const response = await fetch(`${config.baseUrl}/api/sessions/${encodeURIComponent(id)}/export?format=${format}`, {
-            headers: config.headers,
-        });
-        if (!response.ok) {
-            return { success: false, error: { code: 'EXPORT_FAILED', message: 'Export failed' } };
-        }
-        const blob = await response.blob();
-        return { success: true, data: blob };
-    },
-
-    /**
-     * Get session checkpoints
-     */
     async checkpoints(id: string): Promise<ApiResponse<Checkpoint[]>> {
         return get(`/api/sessions/${encodeURIComponent(id)}/checkpoints`);
     },
@@ -303,23 +217,6 @@ export const sessions = {
         return post(`/api/sessions/${encodeURIComponent(id)}/checkpoints`, data);
     },
 
-    /**
-     * Get session share links
-     */
-    async shareLinks(id: string): Promise<ApiResponse<ShareLink[]>> {
-        return get(`/api/sessions/${encodeURIComponent(id)}/share`);
-    },
-
-    /**
-     * Create share link
-     */
-    async share(id: string, provider: string, expiresIn?: number): Promise<ApiResponse<ShareLink>> {
-        return post(`/api/sessions/${encodeURIComponent(id)}/share`, { provider, expiresIn });
-    },
-
-    /**
-     * Get git commits linked to session
-     */
     async commits(id: string): Promise<ApiResponse<GitCommit[]>> {
         return get(`/api/sessions/${encodeURIComponent(id)}/commits`);
     },
@@ -330,52 +227,10 @@ export const sessions = {
 // =============================================================================
 
 export const messages = {
-    /**
-     * Get messages for a session
-     */
-    async list(sessionId: string, limit?: number, before?: string): Promise<ApiResponse<Message[]>> {
-        return get(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { limit, before });
-    },
-
-    /**
-     * Get a single message
-     */
-    async get(sessionId: string, messageId: string): Promise<ApiResponse<Message>> {
-        return get(`/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`);
-    },
-
-    /**
-     * Add a message to a session
-     */
     async create(sessionId: string, data: Partial<Message>): Promise<ApiResponse<Message>> {
         return post(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, data);
     },
 
-    /**
-     * Update a message
-     */
-    async update(sessionId: string, messageId: string, data: Partial<Message>): Promise<ApiResponse<Message>> {
-        return put(
-            `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`,
-            data
-        );
-    },
-
-    /**
-     * Delete a message
-     */
-    async delete(sessionId: string, messageId: string): Promise<ApiResponse<void>> {
-        return del(`/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`);
-    },
-
-    /**
-     * Regenerate an assistant message
-     */
-    async regenerate(sessionId: string, messageId: string): Promise<ApiResponse<Message>> {
-        return post(
-            `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/regenerate`
-        );
-    },
 };
 
 // =============================================================================
@@ -390,58 +245,11 @@ export const providers = {
         return get('/api/providers');
     },
 
-    /**
-     * Get provider by ID
-     */
-    async get(id: string): Promise<ApiResponse<Provider>> {
-        return get(`/api/providers/${encodeURIComponent(id)}`);
-    },
-
-    /**
-     * Create/register a provider
-     */
-    async create(data: Partial<Provider>): Promise<ApiResponse<Provider>> {
-        return post('/api/providers', data);
-    },
-
-    /**
-     * Update provider configuration
-     */
-    async update(id: string, data: Partial<Provider>): Promise<ApiResponse<Provider>> {
-        return put(`/api/providers/${encodeURIComponent(id)}`, data);
-    },
-
-    /**
-     * Delete a provider
-     */
-    async delete(id: string): Promise<ApiResponse<void>> {
-        return del(`/api/providers/${encodeURIComponent(id)}`);
-    },
-
-    /**
-     * Health check for all providers
-     */
     async healthCheck(): Promise<ApiResponse<ProviderHealth[]>> {
-        return get('/api/providers/health');
+        // Served as /api/system/providers/health; there is no /api/providers/health.
+        return get('/api/system/providers/health');
     },
 
-    /**
-     * Health check for specific provider
-     */
-    async checkHealth(id: string): Promise<ApiResponse<ProviderHealth>> {
-        return get(`/api/providers/${encodeURIComponent(id)}/health`);
-    },
-
-    /**
-     * List models available from a provider
-     */
-    async models(id: string): Promise<ApiResponse<string[]>> {
-        return get(`/api/providers/${encodeURIComponent(id)}/models`);
-    },
-
-    /**
-     * Test provider connection
-     */
     async test(id: string): Promise<ApiResponse<{ success: boolean; latency: number }>> {
         return post(`/api/providers/${encodeURIComponent(id)}/test`);
     },
@@ -487,12 +295,6 @@ export const agents = {
         return del(`/api/agents/${encodeURIComponent(id)}`);
     },
 
-    /**
-     * Clone an agent
-     */
-    async clone(id: string): Promise<ApiResponse<Agent>> {
-        return post(`/api/agents/${encodeURIComponent(id)}/clone`);
-    },
 };
 
 // =============================================================================
@@ -535,33 +337,6 @@ export const swarms = {
         return del(`/api/swarms/${encodeURIComponent(id)}`);
     },
 
-    /**
-     * Start swarm execution
-     */
-    async start(id: string, input: string): Promise<ApiResponse<{ runId: string }>> {
-        return post(`/api/swarms/${encodeURIComponent(id)}/start`, { input });
-    },
-
-    /**
-     * Pause swarm execution
-     */
-    async pause(id: string): Promise<ApiResponse<void>> {
-        return post(`/api/swarms/${encodeURIComponent(id)}/pause`);
-    },
-
-    /**
-     * Resume swarm execution
-     */
-    async resume(id: string): Promise<ApiResponse<void>> {
-        return post(`/api/swarms/${encodeURIComponent(id)}/resume`);
-    },
-
-    /**
-     * Stop swarm execution
-     */
-    async stop(id: string): Promise<ApiResponse<void>> {
-        return post(`/api/swarms/${encodeURIComponent(id)}/stop`);
-    },
 };
 
 // =============================================================================
@@ -632,26 +407,6 @@ export const search = {
         return get('/api/search', { q, types: types?.join(','), limit });
     },
 
-    /**
-     * Search sessions
-     */
-    async sessions(q: string, filter?: SessionFilter): Promise<ApiResponse<PaginatedResponse<Session>>> {
-        return get('/api/search/sessions', { q, ...filter as Record<string, string | number | boolean | undefined> });
-    },
-
-    /**
-     * Search messages
-     */
-    async messages(q: string, sessionId?: string, limit?: number): Promise<ApiResponse<Message[]>> {
-        return get('/api/search/messages', { q, sessionId, limit });
-    },
-
-    /**
-     * Semantic search (vector similarity)
-     */
-    async semantic(q: string, limit?: number): Promise<ApiResponse<SearchResult[]>> {
-        return get('/api/search/semantic', { q, limit });
-    },
 };
 
 // =============================================================================
@@ -666,26 +421,10 @@ export const stats = {
         return get('/api/stats/overview');
     },
 
-    /**
-     * Get statistics for a specific workspace
-     */
-    async workspace(id: string): Promise<ApiResponse<Statistics>> {
-        return get(`/api/stats/workspace/${encodeURIComponent(id)}`);
-    },
-
-    /**
-     * Get provider usage statistics
-     */
     async providers(): Promise<ApiResponse<Record<string, { sessions: number; messages: number; tokens: number }>>> {
         return get('/api/stats/providers');
     },
 
-    /**
-     * Get usage over time
-     */
-    async timeline(days?: number): Promise<ApiResponse<{ date: string; sessions: number; messages: number }[]>> {
-        return get('/api/stats/timeline', { days });
-    },
 };
 
 // =============================================================================
@@ -693,45 +432,10 @@ export const stats = {
 // =============================================================================
 
 export const transfer = {
-    /**
-     * Import sessions from a source
-     */
-    async import(source: ImportSource): Promise<ApiResponse<ImportResult>> {
-        return post('/api/import', source);
-    },
-
-    /**
-     * Batch export sessions
-     */
-    async export(options: ExportOptions): Promise<ApiResponse<Blob>> {
-        const response = await fetch(`${config.baseUrl}/api/export`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...config.headers,
-            },
-            body: JSON.stringify(options),
-        });
-        if (!response.ok) {
-            return { success: false, error: { code: 'EXPORT_FAILED', message: 'Export failed' } };
-        }
-        const blob = await response.blob();
-        return { success: true, data: blob };
-    },
-
-    /**
-     * Harvest sessions from providers
-     */
     async harvest(providers?: string[]): Promise<ApiResponse<ImportResult>> {
         return post('/api/harvest', { providers });
     },
 
-    /**
-     * Sync with cloud storage
-     */
-    async sync(direction: 'push' | 'pull'): Promise<ApiResponse<{ synced: number; conflicts: number }>> {
-        return post('/api/sync', { direction });
-    },
 };
 
 // =============================================================================
@@ -824,19 +528,6 @@ export const system = {
         return get('/api/system/info');
     },
 
-    /**
-     * Clear cache
-     */
-    async clearCache(): Promise<ApiResponse<void>> {
-        return post('/api/system/cache/clear');
-    },
-
-    /**
-     * Vacuum database
-     */
-    async vacuum(): Promise<ApiResponse<{ before: number; after: number }>> {
-        return post('/api/system/vacuum');
-    },
 };
 
 // =============================================================================
@@ -858,7 +549,9 @@ export function connectWebSocket(onMessage?: WebSocketHandler): () => void {
     }
 
     if (!ws || ws.readyState === WebSocket.CLOSED) {
-        const wsUrl = config.baseUrl?.replace(/^http/, 'ws') + '/api/ws';
+        // `/ws` is mounted at the server root, not under `/api` -- the socket
+        // never connected while this pointed at `/api/ws`.
+        const wsUrl = config.baseUrl?.replace(/^http/, 'ws') + '/ws';
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {

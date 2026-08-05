@@ -232,27 +232,6 @@ export function useWorkspace(id: string | null, options?: UseQueryOptions): UseQ
     return useQuery(queryFn, [id], { ...options, enabled: !!id && options?.enabled !== false });
 }
 
-/**
- * Discover workspaces mutation
- */
-export function useDiscoverWorkspaces() {
-    return useMutation(() => workspaces.discover());
-}
-
-/**
- * Refresh workspace mutation
- */
-export function useRefreshWorkspace() {
-    return useMutation((id: string) => workspaces.refresh(id));
-}
-
-// =============================================================================
-// Session Hooks
-// =============================================================================
-
-/**
- * Fetch sessions with filtering
- */
 export function useSessions(filter?: SessionFilter, options?: UseQueryOptions): UseQueryResult<PaginatedResponse<Session>> {
     const filterKey = JSON.stringify(filter);
     // See useWorkspaces: key on the serialized filter, not the object identity.
@@ -284,44 +263,10 @@ export function useCreateSession() {
     return useMutation((data: Partial<Session>) => sessions.create(data));
 }
 
-/**
- * Update session mutation
- */
-export function useUpdateSession() {
-    return useMutation(({ id, data }: { id: string; data: Partial<Session> }) => sessions.update(id, data));
-}
-
-/**
- * Delete session mutation
- */
 export function useDeleteSession() {
     return useMutation((id: string) => sessions.delete(id));
 }
 
-/**
- * Archive session mutation
- */
-export function useArchiveSession() {
-    return useMutation(({ id, archived = true }: { id: string; archived?: boolean }) => sessions.archive(id, archived));
-}
-
-/**
- * Fork session mutation
- */
-export function useForkSession() {
-    return useMutation(({ id, fromMessageId }: { id: string; fromMessageId?: string }) => sessions.fork(id, fromMessageId));
-}
-
-/**
- * Merge sessions mutation
- */
-export function useMergeSessions() {
-    return useMutation(({ sessionIds, title }: { sessionIds: string[]; title: string }) => sessions.merge(sessionIds, title));
-}
-
-/**
- * Fetch session checkpoints
- */
 export function useSessionCheckpoints(sessionId: string | null, options?: UseQueryOptions): UseQueryResult<Checkpoint[]> {
     const queryFn = useCallback(() => sessions.checkpoints(sessionId!), [sessionId]);
     return useQuery(queryFn, [sessionId], { ...options, enabled: !!sessionId && options?.enabled !== false });
@@ -348,17 +293,6 @@ export function useSessionCommits(sessionId: string | null, options?: UseQueryOp
 // Message Hooks
 // =============================================================================
 
-/**
- * Fetch messages for a session
- */
-export function useMessages(sessionId: string | null, limit?: number, options?: UseQueryOptions): UseQueryResult<Message[]> {
-    const queryFn = useCallback(() => messages.list(sessionId!, limit), [sessionId, limit]);
-    return useQuery(queryFn, [sessionId, limit], { ...options, enabled: !!sessionId && options?.enabled !== false });
-}
-
-/**
- * Create message mutation
- */
 export function useCreateMessage() {
     return useMutation(({ sessionId, data }: { sessionId: string; data: Partial<Message> }) =>
         messages.create(sessionId, data)
@@ -368,30 +302,6 @@ export function useCreateMessage() {
 /**
  * Update message mutation
  */
-export function useUpdateMessage() {
-    return useMutation(({ sessionId, messageId, data }: { sessionId: string; messageId: string; data: Partial<Message> }) =>
-        messages.update(sessionId, messageId, data)
-    );
-}
-
-/**
- * Delete message mutation
- */
-export function useDeleteMessage() {
-    return useMutation(({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
-        messages.delete(sessionId, messageId)
-    );
-}
-
-/**
- * Regenerate message mutation
- */
-export function useRegenerateMessage() {
-    return useMutation(({ sessionId, messageId }: { sessionId: string; messageId: string }) =>
-        messages.regenerate(sessionId, messageId)
-    );
-}
-
 // =============================================================================
 // Provider Hooks
 // =============================================================================
@@ -404,65 +314,15 @@ export function useProviders(options?: UseQueryOptions): UseQueryResult<Provider
     return useQuery(queryFn, [], options);
 }
 
-/**
- * Fetch a single provider
- */
-export function useProvider(id: string | null, options?: UseQueryOptions): UseQueryResult<Provider> {
-    const queryFn = useCallback(() => providers.get(id!), [id]);
-    return useQuery(queryFn, [id], { ...options, enabled: !!id && options?.enabled !== false });
-}
-
-/**
- * Provider health check
- */
 export function useProviderHealth(options?: UseQueryOptions): UseQueryResult<ProviderHealth[]> {
     const queryFn = useCallback(() => providers.healthCheck(), []);
     return useQuery(queryFn, [], { ...options, refetchInterval: options?.refetchInterval ?? 30000 });
 }
 
-/**
- * Create provider mutation
- */
-export function useCreateProvider() {
-    return useMutation((data: Partial<Provider>) => providers.create(data));
-}
-
-/**
- * Update provider mutation
- */
-export function useUpdateProvider() {
-    return useMutation(({ id, data }: { id: string; data: Partial<Provider> }) => providers.update(id, data));
-}
-
-/**
- * Delete provider mutation
- */
-export function useDeleteProvider() {
-    return useMutation((id: string) => providers.delete(id));
-}
-
-/**
- * Test provider mutation
- */
 export function useTestProvider() {
     return useMutation((id: string) => providers.test(id));
 }
 
-/**
- * Fetch provider models
- */
-export function useProviderModels(id: string | null, options?: UseQueryOptions): UseQueryResult<string[]> {
-    const queryFn = useCallback(() => providers.models(id!), [id]);
-    return useQuery(queryFn, [id], { ...options, enabled: !!id && options?.enabled !== false });
-}
-
-// =============================================================================
-// MCP Hooks
-// =============================================================================
-
-/**
- * Fetch the tools CSM exposes over MCP
- */
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
@@ -509,20 +369,6 @@ export function useDeleteAgent() {
     return useMutation((id: string) => agents.delete(id));
 }
 
-/**
- * Clone agent mutation
- */
-export function useCloneAgent() {
-    return useMutation((id: string) => agents.clone(id));
-}
-
-// =============================================================================
-// Swarm Hooks
-// =============================================================================
-
-/**
- * Fetch all swarms
- */
 export function useSwarms(options?: UseQueryOptions): UseQueryResult<Swarm[]> {
     const queryFn = useCallback(() => swarms.list(), []);
     return useQuery(queryFn, [], options);
@@ -557,41 +403,6 @@ export function useDeleteSwarm() {
     return useMutation((id: string) => swarms.delete(id));
 }
 
-/**
- * Start swarm mutation
- */
-export function useStartSwarm() {
-    return useMutation(({ id, input }: { id: string; input: string }) => swarms.start(id, input));
-}
-
-/**
- * Pause swarm mutation
- */
-export function usePauseSwarm() {
-    return useMutation((id: string) => swarms.pause(id));
-}
-
-/**
- * Resume swarm mutation
- */
-export function useResumeSwarm() {
-    return useMutation((id: string) => swarms.resume(id));
-}
-
-/**
- * Stop swarm mutation
- */
-export function useStopSwarm() {
-    return useMutation((id: string) => swarms.stop(id));
-}
-
-// =============================================================================
-// Search Hooks
-// =============================================================================
-
-/**
- * Full-text search
- */
 export function useSearch(query: string, types?: string[], options?: UseQueryOptions): UseQueryResult<SearchResult[]> {
     const typesKey = JSON.stringify(types);
     // See useWorkspaces: `types` is an array literal with fresh identity each
@@ -604,20 +415,6 @@ export function useSearch(query: string, types?: string[], options?: UseQueryOpt
     });
 }
 
-/**
- * Semantic search
- */
-export function useSemanticSearch(query: string, limit?: number, options?: UseQueryOptions): UseQueryResult<SearchResult[]> {
-    const queryFn = useCallback(() => search.semantic(query, limit), [query, limit]);
-    return useQuery(queryFn, [query, limit], {
-        ...options,
-        enabled: query.length > 0 && options?.enabled !== false,
-    });
-}
-
-/**
- * Debounced search hook for live search
- */
 export function useDebouncedSearch(delay = 300) {
     const [query, setQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -649,37 +446,11 @@ export function useStatistics(options?: UseQueryOptions): UseQueryResult<Statist
     return useQuery(queryFn, [], { ...options, refetchInterval: options?.refetchInterval ?? 60000 });
 }
 
-/**
- * Fetch workspace statistics
- */
-export function useWorkspaceStats(id: string | null, options?: UseQueryOptions): UseQueryResult<Statistics> {
-    const queryFn = useCallback(() => stats.workspace(id!), [id]);
-    return useQuery(queryFn, [id], { ...options, enabled: !!id && options?.enabled !== false });
-}
-
-/**
- * Fetch provider usage stats
- */
 export function useProviderStats(options?: UseQueryOptions): UseQueryResult<Record<string, { sessions: number; messages: number; tokens: number }>> {
     const queryFn = useCallback(() => stats.providers(), []);
     return useQuery(queryFn, [], options);
 }
 
-/**
- * Fetch timeline data
- */
-export function useTimeline(days = 30, options?: UseQueryOptions): UseQueryResult<{ date: string; sessions: number; messages: number }[]> {
-    const queryFn = useCallback(() => stats.timeline(days), [days]);
-    return useQuery(queryFn, [days], options);
-}
-
-// =============================================================================
-// Settings Hooks
-// =============================================================================
-
-/**
- * Fetch application settings
- */
 export function useSettings(options?: UseQueryOptions): UseQueryResult<AppSettings> {
     const queryFn = useCallback(() => settings.get(), []);
     return useQuery(queryFn, [], options);
@@ -826,20 +597,6 @@ export function useHarvest() {
     return useMutation((providers?: string[]) => transfer.harvest(providers));
 }
 
-/**
- * Sync mutation
- */
-export function useSync() {
-    return useMutation((direction: 'push' | 'pull') => transfer.sync(direction));
-}
-
-// =============================================================================
-// WebSocket Hook
-// =============================================================================
-
-/**
- * Subscribe to real-time updates via WebSocket
- */
 export function useWebSocket(onEvent?: (event: WebSocketEvent) => void) {
     const [connected, setConnected] = useState(false);
     const [lastEvent, setLastEvent] = useState<WebSocketEvent | null>(null);
