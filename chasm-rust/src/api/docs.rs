@@ -333,4 +333,184 @@ mod tests {
         }
         out
     }
+
+    /// The spec's declared response body must match what the server sends.
+    ///
+    /// Route coverage only proves a path resolves. This proves the *body* is
+    /// what the spec claims -- the failure that route coverage cannot see, and
+    /// the one that breaks a generated client at deserialization rather than
+    /// at the request. It was worth writing: when first run, the spec was
+    /// wrong about nearly every endpoint, describing a snake_case API that
+    /// returned different fields from the camelCase one that actually exists.
+    ///
+    /// Compares top-level property names only. Types and nested shapes are not
+    /// checked; this catches wholesale drift, not every detail.
+    #[tokio::test]
+    async fn documented_response_bodies_match_what_the_server_sends() {
+        use crate::api::{configure_inbox_routes, AppState};
+        use crate::ChatDatabase;
+        use actix_web::web::Data;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("shapes.db");
+        crate::commands::create_harvest_database(&db_path).expect("harvest schema");
+        let db = ChatDatabase::open(&db_path).expect("open");
+        let state = Data::new(AppState::new(db, db_path));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .configure(configure_inbox_routes)
+                .configure(super::super::configure_routes),
+        )
+        .await;
+
+        let spec = spec();
+        let paths = spec["paths"].as_object().expect("paths");
+        let mut problems = Vec::new();
+
+        for (path, item) in paths {
+            // GETs with no path parameters: everything else needs a record to
+            // exist first, which would make this test a fixture factory.
+            if path.contains('{') {
+                continue;
+            }
+            let Some(op) = item.get("get") else { continue };
+            let Some(schema) = op.pointer("/responses/200/content/application~1json/schema") else {
+                continue;
+            };
+
+            let uri = format!("/api{path}{}", if path == "/search" { "?q=x" } else { "" });
+            let resp = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
+            if resp.status() != StatusCode::OK {
+                problems.push(format!("GET {uri} answered {}", resp.status()));
+                continue;
+            }
+
+            let body: serde_json::Value = match serde_json::from_slice(&test::read_body(resp).await)
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    problems.push(format!("GET {uri} returned unparseable JSON: {e}"));
+                    continue;
+                }
+            };
+
+            // Unwrap the envelope only when the spec says there is one, so a
+            // spec that forgets it is reported rather than silently accepted.
+            let spec_enveloped = declares_envelope(&spec, schema);
+            let real_enveloped = body.get("success").is_some() && body.get("data").is_some();
+            if spec_enveloped != real_enveloped {
+                problems.push(format!(
+                    "GET {uri}: spec says {}, server sends {}",
+                    if spec_enveloped { "enveloped" } else { "bare" },
+                    if real_enveloped { "enveloped" } else { "bare" },
+                ));
+                continue;
+            }
+
+            let payload = if real_enveloped { &body["data"] } else { &body };
+            let documented = declared_properties(&spec, schema, spec_enveloped);
+            let (Some(documented), Some(actual)) = (documented, object_keys(payload)) else {
+                continue; // array or untyped: nothing to compare
+            };
+
+            if documented != actual {
+                problems.push(format!(
+                    "GET {uri}\n       spec: {}\n       real: {}",
+                    documented.join(","),
+                    actual.join(",")
+                ));
+            }
+        }
+
+        assert!(
+            problems.is_empty(),
+            "openapi.yaml does not describe the responses the server sends:\n  {}\n\n\
+             A client generated from this spec fails to deserialize these.",
+            problems.join("\n  ")
+        );
+    }
+
+    fn object_keys(value: &serde_json::Value) -> Option<Vec<String>> {
+        let map = value.as_object()?;
+        let mut keys: Vec<String> = map.keys().cloned().collect();
+        keys.sort();
+        Some(keys)
+    }
+
+    /// Follow `$ref` one level at a time; the spec nests them only shallowly.
+    fn deref<'a>(
+        spec: &'a serde_json::Value,
+        schema: &'a serde_json::Value,
+    ) -> &'a serde_json::Value {
+        let mut current = schema;
+        for _ in 0..8 {
+            let Some(r) = current.get("$ref").and_then(|r| r.as_str()) else {
+                break;
+            };
+            match spec.pointer(r.trim_start_matches('#')) {
+                Some(next) => current = next,
+                None => break,
+            }
+        }
+        current
+    }
+
+    /// True when the schema is the `{success, data, error}` wrapper.
+    fn declares_envelope(spec: &serde_json::Value, schema: &serde_json::Value) -> bool {
+        let resolved = deref(spec, schema);
+        if let Some(all_of) = resolved.get("allOf").and_then(|a| a.as_array()) {
+            return all_of.iter().any(|s| declares_envelope(spec, s));
+        }
+        resolved
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .is_some_and(|p| p.contains_key("success") && p.contains_key("data"))
+    }
+
+    /// Property names the spec declares for the payload, unwrapping the
+    /// envelope's `data` when there is one.
+    fn declared_properties(
+        spec: &serde_json::Value,
+        schema: &serde_json::Value,
+        enveloped: bool,
+    ) -> Option<Vec<String>> {
+        let resolved = deref(spec, schema);
+
+        // allOf: merge the members, then take `data` if we want the payload.
+        if let Some(all_of) = resolved.get("allOf").and_then(|a| a.as_array()) {
+            let mut merged = serde_json::Map::new();
+            for member in all_of {
+                if let Some(props) = deref(spec, member).get("properties").and_then(|p| p.as_object())
+                {
+                    for (k, v) in props {
+                        merged.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            let combined = serde_json::Value::Object(
+                [("properties".to_string(), serde_json::Value::Object(merged))]
+                    .into_iter()
+                    .collect(),
+            );
+            return declared_properties(spec, &combined, enveloped);
+        }
+
+        let props = resolved.get("properties")?.as_object()?;
+        if enveloped {
+            let data = props.get("data")?;
+            let inner = deref(spec, data);
+            if inner.get("type").and_then(|t| t.as_str()) == Some("array") {
+                return None;
+            }
+            let inner_props = inner.get("properties")?.as_object()?;
+            let mut keys: Vec<String> = inner_props.keys().cloned().collect();
+            keys.sort();
+            return Some(keys);
+        }
+        let mut keys: Vec<String> = props.keys().cloned().collect();
+        keys.sort();
+        Some(keys)
+    }
 }

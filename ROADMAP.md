@@ -78,7 +78,39 @@ that test is what found the seven above.
 The inverse gap narrowed but still stands: `GET`/`POST /swarms` and the
 `/swe/projects/*` tree are served but undocumented, as are the `/auth`,
 `/sync`, `/recording`, `/webhooks`, `/audit`, `/retention`, and `/sso` scopes.
-(`PUT /swarms/{id}` is now both served and documented.)
+(`PUT /swarms/{id}` is now both served and documented.) 40 operations under
+`/api` and roughly 29 in the root-mounted scopes remain undocumented; the
+enterprise ones (`/audit`, `/retention`, `/sso`) are feature-gated and would
+fail the route test on a default build, so they need separate handling.
+
+### The spec described responses the server has never sent
+
+Setting out to document those missing scopes turned up something worse than
+the omission. **Every endpoint except `GET /health` wraps its payload in
+`{success, data, error}`, and the spec documented all of them bare.** A client
+generated from it failed to deserialize every response it received -- a worse
+failure than a 404, because it happens after a successful request.
+
+The field names were wrong too. The spec described a snake_case API
+(`total_sessions`, `auto_harvest`, `uptime_seconds`, `database_size_bytes`)
+against a server that returns camelCase, named a `sessions` array where the
+server sends `items` plus `hasMore`, gave `HealthResponse.status` an enum of
+`healthy|degraded|unhealthy` when the only value ever returned is `ok`, and
+typed `GET /sessions/{id}` as a bare `Session` when it returns
+`{session, messages, tool_invocations, file_changes}`. Of the ten documented
+parameterless `GET`s, only two matched reality.
+
+All are corrected against a live server, and
+`documented_response_bodies_match_what_the_server_sends` now guards them: it
+calls each documented parameterless `GET` and compares the body's top-level
+keys against the schema. It compares names, not types or nested shapes, so it
+catches wholesale drift rather than every detail.
+
+Worth noting for anyone extending the spec: the API itself is inconsistent
+about casing. Session fields are camelCase, but the `GET /sessions/{id}`
+wrapper keys and message fields are snake_case. The spec now records that as
+it is rather than tidying it, because the spec's job is to describe the server,
+not to describe what the server ought to be.
 
 ### Web UI calling endpoints that do not exist
 

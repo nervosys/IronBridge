@@ -94,7 +94,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SystemInfo"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SystemInfo"
 
   /workspaces:
     get:
@@ -110,9 +115,12 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Workspace"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WorkspaceList"
 
   /workspaces/{id}:
     get:
@@ -127,7 +135,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Workspace"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Workspace"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -158,7 +171,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SessionList"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SessionList"
     post:
       tags: [Sessions]
       summary: Create a session
@@ -175,7 +193,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Session"
 
   /sessions/{id}:
     get:
@@ -190,7 +213,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Session"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SessionDetail"
         "404":
           $ref: "#/components/responses/NotFound"
     delete:
@@ -243,9 +271,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Checkpoint"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Checkpoint"
     post:
       tags: [Sessions]
       summary: Create a checkpoint
@@ -264,7 +297,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Checkpoint"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Checkpoint"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -284,9 +322,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GitCommit"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/GitCommit"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -301,9 +344,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Provider"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Provider"
 
   /agents:
     get:
@@ -316,9 +364,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Agent"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Agent"
     post:
       tags: [Agents]
       summary: Create agent
@@ -335,7 +388,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Agent"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Agent"
 
   /agents/{id}:
     get:
@@ -350,7 +408,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Agent"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Agent"
     put:
       tags: [Agents]
       summary: Update agent
@@ -387,7 +450,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StatsOverview"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/StatsOverview"
 
   /stats/providers:
     get:
@@ -403,9 +471,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  $ref: "#/components/schemas/ProviderStats"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        additionalProperties:
+                          $ref: "#/components/schemas/ProviderStats"
 
   /search:
     get:
@@ -434,9 +507,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SearchResult"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SearchResult"
 
   /swarms/{id}:
     put:
@@ -483,13 +561,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  latency:
-                    type: integer
-                    description: Round-trip time in milliseconds
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          success:
+                            type: boolean
+                          latency:
+                            type: integer
+                            description: Round-trip time in milliseconds
         "501":
           description: No connectivity test exists for this provider
         "502":
@@ -516,7 +599,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChatCompletionResponse"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ChatCompletionResponse"
         "400":
           description: No messages supplied
         "502":
@@ -538,7 +626,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HarvestResult"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/HarvestResult"
 
   /settings:
     get:
@@ -551,7 +644,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Settings"
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Settings"
     put:
       tags: [Settings]
       summary: Update settings
@@ -712,6 +810,22 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
+    # Every endpoint except GET /health wraps its payload in this. The spec
+    # used to document the payloads bare, so a generated client failed to
+    # deserialize every response it got -- a worse failure than a 404, because
+    # it happens after a successful request.
+    ApiEnvelope:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        data:
+          description: The payload. Absent on failure.
+        error:
+          type: string
+          nullable: true
+
     CreateSession:
       type: object
       properties:
@@ -935,25 +1049,42 @@ components:
       properties:
         status:
           type: string
-          enum: [healthy, degraded, unhealthy]
+          # Observed value is "ok". Previously documented as an enum of
+          # healthy/degraded/unhealthy, none of which the server ever returns.
+          example: ok
         version:
           type: string
-        uptime_seconds:
-          type: integer
+          example: 2.0.1
 
     SystemInfo:
       type: object
       properties:
         version:
           type: string
-        database_size_bytes:
+        status:
+          type: string
+          example: healthy
+        uptime:
           type: integer
-        session_count:
-          type: integer
-        workspace_count:
-          type: integer
-        provider_count:
-          type: integer
+          description: Seconds since the server started.
+        database:
+          type: object
+          properties:
+            path:
+              type: string
+            sizeBytes:
+              type: integer
+        features:
+          type: object
+          properties:
+            agents:
+              type: boolean
+            chat:
+              type: boolean
+            mcp:
+              type: boolean
+            swarms:
+              type: boolean
 
     Workspace:
       type: object
@@ -979,6 +1110,8 @@ components:
           type: string
           format: date-time
 
+    # Field names and types are what the server actually returns: camelCase,
+    # with timestamps as epoch seconds rather than RFC 3339 strings.
     Session:
       type: object
       properties:
@@ -986,34 +1119,32 @@ components:
           type: string
         title:
           type: string
-        workspace_id:
-          type: string
-          format: uuid
         provider:
           type: string
-        model:
-          type: string
-        message_count:
+        messageCount:
           type: integer
-        token_count:
+        workspaceId:
+          type: string
+          nullable: true
+        workspaceName:
+          type: string
+          nullable: true
+        createdAt:
           type: integer
-        archived:
-          type: boolean
-        tags:
-          type: array
-          items:
-            type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
+          format: int64
+          description: Epoch seconds.
+        updatedAt:
+          type: integer
+          format: int64
+          description: Epoch seconds.
 
+    # The list endpoints all return this shape: `items`, not a named array,
+    # plus `hasMore`. Previously documented with a `sessions` key that the
+    # server has never sent.
     SessionList:
       type: object
       properties:
-        sessions:
+        items:
           type: array
           items:
             $ref: "#/components/schemas/Session"
@@ -1023,6 +1154,71 @@ components:
           type: integer
         offset:
           type: integer
+        hasMore:
+          type: boolean
+
+    # GET /sessions/{id} returns the session alongside its reconstructed
+    # messages, not a bare Session. Note the mixed casing: the nested session
+    # object is camelCase while these wrapper keys and the message fields are
+    # snake_case. That is what the server sends.
+    SessionDetail:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/Session"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        tool_invocations:
+          type: array
+          items:
+            type: object
+        file_changes:
+          type: array
+          items:
+            type: object
+
+    Message:
+      type: object
+      properties:
+        index:
+          type: integer
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        content_raw:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        model_id:
+          type: string
+          nullable: true
+        variable_data:
+          nullable: true
+
+    WorkspaceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Workspace"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        hasMore:
+          type: boolean
 
     Provider:
       type: object
@@ -1111,20 +1307,28 @@ components:
     StatsOverview:
       type: object
       properties:
-        total_sessions:
+        totalSessions:
           type: integer
-        total_messages:
+        totalMessages:
           type: integer
-        total_tokens:
+        totalWorkspaces:
           type: integer
-        active_providers:
+        totalToolInvocations:
           type: integer
-        workspaces:
+        totalFileChanges:
           type: integer
-        sessions_today:
-          type: integer
-        messages_today:
-          type: integer
+        tablesEnhanced:
+          type: boolean
+          description: Whether the enhanced harvest tables are present.
+        sessionsByProvider:
+          type: array
+          items:
+            type: object
+            properties:
+              provider:
+                type: string
+              count:
+                type: integer
 
     Settings:
       type: object
@@ -1132,16 +1336,16 @@ components:
         theme:
           type: string
           enum: [light, dark, system]
-        auto_harvest:
+        autoSync:
           type: boolean
-        harvest_interval_minutes:
+        syncInterval:
           type: integer
-        sync_enabled:
-          type: boolean
-        sync_provider:
+          description: Milliseconds between syncs.
+        defaultProvider:
           type: string
-          enum: [local, s3, azure, gcs, webdav]
-        encryption_enabled:
+        enableNotifications:
           type: boolean
-        telemetry_enabled:
+        compactMode:
           type: boolean
+        maxHistoryDays:
+          type: integer

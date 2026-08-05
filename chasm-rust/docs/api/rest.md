@@ -411,9 +411,33 @@ first therefore shadows every route in the other one, and the entire API
 returns 404. `/api/inbox` is the exception that proves the rule: its prefix is
 narrower, so it can only shadow paths that are genuinely its own.
 
-`api::docs::every_documented_path_is_actually_routed` keeps this honest: it
-builds the real app behind a sentinel `default_service` and fails if any
-documented operation reaches it. It caught exactly this shadowing bug. `published_docs_copy_matches_the_served_spec`
+### Response envelope
+
+Every endpoint **except `GET /health`** wraps its payload:
+
+```json
+{ "success": true, "data": { ... }, "error": null }
+```
+
+Errors carry `{"success": false, "error": "..."}` with no `data` key. `/health`
+alone answers bare, with `{"status": "ok", "version": "..."}`.
+
+The spec documented the payloads bare until 2.0.0, so a generated client failed
+to deserialize every response it received -- a worse failure than a 404, since
+it happens *after* a successful request. It was also wrong about field names:
+it described a snake_case API (`total_sessions`, `auto_harvest`,
+`uptime_seconds`) where the server returns camelCase, and named a `sessions`
+array on the list endpoints where the server sends `items` plus `hasMore`.
+
+Two tests keep this honest, and both found real bugs on their first run:
+
+- `every_documented_path_is_actually_routed` builds the real app behind a
+  sentinel `default_service` and fails if any documented operation reaches it.
+  It caught the scope-shadowing bug below.
+- `documented_response_bodies_match_what_the_server_sends` calls each
+  documented parameterless `GET` and compares the body's top-level keys with
+  the schema. It compares names only, not types or nested shapes, so it catches
+  wholesale drift rather than every detail. `published_docs_copy_matches_the_served_spec`
 covers the other half -- `docs/assets/openapi.yaml`, which MkDocs publishes, is
 a copy of the root spec and had silently drifted a full release behind it.
 
