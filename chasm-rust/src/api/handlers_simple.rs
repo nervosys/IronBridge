@@ -1046,7 +1046,15 @@ impl ProviderInfo {
 }
 
 pub async fn list_providers() -> impl Responder {
-    let providers = vec![
+    ApiResponse::success(all_providers())
+}
+
+/// The static provider catalogue.
+///
+/// Shared with `get_provider_health` so the two endpoints cannot drift into
+/// describing different sets of providers.
+fn all_providers() -> Vec<ProviderInfo> {
+    vec![
         // ===========================================
         // Cloud Providers
         // ===========================================
@@ -1581,9 +1589,7 @@ pub async fn list_providers() -> impl Responder {
                 "DeepSeek-Coder-6.7B",
             ],
         ),
-    ];
-
-    ApiResponse::success(providers)
+    ]
 }
 
 // =============================================================================
@@ -2517,26 +2523,262 @@ pub async fn get_system_health(state: web::Data<AppState>) -> impl Responder {
 }
 
 /// Get provider health status  
+/// `GET /api/system/providers/health`
+///
+/// This used to return two hardcoded rows -- "copilot: connected, 45ms" and
+/// "ollama: disconnected" -- regardless of what was actually running. Both
+/// were invented, and the keys were wrong as well (`provider`/`lastCheck`
+/// where the client reads `providerId`/`lastChecked`), so the UI's health map
+/// was keyed by `undefined` and the fabrication never even landed.
+///
+/// Now it measures. Locally hosted providers declare an endpoint, so they get
+/// a real request. Cloud providers report `unknown` rather than a guess: this
+/// server holds no credentials for them, and an unauthenticated probe would
+/// say nothing about whether the user's own access works.
 pub async fn get_provider_health() -> impl Responder {
-    // In a real implementation, this would check actual provider connectivity
-    ApiResponse::success(serde_json::json!([
-        {
-            "provider": "copilot",
-            "status": "connected",
-            "latency": 45,
-            "lastCheck": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64
-        },
-        {
-            "provider": "ollama",
-            "status": "disconnected",
-            "latency": null,
-            "lastCheck": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64
+    let providers = all_providers();
+
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return ApiResponse::<()>::error(&format!("HTTP client error: {e}")),
+    };
+
+    let checked_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Probed concurrently: serially, a dozen unreachable local providers would
+    // each burn the full timeout and the endpoint would take half a minute.
+    let checks = providers.iter().map(|p| {
+        let client = &client;
+        async move {
+            match probe_url(p) {
+                None => serde_json::json!({
+                    "providerId": p.id,
+                    "status": "unknown",
+                    "latency": null,
+                    "lastChecked": checked_at,
+                    "error": "Not checked: no endpoint reachable from the server",
+                    "models": p.models,
+                }),
+                Some(url) => {
+                    let started = std::time::Instant::now();
+                    let (status, error) = match client.get(&url).send().await {
+                        Ok(r) if r.status().is_success() => ("connected", None),
+                        Ok(r) => ("error", Some(format!("HTTP {}", r.status()))),
+                        Err(e) if e.is_connect() || e.is_timeout() => ("disconnected", None),
+                        Err(e) => ("error", Some(e.to_string())),
+                    };
+                    serde_json::json!({
+                        "providerId": p.id,
+                        "status": status,
+                        // Only meaningful when something answered.
+                        "latency": if status == "connected" {
+                            Some(started.elapsed().as_millis() as u64)
+                        } else {
+                            None
+                        },
+                        "lastChecked": checked_at,
+                        "error": error,
+                        "models": p.models,
+                    })
+                }
+            }
         }
-    ]))
+    });
+
+    let results: Vec<serde_json::Value> = futures_util::future::join_all(checks).await;
+    ApiResponse::success(results)
+}
+
+/// Where to probe a provider, or `None` when it cannot be checked from here.
+///
+/// Gated on the provider being locally hosted, not merely on it declaring an
+/// endpoint: several cloud providers declare one too (`api.openai.com/v1` and
+/// friends). Probing those would have this health check fire unauthenticated
+/// requests at third-party APIs from the user's machine, and report the
+/// resulting 401 as `error` -- which says nothing about whether the user's own
+/// credentials work. A health endpoint should not reach off the box.
+fn probe_url(provider: &ProviderInfo) -> Option<String> {
+    if provider.provider_type != "local" {
+        return None;
+    }
+    let endpoint = provider.endpoint.as_deref()?.trim_end_matches('/');
+    if endpoint.is_empty() {
+        return None;
+    }
+    Some(if endpoint.ends_with("/v1") {
+        // OpenAI-compatible surface.
+        format!("{endpoint}/models")
+    } else if provider.id == "ollama" {
+        format!("{endpoint}/api/tags")
+    } else {
+        endpoint.to_string()
+    })
+}
+
+#[cfg(test)]
+mod provider_health_tests {
+    use super::*;
+
+    fn provider(id: &str) -> ProviderInfo {
+        all_providers()
+            .into_iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("no provider `{id}` in the catalogue"))
+    }
+
+    /// Call the handler and parse its JSON body.
+    ///
+    /// Matched rather than `expect`ed: the body's error type does not
+    /// implement `Debug`, so `expect` will not compile here.
+    async fn health_rows() -> Vec<serde_json::Value> {
+        use actix_web::{body::to_bytes, Responder};
+
+        let req = actix_web::test::TestRequest::default().to_http_request();
+        let resp = get_provider_health().await.respond_to(&req);
+        let body = match to_bytes(resp.into_body()).await {
+            Ok(b) => b,
+            Err(_) => panic!("could not read the response body"),
+        };
+        let parsed: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        parsed["data"]
+            .as_array()
+            .expect("data is an array")
+            .clone()
+    }
+
+    #[test]
+    fn the_catalogue_is_shared_by_both_endpoints() {
+        let all = all_providers();
+        assert!(all.len() > 20, "catalogue looks truncated: {}", all.len());
+        assert!(all.iter().any(|p| p.id == "ollama"));
+        assert!(all.iter().any(|p| p.id == "copilot"));
+    }
+
+    /// Cloud providers must not be probed. This server holds no credentials
+    /// for them, so any result would be a guess -- which is exactly what the
+    /// old hardcoded `copilot: connected, 45ms` was.
+    #[test]
+    fn cloud_providers_are_not_probeable() {
+        for id in ["copilot", "openai", "anthropic", "google", "cursor"] {
+            assert!(
+                probe_url(&provider(id)).is_none(),
+                "{id} must not be probed from the server"
+            );
+        }
+    }
+
+    #[test]
+    fn openai_compatible_endpoints_are_probed_at_models() {
+        assert_eq!(
+            probe_url(&provider("lm-studio")).as_deref(),
+            Some("http://localhost:1234/v1/models")
+        );
+        assert_eq!(
+            probe_url(&provider("jan")).as_deref(),
+            Some("http://localhost:1337/v1/models")
+        );
+    }
+
+    /// Ollama has no `/v1` surface at its declared endpoint; probing
+    /// `/v1/models` there would report a running Ollama as down.
+    #[test]
+    fn ollama_is_probed_at_its_own_tags_endpoint() {
+        assert_eq!(
+            probe_url(&provider("ollama")).as_deref(),
+            Some("http://localhost:11434/api/tags")
+        );
+    }
+
+    #[test]
+    fn an_endpoint_without_a_known_surface_is_probed_at_its_base() {
+        assert_eq!(
+            probe_url(&provider("tabby")).as_deref(),
+            Some("http://localhost:8080")
+        );
+    }
+
+    #[test]
+    fn a_blank_endpoint_is_not_probeable() {
+        let mut p = provider("ollama");
+        p.endpoint = Some(String::new());
+        assert!(probe_url(&p).is_none());
+        p.endpoint = None;
+        assert!(probe_url(&p).is_none());
+    }
+
+    /// Several cloud providers declare an endpoint. Probing them would send
+    /// unauthenticated requests to third-party APIs from the user's machine.
+    #[test]
+    fn a_cloud_provider_is_not_probed_even_when_it_declares_an_endpoint() {
+        let all = all_providers();
+        let cloud_with_endpoint: Vec<_> = all
+            .iter()
+            .filter(|p| p.provider_type == "cloud" && p.endpoint.is_some())
+            .collect();
+        assert!(
+            !cloud_with_endpoint.is_empty(),
+            "expected at least one cloud provider to declare an endpoint; \
+             if that changed, this guard is no longer exercised"
+        );
+        for p in cloud_with_endpoint {
+            assert!(
+                probe_url(p).is_none(),
+                "{} is cloud-hosted and must not be probed",
+                p.id
+            );
+        }
+    }
+
+    #[test]
+    fn a_trailing_slash_does_not_produce_a_double_slash() {
+        let mut p = provider("ollama");
+        p.endpoint = Some("http://localhost:11434/".to_string());
+        assert_eq!(probe_url(&p).as_deref(), Some("http://localhost:11434/api/tags"));
+
+        p.endpoint = Some("http://localhost:1234/v1/".to_string());
+        assert_eq!(probe_url(&p).as_deref(), Some("http://localhost:1234/v1/models"));
+    }
+
+    /// The client reads `providerId` and `lastChecked`. The old handler sent
+    /// `provider` and `lastCheck`, so the UI keyed its health map by
+    /// `undefined` and no status ever displayed.
+    #[tokio::test]
+    async fn the_response_uses_the_field_names_the_client_reads() {
+        let rows = health_rows().await;
+        assert!(!rows.is_empty());
+        for row in &rows {
+            assert!(row.get("providerId").is_some(), "missing providerId: {row}");
+            assert!(row.get("lastChecked").is_some(), "missing lastChecked: {row}");
+            assert!(row.get("provider").is_none(), "stale `provider` key: {row}");
+            assert!(row.get("lastCheck").is_none(), "stale `lastCheck` key: {row}");
+
+            let status = row["status"].as_str().unwrap_or_default();
+            assert!(
+                matches!(status, "connected" | "disconnected" | "error" | "unknown"),
+                "status `{status}` is not in the client's ProviderStatus union"
+            );
+            // Latency is only reported when something actually answered.
+            if status != "connected" {
+                assert!(row["latency"].is_null(), "invented latency for {status}");
+            }
+        }
+    }
+
+    /// Nothing may report `connected` without a measurement behind it.
+    #[tokio::test]
+    async fn cloud_providers_report_unknown_not_connected() {
+        let rows = health_rows().await;
+        let copilot = rows
+            .iter()
+            .find(|r| r["providerId"] == "copilot")
+            .expect("copilot row");
+        assert_eq!(copilot["status"], "unknown");
+        assert!(copilot["latency"].is_null());
+    }
 }

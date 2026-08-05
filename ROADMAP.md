@@ -139,9 +139,17 @@ all nineteen read routes answer 200, a message written through
 `POST /sessions/{id}/messages` is visible in `GET /sessions/{id}`, and the
 three refusal paths return 404/501/503 rather than a false success.
 
-Two smaller things found in the same pass and left alone: `ShareSessionModal` is
-a fully tested component that nothing renders, and `GET /api/system/providers/health`
-returns hardcoded provider statuses rather than checking anything.
+`GET /api/system/providers/health` was found in the same pass and has since
+been fixed. It returned two hardcoded rows -- `copilot: connected, 45ms` and
+`ollama: disconnected` -- whatever was actually running, and keyed them
+`provider`/`lastCheck` where the client reads `providerId`/`lastChecked`, so
+the UI's health map was keyed by `undefined` and even the invented data never
+arrived. It now probes each locally hosted provider at its declared endpoint
+concurrently and reports `unknown` for cloud providers, which this server holds
+no credentials for and therefore cannot honestly assess.
+
+Still open: `ShareSessionModal` is a fully tested component that nothing
+renders. Removing it is a product call, so it was left in place.
 
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
 and TUI are complete. The suite is 841 passing tests on Windows (199 lib plus
