@@ -144,8 +144,9 @@ a fully tested component that nothing renders, and `GET /api/system/providers/he
 returns hardcoded provider statuses rather than checking anything.
 
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
-and TUI are complete and covered by 780 passing tests on Windows. Earlier
-figures in the 880–960 range double-counted: `main.rs` re-declared modules that
+and TUI are complete. The suite is 841 passing tests on Windows (199 lib plus
+integration), up from 780 as the API work above added coverage. Earlier figures
+in the 880–960 range double-counted: `main.rs` re-declared modules that
 `lib.rs` already owned, so their unit tests ran in both targets.
 
 ## Overview
