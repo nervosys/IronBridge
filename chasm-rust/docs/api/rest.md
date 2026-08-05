@@ -412,9 +412,27 @@ snake_case except the subscription object, which is camelCase. `/sync/delta`
 mixes both in a single object. `/sync/subscribe` is an SSE stream and
 `/recording/ws` is a WebSocket upgrade, so neither is JSON.
 
-The enterprise scopes (`/audit`, `/retention`, `/sso`) are feature-gated and
-are deliberately absent from the spec: documenting them unconditionally would
-fail the route test on a default build.
+### Enterprise scopes
+
+`/audit`, `/retention` and `/sso` are `#[cfg(feature = "enterprise")]`. They
+are in the spec, each marked `x-chasm-feature: enterprise`. The spec tests
+skip a marked path when the feature is off and probe it normally when it is
+on, so:
+
+```sh
+cargo test --features enterprise    # covers them
+cargo test                          # skips them, and says how many
+```
+
+Their response bodies are **not modelled**, on purpose. The feature needs
+OpenSSL to build (`samael` → `openssl-sys`), so these endpoints could not be
+run when the spec was written and no response was ever observed. Every other
+schema here came off a running server; inventing these would have made the
+document less trustworthy, not more. Paths and methods are taken from the
+route registrations and are enforced by the test on an enterprise build.
+
+If you add a schema for one, verify it against a running enterprise build
+first.
 
 ### Adding a route
 

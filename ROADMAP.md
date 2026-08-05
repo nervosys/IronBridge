@@ -98,10 +98,27 @@ which is camelCase, and `/sync/delta` mixes both in one object.
 Two are not JSON at all and are documented as such: `/sync/subscribe` is an SSE
 stream and `/recording/ws` is a WebSocket upgrade.
 
-Still undocumented: the enterprise scopes (`/audit`, `/retention`, `/sso`).
-They are `#[cfg(feature = "enterprise")]`, so documenting them unconditionally
-would fail the route test on a default build. They need the spec, or the test,
-to become feature-aware -- a design decision rather than more transcription.
+The enterprise scopes are documented too, with a caveat that is stated in the
+spec itself. `/audit`, `/retention` and `/sso` are `#[cfg(feature =
+"enterprise")]`, so a default build does not route them. Each is marked
+`x-chasm-feature: enterprise`; the spec tests skip a marked path when the
+feature is off and probe it normally when it is on, so an enterprise build
+verifies them. On a default build the route test prints how many it skipped
+rather than passing silently, and asserts the marking has not drifted onto a
+path outside those three scopes.
+
+**Their response bodies are deliberately not modelled.** The enterprise
+feature could not be compiled on the machine this was written on -- `samael`
+pulls `openssl-sys`, which needs an OpenSSL installation for MSVC -- so no
+response from these endpoints was ever observed. Every other schema in the
+document was read off a running server. Guessing these would have undone that,
+so each says "body not modelled" instead. Paths and methods come from the
+route registrations, which are unambiguous, and are enforced by the test on
+any enterprise build.
+
+That leaves the spec at 93 paths and 120 operations, describing every route
+the server registers. 102 of those operations are verified as routed on every
+test run; the remaining 18 are verified only on an enterprise build.
 
 ### The spec described responses the server has never sent
 

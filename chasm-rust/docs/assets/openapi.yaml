@@ -79,6 +79,12 @@ tags:
     description: Live session recording and recovery (mounted at the server root)
   - name: Webhooks
     description: Outbound webhook registration and delivery history (mounted at the server root)
+  - name: Audit
+    description: Audit event log (enterprise build only)
+  - name: Retention
+    description: Data retention policies (enterprise build only)
+  - name: SSO
+    description: SAML single sign-on (enterprise build only)
 
 paths:
   /health:
@@ -2142,6 +2148,298 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ===========================================================================
+  # Enterprise scopes.
+  #
+  # These are `#[cfg(feature = "enterprise")]`, so a default build does not
+  # route them. Each is marked `x-chasm-feature: enterprise`; the spec tests
+  # skip a marked path when the feature is off and probe it normally when it
+  # is on, so these are verified by any enterprise build.
+  #
+  # Paths and methods come from the route registrations in src/api/, which are
+  # unambiguous. Response bodies are deliberately NOT modelled: the enterprise
+  # feature needs OpenSSL to build (samael -> openssl-sys) and could not be
+  # compiled on the machine this was written on, so no response was ever
+  # observed. Every other schema in this document was read off a running
+  # server, and guessing these would break that. An unmodelled body says
+  # "this exists, its shape is unverified"; an invented one would lie.
+  # ===========================================================================
+
+  /audit:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [Audit]
+      summary: Query audit events
+      operationId: listAuditEvents
+      responses:
+        "200":
+          description: Audit events. Body not modelled -- see the note above.
+
+  /audit/{event_id}:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [Audit]
+      summary: Get one audit event
+      operationId: getAuditEvent
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit event. Body not modelled.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /audit/user/{user_id}:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [Audit]
+      summary: Audit events for one user
+      operationId: listAuditEventsForUser
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit events. Body not modelled.
+
+  /audit/resource/{type}/{id}:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [Audit]
+      summary: Audit events for one resource
+      operationId: listAuditEventsForResource
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit events. Body not modelled.
+
+  /audit/export:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    post:
+      tags: [Audit]
+      summary: Export audit events
+      operationId: exportAuditEvents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Export produced. Body not modelled.
+
+  /retention/policies:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [Retention]
+      summary: List retention policies
+      operationId: listRetentionPolicies
+      responses:
+        "200":
+          description: Policies. Body not modelled.
+    post:
+      tags: [Retention]
+      summary: Create a retention policy
+      operationId: createRetentionPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Policy created. Body not modelled.
+
+  /retention/policies/{policy_id}:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [Retention]
+      summary: Get a retention policy
+      operationId: getRetentionPolicy
+      parameters:
+        - $ref: "#/components/parameters/retentionPolicyId"
+      responses:
+        "200":
+          description: Policy. Body not modelled.
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Retention]
+      summary: Update a retention policy
+      operationId: updateRetentionPolicy
+      parameters:
+        - $ref: "#/components/parameters/retentionPolicyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated. Body not modelled.
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Retention]
+      summary: Delete a retention policy
+      operationId: deleteRetentionPolicy
+      parameters:
+        - $ref: "#/components/parameters/retentionPolicyId"
+      responses:
+        "200":
+          description: Deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /retention/policies/{policy_id}/execute:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    post:
+      tags: [Retention]
+      summary: Run a retention policy now
+      description: Deletes data the policy selects. Not reversible.
+      operationId: executeRetentionPolicy
+      parameters:
+        - $ref: "#/components/parameters/retentionPolicyId"
+      responses:
+        "200":
+          description: Policy executed. Body not modelled.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sso/metadata:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [SSO]
+      summary: SAML service-provider metadata
+      operationId: getSsoMetadata
+      responses:
+        "200":
+          description: Metadata document. Body not modelled.
+
+  /sso/initiate:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    post:
+      tags: [SSO]
+      summary: Begin a SAML login
+      operationId: initiateSso
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Redirect details. Body not modelled.
+
+  /sso/callback:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    post:
+      tags: [SSO]
+      summary: SAML assertion consumer
+      description: >
+        Receives the IdP's assertion. Signature verification is implemented
+        and covered by wrapping-attack tests.
+      operationId: ssoCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Assertion accepted. Body not modelled.
+        "401":
+          description: Assertion rejected
+
+  /sso/idps:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [SSO]
+      summary: List identity providers
+      operationId: listIdps
+      responses:
+        "200":
+          description: Identity providers. Body not modelled.
+    post:
+      tags: [SSO]
+      summary: Register an identity provider
+      operationId: createIdp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Registered. Body not modelled.
+
+  /sso/idps/{idp_id}:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    put:
+      tags: [SSO]
+      summary: Update an identity provider
+      operationId: updateIdp
+      parameters:
+        - $ref: "#/components/parameters/idpId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated. Body not modelled.
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SSO]
+      summary: Remove an identity provider
+      operationId: deleteIdp
+      parameters:
+        - $ref: "#/components/parameters/idpId"
+      responses:
+        "200":
+          description: Removed.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   parameters:
     workspaceId:
@@ -2182,6 +2480,18 @@ components:
         type: string
     sweEntryId:
       name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    retentionPolicyId:
+      name: policy_id
+      in: path
+      required: true
+      schema:
+        type: string
+    idpId:
+      name: idp_id
       in: path
       required: true
       schema:

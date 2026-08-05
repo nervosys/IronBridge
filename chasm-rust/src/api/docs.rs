@@ -268,7 +268,12 @@ mod tests {
 
         let mut unrouted = Vec::new();
         let mut skipped = Vec::new();
+        let mut gated = Vec::new();
         for (path, item) in paths {
+            if gated_out(item) {
+                gated.push(path.clone());
+                continue;
+            }
             // Path parameters match any value, so the placeholder only has to
             // be non-empty -- routing does not care whether the record exists.
             let concrete = substitute_params(path);
@@ -322,6 +327,29 @@ mod tests {
                 method.to_uppercase()
             );
         }
+
+        // Feature-gated paths are unprobed on this build. That is legitimate,
+        // but it must not be silent: if the marking ever drifted onto a path
+        // that is in fact always served, this test would quietly stop
+        // covering it.
+        if cfg!(feature = "enterprise") {
+            assert!(
+                gated.is_empty(),
+                "enterprise is enabled, so nothing should be gated out: {gated:?}"
+            );
+        } else {
+            assert!(
+                gated.iter().all(|p| {
+                    p.starts_with("/audit") || p.starts_with("/retention") || p.starts_with("/sso")
+                }),
+                "a path outside the enterprise scopes is marked enterprise-gated: {gated:?}"
+            );
+            eprintln!(
+                "[spec] {} enterprise paths unprobed on this build; \
+                 run with --features enterprise to cover them",
+                gated.len()
+            );
+        }
     }
 
     /// Registration check for the handful of routes the probe cannot call.
@@ -333,6 +361,19 @@ mod tests {
         const SOURCE: &str = include_str!("handlers_write.rs");
         let needle = format!("\"{path}\", web::{method}()");
         SOURCE.contains(&needle)
+    }
+
+    /// True when a path is behind a Cargo feature this build does not have.
+    ///
+    /// The enterprise scopes are `#[cfg(feature = "enterprise")]`, so a
+    /// default build genuinely does not route them and probing would
+    /// correctly find nothing. On an enterprise build this returns false and
+    /// they are probed like everything else, which is what actually verifies
+    /// them -- the marking suppresses a false failure, it does not excuse the
+    /// path from ever being checked.
+    fn gated_out(item: &serde_json::Value) -> bool {
+        item.get("x-chasm-feature").and_then(|f| f.as_str()) == Some("enterprise")
+            && !cfg!(feature = "enterprise")
     }
 
     /// Where a documented path is actually mounted.
@@ -430,7 +471,7 @@ mod tests {
         for (path, item) in paths {
             // GETs with no path parameters: everything else needs a record to
             // exist first, which would make this test a fixture factory.
-            if path.contains('{') {
+            if path.contains('{') || gated_out(item) {
                 continue;
             }
             let Some(op) = item.get("get") else { continue };
