@@ -372,28 +372,37 @@ All errors follow a consistent format:
 
 ---
 
-## Endpoints in the spec that are not served
+## Spec coverage
 
-`openapi.yaml` documents surface that was never implemented. Verified against
-route registrations in `src/api/`, not by probing -- this server answers `404`
-for a method mismatch as well as an unknown path, so a `404` alone cannot tell
-the two apart.
+As of spec version 2.0.0, `openapi.yaml` documents only endpoints the server
+actually routes. Twenty paths and seven further operations that had been
+documented but never implemented were removed; a client generated from the spec
+no longer emits methods that 404 on every call. The removed list, and why each
+one went, is kept in
+[`ROADMAP.md`](../../../ROADMAP.md#rest-surface-removed-from-the-spec-in-200).
 
-| Documented | Methods |
-|---|---|
-| `/system/vacuum`, `/system/cache/clear` | POST |
-| `/workspaces/discover`, `/workspaces/{id}/refresh` | POST |
-| `/sessions/merge`, `/sessions/{id}/archive`, `/sessions/{id}/fork` | POST |
-| `/sessions/{id}/export` | GET |
-| `/sessions/{id}/messages` | GET, POST |
-| `/providers/{id}`, `/providers/{id}/health`, `/providers/{id}/models` | GET (+PUT/DELETE) |
-| `/chat/completions`, `/harvest`, `/sync` | POST |
-| `/search`, `/search/sessions`, `/search/semantic` | GET |
-| `/stats/providers`, `/stats/timeline` | GET |
+Notably, the REST API is **read-only** for workspaces, sessions and providers.
+The `POST`, `PUT` and `DELETE` operations the spec used to advertise on those
+paths were never implemented; use the CLI to mutate them.
 
-Search is really `GET /api/sessions/search?q=`. Semantic search exists as a
-library capability but is not exposed over REST.
+`api::docs::every_documented_path_is_actually_routed` keeps this honest: it
+builds the real app behind a sentinel `default_service` and fails if any
+documented operation reaches it. `published_docs_copy_matches_the_served_spec`
+covers the other half -- `docs/assets/openapi.yaml`, which MkDocs publishes, is
+a copy of the root spec and had silently drifted a full release behind it.
 
-`/workspaces/{id}` **is** served, despite an earlier note here claiming
-otherwise: it returns 404 for an id that does not match a stored workspace,
-which is indistinguishable from a missing route when probing.
+Two things that trip people up, now that those paths are gone:
+
+- Search is `GET /api/sessions/search?q=`, not `/api/search`. Semantic search
+  exists as a library capability with no REST route.
+- Harvest and export are CLI-only (`chasm harvest`, `chasm export`).
+
+The spec is still narrower than the server. `/swarms`, the `/swe/projects/*`
+tree, and the `/auth`, `/sync`, `/recording`, `/webhooks`, `/audit`,
+`/retention`, and `/sso` scopes are all served but undocumented.
+
+When checking whether something is served, read the route registrations in
+`src/api/` rather than probing: this server answers `404` for a method mismatch
+as well as for an unknown path, so a `404` alone cannot tell the two apart. That
+is also why `/workspaces/{id}` was briefly and wrongly listed as missing -- it
+returns `404` for an unknown id, which looks identical to an absent route.

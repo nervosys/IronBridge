@@ -25,6 +25,46 @@ Verified against the tree as of August 4, 2026:
 | Desktop application | Runs the API server in-process, so it works standalone. The UI is chasm-web; there is no desktop-specific interface. |
 | Agent inbox | Backed by `/api/inbox`. The agency runtime emits run and message events; permission requests expire rather than lingering as approvable. |
 
+### REST surface removed from the spec in 2.0.0
+
+`openapi.yaml` used to document twenty paths the server never routed, so a
+generated client compiled fine and then 404'd at runtime. They were removed so
+the spec describes only what is served. Recorded here because deleting them
+from the spec also deletes the only record that they were once intended:
+
+| Removed | Methods | Note |
+| --- | --- | --- |
+| `/system/vacuum`, `/system/cache/clear` | POST | No maintenance endpoints exist. |
+| `/workspaces/discover`, `/workspaces/{id}/refresh` | POST | Discovery is CLI-only (`chasm detect`). |
+| `/sessions/merge`, `/sessions/{id}/archive`, `/sessions/{id}/fork` | POST | Merge exists as a library and CLI capability, not over REST. |
+| `/sessions/{id}/export` | GET | Export is CLI-only. |
+| `/sessions/{id}/messages` | GET, POST | Messages come back embedded in `GET /sessions/{id}`. |
+| `/providers/{id}`, `/providers/{id}/health`, `/providers/{id}/models` | GET, PUT, DELETE | Only `GET /providers` and `GET /system/providers/health` are served. |
+| `/chat/completions` | POST | Chasm is not an inference proxy. |
+| `/harvest`, `/sync` | POST | Harvest is CLI-only; sync is served as `/sync/*` subroutes, never as bare `POST /sync`. |
+| `/search`, `/search/sessions`, `/search/semantic` | GET | Search is `GET /sessions/search?q=`. Semantic search is a library capability with no REST route. |
+| `/stats/providers`, `/stats/timeline` | GET | Only `/stats` and `/stats/overview` are served. |
+
+Seven further operations were removed from paths that are otherwise served. The
+REST API is read-only for these resources; writes go through the CLI:
+
+| Removed | Kept on the same path |
+| --- | --- |
+| `POST /workspaces`, `PUT /workspaces/{id}`, `DELETE /workspaces/{id}` | `GET` |
+| `POST /sessions`, `PUT /sessions/{id}`, `DELETE /sessions/{id}` | `GET` |
+| `POST /providers` | `GET` |
+
+Determined from route registrations in `src/api/`, not by probing: this server
+answers `404` for a method mismatch as well as for an unknown path, so a `404`
+alone cannot tell the two apart. `api::docs` now enforces this with
+`every_documented_path_is_actually_routed`, which builds the real app behind a
+sentinel `default_service` and fails if any documented operation reaches it --
+that test is what found the seven above.
+
+The inverse gap still stands -- `/swarms` and the `/swe/projects/*` tree are
+served but undocumented, as are the `/auth`, `/sync`, `/recording`, `/webhooks`,
+`/audit`, `/retention`, and `/sso` scopes.
+
 The CLI, core library, harvest/recovery pipeline, provider parsers, MCP server,
 and TUI are complete and covered by 780 passing tests on Windows. Earlier
 figures in the 880–960 range double-counted: `main.rs` re-declared modules that

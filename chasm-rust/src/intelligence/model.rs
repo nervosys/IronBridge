@@ -517,7 +517,7 @@ mod tests {
     #[test]
     fn truncation_does_not_split_a_multibyte_character() {
         // Every char is 3 bytes, so a byte-index slice would panic here.
-        let text: String = std::iter::repeat('あ').take(MAX_CHARS + 100).collect();
+        let text = "あ".repeat(MAX_CHARS + 100);
         let out = truncate_transcript(&text);
         assert_eq!(out.chars().count(), MAX_CHARS);
     }

@@ -9,6 +9,12 @@ use actix_web::{web, HttpResponse, Responder};
 /// OpenAPI specification as YAML
 const OPENAPI_YAML: &str = include_str!("../../openapi.yaml");
 
+/// The copy MkDocs publishes. Embedded only so a test can assert it matches
+/// the spec this server actually serves -- the two drifted once already, and
+/// the published docs spent a release advertising a base URL that 404'd.
+#[cfg(test)]
+const OPENAPI_YAML_DOCS_COPY: &str = include_str!("../../docs/assets/openapi.yaml");
+
 /// Get OpenAPI specification (YAML)
 pub async fn openapi_yaml() -> impl Responder {
     HttpResponse::Ok()
@@ -112,7 +118,7 @@ const SWAGGER_UI_HTML: &str = r#"<!DOCTYPE html>
 <body>
     <div class="custom-header">
         <h1>🔗 Chasm API</h1>
-        <span class="version">v1.3.0</span>
+        <span class="version">v2.0.0</span>
         <a href="https://github.com/nervosys/chasm" target="_blank">GitHub →</a>
     </div>
     <div id="swagger-ui"></div>
@@ -142,3 +148,147 @@ const SWAGGER_UI_HTML: &str = r#"<!DOCTYPE html>
 </body>
 </html>
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{http::StatusCode, test, App};
+
+    /// Returned by the test app's default service. Any request answered with
+    /// this reached no route at all, which is what distinguishes an unrouted
+    /// path from a handler that legitimately answers 404 for a missing record.
+    /// This server returns 404 for a method mismatch too, so status alone
+    /// cannot tell those apart -- hence the sentinel.
+    const UNROUTED: StatusCode = StatusCode::IM_A_TEAPOT;
+
+    fn spec() -> serde_json::Value {
+        serde_yaml::from_str(OPENAPI_YAML).expect("openapi.yaml must parse")
+    }
+
+    #[test]
+    fn spec_parses_as_yaml_and_converts_to_json() {
+        let json = serde_yaml_to_json(OPENAPI_YAML).expect("spec must convert to JSON");
+        assert!(json.contains("\"openapi\""));
+    }
+
+    #[test]
+    fn published_docs_copy_matches_the_served_spec() {
+        assert_eq!(
+            OPENAPI_YAML, OPENAPI_YAML_DOCS_COPY,
+            "docs/assets/openapi.yaml has drifted from openapi.yaml; \
+             copy the root spec over it so the published docs match the server"
+        );
+    }
+
+    #[test]
+    fn every_ref_in_the_spec_resolves() {
+        let spec = spec();
+        let mut refs = Vec::new();
+        collect_refs(&spec, &mut refs);
+        assert!(!refs.is_empty(), "expected the spec to use $ref");
+
+        for r in refs {
+            let pointer = r.trim_start_matches('#');
+            assert!(
+                spec.pointer(pointer).is_some(),
+                "dangling $ref in openapi.yaml: {r}"
+            );
+        }
+    }
+
+    fn collect_refs(value: &serde_json::Value, out: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (k, v) in map {
+                    if k == "$ref" {
+                        if let Some(s) = v.as_str() {
+                            out.push(s.to_string());
+                        }
+                    } else {
+                        collect_refs(v, out);
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => items.iter().for_each(|v| collect_refs(v, out)),
+            _ => {}
+        }
+    }
+
+    /// Every path in the spec must resolve to a real route.
+    ///
+    /// This is the guard that was missing: `openapi.yaml` accumulated twenty
+    /// documented-but-unimplemented paths, so a generated client compiled and
+    /// then 404'd on every call to them.
+    #[tokio::test]
+    async fn every_documented_path_is_actually_routed() {
+        use crate::api::{configure_inbox_routes, AppState};
+        use crate::ChatDatabase;
+        use actix_web::web::Data;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("spec-routes.db");
+        let db = ChatDatabase::open(&db_path).expect("open db");
+        let state = Data::new(AppState::new(db, db_path));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .configure(configure_inbox_routes)
+                .configure(super::super::configure_routes)
+                .default_service(web::to(|| async { HttpResponse::ImATeapot().finish() })),
+        )
+        .await;
+
+        let spec = spec();
+        let paths = spec["paths"].as_object().expect("spec has paths");
+        assert!(!paths.is_empty());
+
+        let mut unrouted = Vec::new();
+        for (path, item) in paths {
+            // Path parameters match any value, so the placeholder only has to
+            // be non-empty -- routing does not care whether the record exists.
+            let concrete = substitute_params(path);
+            let methods = item.as_object().expect("path item is a map");
+
+            for method in methods.keys() {
+                let req = match method.as_str() {
+                    "get" => test::TestRequest::get(),
+                    "post" => test::TestRequest::post(),
+                    "put" => test::TestRequest::put(),
+                    "delete" => test::TestRequest::delete(),
+                    "patch" => test::TestRequest::patch(),
+                    // parameters, summary, description and friends
+                    _ => continue,
+                };
+                let uri = format!("/api{concrete}");
+                let resp = test::call_service(&app, req.uri(&uri).to_request()).await;
+                if resp.status() == UNROUTED {
+                    unrouted.push(format!("{} {}", method.to_uppercase(), uri));
+                }
+            }
+        }
+
+        assert!(
+            unrouted.is_empty(),
+            "openapi.yaml documents paths the server does not route: {unrouted:#?}\n\
+             Either implement them or remove them from the spec."
+        );
+    }
+
+    fn substitute_params(path: &str) -> String {
+        let mut out = String::with_capacity(path.len());
+        let mut in_param = false;
+        for c in path.chars() {
+            match c {
+                '{' => {
+                    in_param = true;
+                    out.push_str("spec-probe");
+                }
+                '}' => in_param = false,
+                _ if in_param => {}
+                _ => out.push(c),
+            }
+        }
+        out
+    }
+}
