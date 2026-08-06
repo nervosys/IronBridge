@@ -15,7 +15,7 @@
 - 🎛️ **Interactive TUI** — Browse workspaces and sessions in the terminal
 - 🤖 **MCP Server** — Model Context Protocol integration for AI agents
 - 📦 **Git Integration** — Version control your chat histories
-- 🌐 **REST API** — 130 documented operations, every one verified as routed
+- 🌐 **REST API** — 137 documented operations, every one verified as routed
 - 🔗 **Local Share Links** — Revocable, expiring tokens that read a session
   back through your own server. Nothing is uploaded anywhere
 - 🧠 **Conversation Analysis** — Model-backed against any OpenAI-compatible
@@ -187,7 +187,7 @@ Every endpoint **except `GET /api/health`** wraps its payload:
 
 Errors carry `{"success": false, "error": "..."}` with no `data`.
 
-The full spec is `chasm-rust/openapi.yaml` — 101 paths, 130 operations. Two
+The full spec is `chasm-rust/openapi.yaml` — 105 paths, 137 operations. Two
 tests keep it honest: one fails if a documented path is not routed, the other
 if a response body no longer matches its schema.
 
@@ -341,10 +341,16 @@ chasm agency run --orchestration swarm "Build a REST API"
 Behind the `enterprise` feature flag. Pure Rust, so they build wherever the
 rest of the crate does — no `libxmlsec1`, no OpenSSL, no `clang`.
 
-- **SSO/SAML**: SAML 2.0 flow for Okta, Azure AD, Google, OneLogin, Auth0.
-  Assertion signatures are verified by [`chasm-sso`](chasm-sso/), and the
-  response is re-parsed from the signature-reduced document so wrapped
-  forgeries cannot reach the session.
+- **SSO/OIDC**: OpenID Connect authorization-code flow with PKCE, at `/oidc`.
+  **Prefer this over SAML** — a smaller, better-specified protocol with far
+  less attack surface. ID tokens are verified against the provider's JWKS by
+  [`chasm-sso`](chasm-sso/); the `state` is single-use, the PKCE verifier
+  never leaves the server, and a login whose email claim is not marked
+  verified is refused.
+- **SSO/SAML**: SAML 2.0 flow for Okta, Azure AD, Google, OneLogin, Auth0, for
+  providers that speak nothing else. Assertion signatures are verified by
+  `chasm-sso`, and the response is re-parsed from the signature-reduced
+  document so wrapped forgeries cannot reach the session.
 - **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
 - **Data Retention**: policy model, scheduling, and expiry actions.
 - **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS —
@@ -355,13 +361,19 @@ All three services persist through `api::audit::DatabaseOps`. The crate ships
 `SqliteEnterpriseStore`, which implements all 35 methods against the same SQLite
 database as the rest of Chasm; an embedder can substitute its own implementor.
 
-The scopes mount at the root — `/audit`, `/retention`, `/sso` — not under
-`/api`, and unlike the `/api` endpoints they return their payload bare rather
-than in a `{success, data}` envelope.
+The scopes mount at the root — `/audit`, `/retention`, `/sso`, `/oidc` — not
+under `/api`, and unlike the `/api` endpoints they return their payload bare
+rather than in a `{success, data}` envelope.
 
 Set `CHASM_PUBLIC_BASE_URL` when using SAML. It is what the SP metadata
 advertises to the identity provider; without it the URLs fall back to the bind
 address, which is normally `0.0.0.0` and unreachable from a browser.
+
+**An OIDC client secret is stored in the database in plaintext.** It is never
+returned over HTTP — `GET /oidc/providers` reports `has_client_secret` and
+nothing more — but anyone who can read the database file has it. Configuring
+the provider as a public client (PKCE, no secret) avoids this entirely and is
+the better choice where the provider allows it.
 
 **Team Workspaces** (RBAC, activity feeds, session sharing) is not gated behind
 this flag and does not depend on `DatabaseOps`.
@@ -376,9 +388,9 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 879 tests passing.                                                                            |
 | Providers                       | **Working.** 11 local/OpenAI-compatible endpoints in the catalogue, 21 cloud providers listed, and 5 cloud share-link parsers (ChatGPT, Claude, Gemini, Perplexity, Poe). |
 | MCP server, TUI                 | **Working.**                                                                                                              |
-| REST API                        | **Working.** 130 operations across 101 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
+| REST API                        | **Working.** 137 operations across 105 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
-| Enterprise (SSO/audit/retention)| **Working, all platforms.** SAML signatures are verified against wrapping attacks by the pure-Rust `chasm-sso`, and `SqliteEnterpriseStore` implements all 35 `DatabaseOps` methods, so IdP config, sessions, audit events and retention policies persist. All 18 endpoints are served, probed by tests, and their response bodies documented. Until recently the three lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
+| Enterprise (SSO/audit/retention)| **Working, all platforms.** OIDC (authorization code + PKCE) and SAML both run on the pure-Rust `chasm-sso`; SAML signatures are verified against wrapping attacks. `SqliteEnterpriseStore` implements every `DatabaseOps` method, so provider config, pending logins, sessions, audit events and retention policies persist. All 25 enterprise operations are served, probed by tests, and their response bodies documented. Until recently the lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
 | Conversation analysis           | **Model-backed.** `chasm analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
 | Embeddings / semantic search    | **Built, unproven.** `POST /api/search/semantic/index` embeds sessions and `GET /api/search/semantic` ranks them by cosine similarity. Refusal, vector storage and the similarity maths are tested; the embed–index–rank path has never run against a real embedding endpoint, so treat it as unverified. This row previously read "Working" while nothing in the tree ever wrote an embedding. |
 | Session sharing                 | **Working, local only.** Revocable, optionally-expiring tokens readable through your own server. Nothing is uploaded anywhere — see [Sharing](#sharing). |

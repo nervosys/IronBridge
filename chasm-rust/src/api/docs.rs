@@ -361,7 +361,10 @@ mod tests {
         } else {
             assert!(
                 gated.iter().all(|p| {
-                    p.starts_with("/audit") || p.starts_with("/retention") || p.starts_with("/sso")
+                    p.starts_with("/audit")
+                        || p.starts_with("/retention")
+                        || p.starts_with("/sso")
+                        || p.starts_with("/oidc")
                 }),
                 "a path outside the enterprise scopes is marked enterprise-gated: {gated:?}"
             );
@@ -545,6 +548,22 @@ mod tests {
             if resp.status() == StatusCode::SERVICE_UNAVAILABLE
                 && op.pointer("/responses/503").is_some()
             {
+                continue;
+            }
+            // Some endpoints cannot reach 200 from a cold probe at all: the
+            // OIDC callback consumes a single-use login state that only a real
+            // browser round trip creates. Those declare it in the spec, and
+            // the declaration is checked below rather than trusted -- the
+            // operation must actually document the status it answers with, so
+            // this cannot become a blanket excuse for any 4xx.
+            if op.get("x-chasm-probe").and_then(|v| v.as_str()) == Some("needs-prior-state") {
+                let documented = format!("/responses/{}", resp.status().as_u16());
+                assert!(
+                    op.pointer(&documented).is_some(),
+                    "GET {uri} is marked needs-prior-state but answered {} , \
+                     which the spec does not document",
+                    resp.status()
+                );
                 continue;
             }
             if resp.status() != StatusCode::OK {

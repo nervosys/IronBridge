@@ -34,6 +34,8 @@ mod handlers_simple;
 mod handlers_swe;
 mod handlers_write;
 pub mod inbox;
+#[cfg(feature = "enterprise")]
+mod oidc;
 mod recording;
 #[cfg(feature = "enterprise")]
 mod retention;
@@ -55,6 +57,8 @@ pub use docs::configure_docs_routes;
 pub use enterprise_store::SqliteEnterpriseStore;
 pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
 pub use inbox::{configure_inbox_routes, init_inbox_tables, InboxEmitter};
+#[cfg(feature = "enterprise")]
+pub use oidc::{configure_oidc_routes, OidcProviderConfig, OidcService};
 pub use recording::{configure_recording_routes, create_recording_state};
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
@@ -261,6 +265,7 @@ struct EnterpriseServices {
     audit: web::Data<AuditService>,
     retention: web::Data<RetentionService>,
     sso: web::Data<SsoService>,
+    oidc: web::Data<OidcService>,
 }
 
 #[cfg(feature = "enterprise")]
@@ -279,12 +284,14 @@ impl EnterpriseServices {
         let audit = web::Data::new(AuditService::new(store.clone()));
         let retention =
             web::Data::new(RetentionService::new(store.clone()).with_audit(audit.clone()));
-        let sso = web::Data::new(SsoService::new(store, base_url));
+        let sso = web::Data::new(SsoService::new(store.clone(), base_url));
+        let oidc = web::Data::new(OidcService::new(store));
 
         Ok(Self {
             audit,
             retention,
             sso,
+            oidc,
         })
     }
 
@@ -298,9 +305,11 @@ impl EnterpriseServices {
         cfg.app_data(self.audit.clone());
         cfg.app_data(self.retention.clone());
         cfg.app_data(self.sso.clone());
+        cfg.app_data(self.oidc.clone());
         configure_audit_routes(cfg);
         configure_retention_routes(cfg);
         configure_sso_routes(cfg);
+        configure_oidc_routes(cfg);
     }
 }
 

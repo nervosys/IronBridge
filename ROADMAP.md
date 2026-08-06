@@ -68,9 +68,10 @@ Verified against the tree as of August 4, 2026:
 | --- | --- |
 | GraphQL API | Mounted and backed by the database. `harvest` and `sync` mutations return errors by design (use the CLI or REST). `tags` is rejected on session updates -- no column exists for it. |
 | REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted. The served API is 92 routes across `api/mod.rs` and `api/handlers_write.rs`, plus the root-mounted auth, sync, recording, webhook and websocket scopes. (This said 47 until the write handlers landed; the count is now asserted by `openapi.yaml` and its route test rather than kept by hand.) |
+| SSO/OIDC | Authorization code + PKCE, served at `/oidc`. ID tokens are verified against the provider's JWKS by `chasm-sso`. The `state` is consumed atomically (`DELETE ... RETURNING`), so a replayed callback is refused; an unverified email claim is refused too. The client secret is stored in plaintext — never returned over HTTP, but readable by anyone with the database file. |
 | SSO/SAML | Signature verification is implemented in pure Rust (`chasm-sso`) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Builds on every platform; no native dependencies. |
 | Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
-| Enterprise scopes actually served | Fixed. `/audit`, `/retention` and `/sso` were never registered in `start_server`, so all 18 endpoints answered 404 on every enterprise build; the spec test mounted them itself and so never noticed. Both now go through one `EnterpriseServices::configure`, and the response bodies are documented from observed responses. |
+| Enterprise scopes actually served | Fixed. `/audit`, `/retention` and `/sso` were never registered in `start_server`, so all 18 of their operations answered 404 on every enterprise build; the spec test mounted them itself and so never noticed. Both now go through one `EnterpriseServices::configure`, and the response bodies are documented from observed responses. |
 | AI & Intelligence | Model-backed via `chasm analyze`, against any OpenAI-compatible endpoint. Falls back to the old heuristics without a key, and every result states which produced it. |
 | Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation. Requires an API key; without one, embedding calls error rather than returning zeros. |
 | Desktop application | Runs the API server in-process, so it works standalone. The UI is chasm-web; there is no desktop-specific interface. |
@@ -160,7 +161,7 @@ path outside those three scopes.
 
 **The build obstacle is now gone.** `samael` was replaced by the pure-Rust
 `chasm-sso`, so the enterprise feature has no native dependencies and builds
-anywhere cargo does. All 18 enterprise operations are verified as routed on
+anywhere cargo does. All 25 enterprise operations (SAML, OIDC, audit, retention) are verified as routed on
 every platform, and 39 tests that had never run on Windows now execute.
 
 Their response bodies remain unmodelled, but only because nobody has observed

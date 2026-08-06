@@ -414,7 +414,7 @@ mixes both in a single object. `/sync/subscribe` is an SSE stream and
 
 ### Enterprise scopes
 
-`/audit`, `/retention` and `/sso` are `#[cfg(feature = "enterprise")]`. They
+`/audit`, `/retention`, `/sso` and `/oidc` are `#[cfg(feature = "enterprise")]`. They
 are in the spec, each marked `x-chasm-feature: enterprise`. The spec tests
 skip a marked path when the feature is off and probe it normally when it is
 on, so:
@@ -425,7 +425,7 @@ cargo test                          # skips them, and says how many
 ```
 
 **Since SAML moved to `chasm-sso`, that first command works everywhere.** The
-enterprise feature has no native dependencies now, so all 18 enterprise
+enterprise feature has no native dependencies now, so all 25 enterprise
 operations are verified as routed on any platform rather than skipped, and
 39 previously-unrunnable tests execute.
 
@@ -442,6 +442,16 @@ worth knowing:
   the payload bare.
 - Creates answer 201 and deletes answer 204, and every refusal is a 400 —
   including a rejected SAML assertion, which is not a 401.
+
+`/oidc` was added afterwards and follows the same conventions. Two of its
+operations cannot be probed the usual way:
+
+- `GET /oidc/callback` consumes a single-use login state, so it can never
+  answer 200 to a cold probe. It carries `x-chasm-probe: needs-prior-state`,
+  and the test asserts such an operation documents whatever status it does
+  answer — the marker excuses the 200, not the endpoint.
+- `POST /oidc/login` performs discovery against the real issuer, so it only
+  succeeds against a reachable provider.
 
 > **This section is now history.** `samael` was replaced by `chasm-sso`, which
 > is pure Rust, so `--features enterprise` builds on any platform cargo does
@@ -533,8 +543,8 @@ Two things that trip people up, now that those paths are gone:
 
 The spec is no longer narrower than the server. `/swarms`, the
 `/swe/projects/*` tree, and the `/auth`, `/sync`, `/recording`, `/webhooks`,
-`/audit`, `/retention` and `/sso` scopes are all documented, and the route
-test fails if a documented path is not served.
+`/audit`, `/retention`, `/sso` and `/oidc` scopes are all documented, and the
+route test fails if a documented path is not served.
 
 When checking whether something is served, read the route registrations in
 `src/api/` rather than probing: this server answers `404` for a method mismatch

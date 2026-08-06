@@ -2965,6 +2965,208 @@ paths:
         "400":
           $ref: "#/components/responses/EnterpriseBadRequest"
 
+  # --- OIDC ------------------------------------------------------------------
+  # Preferred over the SAML scope above: a smaller, better-specified protocol
+  # with far less attack surface. The protocol work lives in the chasm-sso
+  # crate; these endpoints are configuration, the pending-login store, and
+  # turning a verified identity into a Chasm session.
+
+  /oidc/providers:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [OIDC]
+      summary: List OIDC providers
+      operationId: listOidcProviders
+      parameters:
+        - name: organization_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The configured providers, without their client secrets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OidcProvider"
+    post:
+      tags: [OIDC]
+      summary: Register an OIDC provider
+      description: >
+        The issuer must be `https`, except on loopback. The JWKS fetched from
+        that origin supplies every key the login flow trusts, so a plaintext
+        issuer lets anyone on the path choose the signing keys.
+      operationId: createOidcProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOidcProviderRequest"
+      responses:
+        "201":
+          description: The registered provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcProvider"
+        "400":
+          description: >
+            Missing `issuer`/`client_id`, or an issuer that is neither https
+            nor loopback.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+              example:
+                error: issuer must be https (loopback may use http for development)
+
+  /oidc/providers/{provider_id}:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [OIDC]
+      summary: Get an OIDC provider
+      operationId: getOidcProvider
+      parameters:
+        - $ref: "#/components/parameters/oidcProviderId"
+      responses:
+        "200":
+          description: The provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcProvider"
+        "404":
+          description: No provider with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+    put:
+      tags: [OIDC]
+      summary: Update an OIDC provider
+      operationId: updateOidcProvider
+      parameters:
+        - $ref: "#/components/parameters/oidcProviderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOidcProviderRequest"
+      responses:
+        "200":
+          description: The updated provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcProvider"
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
+    delete:
+      tags: [OIDC]
+      summary: Remove an OIDC provider
+      operationId: deleteOidcProvider
+      parameters:
+        - $ref: "#/components/parameters/oidcProviderId"
+      responses:
+        "204":
+          description: Removed. No body.
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
+
+  /oidc/login:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    post:
+      tags: [OIDC]
+      summary: Begin an OIDC login
+      description: >
+        Discovers the provider, builds the authorization URL, and stores the
+        pending login server-side. Send the browser to `authorization_url`.
+
+        The PKCE verifier and the nonce stay on the server; the caller only
+        ever sees the opaque `state`.
+      operationId: beginOidcLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BeginOidcLoginRequest"
+      responses:
+        "200":
+          description: Where to send the browser
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BeginOidcLoginResponse"
+        "400":
+          description: >
+            Neither `provider_id` nor `email_domain` was given, no provider
+            matched, the provider is disabled, or discovery failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+              example:
+                error: Must provide either provider_id or email_domain
+
+  /oidc/callback:
+    x-chasm-feature: enterprise
+    servers: *rootServer
+    get:
+      tags: [OIDC]
+      summary: OIDC redirect endpoint
+      description: >
+        Where the provider returns the browser. Redeems the code and, if the
+        ID token verifies, issues Chasm tokens.
+
+        `state` is single-use: it is consumed on the first callback, so a
+        replayed one is refused. A login whose ID token carries no verified
+        email is refused too — an unverified address must not select an
+        account.
+      operationId: oidcCallback
+      # This endpoint cannot answer 200 to a cold probe: it consumes a
+      # single-use login state that only a real browser round trip creates.
+      x-chasm-probe: needs-prior-state
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          description: The handle returned by `POST /oidc/login`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >
+            Login succeeded; Chasm tokens issued. The same shape
+            `POST /auth/login` returns, but bare rather than enveloped.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          description: >
+            Unknown, expired or already-used state; a failed token exchange;
+            an ID token that does not verify; or an unverified email claim.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+              example:
+                error: Unknown or already-used state
+
 components:
   parameters:
     workspaceId:
@@ -3023,6 +3225,12 @@ components:
         type: string
     idpId:
       name: idp_id
+      in: path
+      required: true
+      schema:
+        type: string
+    oidcProviderId:
+      name: provider_id
       in: path
       required: true
       schema:
@@ -4797,3 +5005,178 @@ components:
         expires_at:
           type: integer
           format: int64
+
+    # -- OIDC -----------------------------------------------------------------
+
+    OidcProvider:
+      type: object
+      description: >
+        An OIDC provider as returned over HTTP. The `client_secret` is never
+        included -- it is a credential that would let its holder impersonate
+        this application to the identity provider. `has_client_secret` says
+        whether one is configured, which is all a caller needs.
+      required:
+        - id
+        - name
+        - issuer
+        - client_id
+        - has_client_secret
+        - redirect_uri
+        - scopes
+        - enabled
+        - domains
+        - default_tier
+        - auto_provision
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        issuer:
+          type: string
+          description: Trailing slash stripped on creation.
+        client_id:
+          type: string
+        has_client_secret:
+          type: boolean
+        redirect_uri:
+          type: string
+        scopes:
+          type: array
+          description: Empty means `openid email profile`.
+          items:
+            type: string
+        groups_claim:
+          type: string
+          nullable: true
+          description: Entra uses `groups`; others use `roles`.
+        enabled:
+          type: boolean
+        domains:
+          type: array
+          description: >
+            Email domains routed here, folded to lower case. A provider with
+            none is reachable only by explicit id.
+          items:
+            type: string
+        organization_id:
+          type: string
+          nullable: true
+        default_tier:
+          type: string
+          description: Tier granted to auto-provisioned users.
+        auto_provision:
+          type: boolean
+          description: >
+            Whether a first-time user is created. With this off, a login by
+            someone with no existing account is refused.
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+
+    CreateOidcProviderRequest:
+      type: object
+      required: [name, issuer, client_id, redirect_uri]
+      properties:
+        name:
+          type: string
+        issuer:
+          type: string
+          description: Must be https, except on loopback.
+        client_id:
+          type: string
+        client_secret:
+          type: string
+          description: Omit for a public client using PKCE alone.
+        redirect_uri:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        groups_claim:
+          type: string
+        domains:
+          type: array
+          items:
+            type: string
+        organization_id:
+          type: string
+        auto_provision:
+          type: boolean
+          default: false
+        enabled:
+          type: boolean
+          default: true
+      example:
+        name: Entra
+        issuer: https://login.example.com/v2.0
+        client_id: client-abc
+        redirect_uri: https://chasm.example.com/oidc/callback
+        domains: [example.com]
+        auto_provision: true
+
+    UpdateOidcProviderRequest:
+      type: object
+      description: >
+        Every field optional; omitted fields are left alone. Sending
+        `client_secret` replaces the stored one — there is deliberately no way
+        to express "clear it" here, so that clearing cannot be confused with
+        omitting.
+      properties:
+        name:
+          type: string
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        redirect_uri:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        groups_claim:
+          type: string
+        enabled:
+          type: boolean
+        auto_provision:
+          type: boolean
+        domains:
+          type: array
+          items:
+            type: string
+
+    BeginOidcLoginRequest:
+      type: object
+      description: Supply `provider_id` or `email_domain`. Neither is a 400.
+      properties:
+        provider_id:
+          type: string
+        email_domain:
+          type: string
+          description: Matched against each provider's `domains`.
+        return_to:
+          type: string
+          description: Where to send the browser once the login completes.
+
+    BeginOidcLoginResponse:
+      type: object
+      required: [authorization_url, state]
+      properties:
+        authorization_url:
+          type: string
+          description: >
+            The provider's authorization endpoint with the PKCE challenge,
+            nonce and state attached.
+        state:
+          type: string
+          description: >
+            Opaque single-use handle. The PKCE verifier and nonce it stands
+            for stay on the server and are never sent to the browser.

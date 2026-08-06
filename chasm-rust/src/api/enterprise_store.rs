@@ -27,6 +27,7 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 
 use super::audit::{AuditEvent, AuditQuery, AuditQueryResult, DatabaseOps};
 use super::auth::User;
+use super::oidc::{OidcLoginState, OidcProviderConfig};
 use super::retention::{ExpiredItem, ResourceType, RetentionPolicy};
 use super::sso::{SamlIdpConfig, SsoRequestState, SsoSession};
 
@@ -137,6 +138,30 @@ impl SqliteEnterpriseStore {
                 payload    TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_sso_sessions_user ON sso_sessions(user_id);
+
+            CREATE TABLE IF NOT EXISTS oidc_providers (
+                id              TEXT PRIMARY KEY,
+                organization_id TEXT,
+                enabled         INTEGER NOT NULL DEFAULT 0,
+                payload         TEXT NOT NULL
+            );
+
+            -- Domain -> provider routing, indexed for the same reason as the
+            -- SAML equivalent: login discovery is an equality lookup.
+            CREATE TABLE IF NOT EXISTS oidc_provider_domains (
+                domain      TEXT NOT NULL,
+                provider_id TEXT NOT NULL REFERENCES oidc_providers(id) ON DELETE CASCADE,
+                PRIMARY KEY (domain, provider_id)
+            );
+
+            -- Pending logins. Rows are deleted when consumed, so this table
+            -- holds only in-flight logins.
+            CREATE TABLE IF NOT EXISTS oidc_login_states (
+                state       TEXT PRIMARY KEY,
+                provider_id TEXT NOT NULL,
+                expires_at  INTEGER NOT NULL,
+                payload     TEXT NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS users (
                 id            TEXT PRIMARY KEY,
@@ -972,6 +997,178 @@ impl DatabaseOps for SqliteEnterpriseStore {
         Ok(())
     }
 
+    // -- OIDC identity providers --------------------------------------------
+
+    fn get_oidc_provider(&self, id: &str) -> Result<Option<OidcProviderConfig>, String> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT payload FROM oidc_providers WHERE id = ?1",
+            params![id],
+            json_from_row::<OidcProviderConfig>,
+        )
+        .optional()
+        .map_err(err("reading OIDC provider"))
+    }
+
+    fn get_oidc_provider_by_domain(
+        &self,
+        domain: &str,
+    ) -> Result<Option<OidcProviderConfig>, String> {
+        let conn = self.lock()?;
+        // Enabled only, as with SAML: a disabled provider must not be able to
+        // authenticate anyone, including by domain discovery.
+        conn.query_row(
+            "SELECT p.payload FROM oidc_providers p
+             JOIN oidc_provider_domains d ON d.provider_id = p.id
+             WHERE d.domain = ?1 AND p.enabled = 1",
+            params![domain.to_lowercase()],
+            json_from_row::<OidcProviderConfig>,
+        )
+        .optional()
+        .map_err(err("reading OIDC provider by domain"))
+    }
+
+    fn list_oidc_providers(
+        &self,
+        organization_id: Option<&str>,
+    ) -> Result<Vec<OidcProviderConfig>, String> {
+        let conn = self.lock()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT payload FROM oidc_providers
+                 WHERE ?1 IS NULL OR organization_id = ?1
+                 ORDER BY id",
+            )
+            .map_err(err("preparing OIDC provider list"))?;
+        let rows = stmt
+            .query_map(params![organization_id], json_from_row::<OidcProviderConfig>)
+            .map_err(err("listing OIDC providers"))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(err("decoding OIDC providers"))?);
+        }
+        Ok(out)
+    }
+
+    fn create_oidc_provider(&self, provider: &OidcProviderConfig) -> Result<(), String> {
+        let payload = to_json(provider, "OIDC provider")?;
+        let mut conn = self.lock()?;
+        let tx = conn
+            .transaction()
+            .map_err(err("starting OIDC provider write"))?;
+        tx.execute(
+            "INSERT INTO oidc_providers (id, organization_id, enabled, payload)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                provider.id,
+                provider.organization_id.as_deref(),
+                provider.enabled as i64,
+                payload
+            ],
+        )
+        .map_err(err("creating OIDC provider"))?;
+        for domain in &provider.domains {
+            tx.execute(
+                "INSERT OR IGNORE INTO oidc_provider_domains (domain, provider_id)
+                 VALUES (?1, ?2)",
+                params![domain.to_lowercase(), provider.id],
+            )
+            .map_err(err("mapping OIDC provider domain"))?;
+        }
+        tx.commit()
+            .map_err(err("committing OIDC provider write"))?;
+        Ok(())
+    }
+
+    fn update_oidc_provider(&self, provider: &OidcProviderConfig) -> Result<(), String> {
+        let payload = to_json(provider, "OIDC provider")?;
+        let mut conn = self.lock()?;
+        let tx = conn
+            .transaction()
+            .map_err(err("starting OIDC provider update"))?;
+        let changed = tx
+            .execute(
+                "UPDATE oidc_providers SET organization_id = ?2, enabled = ?3, payload = ?4
+                 WHERE id = ?1",
+                params![
+                    provider.id,
+                    provider.organization_id.as_deref(),
+                    provider.enabled as i64,
+                    payload
+                ],
+            )
+            .map_err(err("updating OIDC provider"))?;
+        if changed == 0 {
+            return Err(format!("no OIDC provider '{}'", provider.id));
+        }
+        // Replace the domain set wholesale: removing a domain must stop
+        // routing logins here.
+        tx.execute(
+            "DELETE FROM oidc_provider_domains WHERE provider_id = ?1",
+            params![provider.id],
+        )
+        .map_err(err("clearing OIDC provider domains"))?;
+        for domain in &provider.domains {
+            tx.execute(
+                "INSERT OR IGNORE INTO oidc_provider_domains (domain, provider_id)
+                 VALUES (?1, ?2)",
+                params![domain.to_lowercase(), provider.id],
+            )
+            .map_err(err("mapping OIDC provider domain"))?;
+        }
+        tx.commit()
+            .map_err(err("committing OIDC provider update"))?;
+        Ok(())
+    }
+
+    fn delete_oidc_provider(&self, id: &str) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute("DELETE FROM oidc_providers WHERE id = ?1", params![id])
+            .map_err(err("deleting OIDC provider"))?;
+        Ok(())
+    }
+
+    // -- OIDC pending logins --------------------------------------------------
+
+    fn store_oidc_login_state(&self, state: &OidcLoginState) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO oidc_login_states (state, provider_id, expires_at, payload)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                state.state,
+                state.provider_id,
+                state.expires_at,
+                to_json(state, "OIDC login state")?
+            ],
+        )
+        .map_err(err("storing OIDC login state"))?;
+
+        // Opportunistic cleanup. Abandoned logins are the common case -- users
+        // close the tab -- and nothing else would ever remove them.
+        conn.execute(
+            "DELETE FROM oidc_login_states WHERE expires_at < ?1",
+            params![Utc::now().timestamp()],
+        )
+        .map_err(err("pruning OIDC login states"))?;
+        Ok(())
+    }
+
+    fn take_oidc_login_state(&self, state: &str) -> Result<Option<OidcLoginState>, String> {
+        let conn = self.lock()?;
+        // `RETURNING` makes the read and the delete one statement, so two
+        // concurrent callbacks carrying the same state cannot both be served
+        // -- exactly one sees a row. A select-then-delete pair would leave a
+        // window where both do.
+        conn.query_row(
+            "DELETE FROM oidc_login_states WHERE state = ?1 RETURNING payload",
+            params![state],
+            json_from_row::<OidcLoginState>,
+        )
+        .optional()
+        .map_err(err("consuming OIDC login state"))
+    }
+
     // -- Users provisioned through SSO --------------------------------------
 
     fn get_user_by_email(&self, email: &str) -> Result<Option<User>, String> {
@@ -1326,6 +1523,147 @@ mod store_tests {
             expires_at: now + 3600,
         })
         .unwrap();
+    }
+
+    // -- OIDC ------------------------------------------------------------------
+
+    fn oidc_provider(id: &str, enabled: bool, domains: &[&str]) -> OidcProviderConfig {
+        OidcProviderConfig {
+            id: id.into(),
+            name: "Entra".into(),
+            issuer: "https://login.example.com/v2.0".into(),
+            client_id: "client-abc".into(),
+            client_secret: Some("secret".into()),
+            redirect_uri: "https://chasm.example.com/oidc/callback".into(),
+            scopes: vec![],
+            groups_claim: None,
+            enabled,
+            domains: domains.iter().map(|d| d.to_string()).collect(),
+            organization_id: None,
+            default_tier: crate::api::auth::SubscriptionTier::Enterprise,
+            auto_provision: true,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    #[test]
+    fn oidc_providers_round_trip_and_route_by_domain() {
+        let s = store();
+        s.create_oidc_provider(&oidc_provider("p1", true, &["Example.COM"]))
+            .unwrap();
+
+        assert_eq!(s.get_oidc_provider("p1").unwrap().unwrap().name, "Entra");
+        // Domains are stored folded, so the lookup is case-insensitive in
+        // practice -- email domains are.
+        assert_eq!(
+            s.get_oidc_provider_by_domain("example.com")
+                .unwrap()
+                .unwrap()
+                .id,
+            "p1"
+        );
+        assert_eq!(s.list_oidc_providers(None).unwrap().len(), 1);
+
+        s.delete_oidc_provider("p1").unwrap();
+        assert!(s.get_oidc_provider("p1").unwrap().is_none());
+        assert!(s.get_oidc_provider_by_domain("example.com").unwrap().is_none());
+    }
+
+    /// A disabled provider must not authenticate anyone, including through
+    /// domain discovery, which is the path that does not name it explicitly.
+    #[test]
+    fn a_disabled_provider_is_not_reachable_by_domain() {
+        let s = store();
+        s.create_oidc_provider(&oidc_provider("p1", false, &["example.com"]))
+            .unwrap();
+        assert!(s.get_oidc_provider_by_domain("example.com").unwrap().is_none());
+        // Still readable by id, so an admin can enable it.
+        assert!(s.get_oidc_provider("p1").unwrap().is_some());
+    }
+
+    #[test]
+    fn removing_a_domain_stops_routing_to_the_provider() {
+        let s = store();
+        s.create_oidc_provider(&oidc_provider("p1", true, &["old.example", "keep.example"]))
+            .unwrap();
+        s.update_oidc_provider(&oidc_provider("p1", true, &["keep.example"]))
+            .unwrap();
+
+        assert!(s.get_oidc_provider_by_domain("old.example").unwrap().is_none());
+        assert!(s.get_oidc_provider_by_domain("keep.example").unwrap().is_some());
+    }
+
+    #[test]
+    fn updating_a_provider_that_does_not_exist_is_an_error() {
+        let s = store();
+        assert!(s
+            .update_oidc_provider(&oidc_provider("ghost", true, &[]))
+            .is_err());
+    }
+
+    /// The `state` is a single-use CSRF token. If a second callback carrying
+    /// the same value could be served, an attacker who captured one callback
+    /// URL could replay it.
+    #[test]
+    fn a_login_state_can_only_be_taken_once() {
+        let s = store();
+        let now = Utc::now().timestamp();
+        s.store_oidc_login_state(&OidcLoginState {
+            state: "st-1".into(),
+            provider_id: "p1".into(),
+            nonce: "n".into(),
+            verifier: "v".into(),
+            return_to: Some("/dashboard".into()),
+            created_at: now,
+            expires_at: now + 900,
+        })
+        .unwrap();
+
+        let first = s.take_oidc_login_state("st-1").unwrap();
+        assert_eq!(first.expect("first take must find it").verifier, "v");
+
+        assert!(
+            s.take_oidc_login_state("st-1").unwrap().is_none(),
+            "a replayed callback must find nothing"
+        );
+    }
+
+    #[test]
+    fn an_unknown_login_state_is_absent_not_an_error() {
+        let s = store();
+        assert!(s.take_oidc_login_state("never-issued").unwrap().is_none());
+    }
+
+    /// Abandoned logins are the common case -- users close the tab -- and
+    /// nothing else prunes them.
+    #[test]
+    fn storing_a_login_state_prunes_expired_ones() {
+        let s = store();
+        let now = Utc::now().timestamp();
+        s.store_oidc_login_state(&OidcLoginState {
+            state: "stale".into(),
+            provider_id: "p1".into(),
+            nonce: "n".into(),
+            verifier: "v".into(),
+            return_to: None,
+            created_at: now - 10_000,
+            expires_at: now - 5_000,
+        })
+        .unwrap();
+        s.store_oidc_login_state(&OidcLoginState {
+            state: "fresh".into(),
+            provider_id: "p1".into(),
+            nonce: "n".into(),
+            verifier: "v".into(),
+            return_to: None,
+            created_at: now,
+            expires_at: now + 900,
+        })
+        .unwrap();
+
+        assert!(s.take_oidc_login_state("stale").unwrap().is_none());
+        assert!(s.take_oidc_login_state("fresh").unwrap().is_some());
     }
 
     // -- Retention -----------------------------------------------------------

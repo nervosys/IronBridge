@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 // Domain types referenced by the `DatabaseOps` contract below.
 use super::auth::User;
+use super::oidc::{OidcLoginState, OidcProviderConfig};
 use super::retention::{ExpiredItem, ResourceType, RetentionPolicy};
 use super::sso::{SamlIdpConfig, SsoRequestState, SsoSession};
 
@@ -116,6 +117,29 @@ pub trait DatabaseOps {
     // -- SSO flow state and sessions ----------------------------------------
     fn store_sso_request_state(&self, state: &SsoRequestState) -> Result<(), String>;
     fn store_sso_session(&self, session: &SsoSession) -> Result<(), String>;
+
+    // -- OIDC identity providers --------------------------------------------
+    fn get_oidc_provider(&self, id: &str) -> Result<Option<OidcProviderConfig>, String>;
+    fn get_oidc_provider_by_domain(
+        &self,
+        domain: &str,
+    ) -> Result<Option<OidcProviderConfig>, String>;
+    fn list_oidc_providers(
+        &self,
+        organization_id: Option<&str>,
+    ) -> Result<Vec<OidcProviderConfig>, String>;
+    fn create_oidc_provider(&self, provider: &OidcProviderConfig) -> Result<(), String>;
+    fn update_oidc_provider(&self, provider: &OidcProviderConfig) -> Result<(), String>;
+    fn delete_oidc_provider(&self, id: &str) -> Result<(), String>;
+
+    // -- OIDC pending logins -------------------------------------------------
+    fn store_oidc_login_state(&self, state: &OidcLoginState) -> Result<(), String>;
+    /// Fetch a pending login **and delete it**, atomically.
+    ///
+    /// Take, not get: the `state` is a single-use CSRF token, and a callback
+    /// that can be replayed is a callback an attacker can replay. Implementors
+    /// must not offer a non-consuming read of this.
+    fn take_oidc_login_state(&self, state: &str) -> Result<Option<OidcLoginState>, String>;
 
     // -- Users provisioned through SSO --------------------------------------
     fn get_user_by_email(&self, email: &str) -> Result<Option<User>, String>;

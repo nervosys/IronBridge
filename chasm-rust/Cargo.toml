@@ -28,7 +28,12 @@ enterprise = []
 [dependencies]
 # Pure-Rust SSO. Replaces samael, which needed xmlsec1 and could not build on
 # Windows; see chasm-sso/README.md for what it does and does not guarantee.
-chasm-sso = { path = "../chasm-sso", default-features = false }
+# `http` is on because the OIDC flow has to fetch: discovery, JWKS, and the
+# token exchange. It pulls reqwest with rustls, the same backend this crate
+# already uses, so it adds no new native dependency. SAML needs none of it.
+chasm-sso = { path = "../chasm-sso", default-features = false, features = [
+    "http",
+] }
 
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env"] }
