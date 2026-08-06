@@ -35,10 +35,10 @@ pub type Database = std::sync::Arc<dyn DatabaseOps + Send + Sync>;
 /// inside otherwise-async methods without awaiting; implementors are expected
 /// to be backed by a blocking store (SQLite) or to bridge internally.
 ///
-/// **No implementor ships in-tree yet.** Enterprise services are constructed
-/// with an injected `Database`, so an embedder must supply one before the
-/// `enterprise` feature is functional at runtime. See the tracking note in
-/// `src/api/mod.rs`.
+/// [`super::SqliteEnterpriseStore`] is the in-tree implementor, and is what
+/// `chasm api serve` runs on in an enterprise build. The trait is the seam:
+/// services take an injected `Database`, so an embedder can supply their own
+/// store without touching the handlers.
 #[allow(dead_code)]
 #[async_trait::async_trait]
 pub trait DatabaseOps {

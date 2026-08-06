@@ -2466,13 +2466,17 @@ paths:
   # skip a marked path when the feature is off and probe it normally when it
   # is on, so these are verified by any enterprise build.
   #
-  # Paths and methods come from the route registrations in src/api/, which are
-  # unambiguous. Response bodies are deliberately NOT modelled: the enterprise
-  # feature needs OpenSSL to build (samael -> openssl-sys) and could not be
-  # compiled on the machine this was written on, so no response was ever
-  # observed. Every other schema in this document was read off a running
-  # server, and guessing these would break that. An unmodelled body says
-  # "this exists, its shape is unverified"; an invented one would lie.
+  # These bodies were read off a running enterprise server, like every other
+  # schema here. They were previously left unmodelled because the feature
+  # depended on samael -> openssl-sys and would not build on Windows; it is
+  # now pure Rust (chasm-sso), so the responses could finally be observed.
+  #
+  # Note the status codes: creates answer 201 and deletes answer 204, and the
+  # services report a refused operation as 400, not 401/403 -- including
+  # a rejected SAML assertion.
+  #
+  # Unlike the /api scopes, these return their payload bare rather than inside
+  # the {success, data} envelope.
   # ===========================================================================
 
   /audit:
@@ -2482,9 +2486,27 @@ paths:
       tags: [Audit]
       summary: Query audit events
       operationId: listAuditEvents
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Page size. Echoed back in the response.
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
       responses:
         "200":
-          description: Audit events. Body not modelled -- see the note above.
+          description: A page of audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditQueryResult"
 
   /audit/{event_id}:
     x-chasm-feature: enterprise
@@ -2501,9 +2523,17 @@ paths:
             type: string
       responses:
         "200":
-          description: Audit event. Body not modelled.
+          description: The audit event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEvent"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
 
   /audit/user/{user_id}:
     x-chasm-feature: enterprise
@@ -2518,9 +2548,35 @@ paths:
           required: true
           schema:
             type: string
+        - name: from
+          in: query
+          required: false
+          description: RFC 3339 lower bound. Ignored if unparseable.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
-          description: Audit events. Body not modelled.
+          description: >
+            Matching events, as a bare array -- not the paged object /audit
+            returns.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
 
   /audit/resource/{type}/{id}:
     x-chasm-feature: enterprise
@@ -2540,9 +2596,20 @@ paths:
           required: true
           schema:
             type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
-          description: Audit events. Body not modelled.
+          description: Matching events, as a bare array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
 
   /audit/export:
     x-chasm-feature: enterprise
@@ -2550,16 +2617,40 @@ paths:
     post:
       tags: [Audit]
       summary: Export audit events
+      description: >
+        Takes the same filters as the query endpoint plus a `format`. The
+        response is a file download; its content type follows the format, so
+        this operation does not return JSON unless JSON was asked for.
       operationId: exportAuditEvents
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/AuditExportRequest"
       responses:
         "200":
-          description: Export produced. Body not modelled.
+          description: >
+            The export, as an attachment named `audit-log.export`.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="audit-log.export"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
+            text/csv:
+              schema:
+                type: string
+              example: |
+                id,timestamp,category,action,outcome,actor_id,actor_email,resource_type,resource_id,description,error
+            application/x-ndjson:
+              schema:
+                type: string
 
   /retention/policies:
     x-chasm-feature: enterprise
@@ -2568,9 +2659,21 @@ paths:
       tags: [Retention]
       summary: List retention policies
       operationId: listRetentionPolicies
+      parameters:
+        - name: organization_id
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
-          description: Policies. Body not modelled.
+          description: The policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RetentionPolicy"
     post:
       tags: [Retention]
       summary: Create a retention policy
@@ -2580,10 +2683,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/CreateRetentionPolicyRequest"
       responses:
-        "200":
-          description: Policy created. Body not modelled.
+        "201":
+          description: The created policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPolicy"
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
 
   /retention/policies/{policy_id}:
     x-chasm-feature: enterprise
@@ -2596,12 +2705,23 @@ paths:
         - $ref: "#/components/parameters/retentionPolicyId"
       responses:
         "200":
-          description: Policy. Body not modelled.
+          description: The policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPolicy"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: No policy with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
     put:
       tags: [Retention]
       summary: Update a retention policy
+      description: >
+        A partial update: omitted fields keep their current value. Note that
+        `updated_at` is not advanced by this operation.
       operationId: updateRetentionPolicy
       parameters:
         - $ref: "#/components/parameters/retentionPolicyId"
@@ -2610,12 +2730,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/UpdateRetentionPolicyRequest"
       responses:
         "200":
-          description: Updated. Body not modelled.
-        "404":
-          $ref: "#/components/responses/NotFound"
+          description: The updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionPolicy"
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
     delete:
       tags: [Retention]
       summary: Delete a retention policy
@@ -2623,10 +2747,10 @@ paths:
       parameters:
         - $ref: "#/components/parameters/retentionPolicyId"
       responses:
-        "200":
-          description: Deleted.
-        "404":
-          $ref: "#/components/responses/NotFound"
+        "204":
+          description: Deleted. No body.
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
 
   /retention/policies/{policy_id}/execute:
     x-chasm-feature: enterprise
@@ -2634,15 +2758,28 @@ paths:
     post:
       tags: [Retention]
       summary: Run a retention policy now
-      description: Deletes data the policy selects. Not reversible.
+      description: >
+        Applies the policy's expiry actions immediately. Deletions are not
+        reversible. A disabled policy is refused with 400 rather than run.
       operationId: executeRetentionPolicy
       parameters:
         - $ref: "#/components/parameters/retentionPolicyId"
       responses:
         "200":
-          description: Policy executed. Body not modelled.
-        "404":
-          $ref: "#/components/responses/NotFound"
+          description: What the run did
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetentionExecutionResult"
+        "400":
+          description: >
+            The policy is disabled, or does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+              example:
+                error: Policy is disabled
 
   /sso/metadata:
     x-chasm-feature: enterprise
@@ -2650,10 +2787,35 @@ paths:
     get:
       tags: [SSO]
       summary: SAML service-provider metadata
+      description: >
+        The `EntityDescriptor` to hand to an identity provider. The URLs in it
+        come from `CHASM_PUBLIC_BASE_URL`; without that they fall back to the
+        bind address, which is usually not reachable from a browser.
       operationId: getSsoMetadata
       responses:
         "200":
-          description: Metadata document. Body not modelled.
+          description: SP metadata
+          content:
+            application/xml:
+              schema:
+                type: string
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <EntityDescriptor
+                    xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
+                    entityID="https://chasm.example.com/saml/metadata">
+                  <SPSSODescriptor
+                      AuthnRequestsSigned="false"
+                      WantAssertionsSigned="true"
+                      protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+                    <NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat>
+                    <AssertionConsumerService
+                        Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                        Location="https://chasm.example.com/api/sso/callback"
+                        index="0"
+                        isDefault="true"/>
+                  </SPSSODescriptor>
+                </EntityDescriptor>
 
   /sso/initiate:
     x-chasm-feature: enterprise
@@ -2661,16 +2823,31 @@ paths:
     post:
       tags: [SSO]
       summary: Begin a SAML login
+      description: >
+        Supply either `idp_id` or `email_domain`; supplying neither is a 400.
+        The caller redirects the browser to `redirect_url`.
       operationId: initiateSso
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/InitiateSsoRequest"
       responses:
         "200":
-          description: Redirect details. Body not modelled.
+          description: Where to send the browser
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InitiateSsoResponse"
+        "400":
+          description: Neither `idp_id` nor `email_domain` was given, or no IdP matched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+              example:
+                error: Must provide either idp_id or email_domain
 
   /sso/callback:
     x-chasm-feature: enterprise
@@ -2679,20 +2856,36 @@ paths:
       tags: [SSO]
       summary: SAML assertion consumer
       description: >
-        Receives the IdP's assertion. Signature verification is implemented
-        and covered by wrapping-attack tests.
+        Receives the IdP's assertion as a form post, not JSON. The response is
+        verified and then re-parsed from only the bytes the signature covered,
+        which is what makes it resistant to XML Signature Wrapping.
+
+        A rejected assertion is a 400, not a 401.
       operationId: ssoCallback
       requestBody:
         required: true
         content:
-          application/json:
+          application/x-www-form-urlencoded:
             schema:
-              type: object
+              $ref: "#/components/schemas/SamlCallbackRequest"
       responses:
         "200":
-          description: Assertion accepted. Body not modelled.
-        "401":
-          description: Assertion rejected
+          description: The assertion verified; a session was established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoSession"
+        "400":
+          description: >
+            The assertion was malformed, unsigned, expired, for another
+            audience, or from an unconfigured issuer. The message does not
+            distinguish these.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnterpriseError"
+              example:
+                error: No assertion in response
 
   /sso/idps:
     x-chasm-feature: enterprise
@@ -2701,9 +2894,21 @@ paths:
       tags: [SSO]
       summary: List identity providers
       operationId: listIdps
+      parameters:
+        - name: organization_id
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
-          description: Identity providers. Body not modelled.
+          description: The configured providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SamlIdpConfig"
     post:
       tags: [SSO]
       summary: Register an identity provider
@@ -2713,10 +2918,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/CreateIdpRequest"
       responses:
-        "200":
-          description: Registered. Body not modelled.
+        "201":
+          description: The registered provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SamlIdpConfig"
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
 
   /sso/idps/{idp_id}:
     x-chasm-feature: enterprise
@@ -2732,12 +2943,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/UpdateIdpRequest"
       responses:
         "200":
-          description: Updated. Body not modelled.
-        "404":
-          $ref: "#/components/responses/NotFound"
+          description: The updated provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SamlIdpConfig"
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
     delete:
       tags: [SSO]
       summary: Remove an identity provider
@@ -2745,10 +2960,10 @@ paths:
       parameters:
         - $ref: "#/components/parameters/idpId"
       responses:
-        "200":
-          description: Removed.
-        "404":
-          $ref: "#/components/responses/NotFound"
+        "204":
+          description: Removed. No body.
+        "400":
+          $ref: "#/components/responses/EnterpriseBadRequest"
 
 components:
   parameters:
@@ -2841,6 +3056,15 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    EnterpriseBadRequest:
+      description: >
+        The operation was refused. The enterprise services answer 400 for a
+        bad body, a missing resource and a rejected credential alike, so the
+        status alone does not tell them apart.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EnterpriseError"
 
   schemas:
     # Every endpoint except GET /health wraps its payload in this. The spec
@@ -3767,3 +3991,809 @@ components:
           type: boolean
         maxHistoryDays:
           type: integer
+
+    # =========================================================================
+    # Enterprise schemas (`--features enterprise`).
+    #
+    # Read off a running enterprise server. These are NOT wrapped in
+    # ApiEnvelope -- the enterprise services predate it and return their
+    # payload bare.
+    # =========================================================================
+
+    EnterpriseError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: A human-readable message. Not a stable machine code.
+      example:
+        error: Policy not found
+
+    AuditCategory:
+      type: string
+      enum:
+        - authentication
+        - authorization
+        - user_management
+        - session_management
+        - workspace_management
+        - team_management
+        - configuration
+        - data_transfer
+        - administration
+        - system
+        - api_access
+        - sso
+
+    AuditOutcome:
+      type: string
+      enum: [success, failure, partial, denied, error]
+
+    AuditAction:
+      type: string
+      enum:
+        - login
+        - login_failed
+        - logout
+        - token_refresh
+        - password_change
+        - password_reset
+        - mfa_enabled
+        - mfa_disabled
+        - access_granted
+        - access_denied
+        - permission_changed
+        - user_created
+        - user_updated
+        - user_deleted
+        - user_suspended
+        - user_activated
+        - user_invited
+        - invite_accepted
+        - subscription_changed
+        - session_harvested
+        - session_viewed
+        - session_exported
+        - session_deleted
+        - session_archived
+        - session_shared
+        - session_unshared
+        - bulk_export
+        - bulk_delete
+        - workspace_created
+        - workspace_updated
+        - workspace_deleted
+        - workspace_linked
+        - workspace_unlinked
+        - team_created
+        - team_updated
+        - team_deleted
+        - member_added
+        - member_removed
+        - role_changed
+        - settings_updated
+        - provider_configured
+        - provider_disabled
+        - idp_configured
+        - idp_updated
+        - idp_deleted
+        - data_exported
+        - data_imported
+        - backup_created
+        - backup_restored
+        - admin_action_performed
+        - system_config_changed
+        - retention_policy_applied
+        - data_purged
+        - service_started
+        - service_stopped
+        - error_occurred
+        - maintenance_started
+        - maintenance_completed
+        - sso_login_initiated
+        - sso_login_completed
+        - sso_login_failed
+        - slo_initiated
+        - slo_completed
+        - created
+        - updated
+        - deleted
+        - viewed
+        - listed
+        - searched
+
+    AuditActor:
+      type: object
+      required: [user_id, email]
+      properties:
+        user_id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        tier:
+          type: string
+          nullable: true
+        auth_method:
+          type: string
+          nullable: true
+          description: password, sso, api_key, ...
+        session_id:
+          type: string
+          nullable: true
+
+    AuditResource:
+      type: object
+      required: [resource_type, resource_id]
+      properties:
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        parent:
+          allOf:
+            - $ref: "#/components/schemas/AuditResource"
+          nullable: true
+          description: The containing resource, e.g. the workspace of a session.
+
+    AuditRequest:
+      type: object
+      required: [method, path, request_id]
+      properties:
+        method:
+          type: string
+        path:
+          type: string
+        query:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+        status_code:
+          type: integer
+          nullable: true
+        duration_ms:
+          type: integer
+          nullable: true
+
+    AuditEvent:
+      type: object
+      required:
+        [id, timestamp, category, action, outcome, details, description, tags]
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        category:
+          $ref: "#/components/schemas/AuditCategory"
+        action:
+          $ref: "#/components/schemas/AuditAction"
+        outcome:
+          $ref: "#/components/schemas/AuditOutcome"
+        actor:
+          allOf:
+            - $ref: "#/components/schemas/AuditActor"
+          nullable: true
+          description: Absent for unauthenticated and system-originated events.
+        resource:
+          allOf:
+            - $ref: "#/components/schemas/AuditResource"
+          nullable: true
+        request:
+          allOf:
+            - $ref: "#/components/schemas/AuditRequest"
+          nullable: true
+        details:
+          type: object
+          additionalProperties: true
+        description:
+          type: string
+        error:
+          type: string
+          nullable: true
+        organization_id:
+          type: string
+          nullable: true
+        correlation_id:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+
+    AuditQueryResult:
+      type: object
+      required: [events, total, offset, limit, has_more]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean
+      example:
+        events: []
+        total: 0
+        offset: 0
+        limit: 100
+        has_more: false
+
+    AuditExportRequest:
+      type: object
+      description: >
+        The audit query filters, flattened, plus the output format. Every
+        field is optional; an empty object exports everything as JSON.
+      properties:
+        format:
+          type: string
+          enum: [json, csv, jsonlines]
+          default: json
+        category:
+          $ref: "#/components/schemas/AuditCategory"
+        action:
+          $ref: "#/components/schemas/AuditAction"
+        outcome:
+          $ref: "#/components/schemas/AuditOutcome"
+        actor_id:
+          type: string
+        actor_email:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        organization_id:
+          type: string
+        correlation_id:
+          type: string
+        search:
+          type: string
+          description: Substring match against the description.
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    # -- Retention ------------------------------------------------------------
+
+    ResourceType:
+      type: string
+      enum:
+        - session
+        - workspace
+        - audit_log
+        - user
+        - export
+        - temp_file
+        - backup
+        - api_log
+        - analytics
+
+    ExpiryAction:
+      type: string
+      enum:
+        - delete
+        - archive
+        - soft_delete
+        - anonymize
+        - export_before_delete
+        - notify_owner
+
+    RetentionCondition:
+      type: object
+      description: Tagged by `type`.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum:
+            [always, age, has_tag, status, metadata_match, and, or]
+        field:
+          type: string
+          description: >
+            For `age`, the timestamp to measure from: created_at, updated_at,
+            last_accessed_at, archived_at or deleted_at. For `metadata_match`,
+            the metadata key.
+        tag:
+          type: string
+        status:
+          type: string
+        value:
+          type: string
+        conditions:
+          type: array
+          description: Operands of `and` / `or`.
+          items:
+            $ref: "#/components/schemas/RetentionCondition"
+
+    RetentionPeriod:
+      type: object
+      description: Tagged by `type`.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [forever, duration, until, compliance_archive]
+        days:
+          type: integer
+          description: For `duration`.
+        date:
+          type: string
+          format: date-time
+          description: For `until`.
+        active_days:
+          type: integer
+          description: For `compliance_archive`.
+        archive_days:
+          type: integer
+          description: For `compliance_archive`.
+
+    RetentionRule:
+      type: object
+      required: [name, condition, retention_period, priority]
+      properties:
+        name:
+          type: string
+        condition:
+          $ref: "#/components/schemas/RetentionCondition"
+        retention_period:
+          $ref: "#/components/schemas/RetentionPeriod"
+        priority:
+          type: integer
+          description: Higher is evaluated first.
+
+    RetentionSchedule:
+      type: object
+      description: Tagged by `type`.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [manual, interval, daily, weekly, monthly]
+        hours:
+          type: integer
+          description: For `interval`.
+        day:
+          type: integer
+          description: >
+            For `weekly`, 0 (Sunday) to 6. For `monthly`, 1 to 28.
+        hour:
+          type: integer
+        minute:
+          type: integer
+
+    RetentionPolicy:
+      type: object
+      required:
+        - id
+        - name
+        - enabled
+        - resource_types
+        - rules
+        - schedule
+        - expiry_actions
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        organization_id:
+          type: string
+          nullable: true
+          description: Null means the policy is global.
+        resource_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceType"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionRule"
+        schedule:
+          $ref: "#/components/schemas/RetentionSchedule"
+        expiry_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiryAction"
+        created_at:
+          type: integer
+          format: int64
+          description: Unix seconds.
+        updated_at:
+          type: integer
+          format: int64
+        last_run_at:
+          type: integer
+          format: int64
+          nullable: true
+        next_run_at:
+          type: integer
+          format: int64
+          nullable: true
+          description: Null when the schedule is `manual`.
+
+    CreateRetentionPolicyRequest:
+      type: object
+      required: [name, resource_types, rules, schedule, expiry_actions]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+        organization_id:
+          type: string
+        resource_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceType"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionRule"
+        schedule:
+          $ref: "#/components/schemas/RetentionSchedule"
+        expiry_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiryAction"
+      example:
+        name: Ninety day sessions
+        resource_types: [session]
+        rules:
+          - name: age
+            condition: { type: age, field: created_at }
+            retention_period: { type: duration, days: 90 }
+            priority: 10
+        schedule: { type: daily, hour: 3, minute: 30 }
+        expiry_actions: [delete]
+
+    UpdateRetentionPolicyRequest:
+      type: object
+      description: Every field optional; omitted fields are left alone.
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        resource_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceType"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionRule"
+        schedule:
+          $ref: "#/components/schemas/RetentionSchedule"
+        expiry_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiryAction"
+
+    RetentionStats:
+      type: object
+      properties:
+        scanned:
+          type: integer
+        expired:
+          type: integer
+        deleted:
+          type: integer
+        archived:
+          type: integer
+        anonymized:
+          type: integer
+        soft_deleted:
+          type: integer
+        exported:
+          type: integer
+        notified:
+          type: integer
+        failed:
+          type: integer
+        skipped:
+          type: integer
+        bytes_freed:
+          type: integer
+          format: int64
+
+    RetentionActionLog:
+      type: object
+      required: [resource_type, resource_id, action, success, timestamp]
+      properties:
+        resource_type:
+          $ref: "#/components/schemas/ResourceType"
+        resource_id:
+          type: string
+        action:
+          $ref: "#/components/schemas/ExpiryAction"
+        success:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    RetentionExecutionResult:
+      type: object
+      required:
+        - execution_id
+        - policy_id
+        - started_at
+        - completed_at
+        - success
+        - stats
+        - total_processed
+        - total_affected
+        - total_failed
+        - actions_taken
+      properties:
+        execution_id:
+          type: string
+        policy_id:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        success:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+        stats:
+          type: object
+          description: Keyed by resource type.
+          additionalProperties:
+            $ref: "#/components/schemas/RetentionStats"
+        total_processed:
+          type: integer
+        total_affected:
+          type: integer
+        total_failed:
+          type: integer
+        actions_taken:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetentionActionLog"
+
+    # -- SSO ------------------------------------------------------------------
+
+    AttributeMappings:
+      type: object
+      description: >
+        Which SAML assertion attribute supplies each user field. Note that
+        `email` and `display_name` default to the empty string rather than to
+        a conventional attribute name, so an IdP created without them supplies
+        neither.
+      required: [email, display_name]
+      properties:
+        email:
+          type: string
+        display_name:
+          type: string
+        first_name:
+          type: string
+          nullable: true
+        last_name:
+          type: string
+          nullable: true
+        groups:
+          type: string
+          nullable: true
+        department:
+          type: string
+          nullable: true
+
+    SamlIdpConfig:
+      type: object
+      required:
+        - id
+        - name
+        - entity_id
+        - sso_url
+        - certificate
+        - enabled
+        - domains
+        - attribute_mappings
+        - default_tier
+        - auto_provision
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        entity_id:
+          type: string
+        sso_url:
+          type: string
+        slo_url:
+          type: string
+          nullable: true
+        certificate:
+          type: string
+          description: >
+            The IdP's X.509 signing certificate. Returned as stored -- this is
+            public key material, but the endpoint is admin-only regardless.
+        enabled:
+          type: boolean
+        domains:
+          type: array
+          description: >
+            Email domains routed to this IdP. An IdP with none can only be
+            reached by explicit id.
+          items:
+            type: string
+        organization_id:
+          type: string
+          nullable: true
+        attribute_mappings:
+          $ref: "#/components/schemas/AttributeMappings"
+        default_tier:
+          type: string
+          description: Subscription tier granted to auto-provisioned users.
+        auto_provision:
+          type: boolean
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+
+    CreateIdpRequest:
+      type: object
+      required: [name, entity_id, sso_url, certificate]
+      properties:
+        name:
+          type: string
+        entity_id:
+          type: string
+        sso_url:
+          type: string
+        slo_url:
+          type: string
+        certificate:
+          type: string
+        organization_id:
+          type: string
+        attribute_mappings:
+          $ref: "#/components/schemas/AttributeMappings"
+        auto_provision:
+          type: boolean
+        domains:
+          type: array
+          items:
+            type: string
+
+    UpdateIdpRequest:
+      type: object
+      description: >
+        Every field optional. `entity_id` and `domains` are not updatable.
+      properties:
+        name:
+          type: string
+        sso_url:
+          type: string
+        slo_url:
+          type: string
+        certificate:
+          type: string
+        enabled:
+          type: boolean
+        attribute_mappings:
+          $ref: "#/components/schemas/AttributeMappings"
+        auto_provision:
+          type: boolean
+
+    InitiateSsoRequest:
+      type: object
+      description: Supply `idp_id` or `email_domain`. Neither is a 400.
+      properties:
+        idp_id:
+          type: string
+        email_domain:
+          type: string
+          description: Resolved against each IdP's `domains`.
+        relay_state:
+          type: string
+          description: Round-tripped through the IdP; typically a return path.
+
+    InitiateSsoResponse:
+      type: object
+      required: [redirect_url, request_id]
+      properties:
+        redirect_url:
+          type: string
+          description: >
+            The IdP's SSO URL with the deflated, base64, URL-encoded
+            `SAMLRequest` and the `RelayState` attached.
+        request_id:
+          type: string
+          description: The AuthnRequest ID, echoed by the IdP as InResponseTo.
+
+    SamlCallbackRequest:
+      type: object
+      description: A form post from the IdP, not JSON.
+      required: [SAMLResponse]
+      properties:
+        SAMLResponse:
+          type: string
+          description: The base64 SAML Response.
+        RelayState:
+          type: string
+
+    SsoSession:
+      type: object
+      required: [id, user_id, idp_id, name_id, created_at, expires_at]
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        idp_id:
+          type: string
+        name_id:
+          type: string
+          description: The Subject NameID the IdP asserted.
+        session_index:
+          type: string
+          nullable: true
+          description: Needed to single-logout this session.
+        created_at:
+          type: integer
+          format: int64
+        expires_at:
+          type: integer
+          format: int64

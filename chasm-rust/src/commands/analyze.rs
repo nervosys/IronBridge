@@ -120,9 +120,13 @@ mod tests {
         if std::env::var("OPENAI_API_KEY").is_ok_and(|k| !k.trim().is_empty()) {
             return;
         }
-        let dir = std::env::temp_dir().join("chasm_analyze_test");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("s.json");
+        // A fresh directory per run, not a fixed name under the system temp:
+        // the shared path outlives the test, and once anything leaves it in a
+        // bad state -- a crashed run, a lock, a stray permission -- every
+        // later run of this test fails for a reason that has nothing to do
+        // with what it is testing.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.json");
         std::fs::write(&path, r#"{"requests":[{"message":{"text":"hi"}}]}"#).unwrap();
 
         let err = analyze_session_file(path.to_str().unwrap(), true, true)

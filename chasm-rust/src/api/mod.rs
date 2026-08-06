@@ -5,22 +5,22 @@
 //! Provides a REST API for the web frontend and mobile app to interact with CSM.
 //! Uses Actix-web for the HTTP server.
 //!
-//! # Status of the `enterprise` feature
+//! # The `enterprise` feature
 //!
 //! The modules behind `#[cfg(feature = "enterprise")]` (audit, retention, sso)
-//! compile and are unit-tested, but they are **not usable end to end yet**:
+//! are served by [`EnterpriseServices`], which opens a
+//! [`SqliteEnterpriseStore`] over the same database file and registers the
+//! three scopes with it. Two things are worth knowing before changing them:
 //!
-//! * [`audit::DatabaseOps`] — the persistence contract all three depend on —
-//!   has no implementor in this crate. An embedder must supply one.
-//! * SAML signature verification is implemented, via samael/xmlsec1.
-//!   `handle_callback` verifies the response and then re-parses it from the
-//!   *reduced* document containing only signed content, which is what makes it
-//!   resistant to XML Signature Wrapping. Preserve that ordering: reading the
-//!   original document after verification reintroduces the bypass.
-//!   Because this links libxmlsec1, `enterprise` is built and tested on Linux
-//!   only in CI.
-//!
-//! Treat the feature as in-development scaffolding, not a shipped capability.
+//! * [`audit::DatabaseOps`] is the persistence contract all three depend on.
+//!   `SqliteEnterpriseStore` is the in-tree implementor; the trait stays in
+//!   place so an embedder can substitute their own store.
+//! * SAML signature verification is pure Rust, via `chasm-sso`, so the feature
+//!   builds everywhere rather than only where libxmlsec1 does. `handle_callback`
+//!   verifies the response and then re-parses it from the *reduced* document
+//!   containing only signed content, which is what makes it resistant to XML
+//!   Signature Wrapping. Preserve that ordering: reading the original document
+//!   after verification reintroduces the bypass.
 
 #[cfg(feature = "enterprise")]
 mod audit;
@@ -79,6 +79,34 @@ pub struct ServerConfig {
     pub port: u16,
     pub database_path: String,
     pub cors_origins: Vec<String>,
+    /// The address clients reach this server on, if it differs from the bind
+    /// address. Set from `CHASM_PUBLIC_BASE_URL`.
+    ///
+    /// Only SAML needs this, and it genuinely needs it: the SP metadata and
+    /// the `AssertionConsumerServiceURL` are consumed by the *identity
+    /// provider*, which posts the user's browser back to whatever they say.
+    /// The bind address is frequently `0.0.0.0`, or a container-internal host
+    /// behind a reverse proxy -- neither is somewhere a browser can go.
+    pub public_base_url: Option<String>,
+}
+
+impl ServerConfig {
+    /// The base URL to advertise to external parties.
+    ///
+    /// Falls back to the bind address, rewriting a wildcard to loopback so a
+    /// default local run produces a URL that at least resolves. That fallback
+    /// is right for development and wrong for anything else, which is why
+    /// [`Self::public_base_url`] exists.
+    fn resolved_base_url(&self) -> String {
+        if let Some(url) = &self.public_base_url {
+            return url.trim_end_matches('/').to_string();
+        }
+        let host = match self.host.as_str() {
+            "0.0.0.0" | "::" | "[::]" | "" => "127.0.0.1",
+            other => other,
+        };
+        format!("http://{}:{}", host, self.port)
+    }
 }
 
 impl Default for ServerConfig {
@@ -99,6 +127,9 @@ impl Default for ServerConfig {
                 "http://localhost:19006".to_string(), // Expo web alt
                 "http://127.0.0.1:19006".to_string(), // Expo web alt
             ],
+            public_base_url: std::env::var("CHASM_PUBLIC_BASE_URL")
+                .ok()
+                .filter(|s| !s.trim().is_empty()),
         }
     }
 }
@@ -223,6 +254,56 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
     eprintln!("[DEBUG] Added /api routes");
 }
 
+/// The audit, retention and SSO services, sharing one enterprise store.
+#[cfg(feature = "enterprise")]
+#[derive(Clone)]
+struct EnterpriseServices {
+    audit: web::Data<AuditService>,
+    retention: web::Data<RetentionService>,
+    sso: web::Data<SsoService>,
+}
+
+#[cfg(feature = "enterprise")]
+impl EnterpriseServices {
+    /// Open the store and build the three services over it.
+    ///
+    /// `base_url` is what the SP advertises to identity providers: it ends up
+    /// in the SAML metadata and in the `AssertionConsumerServiceURL` the IdP
+    /// posts back to, so it must be the address a *browser* can reach, not
+    /// necessarily the one the socket is bound to.
+    fn open(db_path: &std::path::Path, base_url: &str) -> Result<Self> {
+        let store = SqliteEnterpriseStore::open(db_path)
+            .map_err(|e| anyhow::anyhow!("failed to open the enterprise store: {}", e))?;
+        let store: audit::Database = std::sync::Arc::new(store);
+
+        let audit = web::Data::new(AuditService::new(store.clone()));
+        let retention =
+            web::Data::new(RetentionService::new(store.clone()).with_audit(audit.clone()));
+        let sso = web::Data::new(SsoService::new(store, base_url));
+
+        Ok(Self {
+            audit,
+            retention,
+            sso,
+        })
+    }
+
+    /// Register the shared state and the routes together.
+    ///
+    /// Deliberately one method rather than two: routes registered without
+    /// their `app_data` compile perfectly and then answer 500 to every
+    /// request, which is exactly the failure this pairing exists to prevent
+    /// anyone reintroducing.
+    fn configure(&self, cfg: &mut web::ServiceConfig) {
+        cfg.app_data(self.audit.clone());
+        cfg.app_data(self.retention.clone());
+        cfg.app_data(self.sso.clone());
+        configure_audit_routes(cfg);
+        configure_retention_routes(cfg);
+        configure_sso_routes(cfg);
+    }
+}
+
 /// Start the API server
 pub async fn start_server(config: ServerConfig) -> Result<()> {
     // Ensure database directory exists
@@ -262,6 +343,12 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             eprintln!("[WARN] Failed to initialize Inbox tables: {}", e);
         }
     }
+
+    // Built once and shared by every worker rather than per worker: the store
+    // owns a connection to the same file, and one per worker would multiply
+    // writers contending for the same SQLite lock to no benefit.
+    #[cfg(feature = "enterprise")]
+    let enterprise = EnterpriseServices::open(&db_path, &config.resolved_base_url())?;
 
     let state = web::Data::new(AppState::new(db, db_path));
     let sync_state = web::Data::new(create_sync_state());
@@ -340,6 +427,21 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(|cfg| configure_websocket_routes(cfg, ws_state.clone()))
             .configure(|cfg| configure_webhook_routes(cfg, webhook_state.clone()))
             .configure(|cfg| configure_graphql_routes(cfg, graphql_schema.clone()))
+            // The enterprise scopes were compiled under `--features
+            // enterprise` but never registered here, so /audit, /retention
+            // and /sso answered 404 on every build that supposedly had them.
+            // The handlers, their tests and their documentation all existed;
+            // only the lines that serve them did not.
+            .configure({
+                #[cfg(feature = "enterprise")]
+                let enterprise = enterprise.clone();
+                move |cfg: &mut web::ServiceConfig| {
+                    #[cfg(feature = "enterprise")]
+                    enterprise.configure(cfg);
+                    #[cfg(not(feature = "enterprise"))]
+                    let _ = cfg;
+                }
+            })
     });
 
     eprintln!("[DEBUG] Binding to {}:{}...", config.host, config.port);
@@ -350,4 +452,60 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
 
     eprintln!("[DEBUG] Server stopped.");
     Ok(())
+}
+
+#[cfg(test)]
+mod base_url_tests {
+    use super::ServerConfig;
+
+    fn config(host: &str, public: Option<&str>) -> ServerConfig {
+        ServerConfig {
+            host: host.to_string(),
+            port: 8787,
+            public_base_url: public.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    /// The bind address is not an address anyone can reach. Advertising it in
+    /// SAML metadata sends the identity provider's redirect nowhere, so a
+    /// wildcard bind must never survive into the base URL.
+    #[test]
+    fn a_wildcard_bind_never_reaches_the_advertised_url() {
+        for wildcard in ["0.0.0.0", "::", "[::]", ""] {
+            let url = config(wildcard, None).resolved_base_url();
+            assert_eq!(
+                url, "http://127.0.0.1:8787",
+                "wildcard bind {wildcard:?} leaked into {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_real_bind_host_is_kept() {
+        assert_eq!(
+            config("192.168.1.10", None).resolved_base_url(),
+            "http://192.168.1.10:8787"
+        );
+    }
+
+    /// The explicit setting wins over the bind address -- the deployment case,
+    /// where the server sits behind a proxy on a different name and scheme.
+    #[test]
+    fn an_explicit_public_url_overrides_the_bind_address() {
+        assert_eq!(
+            config("0.0.0.0", Some("https://chasm.example.com")).resolved_base_url(),
+            "https://chasm.example.com"
+        );
+    }
+
+    /// A trailing slash would produce `https://host//api/sso/callback`, which
+    /// some identity providers compare literally against their configuration.
+    #[test]
+    fn a_trailing_slash_is_trimmed() {
+        assert_eq!(
+            config("0.0.0.0", Some("https://chasm.example.com/")).resolved_base_url(),
+            "https://chasm.example.com"
+        );
+    }
 }

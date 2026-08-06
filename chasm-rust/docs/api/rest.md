@@ -429,12 +429,19 @@ enterprise feature has no native dependencies now, so all 18 enterprise
 operations are verified as routed on any platform rather than skipped, and
 39 previously-unrunnable tests execute.
 
-Their response bodies are still **not modelled**. That is a smaller gap than
-it was — the endpoints can now be exercised, so the schemas can be written
-from observation whenever someone does it — but nobody has yet, and a schema
-written from handler source rather than from a response is exactly what this
-document spent a release getting rid of. Verify against a running enterprise
-build before adding one.
+Their response bodies **are now modelled**, read off a running enterprise
+server like every other schema here. Exercising them turned up three things
+worth knowing:
+
+- The scopes were never registered in `start_server`. All 18 endpoints
+  answered 404 on every enterprise build ever produced. The spec test did not
+  catch it because the test mounted the scopes itself; both now go through
+  `EnterpriseServices::configure`, so the harness cannot serve a route the
+  server does not.
+- These endpoints do **not** use the `{success, data}` envelope. They return
+  the payload bare.
+- Creates answer 201 and deletes answer 204, and every refusal is a 400 —
+  including a rejected SAML assertion, which is not a 401.
 
 > **This section is now history.** `samael` was replaced by `chasm-sso`, which
 > is pure Rust, so `--features enterprise` builds on any platform cargo does
@@ -471,11 +478,8 @@ provides it on Windows and no environment variable that replaces it. Getting
 past it means MSYS2 or building xmlsec1 from source, which is a materially
 bigger undertaking than the two steps above.
 
-**So: build enterprise on Linux.** That is what CI does, and steps 1 and 2 are
-recorded only so nobody repeats the search believing OpenSSL was the problem.
-
-If you add a schema for one, verify it against a running enterprise build
-first.
+**This is why enterprise used to be Linux-only.** Steps 1 and 2 are recorded
+only so nobody repeats the search believing OpenSSL was the problem.
 
 ### Adding a route
 
@@ -522,13 +526,15 @@ a copy of the root spec and had silently drifted a full release behind it.
 
 Two things that trip people up, now that those paths are gone:
 
-- Search is `GET /api/sessions/search?q=`, not `/api/search`. Semantic search
-  exists as a library capability with no REST route.
+- Keyword search is `GET /api/sessions/search?q=`, not `/api/search`. Semantic
+  search is separate: `GET /api/search/semantic`, with
+  `POST /api/search/semantic/index` to build the vectors first.
 - Harvest and export are CLI-only (`chasm harvest`, `chasm export`).
 
-The spec is still narrower than the server. `/swarms`, the `/swe/projects/*`
-tree, and the `/auth`, `/sync`, `/recording`, `/webhooks`, `/audit`,
-`/retention`, and `/sso` scopes are all served but undocumented.
+The spec is no longer narrower than the server. `/swarms`, the
+`/swe/projects/*` tree, and the `/auth`, `/sync`, `/recording`, `/webhooks`,
+`/audit`, `/retention` and `/sso` scopes are all documented, and the route
+test fails if a documented path is not served.
 
 When checking whether something is served, read the route registrations in
 `src/api/` rather than probing: this server answers `404` for a method mismatch

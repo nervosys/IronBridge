@@ -8,6 +8,7 @@
 csm-rust/target/
 chasm-rust/target/
 chasm-desktop/target/
+chasm-sso/target/
 **/*.rs.bk
 **/*.pdb
 # Note: Cargo.lock IS committed for reproducible builds (this is a binary, not a library)

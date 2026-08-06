@@ -238,6 +238,12 @@ mod tests {
         let webhook_state = Data::new(std::sync::Arc::new(
             super::super::WebhookState::new(),
         ));
+        #[cfg(feature = "enterprise")]
+        let enterprise = super::super::EnterpriseServices::open(
+            &dir.path().join("spec-routes-enterprise.db"),
+            "http://127.0.0.1:8787",
+        )
+        .expect("open enterprise store");
 
         let app = test::init_service(
             App::new()
@@ -252,19 +258,20 @@ mod tests {
                 .configure(move |cfg| {
                     super::super::configure_webhook_routes(cfg, webhook_state.clone())
                 })
-                // On an enterprise build these are served and therefore
-                // probed, so the harness has to mount them too -- otherwise
-                // the test reports the spec as wrong when it is the app under
-                // test that is incomplete.
-                .configure(|cfg| {
+                // Through the same call `start_server` uses, deliberately.
+                // This harness used to mount the enterprise scopes itself,
+                // and because it did, the scopes were compiled, tested and
+                // documented for as long as the server never served them --
+                // the test passed on routes that existed nowhere else.
+                .configure({
                     #[cfg(feature = "enterprise")]
-                    {
-                        super::super::configure_audit_routes(cfg);
-                        super::super::configure_retention_routes(cfg);
-                        super::super::configure_sso_routes(cfg);
+                    let enterprise = enterprise.clone();
+                    move |cfg: &mut actix_web::web::ServiceConfig| {
+                        #[cfg(feature = "enterprise")]
+                        enterprise.configure(cfg);
+                        #[cfg(not(feature = "enterprise"))]
+                        let _ = cfg;
                     }
-                    #[cfg(not(feature = "enterprise"))]
-                    let _ = cfg;
                 })
                 .default_service(web::to(|| async { HttpResponse::ImATeapot().finish() })),
         )
@@ -461,6 +468,12 @@ mod tests {
         let webhook_state = Data::new(std::sync::Arc::new(
             super::super::WebhookState::new(),
         ));
+        #[cfg(feature = "enterprise")]
+        let enterprise = super::super::EnterpriseServices::open(
+            &dir.path().join("spec-bodies-enterprise.db"),
+            "http://127.0.0.1:8787",
+        )
+        .expect("open enterprise store");
 
         let app = test::init_service(
             App::new()
@@ -474,6 +487,18 @@ mod tests {
                 .configure(super::super::configure_recording_routes)
                 .configure(move |cfg| {
                     super::super::configure_webhook_routes(cfg, webhook_state.clone())
+                })
+                // The enterprise scopes document response bodies now, so this
+                // test probes them -- which it can only do if they are here.
+                .configure({
+                    #[cfg(feature = "enterprise")]
+                    let enterprise = enterprise.clone();
+                    move |cfg: &mut actix_web::web::ServiceConfig| {
+                        #[cfg(feature = "enterprise")]
+                        enterprise.configure(cfg);
+                        #[cfg(not(feature = "enterprise"))]
+                        let _ = cfg;
+                    }
                 }),
         )
         .await;
