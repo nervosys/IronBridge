@@ -158,9 +158,14 @@ rather than passing silently, and asserts the marking has not drifted onto a
 path outside those three scopes.
 
 **Their response bodies are deliberately not modelled.** The enterprise
-feature could not be compiled on the machine this was written on -- `samael`
-pulls `openssl-sys`, which needs an OpenSSL installation for MSVC -- so no
-response from these endpoints was ever observed. Every other schema in the
+feature could not be compiled on the machine this was written on, so no
+response from these endpoints was ever observed. The precise blocker is worth
+recording, because the obvious candidate is not the one that stops you:
+`openssl-sys` is satisfiable by pointing `OPENSSL_DIR` at any existing
+OpenSSL 3.x with headers (a PostgreSQL install has one), but `libxml v0.3.3`
+panics in its build script without native libxml2, and no environment
+variable substitutes for that. See `chasm-rust/docs/api/rest.md` for the
+exact incantation that gets you as far as libxml2. Every other schema in the
 document was read off a running server. Guessing these would have undone that,
 so each says "body not modelled" instead. Paths and methods come from the
 route registrations, which are unambiguous, and are enforced by the test on

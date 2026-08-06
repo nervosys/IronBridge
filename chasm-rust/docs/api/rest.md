@@ -424,12 +424,33 @@ cargo test --features enterprise    # covers them
 cargo test                          # skips them, and says how many
 ```
 
-Their response bodies are **not modelled**, on purpose. The feature needs
-OpenSSL to build (`samael` → `openssl-sys`), so these endpoints could not be
-run when the spec was written and no response was ever observed. Every other
-schema here came off a running server; inventing these would have made the
-document less trustworthy, not more. Paths and methods are taken from the
+Their response bodies are **not modelled**, on purpose. These endpoints could
+not be run when the spec was written, so no response was ever observed. Every
+other schema here came off a running server; inventing these would have made
+the document less trustworthy, not more. Paths and methods are taken from the
 route registrations and are enforced by the test on an enterprise build.
+
+#### What the enterprise build actually needs on Windows
+
+`samael` pulls two native dependencies, and they are not equally awkward:
+
+- **OpenSSL** (via `openssl-sys`) — *not* the real blocker. Any existing
+  OpenSSL 3.x with headers works by pointing at it, no installation required.
+  A PostgreSQL 17 install happens to ship one:
+
+  ```sh
+  export OPENSSL_DIR="C:\Program Files\PostgreSQL\17"
+  export OPENSSL_NO_VENDOR=1
+  ```
+
+- **libxml2** (via `libxml v0.3.3`) — this is the blocker. Its build script
+  panics without the native library, and there is no environment variable that
+  substitutes for having it. `vcpkg install libxml2` (plus `libxmlsec` for the
+  signature verification) is the route on Windows, or use Linux, where CI
+  builds this feature today.
+
+Recorded because the first attempt costs an hour of searching to discover that
+the obvious-looking blocker is not the one that stops you.
 
 If you add a schema for one, verify it against a running enterprise build
 first.
