@@ -424,13 +424,24 @@ cargo test --features enterprise    # covers them
 cargo test                          # skips them, and says how many
 ```
 
-Their response bodies are **not modelled**, on purpose. These endpoints could
-not be run when the spec was written, so no response was ever observed. Every
-other schema here came off a running server; inventing these would have made
-the document less trustworthy, not more. Paths and methods are taken from the
-route registrations and are enforced by the test on an enterprise build.
+**Since SAML moved to `chasm-sso`, that first command works everywhere.** The
+enterprise feature has no native dependencies now, so all 18 enterprise
+operations are verified as routed on any platform rather than skipped, and
+39 previously-unrunnable tests execute.
 
-#### What the enterprise build actually needs on Windows
+Their response bodies are still **not modelled**. That is a smaller gap than
+it was — the endpoints can now be exercised, so the schemas can be written
+from observation whenever someone does it — but nobody has yet, and a schema
+written from handler source rather than from a response is exactly what this
+document spent a release getting rid of. Verify against a running enterprise
+build before adding one.
+
+> **This section is now history.** `samael` was replaced by `chasm-sso`, which
+> is pure Rust, so `--features enterprise` builds on any platform cargo does
+> and needs none of what follows. It is kept because the reasoning — that the
+> visible error is not the one that stops you — outlived the problem.
+
+#### What the enterprise build used to need on Windows
 
 `samael` pulls a chain of three native dependencies. Each one hides the next,
 so the first error you see is not the thing that stops you. Worked through in

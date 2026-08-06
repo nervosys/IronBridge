@@ -21,7 +21,85 @@
 //! xmlsec1 remains the more conservative choice.
 
 pub mod c14n;
+pub mod sign;
 pub mod signature;
+
+/// Fixtures for the crate's own tests.
+///
+/// The integration test in `tests/` carries its own copy of this, because a
+/// `cfg(test)` item is not visible to a separate test binary. The duplication
+/// is deliberate: exposing test scaffolding through a public feature so two
+/// test targets can share forty lines is a worse trade than copying them.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use rsa::RsaPrivateKey;
+
+    /// A minimal X.509 wrapper around the key's public half.
+    ///
+    /// Only the SubjectPublicKeyInfo is ever read by the verifier, so the rest
+    /// is the smallest structurally valid certificate x509-parser accepts.
+    pub(crate) fn self_signed_cert(key: &RsaPrivateKey) -> Vec<u8> {
+        use rsa::pkcs8::EncodePublicKey;
+        let spki = key
+            .to_public_key()
+            .to_public_key_der()
+            .expect("encode SPKI")
+            .as_bytes()
+            .to_vec();
+
+        fn seq(body: Vec<u8>) -> Vec<u8> {
+            let mut out = vec![0x30];
+            out.extend(len(body.len()));
+            out.extend(body);
+            out
+        }
+        fn len(n: usize) -> Vec<u8> {
+            if n < 0x80 {
+                vec![n as u8]
+            } else if n < 0x100 {
+                vec![0x81, n as u8]
+            } else {
+                vec![0x82, (n >> 8) as u8, (n & 0xff) as u8]
+            }
+        }
+
+        let version = vec![0xA0, 0x03, 0x02, 0x01, 0x02];
+        let serial = vec![0x02, 0x01, 0x01];
+        let sig_alg = seq(vec![
+            0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x0B, 0x05, 0x00,
+        ]);
+        let name = seq(vec![]);
+        let validity = seq({
+            let mut v = Vec::new();
+            for t in ["200101000000Z", "991231235959Z"] {
+                v.push(0x17);
+                v.push(t.len() as u8);
+                v.extend(t.as_bytes());
+            }
+            v
+        });
+
+        let tbs = seq({
+            let mut v = Vec::new();
+            v.extend(version);
+            v.extend(serial);
+            v.extend(sig_alg.clone());
+            v.extend(name.clone());
+            v.extend(validity);
+            v.extend(name);
+            v.extend(spki);
+            v
+        });
+
+        seq({
+            let mut v = Vec::new();
+            v.extend(tbs);
+            v.extend(sig_alg);
+            v.extend(vec![0x03, 0x02, 0x00, 0x00]);
+            v
+        })
+    }
+}
 
 use crate::{Identity, Result, SsoError};
 use base64::Engine;
@@ -48,12 +126,18 @@ pub struct SamlConfig {
 impl SamlConfig {
     /// Parse a PEM certificate into DER.
     pub fn certificate_from_pem(pem: &str) -> Result<Vec<u8>> {
+        // `trim_start` before the armour check: an indented PEM block is
+        // common in copied configuration, and without it the BEGIN line is
+        // treated as base64 and the whole certificate fails to decode.
         let body: String = pem
             .lines()
-            .filter(|l| !l.starts_with("-----"))
+            .filter(|l| !l.trim_start().starts_with("-----"))
             .flat_map(|l| l.chars())
             .filter(|c| !c.is_whitespace())
             .collect();
+        if body.is_empty() {
+            return Err(SsoError::malformed("certificate", "no certificate body"));
+        }
         base64::engine::general_purpose::STANDARD
             .decode(body)
             .map_err(|e| SsoError::malformed("certificate", format!("not base64 PEM: {e}")))

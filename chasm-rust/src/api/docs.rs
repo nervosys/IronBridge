@@ -252,6 +252,20 @@ mod tests {
                 .configure(move |cfg| {
                     super::super::configure_webhook_routes(cfg, webhook_state.clone())
                 })
+                // On an enterprise build these are served and therefore
+                // probed, so the harness has to mount them too -- otherwise
+                // the test reports the spec as wrong when it is the app under
+                // test that is incomplete.
+                .configure(|cfg| {
+                    #[cfg(feature = "enterprise")]
+                    {
+                        super::super::configure_audit_routes(cfg);
+                        super::super::configure_retention_routes(cfg);
+                        super::super::configure_sso_routes(cfg);
+                    }
+                    #[cfg(not(feature = "enterprise"))]
+                    let _ = cfg;
+                })
                 .default_service(web::to(|| async { HttpResponse::ImATeapot().finish() })),
         )
         .await;

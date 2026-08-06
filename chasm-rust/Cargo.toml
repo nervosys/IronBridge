@@ -20,9 +20,16 @@ path = "src/lib.rs"
 
 [features]
 default = []
-enterprise = ["dep:samael"]
+# SAML verification now comes from chasm-sso (pure Rust), so the enterprise
+# feature no longer pulls xmlsec1/libxml2/OpenSSL and builds on any platform
+# cargo does. It gates the audit, retention and SSO scopes, nothing else.
+enterprise = []
 
 [dependencies]
+# Pure-Rust SSO. Replaces samael, which needed xmlsec1 and could not build on
+# Windows; see chasm-sso/README.md for what it does and does not guarantee.
+chasm-sso = { path = "../chasm-sso", default-features = false }
+
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env"] }
 clap_complete = "4.4"
@@ -84,7 +91,6 @@ ratatui = "0.29"
 crossterm = "0.29"
 
 # HTTP client for cloud API providers (using rustls for cross-compilation compatibility)
-samael = { version = "0.0.22", optional = true }
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "blocking",
@@ -152,6 +158,8 @@ windows = { version = "0.58", features = [
 ] }
 
 [dev-dependencies]
+# For the SAML test fixtures, which sign a response before verifying it.
+rsa = "0.9"
 tempfile = "3.9"
 assert_cmd = "2.0"
 predicates = "3.0"

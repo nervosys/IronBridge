@@ -26,6 +26,11 @@
 mod discovery;
 mod jwks;
 mod pkce;
+// Every function in `token` performs HTTP. Without that feature the module is
+// entirely dead, so it is compiled out rather than left as warnings for a
+// consumer that only wants the verification logic.
+#[cfg(feature = "http")]
+mod token;
 
 pub use discovery::ProviderMetadata;
 pub use jwks::{Jwk, JwkSet};
@@ -173,6 +178,27 @@ impl OidcClient {
 
     pub fn metadata(&self) -> &ProviderMetadata {
         &self.metadata
+    }
+
+    // Only the HTTP paths need these; without that feature they are dead.
+    #[cfg(feature = "http")]
+    pub(crate) fn token_endpoint(&self) -> &str {
+        &self.metadata.token_endpoint
+    }
+
+    #[cfg(feature = "http")]
+    pub(crate) fn client_id(&self) -> &str {
+        &self.config.client_id
+    }
+
+    #[cfg(feature = "http")]
+    pub(crate) fn client_secret(&self) -> Option<&str> {
+        self.config.client_secret.as_deref()
+    }
+
+    #[cfg(feature = "http")]
+    pub(crate) fn redirect_uri(&self) -> &str {
+        &self.config.redirect_uri
     }
 
     /// Begin a login.

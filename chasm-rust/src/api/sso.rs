@@ -17,7 +17,6 @@ use std::io::Read;
 use std::sync::OnceLock;
 use uuid::Uuid;
 
-use samael::crypto::{decode_x509_cert, CertificateDer, Crypto, CryptoProvider, ReduceMode};
 
 use super::audit::Database;
 use super::auth::{AuthResponse, Claims, PublicUser, SubscriptionTier, User};
@@ -796,37 +795,27 @@ impl SsoService {
     /// forgery. Reducing to signed content makes the forged elements cease to
     /// exist before parsing.
     ///
-    /// `ReduceMode::ValidateAndMarkNoAncestors` is deliberate. samael also
-    /// offers `ValidateAndMark`, whose own documentation notes that unsigned
-    /// ancestors can survive reduction; that is precisely the hole this
-    /// function exists to close.
+    /// The reduction is what closes the hole: `verify_and_extract_signed`
+    /// returns the signed element itself, so there is no original document
+    /// left for a caller to re-read and no second assertion to be confused by.
     fn verify_and_reduce(response_xml: &str, idp: &SamlIdpConfig) -> Result<String, String> {
         let cert = Self::certificate_der(&idp.certificate)?;
 
-        Crypto::reduce_xml_to_signed(
-            response_xml,
-            &[cert],
-            ReduceMode::ValidateAndMarkNoAncestors,
-        )
-        .map_err(|e| format!("SAML signature verification failed: {}", e))
+        chasm_sso::saml::signature::verify_and_extract_signed(response_xml, &cert)
+            .map_err(|e| format!("SAML signature verification failed: {}", e))
     }
 
     /// Decode the IdP's configured X.509 certificate to DER.
     ///
     /// Accepts either a PEM block or a bare base64 body, since IdP metadata
     /// exports differ on whether they include the armour.
-    fn certificate_der(certificate: &str) -> Result<CertificateDer, String> {
-        let body: String = certificate
-            .lines()
-            .filter(|line| !line.trim_start().starts_with("-----"))
-            .flat_map(|line| line.split_whitespace())
-            .collect();
-
-        if body.is_empty() {
+    fn certificate_der(certificate: &str) -> Result<Vec<u8>, String> {
+        if certificate.trim().is_empty() {
             return Err("IdP certificate is empty".to_string());
         }
 
-        decode_x509_cert(&body).map_err(|e| format!("Invalid IdP certificate: {}", e))
+        chasm_sso::saml::SamlConfig::certificate_from_pem(certificate)
+            .map_err(|e| format!("Invalid IdP certificate: {}", e))
     }
 
     /// Validate the assertion's time window.
@@ -1231,6 +1220,17 @@ mod signature_tests {
             .expect("test key fixture is valid base64")
     }
 
+    /// The same fixture key, as something that can sign.
+    ///
+    /// The fixtures are unchanged by the move off samael: the certificate and
+    /// key are the same bytes as before, so these tests still exercise the
+    /// signature format a real IdP produces, only verified by a different
+    /// implementation.
+    fn test_key() -> rsa::RsaPrivateKey {
+        chasm_sso::saml::sign::private_key_from_der(&private_key_der())
+            .expect("test key fixture is a usable RSA key")
+    }
+
     fn idp() -> SamlIdpConfig {
         SamlIdpConfig {
             id: "test".into(),
@@ -1289,7 +1289,11 @@ mod signature_tests {
     }
 
     fn signed_response(email: &str) -> String {
-        Crypto::sign_xml(unsigned_response(email), &private_key_der())
+        // `_assert7`, not `_resp1`: the fixture's template carries
+        // `Reference URI="#_assert7"`, so the assertion is what the signature
+        // claims to cover. Signing the enclosing Response instead produces a
+        // digest over the wrong element and fails verification -- correctly.
+        chasm_sso::saml::sign::sign_enveloped(&unsigned_response(email), "_assert7", &test_key())
             .expect("signing the test response should succeed")
     }
 

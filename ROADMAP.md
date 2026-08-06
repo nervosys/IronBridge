@@ -157,12 +157,20 @@ verifies them. On a default build the route test prints how many it skipped
 rather than passing silently, and asserts the marking has not drifted onto a
 path outside those three scopes.
 
-**Their response bodies are deliberately not modelled.** The enterprise
-feature could not be compiled on the machine this was written on, so no
-response from these endpoints was ever observed.
+**The build obstacle is now gone.** `samael` was replaced by the pure-Rust
+`chasm-sso`, so the enterprise feature has no native dependencies and builds
+anywhere cargo does. All 18 enterprise operations are verified as routed on
+every platform, and 39 tests that had never run on Windows now execute.
 
-The blocker is a chain of three, each hiding the next, and only the third is
-genuinely hard: `openssl-sys` is satisfied by pointing `OPENSSL_DIR` at any
+Their response bodies remain unmodelled, but only because nobody has observed
+one yet. The obstacle is removed; the work is not done.
+
+The history below is kept because its lesson outlived the problem — the error
+you can see is repeatedly not the error that stops you.
+
+**Formerly:** the enterprise feature could not be compiled here, so no
+response from these endpoints was ever observed. The blocker was a chain of
+three, each hiding the next, and only the third was genuinely hard: `openssl-sys` is satisfied by pointing `OPENSSL_DIR` at any
 existing OpenSSL 3.x with headers; `libxml v0.3.3` is satisfied by
 `vcpkg install libxml2` plus an explicit `LIBXML2` path to the `.lib`; but
 `samael` then shells out to `xmlsec1-config`, an autotools script with no
