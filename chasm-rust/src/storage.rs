@@ -2149,10 +2149,14 @@ pub fn register_all_sessions_from_directory(
 /// Check if VS Code is currently running
 pub fn is_vscode_running() -> bool {
     let mut sys = System::new();
-    sys.refresh_processes();
+    // sysinfo 0.37 requires saying which processes to refresh, and whether to
+    // remove ones that have exited.
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     for process in sys.processes().values() {
-        let name = process.name().to_lowercase();
+        // `name()` returns an `&OsStr` since 0.31; a name that is not valid
+        // Unicode should read as "no match" rather than panic.
+        let name = process.name().to_string_lossy().to_lowercase();
         if name.contains("code") && !name.contains("codec") {
             return true;
         }
@@ -2172,9 +2176,9 @@ pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
 
     // Send SIGTERM (graceful close) to all Code processes
     let mut sys = System::new_with_specifics(
-        RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
     );
-    sys.refresh_processes();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     let mut signaled = 0u32;
     // The key is read only by the Windows `taskkill` branch below, so on other
@@ -2185,7 +2189,7 @@ pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
     // needs.
     #[allow(clippy::for_kv_map)]
     for (_pid, process) in sys.processes() {
-        let name = process.name().to_lowercase();
+        let name = process.name().to_string_lossy().to_lowercase();
         if name.contains("code") && !name.contains("codec") {
             // On Windows, kill() sends TerminateProcess; there's no graceful
             // SIGTERM equivalent via sysinfo. But the main electron process
@@ -2225,11 +2229,11 @@ pub fn close_vscode_and_wait(timeout_secs: u64) -> Result<()> {
         if std::time::Instant::now() >= deadline {
             // Force kill remaining processes
             let mut sys2 = System::new_with_specifics(
-                RefreshKind::new().with_processes(ProcessRefreshKind::everything()),
+                RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
             );
-            sys2.refresh_processes();
+            sys2.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
             for process in sys2.processes().values() {
-                let name = process.name().to_lowercase();
+                let name = process.name().to_string_lossy().to_lowercase();
                 if name.contains("code") && !name.contains("codec") {
                     process.kill();
                 }
