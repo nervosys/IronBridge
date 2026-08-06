@@ -159,13 +159,19 @@ path outside those three scopes.
 
 **Their response bodies are deliberately not modelled.** The enterprise
 feature could not be compiled on the machine this was written on, so no
-response from these endpoints was ever observed. The precise blocker is worth
-recording, because the obvious candidate is not the one that stops you:
-`openssl-sys` is satisfiable by pointing `OPENSSL_DIR` at any existing
-OpenSSL 3.x with headers (a PostgreSQL install has one), but `libxml v0.3.3`
-panics in its build script without native libxml2, and no environment
-variable substitutes for that. See `chasm-rust/docs/api/rest.md` for the
-exact incantation that gets you as far as libxml2. Every other schema in the
+response from these endpoints was ever observed.
+
+The blocker is a chain of three, each hiding the next, and only the third is
+genuinely hard: `openssl-sys` is satisfied by pointing `OPENSSL_DIR` at any
+existing OpenSSL 3.x with headers; `libxml v0.3.3` is satisfied by
+`vcpkg install libxml2` plus an explicit `LIBXML2` path to the `.lib`; but
+`samael` then shells out to `xmlsec1-config`, an autotools script with no
+vcpkg port on Windows and no environment-variable equivalent. Past that point
+you need MSYS2 or a source build of xmlsec1.
+
+Build enterprise on Linux, which is what CI does.
+`chasm-rust/docs/api/rest.md` records the exact steps for 1 and 2 so nobody
+repeats the search believing OpenSSL is the problem. Every other schema in the
 document was read off a running server. Guessing these would have undone that,
 so each says "body not modelled" instead. Paths and methods come from the
 route registrations, which are unambiguous, and are enforced by the test on

@@ -432,25 +432,36 @@ route registrations and are enforced by the test on an enterprise build.
 
 #### What the enterprise build actually needs on Windows
 
-`samael` pulls two native dependencies, and they are not equally awkward:
+`samael` pulls a chain of three native dependencies. Each one hides the next,
+so the first error you see is not the thing that stops you. Worked through in
+order:
 
-- **OpenSSL** (via `openssl-sys`) — *not* the real blocker. Any existing
-  OpenSSL 3.x with headers works by pointing at it, no installation required.
-  A PostgreSQL 17 install happens to ship one:
+**1. OpenSSL** (`openssl-sys`) — solvable with no installation. Point at any
+existing OpenSSL 3.x that ships headers; a PostgreSQL 17 install has one:
 
-  ```sh
-  export OPENSSL_DIR="C:\Program Files\PostgreSQL\17"
-  export OPENSSL_NO_VENDOR=1
-  ```
+```sh
+export OPENSSL_DIR="C:\Program Files\PostgreSQL\17"
+export OPENSSL_NO_VENDOR=1
+```
 
-- **libxml2** (via `libxml v0.3.3`) — this is the blocker. Its build script
-  panics without the native library, and there is no environment variable that
-  substitutes for having it. `vcpkg install libxml2` (plus `libxmlsec` for the
-  signature verification) is the route on Windows, or use Linux, where CI
-  builds this feature today.
+**2. libxml2** (`libxml v0.3.3`) — needs the native library. `vcpkg install
+libxml2:x64-windows` provides it, but its vcpkg auto-discovery did not find
+the result; the explicit escape hatch does, and wants the full path to the
+`.lib`, not a directory:
 
-Recorded because the first attempt costs an hour of searching to discover that
-the obvious-looking blocker is not the one that stops you.
+```sh
+export LIBXML2="C:\vcpkg\installed\x64-windows\lib\libxml2.lib"
+```
+
+**3. `xmlsec1-config`** — this is where it stops. `samael`'s build script
+shells out to `xmlsec1-config --cflags`, an autotools-generated script that
+comes with a `./configure` build of xmlsec1. There is no vcpkg port that
+provides it on Windows and no environment variable that replaces it. Getting
+past it means MSYS2 or building xmlsec1 from source, which is a materially
+bigger undertaking than the two steps above.
+
+**So: build enterprise on Linux.** That is what CI does, and steps 1 and 2 are
+recorded only so nobody repeats the search believing OpenSSL was the problem.
 
 If you add a schema for one, verify it against a running enterprise build
 first.
