@@ -154,7 +154,7 @@ pub fn shard_session(
                 "[dry-run]".bright_black(),
                 i + 1,
                 shards.len(),
-                &uuid[..8],
+                crate::text::head(uuid, 8),
                 shard.requests.len(),
                 size_mb
             );
@@ -165,7 +165,7 @@ pub fn shard_session(
                 "  Part {}/{}: {} — {} requests ({:.1} MB)",
                 i + 1,
                 shards.len(),
-                &uuid[..8],
+                crate::text::head(uuid, 8),
                 shard.requests.len(),
                 size_mb
             );
@@ -267,7 +267,7 @@ pub fn shard_session(
             println!(
                 "  {} Would update session index for workspace {}",
                 "[dry-run]".bright_black(),
-                &ws_hash[..8]
+                crate::text::head(&ws_hash, 8)
             );
         } else {
             update_shard_index(&ws_hash, &session_id, &shards, &shard_uuids, &session)?;
@@ -348,7 +348,7 @@ pub fn shard_workspace(
     println!(
         "Scanning {} session files in workspace {}...",
         candidates.len(),
-        &ws_hash[..8]
+        crate::text::head(&ws_hash, 8)
     );
 
     let mut sharded_count = 0;

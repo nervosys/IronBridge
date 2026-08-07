@@ -92,7 +92,9 @@ fn main() -> anyhow::Result<()> {
         if ws.chat_session_count > 0 {
             println!(
                 "   {} - {} sessions",
-                ws.project_path.as_deref().unwrap_or(&ws.hash[..12]),
+                ws.project_path
+                    .clone()
+                    .unwrap_or_else(|| chasm::text::head(&ws.hash, 12)),
                 ws.chat_session_count
             );
             total_sessions += ws.chat_session_count;

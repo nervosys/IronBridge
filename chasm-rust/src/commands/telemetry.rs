@@ -221,7 +221,7 @@ pub fn telemetry_show(
             println!();
 
             for record in &records {
-                let time_short = &record.timestamp_iso[..19];
+                let time_short = crate::text::head(&record.timestamp_iso, 19);
                 let tags_str = if record.tags.is_empty() {
                     String::new()
                 } else {
@@ -240,7 +240,7 @@ pub fn telemetry_show(
                     let data_str = serde_json::to_string(&record.data).unwrap_or_default();
                     // Truncate long data
                     let display = if data_str.len() > 80 {
-                        format!("{}...", &data_str[..77])
+                        crate::text::truncate(&data_str, 80)
                     } else {
                         data_str
                     };

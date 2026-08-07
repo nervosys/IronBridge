@@ -504,11 +504,7 @@ pub fn register_sessions(
                 session.is_empty(),
             )?;
 
-            let id_display = if session_id.len() > 12 {
-                &session_id[..12]
-            } else {
-                &session_id
-            };
+            let id_display = crate::text::head(&session_id, 12);
             println!(
                 "   {} {} (\"{}\")",
                 "[OK]".green(),
@@ -546,11 +542,7 @@ pub fn register_sessions(
                         session.is_empty(),
                     )?;
 
-                    let id_display = if actual_session_id.len() > 12 {
-                        &actual_session_id[..12]
-                    } else {
-                        &actual_session_id
-                    };
+                    let id_display = crate::text::head(&actual_session_id, 12);
                     println!(
                         "   {} {} (\"{}\")",
                         "[OK]".green(),
@@ -674,11 +666,7 @@ pub fn list_orphaned(project_path: Option<&str>) -> Result<()> {
     );
 
     for (session_id, title, msg_count, _path) in &orphaned_sessions {
-        let id_display = if session_id.len() > 12 {
-            &session_id[..12]
-        } else {
-            session_id
-        };
+        let id_display = crate::text::head(session_id, 12);
         println!(
             "   {} {} ({} messages)",
             id_display.cyan(),

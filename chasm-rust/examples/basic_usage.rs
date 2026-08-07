@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     for ws in workspaces.iter().take(5) {
         println!(
             "   - {} | {} sessions | {}",
-            &ws.hash[..12],
+            chasm::text::head(&ws.hash, 12),
             ws.chat_session_count,
             ws.project_path.as_deref().unwrap_or("(none)")
         );
@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
         if let Some(path) = &first_ws.project_path {
             match find_workspace_by_path(path) {
                 Ok(Some((hash, _, _))) => {
-                    println!("   Found workspace: {}...", &hash[..16]);
+                    println!("   Found workspace: {}...", chasm::text::head(&hash, 16));
                 }
                 Ok(None) => {
                     println!("   Workspace not found");

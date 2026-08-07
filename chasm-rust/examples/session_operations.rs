@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     let test_path = std::env::current_dir()?;
     match find_workspace_by_path(&test_path.to_string_lossy()) {
         Ok(Some((hash, ws_dir, _))) => {
-            println!("   Found workspace: {}...", &hash[..16]);
+            println!("   Found workspace: {}...", chasm::text::head(&hash, 16));
             let sessions = get_chat_sessions_from_workspace(&ws_dir)?;
             println!("   Sessions in workspace: {}", sessions.len());
 

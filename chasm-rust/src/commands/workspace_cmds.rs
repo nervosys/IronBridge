@@ -2278,7 +2278,7 @@ pub fn list_agents_sessions(
                 .as_ref()
                 .and_then(|p| std::path::Path::new(p).file_name())
                 .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| entry.file_name().to_string_lossy()[..8].to_string());
+                .unwrap_or_else(|| crate::text::head(&entry.file_name().to_string_lossy(), 8));
 
             // List agent session directories
             for session_entry in std::fs::read_dir(&agent_sessions_dir)?.filter_map(|e| e.ok()) {
@@ -2289,7 +2289,7 @@ pub fn list_agents_sessions(
 
                 let session_id = session_entry.file_name().to_string_lossy().to_string();
                 let short_id = if session_id.len() > 8 {
-                    format!("{}...", &session_id[..8])
+                    format!("{}...", crate::text::head(&session_id, 8))
                 } else {
                     session_id.clone()
                 };
@@ -2773,7 +2773,7 @@ pub fn show_index(project_path: Option<&str>, all: bool) -> Result<()> {
         rows.push(IndexRow {
             session_id: entry.session_id[..12.min(entry.session_id.len())].to_string(),
             title: if entry.title.len() > 40 {
-                format!("{}...", &entry.title[..37])
+                crate::text::truncate(&entry.title, 40)
             } else {
                 entry.title.clone()
             },

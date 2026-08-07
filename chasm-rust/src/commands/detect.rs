@@ -445,14 +445,9 @@ pub fn detect_all(path: Option<&str>, verbose: bool) -> Result<()> {
     Ok(())
 }
 
-/// Helper function to truncate strings
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len - 3])
-    }
-}
+// Was a local copy that sliced bytes and panicked on non-ASCII; see
+// `crate::text`.
+use crate::text::truncate;
 
 /// Detect all workspace hashes for a project path (including orphaned workspaces)
 /// This helps find sessions that exist on disk but are in old/orphaned workspace folders
@@ -669,7 +664,7 @@ pub fn detect_orphaned(path: Option<&str>, recover: bool) -> Result<()> {
                                     "   {} Copied: {} (from {}...)",
                                     "[+]".green(),
                                     filename.to_string_lossy(),
-                                    &hash[..8]
+                                    crate::text::head(hash, 8)
                                 );
                             }
                         }

@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
         let mod_time: chrono::DateTime<chrono::Utc> = (*last_mod).into();
         println!(
             "   - {}... | {} sessions | {}",
-            &hash[..12],
+            chasm::text::head(hash, 12),
             sessions.len(),
             mod_time.format("%Y-%m-%d")
         );

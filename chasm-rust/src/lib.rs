@@ -67,6 +67,7 @@ pub mod storage;
 pub mod sync;
 pub mod teams;
 pub mod telemetry;
+pub mod text;
 pub mod tui;
 pub mod workspace;
 

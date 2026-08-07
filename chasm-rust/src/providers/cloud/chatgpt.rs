@@ -175,8 +175,8 @@ impl ChatGPTProvider {
                 // from other API regressions.
                 let snippet = serde_json::to_string(&session_data)
                     .unwrap_or_else(|_| "<unserializable>".to_string());
-                let snippet = if snippet.len() > 300 {
-                    format!("{}…", &snippet[..300])
+                let snippet = if snippet.chars().count() > 300 {
+                    format!("{}…", crate::text::head(&snippet, 300))
                 } else {
                     snippet
                 };

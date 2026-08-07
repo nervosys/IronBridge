@@ -926,11 +926,7 @@ impl App {
                     .current_session()
                     .map(|s| {
                         let t = s.session.title();
-                        if t.len() > 30 {
-                            format!("{}...", &t[..27])
-                        } else {
-                            t
-                        }
+                        crate::text::truncate(&t, 30)
                     })
                     .unwrap_or_else(|| "session".to_string());
                 format!("◆ Workspaces › {} › {}", ws_name, session_title)

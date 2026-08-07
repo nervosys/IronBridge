@@ -105,8 +105,8 @@ pub fn inspect_index(path: Option<&str>, workspace_id: Option<&str>, json: bool)
     entries.sort_by_key(|e| std::cmp::Reverse(e.1.last_message_date));
 
     for (id, entry) in &entries {
-        let title = if entry.title.len() > 60 {
-            format!("{}...", &entry.title[..57])
+        let title = if entry.title.chars().count() > 60 {
+            crate::text::truncate(&entry.title, 60)
         } else {
             entry.title.clone()
         };
@@ -281,16 +281,16 @@ pub fn inspect_memento(path: Option<&str>, workspace_id: Option<&str>, json: boo
                 for (key, v) in obj {
                     let display = match v {
                         serde_json::Value::String(s) => {
-                            if s.len() > 80 {
-                                format!("{}...", &s[..77])
+                            if s.chars().count() > 80 {
+                                crate::text::truncate(s, 80)
                             } else {
                                 s.clone()
                             }
                         }
                         other => {
                             let s = serde_json::to_string(other).unwrap_or_default();
-                            if s.len() > 80 {
-                                format!("{}...", &s[..77])
+                            if s.chars().count() > 80 {
+                                crate::text::truncate(&s, 80)
                             } else {
                                 s
                             }
@@ -346,8 +346,8 @@ pub fn inspect_cache(path: Option<&str>, workspace_id: Option<&str>, json: bool)
         let session_id =
             session_id_from_resource_uri(&entry.resource).unwrap_or_else(|| entry.resource.clone());
 
-        let title = if entry.label.len() > 60 {
-            format!("{}...", &entry.label[..57])
+        let title = if entry.label.chars().count() > 60 {
+            crate::text::truncate(&entry.label, 60)
         } else {
             entry.label.clone()
         };
@@ -524,8 +524,8 @@ pub fn inspect_validate(path: Option<&str>, workspace_id: Option<&str>, json: bo
                 ValidationStatus::Fail => "✗".red(),
             };
 
-            let title = if entry.title.len() > 50 {
-                format!("{}...", &entry.title[..47])
+            let title = if entry.title.chars().count() > 50 {
+                crate::text::truncate(&entry.title, 50)
             } else {
                 entry.title.clone()
             };
@@ -1256,8 +1256,8 @@ pub fn inspect_rebuild(
         } else {
             "\u{2714}".green() // ✔
         };
-        let title_display = if s.title.len() > 50 {
-            format!("{}...", &s.title[..47])
+        let title_display = if s.title.chars().count() > 50 {
+            crate::text::truncate(&s.title, 50)
         } else {
             s.title.clone()
         };

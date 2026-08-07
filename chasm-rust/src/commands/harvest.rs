@@ -2764,7 +2764,7 @@ pub fn harvest_share(
         println!(
             "{} Registered share link (ID: {})",
             "[+]".green(),
-            &link_id[..8]
+            crate::text::head(&link_id, 8)
         );
     }
 
@@ -3431,18 +3431,14 @@ pub fn harvest_shares(
 
         println!(
             "{} [{}] {} - {}",
-            format!("#{}", &id[..8]).dimmed(),
+            format!("#{}", crate::text::head(&id, 8)).dimmed(),
             status_colored,
             provider.bold(),
             title.as_deref().unwrap_or("(untitled)")
         );
 
         // Truncate URL for display
-        let display_url = if url.len() > 60 {
-            format!("{}...", &url[..57])
-        } else {
-            url.clone()
-        };
+        let display_url = crate::text::truncate(&url, 60);
         println!("   {} {}", "URL:".dimmed(), display_url.dimmed());
 
         // Format timestamp
@@ -3548,7 +3544,11 @@ pub fn harvest_checkpoint(
         message_text
     );
     println!("{} Messages: {}", "[i]".blue(), msg_count);
-    println!("{} Hash: {}", "[i]".blue(), &content_hash[..16]);
+    println!(
+        "{} Hash: {}",
+        "[i]".blue(),
+        crate::text::head(&content_hash, 16)
+    );
     println!();
     println!(
         "   Use 'csm harvest checkpoints {}' to view history",
@@ -3642,7 +3642,7 @@ pub fn harvest_checkpoints(db_path: Option<&str>, session_id: &str) -> Result<()
         println!(
             "       {} messages | {} | {}",
             msg_count,
-            &hash[..12],
+            crate::text::head(&hash, 12),
             created_at.dimmed()
         );
     }

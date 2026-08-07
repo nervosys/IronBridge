@@ -2734,10 +2734,10 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                     if kind == "thinking" {
                         if let Some(val) = r.get_mut("value") {
                             if let Some(s) = val.as_str() {
-                                if s.len() > 500 {
+                                if s.chars().count() > 500 {
                                     *val = serde_json::Value::String(format!(
                                         "{}... [truncated]",
-                                        &s[..500]
+                                        crate::text::head(s, 500)
                                     ));
                                 }
                             }
@@ -2745,10 +2745,10 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                         if let Some(thought) = r.get_mut("thought") {
                             if let Some(thought_val) = thought.get_mut("value") {
                                 if let Some(s) = thought_val.as_str() {
-                                    if s.len() > 500 {
+                                    if s.chars().count() > 500 {
                                         *thought_val = serde_json::Value::String(format!(
                                             "{}... [truncated]",
-                                            &s[..500]
+                                            crate::text::head(s, 500)
                                         ));
                                     }
                                 }
@@ -2761,10 +2761,10 @@ fn strip_bloated_content(entry: &mut serde_json::Value) {
                         if let Some(content) = r.get_mut("content") {
                             if let Some(val) = content.get_mut("value") {
                                 if let Some(s) = val.as_str() {
-                                    if s.len() > 20000 {
+                                    if s.chars().count() > 20000 {
                                         *val = serde_json::Value::String(format!(
                                             "{}\n\n---\n*[Chasm: Content truncated for loading performance]*",
-                                            &s[..20000]
+                                            crate::text::head(s, 20000)
                                         ));
                                     }
                                 }
@@ -3647,4 +3647,79 @@ pub fn repair_workspace_sessions(
     }
 
     Ok((compacted, index_fixed))
+}
+
+#[cfg(test)]
+mod truncation_tests {
+    use super::strip_bloated_content;
+
+    fn entry_with(kind: &str, field: &str, value: String) -> serde_json::Value {
+        serde_json::json!({
+            "v": { "requests": [ { "response": [ { "kind": kind, field: value } ] } ] }
+        })
+    }
+
+    /// The reason this module exists. These fields hold model output, which
+    /// routinely contains emoji and non-Latin script, and the truncation used
+    /// to slice **bytes**: `&s[..500]` lands mid-character and panics. Every
+    /// session carrying a long non-ASCII "thinking" block was unreadable.
+    #[test]
+    fn multibyte_thinking_content_is_truncated_without_panicking() {
+        let mut entry = entry_with("thinking", "value", "考".repeat(600));
+        strip_bloated_content(&mut entry);
+
+        let out = entry["v"]["requests"][0]["response"][0]["value"]
+            .as_str()
+            .expect("value should still be a string");
+        assert!(out.ends_with("... [truncated]"), "{out}");
+        assert_eq!(out.trim_end_matches("... [truncated]").chars().count(), 500);
+    }
+
+    #[test]
+    fn multibyte_markdown_content_is_truncated_without_panicking() {
+        let mut entry = serde_json::json!({
+            "v": { "requests": [ { "response": [ {
+                "kind": "markdownContent",
+                "content": { "value": "🎉".repeat(20_050) }
+            } ] } ] }
+        });
+        strip_bloated_content(&mut entry);
+
+        let out = entry["v"]["requests"][0]["response"][0]["content"]["value"]
+            .as_str()
+            .expect("value should still be a string");
+        assert!(out.contains("Content truncated"), "{out}");
+        assert_eq!(out.chars().filter(|c| *c == '🎉').count(), 20_000);
+    }
+
+    /// Content already under the limit must be left exactly as it was --
+    /// truncation that rewrites short values would corrupt every session.
+    #[test]
+    fn short_content_is_left_alone() {
+        let original = "短いテキスト".to_string();
+        let mut entry = entry_with("thinking", "value", original.clone());
+        strip_bloated_content(&mut entry);
+
+        assert_eq!(
+            entry["v"]["requests"][0]["response"][0]["value"]
+                .as_str()
+                .unwrap(),
+            original
+        );
+    }
+
+    /// A boundary case the char/byte confusion hides: exactly at the limit is
+    /// not "over" it.
+    #[test]
+    fn content_exactly_at_the_limit_is_not_truncated() {
+        let exact = "あ".repeat(500);
+        let mut entry = entry_with("thinking", "value", exact.clone());
+        strip_bloated_content(&mut entry);
+        assert_eq!(
+            entry["v"]["requests"][0]["response"][0]["value"]
+                .as_str()
+                .unwrap(),
+            exact
+        );
+    }
 }
