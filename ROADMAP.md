@@ -50,15 +50,27 @@ sessions behind, a fork diverges from its source, a merge leaves both inputs
 intact, markdown export renders the transcript, and a share link reads, lists
 as active, revokes, and then 404s.
 
-**Semantic search's success path is not verified.** No embedding API was
-reachable from the machine this was written on, so what has been exercised is
-the refusal path (`503` naming `OPENAI_API_KEY`), the vector encode/decode
-round trip, and the cosine arithmetic including its degenerate cases. The
-embed-index-rank path has never run against a real embedding endpoint. It is
-written to fail loudly rather than quietly -- mismatched vector counts and
-out-of-order indices are errors, not silent corruption -- but it has not been
-proven end to end, and the first person with a key should treat it as
-unproven.
+**Semantic search's success path is now verified.** It previously was not:
+no embedding API was reachable, so only the refusal path, the vector
+encode/decode round trip and the cosine arithmetic had been exercised.
+
+It has since been run end to end against a local OpenAI-compatible
+`/embeddings` endpoint. Three sessions on unrelated topics (authentication,
+cooking, Kubernetes) were indexed through `POST /api/search/semantic/index`,
+and each of four queries ranked its own session first with the others at
+0.0. Re-indexing reported `indexed: 0` with the "already has a vector" note,
+and `force` rebuilt all three.
+
+The endpoint deliberately returned its `data` array **shuffled**, with correct
+`index` fields — which the real API is free to do. Had the client trusted
+array position, every vector would have attached to the wrong session and the
+rankings would have been confidently wrong. That hazard is now a unit test
+(`embedder_network_tests`) driving the real client against a real socket; it
+was confirmed to fail when the reordering is removed, so it is a regression
+test and not decoration.
+
+What remains unverified is OpenAI's own service specifically — rate limits,
+token limits, and the shape of their error bodies. The flow itself is proven.
 
 ## Known gaps
 
@@ -73,7 +85,7 @@ Verified against the tree as of August 4, 2026:
 | Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
 | Enterprise scopes actually served | Fixed. `/audit`, `/retention` and `/sso` were never registered in `start_server`, so all 18 of their operations answered 404 on every enterprise build; the spec test mounted them itself and so never noticed. Both now go through one `EnterpriseServices::configure`, and the response bodies are documented from observed responses. |
 | AI & Intelligence | Model-backed via `chasm analyze`, against any OpenAI-compatible endpoint. Falls back to the old heuristics without a key, and every result states which produced it. |
-| Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation. Requires an API key; without one, embedding calls error rather than returning zeros. |
+| Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation, and verified end to end against a local endpoint implementing that API. Requires an API key; without one, embedding calls error rather than returning zeros. |
 | Desktop application | Runs the API server in-process, so it works standalone. The UI is chasm-web; there is no desktop-specific interface. |
 | Agent inbox | Backed by `/api/inbox`. The agency runtime emits run and message events; permission requests expire rather than lingering as approvable. |
 

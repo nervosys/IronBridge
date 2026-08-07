@@ -235,9 +235,13 @@ endpoint called "semantic" quietly returning substring matches would be
 indistinguishable from a broken index, and `/api/search` already does substring
 matching honestly.
 
-> **Not yet proven.** The refusal path, vector storage and similarity maths are
-> tested, but the embed–index–rank path has never run against a real embedding
-> endpoint. Treat it as unverified until you have run it with a key.
+> **Proven end to end**, against a local OpenAI-compatible embeddings endpoint:
+> three sessions on distinct topics were indexed and each query ranked its own
+> session first. Idempotent re-indexing and `force` rebuild both behave.
+>
+> It has still not run against **OpenAI itself** — only against an endpoint
+> implementing the same contract. What that leaves unverified is their specific
+> dialect (rate limits, token limits, error bodies), not the flow.
 
 ### GraphQL
 
@@ -392,7 +396,7 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
 | Enterprise (SSO/audit/retention)| **Working, all platforms.** OIDC (authorization code + PKCE) and SAML both run on the pure-Rust `chasm-sso`; SAML signatures are verified against wrapping attacks. `SqliteEnterpriseStore` implements every `DatabaseOps` method, so provider config, pending logins, sessions, audit events and retention policies persist. All 25 enterprise operations are served, probed by tests, and their response bodies documented. Until recently the lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
 | Conversation analysis           | **Model-backed.** `chasm analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
-| Embeddings / semantic search    | **Built, unproven.** `POST /api/search/semantic/index` embeds sessions and `GET /api/search/semantic` ranks them by cosine similarity. Refusal, vector storage and the similarity maths are tested; the embed–index–rank path has never run against a real embedding endpoint, so treat it as unverified. This row previously read "Working" while nothing in the tree ever wrote an embedding. |
+| Embeddings / semantic search    | **Working, verified end to end.** `POST /api/search/semantic/index` embeds sessions and `GET /api/search/semantic` ranks them by cosine similarity. Exercised against a local OpenAI-compatible endpoint: every query ranked its own topic first, re-indexing is idempotent, and `force` rebuilds. The client's reordering-by-`index` is now covered by a test that fails if array position is trusted instead. Not yet run against OpenAI's own service, so their dialect (rate/token limits, error bodies) is still unverified. |
 | Session sharing                 | **Working, local only.** Revocable, optionally-expiring tokens readable through your own server. Nothing is uploaded anywhere — see [Sharing](#sharing). |
 | chasm-desktop                   | **Working.** Wraps chasm-web and runs the API server in-process on 127.0.0.1:8788, so it needs no separately started backend. No desktop-specific UI. |
 | chasm-web                       | **Working.** `AgentInbox` is backed by `/api/inbox`.                                                                      |

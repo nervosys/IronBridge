@@ -3270,3 +3270,184 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }
+
+/// Tests for the embedding client's network contract.
+///
+/// The embed-index-rank path was shipped and documented as unverified: no
+/// embedding endpoint had ever answered it. These stand up a real HTTP server
+/// and drive the real client against it, so the request shape, the auth
+/// header, the response parsing and -- most importantly -- the reordering are
+/// exercised against actual traffic rather than asserted about.
+#[cfg(test)]
+mod embedder_network_tests {
+    use super::Embedder;
+    use actix_web::{web, App, HttpResponse, HttpServer};
+    use serde_json::json;
+    use std::sync::{Arc, Mutex};
+
+    /// What the last request carried, so the test can assert on it.
+    #[derive(Default)]
+    struct Seen {
+        authorization: Option<String>,
+        model: Option<String>,
+        inputs: Vec<String>,
+    }
+
+    /// Start a local OpenAI-compatible `/embeddings` endpoint.
+    ///
+    /// `shuffle` returns `data` in reverse order with correct `index` fields,
+    /// which is legal and which the real API gives no guarantee against.
+    async fn serve(shuffle: bool) -> (String, Arc<Mutex<Seen>>) {
+        let seen = Arc::new(Mutex::new(Seen::default()));
+        let captured = seen.clone();
+
+        let server = HttpServer::new(move || {
+            let captured = captured.clone();
+            App::new().route(
+                "/embeddings",
+                web::post().to(
+                    move |req: actix_web::HttpRequest, body: web::Json<serde_json::Value>| {
+                        let captured = captured.clone();
+                        async move {
+                            let auth = req
+                                .headers()
+                                .get("authorization")
+                                .and_then(|v| v.to_str().ok())
+                                .map(str::to_string);
+                            let inputs: Vec<String> = body["input"]
+                                .as_array()
+                                .map(|a| {
+                                    a.iter()
+                                        .map(|v| v.as_str().unwrap_or_default().to_string())
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            {
+                                let mut s = captured.lock().unwrap();
+                                s.authorization = auth;
+                                s.model = body["model"].as_str().map(str::to_string);
+                                s.inputs = inputs.clone();
+                            }
+
+                            // One dimension per input position, so a vector is
+                            // trivially traceable back to the text it came from.
+                            let mut data: Vec<serde_json::Value> = inputs
+                                .iter()
+                                .enumerate()
+                                .map(|(i, _)| {
+                                    let mut v = vec![0.0f32; inputs.len()];
+                                    v[i] = 1.0;
+                                    json!({ "object": "embedding", "index": i, "embedding": v })
+                                })
+                                .collect();
+                            if shuffle {
+                                data.reverse();
+                            }
+                            HttpResponse::Ok().json(json!({ "object": "list", "data": data }))
+                        }
+                    },
+                ),
+            )
+        })
+        .bind(("127.0.0.1", 0))
+        .expect("bind");
+
+        let port = server.addrs()[0].port();
+        let running = server.run();
+        tokio::spawn(running);
+        (format!("http://127.0.0.1:{port}"), seen)
+    }
+
+    fn embedder(base_url: String) -> Embedder {
+        Embedder {
+            client: reqwest::Client::new(),
+            api_key: "test-key".to_string(),
+            base_url,
+            model: "test-model".to_string(),
+        }
+    }
+
+    /// The one that matters. The API returns an `index` per item and does not
+    /// promise sorted output; trusting array position attaches every vector to
+    /// the wrong text, which looks like a working index returning nonsense.
+    #[tokio::test]
+    async fn vectors_come_back_in_input_order_even_when_the_api_shuffles_them() {
+        let (base, _seen) = serve(true).await;
+        let inputs = vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third".to_string(),
+        ];
+        let out = embedder(base).embed(&inputs).await.expect("embed");
+
+        assert_eq!(out.len(), 3);
+        // Input i was answered with a one-hot vector at dimension i, so this
+        // fails loudly if the reordering is dropped.
+        for (i, v) in out.iter().enumerate() {
+            assert_eq!(v[i], 1.0, "input {i} got the wrong vector: {v:?}");
+            assert_eq!(v.iter().filter(|x| **x != 0.0).count(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn the_request_carries_the_bearer_token_and_the_model() {
+        let (base, seen) = serve(false).await;
+        let inputs = vec!["hello".to_string()];
+        embedder(base).embed(&inputs).await.expect("embed");
+
+        let s = seen.lock().unwrap();
+        assert_eq!(s.authorization.as_deref(), Some("Bearer test-key"));
+        assert_eq!(s.model.as_deref(), Some("test-model"));
+        assert_eq!(s.inputs, inputs);
+    }
+
+    /// A short count means some input silently got no vector. Returning what
+    /// arrived would attach vectors to the wrong texts from that point on.
+    #[tokio::test]
+    async fn a_response_with_fewer_vectors_than_inputs_is_an_error() {
+        let server = HttpServer::new(|| {
+            App::new().route(
+                "/embeddings",
+                web::post().to(|| async {
+                    HttpResponse::Ok().json(json!({
+                        "data": [{ "object": "embedding", "index": 0, "embedding": [1.0] }]
+                    }))
+                }),
+            )
+        })
+        .bind(("127.0.0.1", 0))
+        .expect("bind");
+        let port = server.addrs()[0].port();
+        tokio::spawn(server.run());
+
+        let err = embedder(format!("http://127.0.0.1:{port}"))
+            .embed(&["a".to_string(), "b".to_string()])
+            .await
+            .expect_err("a short response must not be accepted");
+        assert!(err.contains("1 vectors for 2 inputs"), "{err}");
+    }
+
+    /// An upstream failure must surface, not be mistaken for an empty result.
+    #[tokio::test]
+    async fn an_error_status_is_reported_with_the_body() {
+        let server = HttpServer::new(|| {
+            App::new().route(
+                "/embeddings",
+                web::post().to(|| async {
+                    HttpResponse::Unauthorized().json(json!({ "error": { "message": "bad key" } }))
+                }),
+            )
+        })
+        .bind(("127.0.0.1", 0))
+        .expect("bind");
+        let port = server.addrs()[0].port();
+        tokio::spawn(server.run());
+
+        let err = embedder(format!("http://127.0.0.1:{port}"))
+            .embed(&["a".to_string()])
+            .await
+            .expect_err("401 must be an error");
+        assert!(err.contains("401"), "{err}");
+        assert!(err.contains("bad key"), "{err}");
+    }
+}
