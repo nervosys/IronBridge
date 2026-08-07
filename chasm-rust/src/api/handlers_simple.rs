@@ -2657,10 +2657,7 @@ mod provider_health_tests {
             Err(_) => panic!("could not read the response body"),
         };
         let parsed: serde_json::Value = serde_json::from_slice(&body).expect("json");
-        parsed["data"]
-            .as_array()
-            .expect("data is an array")
-            .clone()
+        parsed["data"].as_array().expect("data is an array").clone()
     }
 
     /// The database check must be able to succeed.
@@ -2780,10 +2777,16 @@ mod provider_health_tests {
     fn a_trailing_slash_does_not_produce_a_double_slash() {
         let mut p = provider("ollama");
         p.endpoint = Some("http://localhost:11434/".to_string());
-        assert_eq!(probe_url(&p).as_deref(), Some("http://localhost:11434/api/tags"));
+        assert_eq!(
+            probe_url(&p).as_deref(),
+            Some("http://localhost:11434/api/tags")
+        );
 
         p.endpoint = Some("http://localhost:1234/v1/".to_string());
-        assert_eq!(probe_url(&p).as_deref(), Some("http://localhost:1234/v1/models"));
+        assert_eq!(
+            probe_url(&p).as_deref(),
+            Some("http://localhost:1234/v1/models")
+        );
     }
 
     /// The client reads `providerId` and `lastChecked`. The old handler sent
@@ -2795,9 +2798,15 @@ mod provider_health_tests {
         assert!(!rows.is_empty());
         for row in &rows {
             assert!(row.get("providerId").is_some(), "missing providerId: {row}");
-            assert!(row.get("lastChecked").is_some(), "missing lastChecked: {row}");
+            assert!(
+                row.get("lastChecked").is_some(),
+                "missing lastChecked: {row}"
+            );
             assert!(row.get("provider").is_none(), "stale `provider` key: {row}");
-            assert!(row.get("lastCheck").is_none(), "stale `lastCheck` key: {row}");
+            assert!(
+                row.get("lastCheck").is_none(),
+                "stale `lastCheck` key: {row}"
+            );
 
             let status = row["status"].as_str().unwrap_or_default();
             assert!(

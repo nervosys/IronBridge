@@ -235,9 +235,7 @@ mod tests {
         // harness rather than of the spec.
         let sync_state = Data::new(super::super::create_sync_state());
         let recording_state = Data::new(super::super::create_recording_state());
-        let webhook_state = Data::new(std::sync::Arc::new(
-            super::super::WebhookState::new(),
-        ));
+        let webhook_state = Data::new(std::sync::Arc::new(super::super::WebhookState::new()));
         #[cfg(feature = "enterprise")]
         let enterprise = super::super::EnterpriseServices::open(
             &dir.path().join("spec-routes-enterprise.db"),
@@ -468,9 +466,7 @@ mod tests {
 
         let sync_state = Data::new(super::super::create_sync_state());
         let recording_state = Data::new(super::super::create_recording_state());
-        let webhook_state = Data::new(std::sync::Arc::new(
-            super::super::WebhookState::new(),
-        ));
+        let webhook_state = Data::new(std::sync::Arc::new(super::super::WebhookState::new()));
         #[cfg(feature = "enterprise")]
         let enterprise = super::super::EnterpriseServices::open(
             &dir.path().join("spec-bodies-enterprise.db"),
@@ -525,21 +521,16 @@ mod tests {
             // the spec rather than guessed from the path. A name-based rule
             // ("paths ending in search need q") silently missed
             // /search/semantic and reported its correct 400 as drift.
-            let uri = format!(
-                "{}{path}{}",
-                mount_prefix(item),
-                required_query_string(op)
-            );
-            let resp = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
+            let uri = format!("{}{path}{}", mount_prefix(item), required_query_string(op));
+            let resp =
+                test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
 
             // An endpoint that documents a 401 and answers 401 to an
             // unauthenticated probe is behaving exactly as described. Reading
             // its success body would need a real session, which this test
             // deliberately does not build -- so its 200 shape is unverified
             // here rather than wrongly reported as drift.
-            if resp.status() == StatusCode::UNAUTHORIZED
-                && op.pointer("/responses/401").is_some()
-            {
+            if resp.status() == StatusCode::UNAUTHORIZED && op.pointer("/responses/401").is_some() {
                 continue;
             }
             // Same reasoning for an endpoint that needs a model configured and
@@ -695,7 +686,9 @@ mod tests {
         if let Some(all_of) = resolved.get("allOf").and_then(|a| a.as_array()) {
             let mut merged = serde_json::Map::new();
             for member in all_of {
-                if let Some(props) = deref(spec, member).get("properties").and_then(|p| p.as_object())
+                if let Some(props) = deref(spec, member)
+                    .get("properties")
+                    .and_then(|p| p.as_object())
                 {
                     for (k, v) in props {
                         merged.insert(k.clone(), v.clone());

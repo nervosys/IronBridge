@@ -129,7 +129,11 @@ fn write_element(
     // PrefixList forces declarations in even when unused, which is how a
     // signer keeps a fragment verifiable in contexts it cannot predict.
     for prefix in inclusive {
-        let lookup = if prefix == "#default" { "" } else { prefix.as_str() };
+        let lookup = if prefix == "#default" {
+            ""
+        } else {
+            prefix.as_str()
+        };
         if let Some(uri) = node
             .namespaces()
             .find(|ns| ns.name().unwrap_or("") == lookup)
@@ -143,9 +147,7 @@ fn write_element(
     let mut emitted = rendered.to_vec();
     let mut to_render: Vec<(String, String)> = Vec::new();
     for (prefix, uri) in needed {
-        let already = emitted
-            .iter()
-            .any(|(p, u)| p == &prefix && u == &uri);
+        let already = emitted.iter().any(|(p, u)| p == &prefix && u == &uri);
         if !already {
             to_render.push((prefix.clone(), uri.clone()));
             emitted.push((prefix, uri));

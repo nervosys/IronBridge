@@ -149,8 +149,7 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
     // The write endpoints join this same scope rather than registering their
     // own: a second `web::scope("/api")` would match the prefix first and
     // shadow everything here.
-    cfg.service(
-        handlers_write::attach_write_routes(
+    cfg.service(handlers_write::attach_write_routes(
         web::scope("/api")
             .route("/health", web::get().to(health_check))
             .route("/workspaces", web::get().to(list_workspaces))
@@ -252,8 +251,7 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
                 "/swe/projects/{project_id}/rules/{id}",
                 web::delete().to(handlers_swe::delete_rule),
             ),
-        ),
-    );
+    ));
 
     eprintln!("[DEBUG] Added /api routes");
 }

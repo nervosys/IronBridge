@@ -104,8 +104,7 @@ pub struct JwkSet {
 
 impl JwkSet {
     pub fn from_json(body: &str) -> Result<Self> {
-        serde_json::from_str(body)
-            .map_err(|e| SsoError::malformed("jwks document", e.to_string()))
+        serde_json::from_str(body).map_err(|e| SsoError::malformed("jwks document", e.to_string()))
     }
 
     /// Find the key that signed a token.
@@ -180,7 +179,10 @@ mod tests {
             keys: vec![rsa_key("one"), rsa_key("two")],
         };
         assert_eq!(
-            set.find(Some("two"), Algorithm::RS256).unwrap().kid.as_deref(),
+            set.find(Some("two"), Algorithm::RS256)
+                .unwrap()
+                .kid
+                .as_deref(),
             Some("two")
         );
     }

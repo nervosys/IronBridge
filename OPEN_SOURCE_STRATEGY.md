@@ -211,6 +211,21 @@ CMD ["chasm", "api", "serve"]
 
 ### Features to Keep Proprietary
 
+> **⚠️ SSO no longer matches this table.** The row below says SSO belongs in
+> `csm-cloud`. In the tree today, both SAML *and* OIDC ship in this AGPL
+> repository, behind `--features enterprise`: `chasm-rust/src/api/{sso,oidc}.rs`
+> serve 14 of the 25 enterprise operations, on the pure-Rust `chasm-sso` crate.
+>
+> This is recorded, not resolved. The table states the intended boundary and
+> the tree states what was built; they disagree, and which one changes is a
+> business decision. Two things worth knowing while deciding:
+>
+> - `chasm-sso` is a standalone crate. A future `csm-cloud` can depend on it
+>   without any of the REST surface in `chasm-rust`, so moving the *endpoints*
+>   later does not mean rewriting the protocol work.
+> - Under AGPL-3.0-only, what has already shipped stays shipped. Removing the
+>   endpoints changes future releases; it does not retract released ones.
+
 | Feature                          | Reason                  | Location      |
 | -------------------------------- | ----------------------- | ------------- |
 | Team/Organization sync           | Enterprise value        | csm-cloud     |
@@ -218,7 +233,7 @@ CMD ["chasm", "api", "serve"]
 | Push notifications               | Mobile value            | csm-app       |
 | Offline-first mobile             | Mobile value            | csm-app       |
 | White-label branding             | Enterprise value        | csm-cloud     |
-| SSO/SAML integration             | Enterprise value        | csm-cloud     |
+| SSO/SAML integration             | Enterprise value        | csm-cloud — **but see the note above: it ships in `chasm` today** |
 | Advanced search/filtering UI     | Product differentiation | csm-web       |
 | Session commenting/collaboration | Team feature            | csm-web/cloud |
 

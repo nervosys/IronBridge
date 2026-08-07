@@ -158,7 +158,10 @@ pub fn verify_response(
     config: &SamlConfig,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<Identity> {
-    let cleaned: String = response_b64.chars().filter(|c| !c.is_whitespace()).collect();
+    let cleaned: String = response_b64
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
     let xml = base64::engine::general_purpose::STANDARD
         .decode(cleaned)
         .map_err(|e| SsoError::malformed("SAMLResponse", format!("not base64: {e}")))?;
@@ -178,9 +181,7 @@ pub fn verify_response(
     } else if is(root, "Response", PROTOCOL_NS) {
         root.children()
             .find(|c| is(*c, "Assertion", ASSERTION_NS))
-            .ok_or_else(|| {
-                SsoError::verification("signed Response contains no Assertion")
-            })?
+            .ok_or_else(|| SsoError::verification("signed Response contains no Assertion"))?
     } else {
         return Err(SsoError::verification(format!(
             "signature covers <{}>, which is neither Response nor Assertion",
@@ -294,7 +295,10 @@ fn identity_from(assertion: roxmltree::Node, config: &SamlConfig) -> Result<Iden
                 .filter(|v| !v.is_empty())
                 .collect();
             if !values.is_empty() {
-                attributes.entry(name.to_string()).or_default().extend(values);
+                attributes
+                    .entry(name.to_string())
+                    .or_default()
+                    .extend(values);
             }
         }
     }

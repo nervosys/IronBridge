@@ -49,11 +49,7 @@ pub fn sign_enveloped(xml: &str, id: &str, key: &RsaPrivateKey) -> Result<String
 
     let target = doc
         .descendants()
-        .find(|n| {
-            n.is_element()
-                && n.attributes()
-                    .any(|a| a.name() == "ID" && a.value() == id)
-        })
+        .find(|n| n.is_element() && n.attributes().any(|a| a.name() == "ID" && a.value() == id))
         .ok_or_else(|| SsoError::Config(format!("no element with ID {id:?} to sign")))?;
 
     // A prepared template -- an empty `ds:Signature` already inside the target
@@ -61,7 +57,9 @@ pub fn sign_enveloped(xml: &str, id: &str, key: &RsaPrivateKey) -> Result<String
     // it. This is how xmlsec works, and a document carrying two signatures is
     // one the verifier refuses outright.
     if let Some(existing) = target.descendants().find(|n| {
-        n.is_element() && n.tag_name().name() == "Signature" && n.tag_name().namespace() == Some(DSIG_NS)
+        n.is_element()
+            && n.tag_name().name() == "Signature"
+            && n.tag_name().namespace() == Some(DSIG_NS)
     }) {
         return fill_template(xml, target, existing, key);
     }
@@ -69,7 +67,8 @@ pub fn sign_enveloped(xml: &str, id: &str, key: &RsaPrivateKey) -> Result<String
     // Digest the target as the verifier will see it: canonical, with no
     // signature inside it yet.
     let canonical = c14n::canonicalize(target, &[]);
-    let digest = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(canonical.as_bytes()));
+    let digest =
+        base64::engine::general_purpose::STANDARD.encode(Sha256::digest(canonical.as_bytes()));
 
     let signed_info = build_signed_info(id, &digest);
 
@@ -120,8 +119,14 @@ fn fill_template(
     let filled = replace_first_of(
         xml,
         &[
-            ("<ds:DigestValue></ds:DigestValue>", format!("<ds:DigestValue>{digest}</ds:DigestValue>")),
-            ("<ds:DigestValue/>", format!("<ds:DigestValue>{digest}</ds:DigestValue>")),
+            (
+                "<ds:DigestValue></ds:DigestValue>",
+                format!("<ds:DigestValue>{digest}</ds:DigestValue>"),
+            ),
+            (
+                "<ds:DigestValue/>",
+                format!("<ds:DigestValue>{digest}</ds:DigestValue>"),
+            ),
         ],
     )
     .ok_or_else(|| SsoError::Config("signature template has no empty DigestValue".into()))?;

@@ -88,7 +88,10 @@ mod tests {
     fn encoding_is_url_safe_and_unpadded() {
         for _ in 0..20 {
             let s = random_urlsafe(32);
-            assert!(!s.contains('+') && !s.contains('/') && !s.contains('='), "{s}");
+            assert!(
+                !s.contains('+') && !s.contains('/') && !s.contains('='),
+                "{s}"
+            );
         }
     }
 }

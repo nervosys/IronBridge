@@ -172,9 +172,13 @@ fn sign_assertion(idp: &Idp, assertion: &str, id: &str) -> String {
         base64::engine::general_purpose::STANDARD.encode(idp.sign(si_canonical.as_bytes()));
 
     let signature = [
-        "<ds:Signature xmlns:ds=\"", dsig, "\">",
+        "<ds:Signature xmlns:ds=\"",
+        dsig,
+        "\">",
         &signed_info,
-        "<ds:SignatureValue>", &signature_value, "</ds:SignatureValue>",
+        "<ds:SignatureValue>",
+        &signature_value,
+        "</ds:SignatureValue>",
         "</ds:Signature>",
     ]
     .concat();
@@ -182,7 +186,6 @@ fn sign_assertion(idp: &Idp, assertion: &str, id: &str) -> String {
     // Insert the signature after Issuer, where SAML puts it.
     assertion.replacen("</saml:Issuer>", &format!("</saml:Issuer>{signature}"), 1)
 }
-
 
 fn b64(s: &str) -> String {
     base64::engine::general_purpose::STANDARD.encode(s)
@@ -363,8 +366,10 @@ fn an_assertion_with_no_conditions_is_rejected() {
 #[test]
 fn an_assertion_from_an_unexpected_issuer_is_rejected() {
     let idp = Idp::new();
-    let wrong_issuer = assertion_xml("_a1", "alice@example.com")
-        .replace("https://idp.example/entity", "https://elsewhere.example/entity");
+    let wrong_issuer = assertion_xml("_a1", "alice@example.com").replace(
+        "https://idp.example/entity",
+        "https://elsewhere.example/entity",
+    );
     let signed = sign_assertion(&idp, &wrong_issuer, "_a1");
 
     let err = saml::verify_response(&b64(&signed), &config(&idp), now())

@@ -237,7 +237,9 @@ impl OidcClient {
         if constant_time_eq(expected.as_bytes(), returned.as_bytes()) {
             Ok(())
         } else {
-            Err(SsoError::verification("state mismatch (unsolicited response)"))
+            Err(SsoError::verification(
+                "state mismatch (unsolicited response)",
+            ))
         }
     }
 
@@ -255,7 +257,10 @@ impl OidcClient {
         // with the RSA *public* key as an HMAC secret, and a verifier that
         // picks the algorithm from the token accepts it.
         use jsonwebtoken::Algorithm::*;
-        if !matches!(header.alg, RS256 | RS384 | RS512 | ES256 | ES384 | PS256 | PS384 | PS512) {
+        if !matches!(
+            header.alg,
+            RS256 | RS384 | RS512 | ES256 | ES384 | PS256 | PS384 | PS512
+        ) {
             return Err(SsoError::unsupported(format!(
                 "id_token algorithm {:?} is not asymmetric; refusing",
                 header.alg

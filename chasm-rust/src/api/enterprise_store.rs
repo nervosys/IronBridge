@@ -1041,7 +1041,10 @@ impl DatabaseOps for SqliteEnterpriseStore {
             )
             .map_err(err("preparing OIDC provider list"))?;
         let rows = stmt
-            .query_map(params![organization_id], json_from_row::<OidcProviderConfig>)
+            .query_map(
+                params![organization_id],
+                json_from_row::<OidcProviderConfig>,
+            )
             .map_err(err("listing OIDC providers"))?;
         let mut out = Vec::new();
         for row in rows {
@@ -1075,8 +1078,7 @@ impl DatabaseOps for SqliteEnterpriseStore {
             )
             .map_err(err("mapping OIDC provider domain"))?;
         }
-        tx.commit()
-            .map_err(err("committing OIDC provider write"))?;
+        tx.commit().map_err(err("committing OIDC provider write"))?;
         Ok(())
     }
 
@@ -1567,7 +1569,10 @@ mod store_tests {
 
         s.delete_oidc_provider("p1").unwrap();
         assert!(s.get_oidc_provider("p1").unwrap().is_none());
-        assert!(s.get_oidc_provider_by_domain("example.com").unwrap().is_none());
+        assert!(s
+            .get_oidc_provider_by_domain("example.com")
+            .unwrap()
+            .is_none());
     }
 
     /// A disabled provider must not authenticate anyone, including through
@@ -1577,7 +1582,10 @@ mod store_tests {
         let s = store();
         s.create_oidc_provider(&oidc_provider("p1", false, &["example.com"]))
             .unwrap();
-        assert!(s.get_oidc_provider_by_domain("example.com").unwrap().is_none());
+        assert!(s
+            .get_oidc_provider_by_domain("example.com")
+            .unwrap()
+            .is_none());
         // Still readable by id, so an admin can enable it.
         assert!(s.get_oidc_provider("p1").unwrap().is_some());
     }
@@ -1590,8 +1598,14 @@ mod store_tests {
         s.update_oidc_provider(&oidc_provider("p1", true, &["keep.example"]))
             .unwrap();
 
-        assert!(s.get_oidc_provider_by_domain("old.example").unwrap().is_none());
-        assert!(s.get_oidc_provider_by_domain("keep.example").unwrap().is_some());
+        assert!(s
+            .get_oidc_provider_by_domain("old.example")
+            .unwrap()
+            .is_none());
+        assert!(s
+            .get_oidc_provider_by_domain("keep.example")
+            .unwrap()
+            .is_some());
     }
 
     #[test]

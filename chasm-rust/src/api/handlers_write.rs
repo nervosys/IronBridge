@@ -147,10 +147,7 @@ pub async fn create_session(
 }
 
 /// `DELETE /api/sessions/{id}`
-pub async fn delete_session(
-    state: web::Data<AppState>,
-    path: web::Path<String>,
-) -> impl Responder {
+pub async fn delete_session(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
     let db = state.db.lock().unwrap();
     let id = path.into_inner();
 
@@ -228,7 +225,11 @@ pub async fn create_message(
     };
 
     let mut session: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({}));
-    if !session.get("requests").map(|r| r.is_array()).unwrap_or(false) {
+    if !session
+        .get("requests")
+        .map(|r| r.is_array())
+        .unwrap_or(false)
+    {
         session["requests"] = json!([]);
     }
     let now = now_secs();
@@ -411,7 +412,10 @@ pub async fn create_checkpoint(
 
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_secs();
-    let name = body.name.clone().unwrap_or_else(|| format!("Checkpoint {now}"));
+    let name = body
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("Checkpoint {now}"));
     let metadata = body.metadata.as_ref().map(|m| m.to_string());
 
     if let Err(e) = db.conn.execute(
@@ -995,7 +999,6 @@ fn table_exists(conn: &Connection, name: &str) -> bool {
     .unwrap_or(false)
 }
 
-
 // =============================================================================
 // Timeline statistics
 // =============================================================================
@@ -1169,7 +1172,8 @@ fn request_count(session: &Value) -> i64 {
         .map(|r| {
             r.iter()
                 .map(|req| {
-                    i64::from(req.get("message").is_some()) + i64::from(req.get("response").is_some())
+                    i64::from(req.get("message").is_some())
+                        + i64::from(req.get("response").is_some())
                 })
                 .sum()
         })
@@ -1203,7 +1207,8 @@ pub async fn fork_session(
         return not_found("Session");
     };
 
-    let mut session: Value = serde_json::from_str(&raw).unwrap_or_else(|_| json!({ "requests": [] }));
+    let mut session: Value =
+        serde_json::from_str(&raw).unwrap_or_else(|_| json!({ "requests": [] }));
     session["forkedFrom"] = json!(source_id);
 
     let new_id = uuid::Uuid::new_v4().to_string();
@@ -1221,7 +1226,15 @@ pub async fn fork_session(
              created_at, updated_at, harvested_at, session_json)
          SELECT ?1, ?2, workspace_id, workspace_path, ?3, ?4, ?5, ?5, ?5, ?6
          FROM sessions WHERE id = ?7",
-        params![new_id, provider, new_title, count, now, session.to_string(), source_id],
+        params![
+            new_id,
+            provider,
+            new_title,
+            count,
+            now,
+            session.to_string(),
+            source_id
+        ],
     );
 
     match inserted {
@@ -1413,7 +1426,13 @@ fn render_markdown(title: &str, session: &Value) -> String {
 fn safe_filename(title: &str) -> String {
     let cleaned: String = title
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let trimmed = cleaned.trim_matches('-');
     if trimmed.is_empty() {
@@ -1550,10 +1569,7 @@ pub async fn create_share(
 /// Lists the links handed out for a session so they can be audited and
 /// revoked. The token is returned in full: this is the owner's own view, and
 /// a list of links you cannot copy is not much use.
-pub async fn list_shares(
-    state: web::Data<AppState>,
-    path: web::Path<String>,
-) -> impl Responder {
+pub async fn list_shares(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
     let db = state.db.lock().unwrap();
     let session_id = path.into_inner();
 
@@ -1601,10 +1617,7 @@ pub async fn list_shares(
 ///
 /// Revokes rather than deletes, so the access count and creation time survive
 /// as a record that the link existed.
-pub async fn revoke_share(
-    state: web::Data<AppState>,
-    path: web::Path<String>,
-) -> impl Responder {
+pub async fn revoke_share(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
     let db = state.db.lock().unwrap();
     let token = path.into_inner();
 
@@ -1627,10 +1640,7 @@ pub async fn revoke_share(
 /// Read a shared session. Answers 404 for a token that is unknown, revoked or
 /// expired -- all three indistinguishable from outside, so a probe cannot use
 /// the response to tell a real-but-closed link from a guess.
-pub async fn read_shared(
-    state: web::Data<AppState>,
-    path: web::Path<String>,
-) -> impl Responder {
+pub async fn read_shared(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
     let db = state.db.lock().unwrap();
     let token = path.into_inner();
 
@@ -1725,8 +1735,7 @@ fn ensure_embeddings_table(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 fn embedding_model() -> String {
-    std::env::var("CHASM_EMBEDDING_MODEL")
-        .unwrap_or_else(|_| "text-embedding-3-small".to_string())
+    std::env::var("CHASM_EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".to_string())
 }
 
 /// Little-endian f32 blob. SQLite has no vector type; this keeps the encoding
@@ -1818,7 +1827,10 @@ impl Embedder {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            return Err(format!("embedding API returned {status}: {}", snippet(&text, 200)));
+            return Err(format!(
+                "embedding API returned {status}: {}",
+                snippet(&text, 200)
+            ));
         }
 
         let parsed: Resp = serde_json::from_str(&text)
@@ -1834,7 +1846,10 @@ impl Embedder {
         let mut out = vec![Vec::new(); inputs.len()];
         for item in parsed.data {
             if item.index >= out.len() {
-                return Err(format!("embedding API returned out-of-range index {}", item.index));
+                return Err(format!(
+                    "embedding API returned out-of-range index {}",
+                    item.index
+                ));
             }
             out[item.index] = item.embedding;
         }
@@ -1846,7 +1861,10 @@ impl Embedder {
 }
 
 /// Sessions rendered to one text per session, for embedding.
-fn indexable_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<(String, String, String)>> {
+fn indexable_sessions(
+    conn: &Connection,
+    limit: i64,
+) -> rusqlite::Result<Vec<(String, String, String)>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, session_json FROM sessions ORDER BY updated_at DESC LIMIT ?1",
     )?;
@@ -2130,7 +2148,10 @@ pub(super) fn attach_write_routes(scope: actix_web::Scope) -> actix_web::Scope {
         .route("/sessions", web::post().to(create_session))
         .route("/sessions/{id}", web::delete().to(delete_session))
         .route("/sessions/{id}/messages", web::post().to(create_message))
-        .route("/sessions/{id}/checkpoints", web::get().to(list_checkpoints))
+        .route(
+            "/sessions/{id}/checkpoints",
+            web::get().to(list_checkpoints),
+        )
         .route(
             "/sessions/{id}/checkpoints",
             web::post().to(create_checkpoint),
@@ -2313,7 +2334,11 @@ mod tests {
             .unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
         let requests = parsed["requests"].as_array().unwrap();
-        assert_eq!(requests.len(), 1, "reply should not create a second request");
+        assert_eq!(
+            requests.len(),
+            1,
+            "reply should not create a second request"
+        );
         assert_eq!(requests[0]["message"]["text"], "ping");
         assert_eq!(requests[0]["response"][0]["value"], "pong");
 
@@ -2716,7 +2741,10 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert_eq!(count, 1, "deleting a workspace must not delete its sessions");
+        assert_eq!(
+            count, 1,
+            "deleting a workspace must not delete its sessions"
+        );
         assert!(workspace.is_none(), "the session should be detached");
     }
 

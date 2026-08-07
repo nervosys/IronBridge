@@ -17,7 +17,6 @@ use std::io::Read;
 use std::sync::OnceLock;
 use uuid::Uuid;
 
-
 use super::audit::Database;
 use super::auth::{AuthResponse, Claims, PublicUser, SubscriptionTier, User};
 

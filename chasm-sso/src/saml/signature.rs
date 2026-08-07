@@ -92,7 +92,11 @@ pub fn verify_and_extract_signed(xml: &str, certificate_der: &[u8]) -> Result<St
 
     let signatures: Vec<_> = doc
         .descendants()
-        .filter(|n| n.is_element() && n.tag_name().name() == "Signature" && n.tag_name().namespace() == Some(DSIG_NS))
+        .filter(|n| {
+            n.is_element()
+                && n.tag_name().name() == "Signature"
+                && n.tag_name().namespace() == Some(DSIG_NS)
+        })
         .collect();
 
     // More than one signature means more than one possible answer to "what did
@@ -128,7 +132,9 @@ pub fn verify_and_extract_signed(xml: &str, certificate_der: &[u8]) -> Result<St
     })?;
 
     let target = find_by_id(&doc, target_id).ok_or_else(|| {
-        SsoError::verification(format!("Reference points at #{target_id}, which does not exist"))
+        SsoError::verification(format!(
+            "Reference points at #{target_id}, which does not exist"
+        ))
     })?;
 
     // --- transforms ----------------------------------------------------
@@ -139,9 +145,10 @@ pub fn verify_and_extract_signed(xml: &str, certificate_der: &[u8]) -> Result<St
             match alg {
                 ENVELOPED => {}
                 EXC_C14N => {
-                    if let Some(inc) = t.children().find(|c| {
-                        c.is_element() && c.tag_name().name() == "InclusiveNamespaces"
-                    }) {
+                    if let Some(inc) = t
+                        .children()
+                        .find(|c| c.is_element() && c.tag_name().name() == "InclusiveNamespaces")
+                    {
                         if let Some(list) = inc.attribute("PrefixList") {
                             inclusive_prefixes =
                                 list.split_whitespace().map(str::to_string).collect();
@@ -149,9 +156,11 @@ pub fn verify_and_extract_signed(xml: &str, certificate_der: &[u8]) -> Result<St
                     }
                 }
                 other => {
-                    return Err(SsoError::unsupported(format!(
-                        "transform {other}: only enveloped-signature and exclusive c14n are supported"
-                    )))
+                    let why = format!(
+                        "transform {other}: only enveloped-signature \
+                         and exclusive c14n are supported"
+                    );
+                    return Err(SsoError::unsupported(why));
                 }
             }
         }
@@ -170,7 +179,8 @@ pub fn verify_and_extract_signed(xml: &str, certificate_der: &[u8]) -> Result<St
 
     // Canonicalise the target with the signature removed -- that is what
     // "enveloped" means, and forgetting it makes every digest wrong.
-    let canonical_target = super::c14n::canonicalize_without(target, signature, &inclusive_prefixes);
+    let canonical_target =
+        super::c14n::canonicalize_without(target, signature, &inclusive_prefixes);
     let actual_digest = digest_alg.hash(canonical_target.as_bytes());
 
     if !constant_time_eq(&actual_digest, &expected_digest) {
@@ -183,17 +193,20 @@ pub fn verify_and_extract_signed(xml: &str, certificate_der: &[u8]) -> Result<St
     let sig_alg = child(signed_info, "SignatureMethod")
         .and_then(|s| s.attribute("Algorithm"))
         .ok_or_else(|| SsoError::malformed("SignedInfo", "no SignatureMethod"))?;
-    let sig_digest = match sig_alg {
-        "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" => Digest2::Sha256,
-        "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384" => Digest2::Sha384,
-        "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512" => Digest2::Sha512,
-        "http://www.w3.org/2000/09/xmldsig#rsa-sha1" => {
-            return Err(SsoError::unsupported(
+    let sig_digest =
+        match sig_alg {
+            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" => Digest2::Sha256,
+            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384" => Digest2::Sha384,
+            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512" => Digest2::Sha512,
+            "http://www.w3.org/2000/09/xmldsig#rsa-sha1" => return Err(SsoError::unsupported(
                 "RSA-SHA1 signatures are refused; reconfigure the identity provider for SHA-256",
-            ))
-        }
-        other => return Err(SsoError::unsupported(format!("signature algorithm {other}"))),
-    };
+            )),
+            other => {
+                return Err(SsoError::unsupported(format!(
+                    "signature algorithm {other}"
+                )))
+            }
+        };
 
     let signature_value = child(signature, "SignatureValue")
         .and_then(|s| s.text())
@@ -232,9 +245,15 @@ fn verify_rsa(
         .map_err(|e| SsoError::malformed("SignatureValue", e.to_string()))?;
 
     let ok = match digest {
-        Digest2::Sha256 => VerifyingKey::<Sha256>::new(public_key).verify(message, &sig).is_ok(),
-        Digest2::Sha384 => VerifyingKey::<Sha384>::new(public_key).verify(message, &sig).is_ok(),
-        Digest2::Sha512 => VerifyingKey::<Sha512>::new(public_key).verify(message, &sig).is_ok(),
+        Digest2::Sha256 => VerifyingKey::<Sha256>::new(public_key)
+            .verify(message, &sig)
+            .is_ok(),
+        Digest2::Sha384 => VerifyingKey::<Sha384>::new(public_key)
+            .verify(message, &sig)
+            .is_ok(),
+        Digest2::Sha512 => VerifyingKey::<Sha512>::new(public_key)
+            .verify(message, &sig)
+            .is_ok(),
     };
 
     if ok {
