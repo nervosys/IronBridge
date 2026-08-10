@@ -235,9 +235,18 @@ impl ChatProvider for OllamaProvider {
         anyhow::bail!("Ollama does not persist chat sessions by default")
     }
 
+    /// Always an error. See [`OllamaProvider::import_session`] -- the reason is
+    /// the same in both directions.
+    ///
+    /// Ollama's `/api/chat` is stateless; the conversation lives in whatever
+    /// client is driving it, not on the server. Replaying a session as chat
+    /// requests would generate fresh model output rather than store the
+    /// original, so it would not be an export.
     fn export_session(&self, _session: &ChatSession) -> Result<()> {
-        // Could implement by sending messages to Ollama to recreate context
-        anyhow::bail!("Export to Ollama not yet implemented")
+        anyhow::bail!(
+            "Ollama is a stateless inference endpoint and does not store conversations, \
+             so there is nothing to export into; export to a file instead"
+        )
     }
 }
 

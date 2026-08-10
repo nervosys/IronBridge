@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Cursor session export** — `export_session` writes into Cursor's own
+  `chatSessions` store in the format `import_session` reads back. The target
+  workspace is the one already holding that session id, or the only workspace
+  if there is exactly one; an ambiguous target is an error rather than a guess.
+- **Llamafile discovery** — registered alongside the other OpenAI-compatible
+  endpoints, honouring `LLAMAFILE_ENDPOINT`.
+
+### Removed
+
+- **Seven dead provider files** (`gpt4all`, `jan`, `llamafile`, `lmstudio`,
+  `localai`, `textgen_webui`, `vllm`, 2,728 lines). None was declared in
+  `providers/mod.rs`, so none had ever been compiled; adding the declarations
+  produces 137 errors, because they were written against an older `ChatSession`
+  model and call a dependency (`ureq`) the crate does not have. Every one of
+  these providers speaks the OpenAI API and is already served by the compiled
+  `openai_compat` provider, which the registry does use — so this removes
+  duplicates, not capability. The 1.5.0 entry below listing them as supported
+  was describing files, not behaviour.
+
+### Fixed
+
+- **Export stubs that promised a roadmap** — `export_session` for Ollama and
+  the OpenAI-compatible providers said "not yet implemented". Both are
+  stateless inference endpoints with nowhere to put a conversation, so the
+  answer is not "later", it is "no". They now say why, and point at file export.
+
 ## [1.5.4] - 2026-02-25
 
 ### Added

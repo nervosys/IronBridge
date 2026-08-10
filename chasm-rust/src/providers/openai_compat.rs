@@ -244,9 +244,19 @@ impl ChatProvider for OpenAICompatProvider {
         anyhow::bail!("{} does not persist chat sessions", self.name)
     }
 
+    /// Always an error, and not for want of effort.
+    ///
+    /// The Chat Completions API is stateless: there is no endpoint that stores
+    /// a conversation, so there is nowhere for an exported session to go.
+    /// Replaying the messages as completions would burn tokens and produce new
+    /// assistant replies, which is not an export of anything. `import_session`
+    /// refuses for the same reason.
     fn export_session(&self, _session: &ChatSession) -> Result<()> {
-        // Could implement by sending messages to recreate context
-        anyhow::bail!("Export to {} not yet implemented", self.name)
+        anyhow::bail!(
+            "{} is a stateless inference endpoint and does not store conversations, \
+             so there is nothing to export into; export to a file instead",
+            self.name
+        )
     }
 }
 
@@ -286,6 +296,11 @@ pub fn discover_openai_compatible_providers() -> Vec<OpenAICompatProvider> {
 
     // Azure AI Foundry / Foundry Local (default port 5272)
     if let Some(provider) = discover_foundry() {
+        providers.push(provider);
+    }
+
+    // Llamafile (default port 8080 on its own `--server` mode)
+    if let Some(provider) = discover_llamafile() {
         providers.push(provider);
     }
 
@@ -371,6 +386,20 @@ fn discover_gpt4all() -> Option<OpenAICompatProvider> {
     }
 
     Some(provider)
+}
+
+fn discover_llamafile() -> Option<OpenAICompatProvider> {
+    // Llamafile serves the OpenAI API on 8080 by default, the same port
+    // LocalAI uses. Both are registered; whichever is actually listening
+    // answers, and `is_available` is what decides.
+    let endpoint = std::env::var("LLAMAFILE_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:8080/v1".to_string());
+
+    Some(OpenAICompatProvider::new(
+        ProviderType::Llamafile,
+        "Llamafile",
+        endpoint,
+    ))
 }
 
 fn discover_foundry() -> Option<OpenAICompatProvider> {
