@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Shard command — split oversized chat sessions into linked shard files
 //!
 //! Sharding can be driven by request count (`--max-requests N`) or by file

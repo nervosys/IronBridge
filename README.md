@@ -478,6 +478,9 @@ chasm/
 
 ## License
 
-[AGPL-3.0](LICENSE) with [commercial dual-license](COMMERCIAL_LICENSE.md) — Made by [Nervosys](https://nervosys.ai)
+`AGPL-3.0-only OR LicenseRef-Chasm-Commercial` — [AGPL-3.0](LICENSE) with a
+[commercial option](COMMERCIAL_LICENSE.md) for organizations that cannot meet
+its source-disclosure terms. Absent a signed agreement, what you receive Chasm
+under is AGPL-3.0-only. Made by [Nervosys](https://nervosys.ai)
 
 Contributions require signing the [CLA](CLA.md).

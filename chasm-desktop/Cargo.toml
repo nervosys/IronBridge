@@ -3,7 +3,7 @@ name = "chasm-desktop"
 version = "1.0.0"
 description = "Chasm Desktop - Chat Session Manager"
 authors = ["Nervosys LLC"]
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-only OR LicenseRef-Chasm-Commercial"
 repository = "https://github.com/nervosys/chasm"
 edition = "2021"
 

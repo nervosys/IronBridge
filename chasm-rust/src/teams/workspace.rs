@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2027 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Team workspace management
 //!
 //! Provides shared team workspaces with real-time collaboration features.

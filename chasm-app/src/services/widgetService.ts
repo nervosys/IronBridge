@@ -1,7 +1,7 @@
 // Widget Service
 // Provides data and functionality for iOS/Android home screen widgets
 // Copyright (c) 2024-2028 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, NativeModules, NativeEventEmitter } from 'react-native';

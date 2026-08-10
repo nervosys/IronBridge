@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Ontology layer for AI agent discoverability.
 //!
 //! Provides a structured, machine-readable description of:

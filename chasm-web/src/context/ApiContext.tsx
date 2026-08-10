@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
 // API Context Provider - Global state management for API data
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';

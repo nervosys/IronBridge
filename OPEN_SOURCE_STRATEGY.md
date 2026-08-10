@@ -177,7 +177,7 @@ Before open-sourcing, audit csm-rust for:
 name = "chasm"
 version = "1.0.0"
 edition = "2021"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-only OR LicenseRef-Chasm-Commercial"
 description = "Universal chat session manager - harvest, merge, and analyze AI chat history"
 repository = "https://github.com/nervosys/chasm"
 documentation = "https://docs.rs/chasm"
@@ -408,7 +408,7 @@ ENTERPRISE (Custom)
 
 ```rust
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //
 // This file is part of Chasm - Universal Chat Session Manager
 // https://github.com/nervosys/chasm

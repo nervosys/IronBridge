@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Embedded API server.
 //!
 //! The desktop app loads `chasm-web`, which talks to the Chasm REST API. On

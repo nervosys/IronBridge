@@ -1,7 +1,7 @@
 {
   "name": "chasm-docs",
   "version": "1.0.0",
-  "license": "AGPL-3.0-only",
+  "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial",
   "private": true,
   "description": "Chasm documentation website",
   "scripts": {

@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2028 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Database Scaling Module
 //!
 //! Provides sharding, read replicas, and advanced database scaling capabilities.

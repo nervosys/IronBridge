@@ -682,5 +682,5 @@
         "type": "git",
         "url": "https://github.com/nervosys/chasm.git"
     },
-    "license": "AGPL-3.0-only"
+    "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial"
 }

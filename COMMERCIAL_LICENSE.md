@@ -6,6 +6,28 @@ Chasm is dual-licensed under the **GNU Affero General Public License v3.0
 (AGPL-3.0)** and a **Commercial License** for organizations that cannot comply
 with AGPL-3.0 obligations.
 
+## SPDX Identifier
+
+The commercial half of the dual license has no SPDX-registered identifier, so
+Chasm declares its own:
+
+```
+LicenseRef-Chasm-Commercial
+```
+
+**This document is that license reference.** Package manifests and source
+headers throughout the repository carry:
+
+```
+AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+```
+
+Read that expression as *"AGPL-3.0-only, or commercial terms by agreement with
+Nervosys LLC."* It is not an invitation to self-select the commercial branch:
+absent a signed agreement, the terms you receive Chasm under are AGPL-3.0-only.
+Automated license scanners that treat `OR` as a free choice will get this
+wrong — the commercial option requires [contacting us](#contact).
+
 ## When You Need a Commercial License
 
 Under the AGPL-3.0, if you modify Chasm or use it to provide a network service,

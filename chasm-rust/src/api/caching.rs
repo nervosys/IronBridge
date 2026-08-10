@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2028 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Edge Caching Module
 //!
 //! Provides CDN integration and edge caching for API responses.

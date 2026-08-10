@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Copilot Chat extension version detection and compatibility analysis
 //!
 //! Detects installed VS Code Copilot Chat extension versions, extracts version

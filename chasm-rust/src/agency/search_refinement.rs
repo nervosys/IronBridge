@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2027 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Context-Aware Search Refinement Agent
 //!
 //! An AI agent that understands search context and suggests query refinements

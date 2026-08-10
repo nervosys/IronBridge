@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! `chasm inspect` — Low-level inspection of VS Code state databases, session
 //! indices, mementos, caches, and session file validity.
 

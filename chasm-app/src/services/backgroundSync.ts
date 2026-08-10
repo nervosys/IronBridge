@@ -1,7 +1,7 @@
 // Background Sync Service
 // Handles background synchronization with battery optimization
 // Copyright (c) 2024-2028 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';

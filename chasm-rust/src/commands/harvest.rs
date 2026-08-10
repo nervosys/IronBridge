@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 //! Harvest commands for collecting chat sessions from multiple providers
 //!
 //! The harvester scans for local and remote LLM providers, downloads all chat

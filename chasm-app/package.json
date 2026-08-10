@@ -1,7 +1,7 @@
 {
   "name": "chasm-app",
   "version": "1.0.0",
-  "license": "AGPL-3.0-only",
+  "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
