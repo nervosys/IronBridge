@@ -25,16 +25,28 @@ pub struct SdkConfig {
 }
 
 /// SDK language
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+///
+/// `ValueEnum` is derived here rather than mirrored in `cli.rs` on purpose: a
+/// second copy of the variant list is a copy that can fall behind, which is
+/// the same class of bug as the placeholder arm `generate()` used to have.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum SdkLanguage {
+    #[value(name = "python")]
     Python,
+    #[value(name = "nodejs")]
     NodeJs,
+    #[value(name = "go")]
     Go,
+    #[value(name = "rust")]
     Rust,
+    #[value(name = "java")]
     Java,
+    #[value(name = "csharp")]
     CSharp,
+    #[value(name = "ruby")]
     Ruby,
+    #[value(name = "php")]
     Php,
 }
 

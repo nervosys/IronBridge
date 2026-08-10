@@ -1180,6 +1180,21 @@ fn main() -> Result<()> {
         // ====================================================================
         // Easter Egg
         // ====================================================================
+        // ====================================================================
+        // SDK Commands
+        // ====================================================================
+        Commands::Sdk { command } => match command {
+            cli::SdkCommands::List { json } => commands::sdk_list(json),
+            cli::SdkCommands::Generate {
+                language,
+                all,
+                output,
+                stdout,
+                base_url,
+                force,
+            } => commands::sdk_generate(language, all, output.as_deref(), stdout, &base_url, force),
+        },
+
         Commands::Banner => {
             print_banner();
             Ok(())

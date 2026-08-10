@@ -348,6 +348,15 @@ pub enum Commands {
     },
 
     // ============================================================================
+    // SDK Commands
+    // ============================================================================
+    /// Generate a single-file API client for Python, Node.js, Go, Rust, Java, C#, Ruby, or PHP
+    Sdk {
+        #[command(subcommand)]
+        command: SdkCommands,
+    },
+
+    // ============================================================================
     // Internal Commands (hidden)
     // ============================================================================
     /// Internal commands used by chasm background processes
@@ -363,6 +372,48 @@ pub enum Commands {
     /// Show banner
     #[command(hide = true)]
     Banner,
+}
+
+// ============================================================================
+// SDK Subcommands
+// ============================================================================
+
+#[derive(Subcommand)]
+pub enum SdkCommands {
+    /// List the languages a client can be generated for
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Write a client for one language, or for every language with --all
+    #[command(visible_alias = "gen")]
+    Generate {
+        /// Language to generate; omit and pass --all for every language
+        #[arg(value_enum)]
+        language: Option<crate::api::sdk::SdkLanguage>,
+
+        /// Generate every supported language
+        #[arg(long, conflicts_with = "language")]
+        all: bool,
+
+        /// Directory to write into (created if absent). Defaults to the current directory
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Write to stdout instead of a file; requires a single language
+        #[arg(long, conflicts_with = "output")]
+        stdout: bool,
+
+        /// Base URL baked into the generated client as its fallback
+        #[arg(long, default_value = "http://localhost:8787")]
+        base_url: String,
+
+        /// Overwrite existing files rather than refusing
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 // ============================================================================
