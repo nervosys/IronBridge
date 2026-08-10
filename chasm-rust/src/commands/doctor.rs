@@ -63,45 +63,81 @@ impl CheckResult {
 }
 
 /// Run all diagnostic checks
+///
+/// Results stream to the terminal as each check finishes. They used to be
+/// accumulated into a `Vec` and printed only at the very end, which meant that
+/// on a machine with a large session store — 224 VS Code workspaces was enough
+/// — `chasm doctor` sat silent for over ten minutes and was indistinguishable
+/// from a hang. The first command a new user runs must not look broken.
 #[allow(clippy::vec_init_then_push)]
-pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
+pub fn doctor(full: bool, format: &str, fix: bool, quick: bool) -> Result<()> {
+    // JSON has to be a single document, so it still buffers; text streams.
+    let streaming = format != "json";
+    let mut printer = Printer::new(streaming);
     let mut results: Vec<CheckResult> = Vec::new();
 
+    if streaming {
+        println!();
+        println!("  {}", "Chasm Doctor".bold().cyan());
+        println!("  {}", "─".repeat(50).bright_black());
+    }
+
+    let record = |printer: &mut Printer, results: &mut Vec<CheckResult>, r: CheckResult| {
+        printer.emit(&r);
+        results.push(r);
+    };
+
     // ── System checks ──────────────────────────────────────────────
-    results.push(check_version());
-    results.push(check_rust_version());
-    results.push(check_os());
+    record(&mut printer, &mut results, check_version());
+    record(&mut printer, &mut results, check_rust_version());
+    record(&mut printer, &mut results, check_os());
 
     // ── Storage checks ─────────────────────────────────────────────
-    results.push(check_vscode_storage());
-    results.push(check_cursor_storage());
-    results.push(check_harvest_db());
+    record(&mut printer, &mut results, check_vscode_storage());
+    record(&mut printer, &mut results, check_cursor_storage());
+    record(&mut printer, &mut results, check_harvest_db());
 
     // ── Provider checks ────────────────────────────────────────────
-    results.push(check_copilot_chat());
-    results.push(check_claude_code());
-    results.push(check_codex_cli());
-    results.push(check_gemini_cli());
-    results.extend(check_agent_home_dirs());
+    record(&mut printer, &mut results, check_copilot_chat());
+    record(&mut printer, &mut results, check_claude_code());
+    record(&mut printer, &mut results, check_codex_cli());
+    record(&mut printer, &mut results, check_gemini_cli());
+    for r in check_agent_home_dirs() {
+        record(&mut printer, &mut results, r);
+    }
 
     // ── Tool checks ────────────────────────────────────────────────
-    results.push(check_git());
-    results.push(check_sqlite());
+    record(&mut printer, &mut results, check_git());
+    record(&mut printer, &mut results, check_sqlite());
 
     // ── Network checks (only with --full) ──────────────────────────
     if full {
-        results.push(check_ollama());
-        results.push(check_lm_studio());
-        results.push(check_api_server());
+        record(&mut printer, &mut results, check_ollama());
+        record(&mut printer, &mut results, check_lm_studio());
+        record(&mut printer, &mut results, check_api_server());
     }
 
-    // ── Session health checks (always run) ─────────────────────────
-    let diagnoses = check_all_workspace_sessions(&mut results);
+    // ── Session health checks ──────────────────────────────────────
+    // By far the most expensive part: it parses every session file in every
+    // workspace. `--quick` skips it; otherwise it runs in parallel and reports
+    // progress, because silence for minutes reads as a crash.
+    let diagnoses = if quick {
+        let r = CheckResult::pass("sessions", "Session health")
+            .with_detail("skipped (--quick); drop the flag to scan session files");
+        record(&mut printer, &mut results, r);
+        Vec::new()
+    } else {
+        let mut session_results = Vec::new();
+        let d = check_all_workspace_sessions(&mut session_results, streaming);
+        for r in session_results {
+            record(&mut printer, &mut results, r);
+        }
+        d
+    };
 
     // ── Output ─────────────────────────────────────────────────────
-    match format {
-        "json" => print_json(&results),
-        _ => print_text(&results),
+    if !streaming {
+        print_json(&results);
     }
 
     // Summary
@@ -133,6 +169,13 @@ pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
                 "  {} Run {} for network connectivity checks",
                 "Tip:".bright_black(),
                 "chasm doctor --full".cyan(),
+            );
+        }
+        if !quick {
+            println!(
+                "  {} Run {} to skip the session-file scan",
+                "Tip:".bright_black(),
+                "chasm doctor --quick".cyan(),
             );
         }
     }
@@ -250,7 +293,10 @@ pub fn doctor(full: bool, format: &str, fix: bool) -> Result<()> {
 
 /// Scan all VS Code workspaces for session issues and add results to the check list.
 /// Returns the full diagnosis list for use by --fix.
-fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<WorkspaceDiagnosis> {
+fn check_all_workspace_sessions(
+    results: &mut Vec<CheckResult>,
+    show_progress: bool,
+) -> Vec<WorkspaceDiagnosis> {
     let workspaces = match discover_workspaces() {
         Ok(ws) => ws,
         Err(e) => {
@@ -276,17 +322,55 @@ fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<Workspace
         return Vec::new();
     }
 
+    // Each workspace is an independent parse of independent files, so this
+    // fans out. Serially it took over ten minutes across 224 workspaces.
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let total = ws_with_sessions.len();
+    let done = AtomicUsize::new(0);
+
+    if show_progress {
+        println!();
+        println!("  {} {}", "▸".bright_black(), "SESSIONS".bold());
+    }
+
+    // Type left to inference: `diagnose_workspace_sessions` returns the
+    // crate's own error type, not anyhow's.
+    let scanned: Vec<_> = ws_with_sessions
+        .par_iter()
+        .map(|ws| {
+            let chat_dir = ws.workspace_path.join("chatSessions");
+            let outcome = diagnose_workspace_sessions(&ws.hash, &chat_dir);
+
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            if show_progress {
+                // Carriage return, no newline: one line that counts up rather
+                // than N lines of scrollback.
+                print!("\r    scanning workspaces… {n}/{total}");
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+            }
+
+            (ws.project_path.clone(), ws.hash.clone(), outcome)
+        })
+        .collect();
+
+    if show_progress {
+        // Blank the progress line so it does not collide with the results.
+        print!("\r{}\r", " ".repeat(40));
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+    }
+
     let mut diagnoses = Vec::new();
     let mut total_issues = 0usize;
     let mut workspaces_with_issues = 0usize;
     let mut issue_counts: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
-    for ws in &ws_with_sessions {
-        let chat_dir = ws.workspace_path.join("chatSessions");
-        match diagnose_workspace_sessions(&ws.hash, &chat_dir) {
+    for (project_path, hash, outcome) in scanned {
+        match outcome {
             Ok(mut diag) => {
-                diag.project_path = ws.project_path.clone();
+                diag.project_path = project_path;
                 if !diag.is_healthy() {
                     workspaces_with_issues += 1;
                     for issue in &diag.issues {
@@ -297,7 +381,7 @@ fn check_all_workspace_sessions(results: &mut Vec<CheckResult>) -> Vec<Workspace
                 diagnoses.push(diag);
             }
             Err(e) => {
-                let display = ws.project_path.as_deref().unwrap_or(&ws.hash);
+                let display = project_path.unwrap_or(hash);
                 results.push(CheckResult::warn(
                     "sessions",
                     &format!("Scan: {}", display),
@@ -665,21 +749,42 @@ fn check_api_server() -> CheckResult {
 
 // ─── Output formatting ─────────────────────────────────────────────
 
-fn print_text(results: &[CheckResult]) {
-    println!();
-    println!("  {}", "Chasm Doctor".bold().cyan());
-    println!("  {}", "─".repeat(50).bright_black());
+/// Prints check results as they arrive, emitting a category heading the first
+/// time it sees each category.
+///
+/// Holding the whole run in memory before printing anything was the reason a
+/// slow scan was indistinguishable from a hang; this exists so a result is on
+/// screen the moment it is known.
+struct Printer<W: std::io::Write = std::io::Stdout> {
+    enabled: bool,
+    current_category: String,
+    out: W,
+}
 
-    let mut current_category = String::new();
+impl Printer<std::io::Stdout> {
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            current_category: String::new(),
+            out: std::io::stdout(),
+        }
+    }
+}
 
-    for result in results {
-        if result.category != current_category {
-            current_category = result.category.clone();
-            println!();
-            println!(
+impl<W: std::io::Write> Printer<W> {
+    fn emit(&mut self, result: &CheckResult) {
+        if !self.enabled {
+            return;
+        }
+
+        if result.category != self.current_category {
+            self.current_category = result.category.clone();
+            let _ = writeln!(self.out);
+            let _ = writeln!(
+                self.out,
                 "  {} {}",
                 "▸".bright_black(),
-                current_category.to_uppercase().bold()
+                self.current_category.to_uppercase().bold()
             );
         }
 
@@ -695,7 +800,9 @@ fn print_text(results: &[CheckResult]) {
             .map(|d| format!(" {}", d.bright_black()))
             .unwrap_or_default();
 
-        println!("    {} {}{}{}", icon, result.name, detail, msg);
+        let _ = writeln!(self.out, "    {} {}{}{}", icon, result.name, detail, msg);
+        // Checks can be seconds apart; an unflushed line helps nobody.
+        let _ = self.out.flush();
     }
 }
 
@@ -792,5 +899,83 @@ fn format_bytes(bytes: u64) -> String {
         format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
     } else {
         format!("{:.2} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
+#[cfg(test)]
+mod printer_tests {
+    use super::*;
+
+    fn drain(enabled: bool, results: &[CheckResult]) -> String {
+        let mut printer = Printer {
+            enabled,
+            current_category: String::new(),
+            out: Vec::new(),
+        };
+        for r in results {
+            printer.emit(r);
+        }
+        String::from_utf8(printer.out).unwrap()
+    }
+
+    /// The whole point of the rewrite: a result must be written the moment it
+    /// is emitted, not held until the run ends. If `emit` ever goes back to
+    /// buffering, the first call produces nothing and this fails.
+    #[test]
+    fn a_result_is_written_as_soon_as_it_is_emitted() {
+        let mut printer = Printer {
+            enabled: true,
+            current_category: String::new(),
+            out: Vec::new(),
+        };
+        printer.emit(&CheckResult::pass("system", "Chasm version"));
+
+        let written = String::from_utf8(printer.out.clone()).unwrap();
+        assert!(
+            written.contains("Chasm version"),
+            "nothing was written after the first emit: {written:?}"
+        );
+    }
+
+    /// A category heading prints once, not before every result under it.
+    #[test]
+    fn a_category_heading_prints_once() {
+        let out = drain(
+            true,
+            &[
+                CheckResult::pass("system", "one"),
+                CheckResult::pass("system", "two"),
+                CheckResult::pass("storage", "three"),
+            ],
+        );
+
+        assert_eq!(out.matches("SYSTEM").count(), 1, "{out}");
+        assert_eq!(out.matches("STORAGE").count(), 1, "{out}");
+        assert!(out.contains("one") && out.contains("two") && out.contains("three"));
+    }
+
+    /// JSON mode builds one document at the end, so the streaming printer must
+    /// stay completely silent or it would corrupt that document.
+    #[test]
+    fn a_disabled_printer_writes_nothing() {
+        let out = drain(
+            false,
+            &[
+                CheckResult::pass("system", "one"),
+                CheckResult::fail("storage", "two", "broken"),
+            ],
+        );
+        assert!(out.is_empty(), "expected silence, got {out:?}");
+    }
+
+    /// Warnings and failures must carry their message through, not just an icon.
+    #[test]
+    fn a_failure_message_survives_formatting() {
+        let out = drain(
+            true,
+            &[CheckResult::fail("storage", "Harvest db", "missing")],
+        );
+        assert!(out.contains("Harvest db"), "{out}");
+        assert!(out.contains("missing"), "{out}");
     }
 }

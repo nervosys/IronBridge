@@ -324,6 +324,10 @@ pub enum Commands {
         /// Attempt to fix detected issues automatically
         #[arg(long)]
         fix: bool,
+
+        /// Skip the session-file scan, which is the slow part on large stores
+        #[arg(long)]
+        quick: bool,
     },
 
     // ============================================================================

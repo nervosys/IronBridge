@@ -137,3 +137,6 @@ chasm-rust/build_output.txt
 
 # Recovered chat sessions (large, contain full conversation history)
 recovered-sessions/
+
+# TypeScript incremental build state, written by `tsc` even with --noEmit
+*.tsbuildinfo

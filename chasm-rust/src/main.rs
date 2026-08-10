@@ -1091,7 +1091,12 @@ fn main() -> Result<()> {
         // ====================================================================
         // Doctor
         // ====================================================================
-        Commands::Doctor { full, format, fix } => commands::doctor(full, &format, fix),
+        Commands::Doctor {
+            full,
+            format,
+            fix,
+            quick,
+        } => commands::doctor(full, &format, fix, quick),
 
         // ====================================================================
         // Inspect Commands

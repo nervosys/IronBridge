@@ -485,35 +485,55 @@ Check system environment, providers, and configuration health.
 
 | Command | Description |
 |---|---|
-| `chasm doctor` | Run basic environment checks |
+| Command | Description |
+|---|---|
+| `chasm doctor` | Run basic environment checks, including the session-file scan |
+| `chasm doctor --quick` | Skip the session-file scan — the slow part |
 | `chasm doctor --full` | Run all checks including network connectivity |
 | `chasm doctor --format json` | Output results as JSON |
 | `chasm doctor --fix` | Attempt to fix detected issues automatically |
 
+### How long it takes
+
+Every check except the session scan finishes in well under a second;
+`--quick` returns in about that. The session scan parses every session file in
+every workspace, so its cost is proportional to your store — on a machine with
+224 VS Code workspaces it takes several minutes even scanning workspaces in
+parallel, because it is disk-bound rather than CPU-bound.
+
+Results print as each check completes, and the scan shows a running
+`scanning workspaces… n/total` counter, so a long run is visibly working
+rather than apparently hung. `--format json` is the exception: it must emit a
+single document, so it prints nothing until the end.
+
 ### Checks Performed
 
-| Category | Check | Requires `--full` |
-|---|---|---|
-| System | Chasm version | No |
-| System | Rust version | No |
-| System | Operating system | No |
-| Storage | VS Code session storage | No |
-| Storage | Cursor session storage | No |
-| Storage | Harvest database | No |
-| Provider | Claude Code CLI | No |
-| Provider | Codex CLI (OpenAI) | No |
-| Provider | Gemini CLI (Google) | No |
-| Tools | Git | No |
-| Tools | SQLite | No |
-| Network | Ollama server | Yes |
-| Network | LM Studio server | Yes |
-| Network | Chasm API server | Yes |
+| Category | Check | Requires `--full` | Skipped by `--quick` |
+|---|---|---|---|
+| System | Chasm version | No | No |
+| System | Rust version | No | No |
+| System | Operating system | No | No |
+| Storage | VS Code session storage | No | No |
+| Storage | Cursor session storage | No | No |
+| Storage | Harvest database | No | No |
+| Provider | Claude Code CLI | No | No |
+| Provider | Codex CLI (OpenAI) | No | No |
+| Provider | Gemini CLI (Google) | No | No |
+| Tools | Git | No | No |
+| Tools | SQLite | No | No |
+| Network | Ollama server | Yes | No |
+| Network | LM Studio server | Yes | No |
+| Network | Chasm API server | Yes | No |
+| Sessions | Per-workspace session health | No | **Yes** |
 
 ### Examples
 
 ```bash
-# Quick check
+# Everything except the network checks
 chasm doctor
+
+# Environment only, no session scan -- sub-second
+chasm doctor --quick
 
 # Full check with network tests
 chasm doctor --full

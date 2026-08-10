@@ -206,6 +206,7 @@ chasm register recursive --force /path/to/projects
 | Command                       | Description                                            |
 | ----------------------------- | ------------------------------------------------------ |
 | `chasm doctor`                | Check system environment, providers, and config health |
+| `chasm doctor --quick`        | Same, minus the session-file scan (the slow part)      |
 | `chasm doctor --fix`          | Auto-fix detected issues                               |
 | `chasm register repair --all` | Repair and rebuild session index for all workspaces    |
 | `chasm register trim --all`   | Trim sessions over 10MB to keep recent requests        |
