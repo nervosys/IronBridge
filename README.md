@@ -329,9 +329,22 @@ original clients called `/health`, which 404s because the API is mounted
 under `/api`, and `/api/harvest/status`, which does not exist at all.
 
 Verified out of tree by extracting each generated client and running it
-through its own toolchain: `node --check`, `gofmt -e`, `javac`, and a real
-`cargo check` against reqwest/serde/tokio all pass. Python, C#, Ruby, and PHP
-have no toolchain on the development machine and are reviewed by hand only.
+through its own toolchain — all eight now, none by hand:
+
+| Language | Check                                                       |
+| -------- | ----------------------------------------------------------- |
+| Python   | `py_compile`, then imported and exercised: env precedence, explicit-argument override, and the `Authorization` header appearing only when a key is present |
+| Node.js  | `node --check`                                               |
+| Go       | `go vet`                                                     |
+| Rust     | `cargo clippy` against reqwest/serde/tokio                   |
+| Java     | `javac`                                                      |
+| C#       | `dotnet build` (.NET 8), zero warnings under nullable reference types |
+| Ruby     | `ruby -c`                                                    |
+| PHP      | `php -l`                                                     |
+
+The C# pass is the one that changed code: `ApiKey` and the optional
+constructor argument were non-nullable, which is wrong — unauthenticated is a
+supported state — and the compiler said so three times.
 
 ## Conversation Analysis
 

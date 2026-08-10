@@ -1250,7 +1250,9 @@ namespace Nervosys.Chasm
     public class ChasmConfig
     {
         public string BaseUrl { get; set; }
-        public string ApiKey { get; set; }
+
+        /// <summary>Null when unauthenticated, which is a supported state.</summary>
+        public string? ApiKey { get; set; }
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
 
         public ChasmConfig()
@@ -1281,7 +1283,7 @@ namespace Nervosys.Chasm
         private readonly ChasmConfig _config;
         private readonly HttpClient _http;
 
-        public ChasmClient(ChasmConfig config = null)
+        public ChasmClient(ChasmConfig? config = null)
         {
             _config = config ?? new ChasmConfig();
             _http = new HttpClient { Timeout = _config.Timeout };
