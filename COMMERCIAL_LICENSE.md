@@ -47,9 +47,21 @@ commercial license removes this obligation. You need a commercial license if you
 - Full rights to redistribute and sublicense
 - White-label and OEM embedding rights
 - Priority support and SLA options
-- Access to enterprise features (SSO, multi-tenancy, compliance)
 - Patent and IP indemnification
 - Custom integration support
+
+### What it does *not* include
+
+A commercial license buys different **terms**, not additional **code**. There
+is no proprietary build of Chasm held back from the AGPL one.
+
+In particular, the enterprise features are already here, under AGPL-3.0:
+single sign-on ([`chasm-sso`](chasm-sso/) plus the `/sso` and `/oidc` handlers),
+multi-tenancy, audit logging and retention policy all ship in this repository
+behind `--features enterprise`. Building them requires nothing but `cargo`.
+
+What a commercial license changes is that you may run or redistribute those
+features without the AGPL's source-disclosure obligation.
 
 ## Pricing
 

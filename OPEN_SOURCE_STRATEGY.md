@@ -225,6 +225,12 @@ CMD ["chasm", "api", "serve"]
 >   later does not mean rewriting the protocol work.
 > - Under AGPL-3.0-only, what has already shipped stays shipped. Removing the
 >   endpoints changes future releases; it does not retract released ones.
+>
+> One half of the contradiction *has* been resolved:
+> [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md) no longer advertises SSO as
+> something a commercial license grants access to, because it isn't — it
+> describes what the license actually changes, which is the copyleft
+> obligation. The table below still states an unmet intent.
 
 | Feature                          | Reason                  | Location      |
 | -------------------------------- | ----------------------- | ------------- |
