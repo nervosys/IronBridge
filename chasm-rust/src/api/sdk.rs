@@ -38,6 +38,20 @@ pub enum SdkLanguage {
     Php,
 }
 
+impl SdkLanguage {
+    /// Every language, so callers and tests cannot silently miss one.
+    pub const ALL: [SdkLanguage; 8] = [
+        SdkLanguage::Python,
+        SdkLanguage::NodeJs,
+        SdkLanguage::Go,
+        SdkLanguage::Rust,
+        SdkLanguage::Java,
+        SdkLanguage::CSharp,
+        SdkLanguage::Ruby,
+        SdkLanguage::Php,
+    ];
+}
+
 impl std::fmt::Display for SdkLanguage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -86,11 +100,21 @@ __version__ = "{{version}}"
 __api_version__ = "{{api_version}}"
 
 
+def _default_base_url() -> str:
+    """The base URL from the environment, falling back to the generated default."""
+    return os.environ.get("CHASM_BASE_URL") or "{{base_url}}"
+
+
+def _default_api_key() -> Optional[str]:
+    """The API key from the environment, or None when unauthenticated."""
+    return os.environ.get("CHASM_API_KEY") or None
+
+
 @dataclass
 class ChasmConfig:
     """Configuration for Chasm client."""
-    base_url: str = "{{base_url}}"
-    api_key: Optional[str] = None
+    base_url: str = field(default_factory=_default_base_url)
+    api_key: Optional[str] = field(default_factory=_default_api_key)
     timeout: int = 30
     retry_count: int = 3
     retry_delay: float = 1.0
@@ -311,10 +335,6 @@ class HarvestResource:
             data["providers"] = providers
         return self._client.post("/api/harvest", data)
     
-    def status(self) -> dict:
-        """Get harvest status."""
-        return self._client.get("/api/harvest/status")
-
 
 class ChasmClient:
     """Main Chasm client."""
@@ -325,10 +345,9 @@ class ChasmClient:
         base_url: Optional[str] = None,
         **kwargs
     ):
-        api_key = api_key or os.environ.get("CHASM_API_KEY")
         config = ChasmConfig(
-            api_key=api_key,
-            base_url=base_url or "{{base_url}}",
+            api_key=api_key or _default_api_key(),
+            base_url=base_url or _default_base_url(),
             **kwargs
         )
         self._api = ApiClient(config)
@@ -340,7 +359,7 @@ class ChasmClient:
     
     def health(self) -> dict:
         """Check API health."""
-        return self._api.get("/health")
+        return self._api.get("/api/health")
     
     def stats(self) -> dict:
         """Get statistics."""
@@ -572,10 +591,6 @@ class HarvestResource {
     const data = providers ? { providers } : {};
     return this._client.post('/api/harvest', data);
   }
-
-  async status() {
-    return this._client.get('/api/harvest/status');
-  }
 }
 
 /**
@@ -592,7 +607,7 @@ class ChasmClient {
   }
 
   async health() {
-    return this._api.get('/health');
+    return this._api.get('/api/health');
   }
 
   async stats() {
@@ -768,7 +783,7 @@ func (c *Client) request(method, path string, body interface{}, result interface
 // Health checks API health
 func (c *Client) Health() (map[string]interface{}, error) {
 	var result map[string]interface{}
-	err := c.request("GET", "/health", nil, &result)
+	err := c.request("GET", "/api/health", nil, &result)
 	return result, err
 }
 
@@ -901,14 +916,665 @@ func (h *HarvestService) Run(providers []string) (map[string]interface{}, error)
 	err := h.client.request("POST", "/api/harvest", body, &result)
 	return result, err
 }
+"#;
 
-func (h *HarvestService) Status() (map[string]interface{}, error) {
-	var result map[string]interface{}
-	err := h.client.request("GET", "/api/harvest/status", nil, &result)
-	return result, err
+// ============================================================================
+// Rust SDK
+// ============================================================================
+
+pub const RUST_SDK_TEMPLATE: &str = r##"// Chasm Rust SDK
+// Auto-generated - Do not edit directly
+// Version: {{version}}
+//
+// Add to Cargo.toml:
+//   reqwest = { version = "0.12", features = ["json"] }
+//   serde = { version = "1", features = ["derive"] }
+//   tokio = { version = "1", features = ["full"] }
+
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+pub const VERSION: &str = "{{version}}";
+pub const API_VERSION: &str = "{{api_version}}";
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub base_url: String,
+    pub api_key: Option<String>,
+    pub timeout: Duration,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            base_url: std::env::var("CHASM_BASE_URL")
+                .unwrap_or_else(|_| "{{base_url}}".to_string()),
+            api_key: std::env::var("CHASM_API_KEY").ok().filter(|k| !k.is_empty()),
+            timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub provider: String,
+    #[serde(default)]
+    pub message_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Workspace {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub path: String,
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Http(reqwest::Error),
+    Api { status: u16, message: String },
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Http(e) => write!(f, "chasm: transport error: {e}"),
+            Error::Api { status, message } => write!(f, "chasm: API error {status}: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::Http(e)
+    }
+}
+
+pub struct Client {
+    config: Config,
+    http: reqwest::Client,
+}
+
+impl Client {
+    pub fn new(config: Config) -> Result<Self, Error> {
+        let http = reqwest::Client::builder()
+            .timeout(config.timeout)
+            .user_agent(format!("chasm-rust/{VERSION}"))
+            .build()?;
+        Ok(Self { config, http })
+    }
+
+    async fn get(&self, path: &str) -> Result<serde_json::Value, Error> {
+        self.send(self.http.get(format!("{}{}", self.config.base_url, path)))
+            .await
+    }
+
+    async fn post(&self, path: &str, body: serde_json::Value) -> Result<serde_json::Value, Error> {
+        self.send(
+            self.http
+                .post(format!("{}{}", self.config.base_url, path))
+                .json(&body),
+        )
+        .await
+    }
+
+    async fn send(&self, mut req: reqwest::RequestBuilder) -> Result<serde_json::Value, Error> {
+        if let Some(key) = &self.config.api_key {
+            req = req.bearer_auth(key);
+        }
+        let resp = req.send().await?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(Error::Api {
+                status: status.as_u16(),
+                message: text,
+            });
+        }
+        Ok(serde_json::from_str(&text).unwrap_or(serde_json::Value::Null))
+    }
+
+    pub async fn health(&self) -> Result<serde_json::Value, Error> {
+        self.get("/api/health").await
+    }
+
+    pub async fn stats(&self) -> Result<serde_json::Value, Error> {
+        self.get("/api/stats").await
+    }
+
+    pub async fn list_sessions(&self, limit: Option<u32>) -> Result<serde_json::Value, Error> {
+        match limit {
+            Some(n) => self.get(&format!("/api/sessions?limit={n}")).await,
+            None => self.get("/api/sessions").await,
+        }
+    }
+
+    pub async fn get_session(&self, id: &str) -> Result<serde_json::Value, Error> {
+        self.get(&format!("/api/sessions/{id}")).await
+    }
+
+    pub async fn search_sessions(&self, query: &str) -> Result<serde_json::Value, Error> {
+        self.get(&format!(
+            "/api/sessions/search?q={}",
+            urlencoding_encode(query)
+        ))
+        .await
+    }
+
+    pub async fn list_workspaces(&self) -> Result<serde_json::Value, Error> {
+        self.get("/api/workspaces").await
+    }
+
+    pub async fn get_workspace(&self, id: &str) -> Result<serde_json::Value, Error> {
+        self.get(&format!("/api/workspaces/{id}")).await
+    }
+
+    pub async fn harvest(&self) -> Result<serde_json::Value, Error> {
+        self.post("/api/harvest", serde_json::json!({})).await
+    }
+}
+
+/// Percent-encode a query value without pulling in another dependency.
+fn urlencoding_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+"##;
+
+// ============================================================================
+// Java SDK
+// ============================================================================
+
+pub const JAVA_SDK_TEMPLATE: &str = r#"// Chasm Java SDK
+// Auto-generated - Do not edit directly
+// Version: {{version}}
+//
+// Requires Java 11+ (java.net.http). No external dependencies.
+
+package ai.nervosys.chasm;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+
+public class Chasm {
+    public static final String VERSION = "{{version}}";
+    public static final String API_VERSION = "{{api_version}}";
+
+    public static class Config {
+        public String baseUrl;
+        public String apiKey;
+        public Duration timeout = Duration.ofSeconds(30);
+
+        public Config() {
+            String env = System.getenv("CHASM_BASE_URL");
+            this.baseUrl = (env == null || env.isEmpty()) ? "{{base_url}}" : env;
+            this.apiKey = System.getenv("CHASM_API_KEY");
+        }
+    }
+
+    /** Thrown for any non-2xx response; carries the status so callers can branch. */
+    public static class ChasmException extends RuntimeException {
+        public final int statusCode;
+
+        public ChasmException(String message, int statusCode) {
+            super("chasm: " + message + " (status " + statusCode + ")");
+            this.statusCode = statusCode;
+        }
+    }
+
+    public static class Client {
+        private final Config config;
+        private final HttpClient http;
+
+        public Client(Config config) {
+            this.config = config == null ? new Config() : config;
+            this.http = HttpClient.newBuilder().connectTimeout(this.config.timeout).build();
+        }
+
+        private String send(HttpRequest.Builder builder) {
+            builder.header("Content-Type", "application/json");
+            builder.header("User-Agent", "chasm-java/" + VERSION);
+            if (config.apiKey != null && !config.apiKey.isEmpty()) {
+                builder.header("Authorization", "Bearer " + config.apiKey);
+            }
+            try {
+                HttpResponse<String> resp =
+                        http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() >= 400) {
+                    throw new ChasmException(resp.body(), resp.statusCode());
+                }
+                return resp.body();
+            } catch (ChasmException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException("chasm: request failed", e);
+            }
+        }
+
+        private String get(String path) {
+            return send(HttpRequest.newBuilder().uri(URI.create(config.baseUrl + path)).GET());
+        }
+
+        private String post(String path, String jsonBody) {
+            return send(HttpRequest.newBuilder()
+                    .uri(URI.create(config.baseUrl + path))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody)));
+        }
+
+        public String health() {
+            return get("/api/health");
+        }
+
+        public String stats() {
+            return get("/api/stats");
+        }
+
+        public String listSessions() {
+            return get("/api/sessions");
+        }
+
+        public String getSession(String id) {
+            return get("/api/sessions/" + id);
+        }
+
+        public String searchSessions(String query) {
+            return get("/api/sessions/search?q="
+                    + URLEncoder.encode(query, StandardCharsets.UTF_8));
+        }
+
+        public String listWorkspaces() {
+            return get("/api/workspaces");
+        }
+
+        public String getWorkspace(String id) {
+            return get("/api/workspaces/" + id);
+        }
+
+        public String harvest() {
+            return post("/api/harvest", "{}");
+        }
+    }
 }
 "#;
 
+// ============================================================================
+// C# SDK
+// ============================================================================
+
+pub const CSHARP_SDK_TEMPLATE: &str = r#"// Chasm C# SDK
+// Auto-generated - Do not edit directly
+// Version: {{version}}
+//
+// Targets .NET 6+. No external dependencies.
+
+using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
+
+namespace Nervosys.Chasm
+{
+    public class ChasmConfig
+    {
+        public string BaseUrl { get; set; }
+        public string ApiKey { get; set; }
+        public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
+
+        public ChasmConfig()
+        {
+            var env = Environment.GetEnvironmentVariable("CHASM_BASE_URL");
+            BaseUrl = string.IsNullOrEmpty(env) ? "{{base_url}}" : env;
+            ApiKey = Environment.GetEnvironmentVariable("CHASM_API_KEY");
+        }
+    }
+
+    /// <summary>Thrown for any non-2xx response; carries the status code.</summary>
+    public class ChasmException : Exception
+    {
+        public int StatusCode { get; }
+
+        public ChasmException(string message, int statusCode)
+            : base($"chasm: {message} (status {statusCode})")
+        {
+            StatusCode = statusCode;
+        }
+    }
+
+    public class ChasmClient : IDisposable
+    {
+        public const string Version = "{{version}}";
+        public const string ApiVersion = "{{api_version}}";
+
+        private readonly ChasmConfig _config;
+        private readonly HttpClient _http;
+
+        public ChasmClient(ChasmConfig config = null)
+        {
+            _config = config ?? new ChasmConfig();
+            _http = new HttpClient { Timeout = _config.Timeout };
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd($"chasm-csharp/{Version}");
+            if (!string.IsNullOrEmpty(_config.ApiKey))
+            {
+                _http.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", _config.ApiKey);
+            }
+        }
+
+        private async Task<string> SendAsync(HttpRequestMessage request)
+        {
+            var response = await _http.SendAsync(request).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new ChasmException(body, (int)response.StatusCode);
+            }
+            return body;
+        }
+
+        private Task<string> GetAsync(string path) =>
+            SendAsync(new HttpRequestMessage(HttpMethod.Get, _config.BaseUrl + path));
+
+        private Task<string> PostAsync(string path, string json) =>
+            SendAsync(new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl + path)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            });
+
+        public Task<string> HealthAsync() => GetAsync("/api/health");
+
+        public Task<string> StatsAsync() => GetAsync("/api/stats");
+
+        public Task<string> ListSessionsAsync() => GetAsync("/api/sessions");
+
+        public Task<string> GetSessionAsync(string id) => GetAsync("/api/sessions/" + id);
+
+        public Task<string> SearchSessionsAsync(string query) =>
+            GetAsync("/api/sessions/search?q=" + Uri.EscapeDataString(query));
+
+        public Task<string> ListWorkspacesAsync() => GetAsync("/api/workspaces");
+
+        public Task<string> GetWorkspaceAsync(string id) => GetAsync("/api/workspaces/" + id);
+
+        public Task<string> HarvestAsync() => PostAsync("/api/harvest", "{}");
+
+        public void Dispose() => _http.Dispose();
+    }
+}
+"#;
+
+// ============================================================================
+// Ruby SDK
+// ============================================================================
+
+pub const RUBY_SDK_TEMPLATE: &str = r#"# Chasm Ruby SDK
+# Auto-generated - Do not edit directly
+# Version: {{version}}
+#
+# Standard library only.
+
+require 'net/http'
+require 'uri'
+require 'json'
+
+module Chasm
+  VERSION = '{{version}}'.freeze
+  API_VERSION = '{{api_version}}'.freeze
+
+  # Raised for any non-2xx response. Carries the status so callers can branch.
+  class Error < StandardError
+    attr_reader :status_code
+
+    def initialize(message, status_code)
+      super("chasm: #{message} (status #{status_code})")
+      @status_code = status_code
+    end
+  end
+
+  class Config
+    attr_accessor :base_url, :api_key, :timeout
+
+    def initialize(base_url: nil, api_key: nil, timeout: 30)
+      @base_url = base_url || ENV['CHASM_BASE_URL'] || '{{base_url}}'
+      @api_key = api_key || ENV['CHASM_API_KEY']
+      @timeout = timeout
+    end
+  end
+
+  class Client
+    def initialize(config = nil)
+      @config = config || Config.new
+    end
+
+    def health
+      get('/api/health')
+    end
+
+    def stats
+      get('/api/stats')
+    end
+
+    def list_sessions(limit: nil)
+      path = '/api/sessions'
+      path += "?limit=#{limit}" if limit
+      get(path)
+    end
+
+    def get_session(id)
+      get("/api/sessions/#{id}")
+    end
+
+    def search_sessions(query)
+      get("/api/sessions/search?q=#{URI.encode_www_form_component(query)}")
+    end
+
+    def list_workspaces
+      get('/api/workspaces')
+    end
+
+    def get_workspace(id)
+      get("/api/workspaces/#{id}")
+    end
+
+    def harvest
+      post('/api/harvest', {})
+    end
+
+    private
+
+    def get(path)
+      uri = URI.parse(@config.base_url + path)
+      send_request(Net::HTTP::Get.new(uri), uri)
+    end
+
+    def post(path, body)
+      uri = URI.parse(@config.base_url + path)
+      request = Net::HTTP::Post.new(uri)
+      request.body = JSON.generate(body)
+      send_request(request, uri)
+    end
+
+    def send_request(request, uri)
+      request['Content-Type'] = 'application/json'
+      request['User-Agent'] = "chasm-ruby/#{VERSION}"
+      request['Authorization'] = "Bearer #{@config.api_key}" if @config.api_key
+
+      response = Net::HTTP.start(uri.hostname, uri.port,
+                                 use_ssl: uri.scheme == 'https',
+                                 read_timeout: @config.timeout) do |http|
+        http.request(request)
+      end
+
+      raise Error.new(response.body, response.code.to_i) if response.code.to_i >= 400
+
+      response.body.empty? ? nil : JSON.parse(response.body)
+    end
+  end
+end
+"#;
+
+// ============================================================================
+// PHP SDK
+// ============================================================================
+
+pub const PHP_SDK_TEMPLATE: &str = r#"<?php
+// Chasm PHP SDK
+// Auto-generated - Do not edit directly
+// Version: {{version}}
+//
+// Requires PHP 7.4+ with ext-curl and ext-json.
+
+namespace Nervosys\Chasm;
+
+/** Thrown for any non-2xx response; carries the status so callers can branch. */
+class ChasmException extends \RuntimeException
+{
+    public int $statusCode;
+
+    public function __construct(string $message, int $statusCode)
+    {
+        parent::__construct("chasm: {$message} (status {$statusCode})");
+        $this->statusCode = $statusCode;
+    }
+}
+
+class Config
+{
+    public string $baseUrl;
+    public ?string $apiKey;
+    public int $timeout;
+
+    public function __construct(?string $baseUrl = null, ?string $apiKey = null, int $timeout = 30)
+    {
+        $this->baseUrl = $baseUrl ?: (getenv('CHASM_BASE_URL') ?: '{{base_url}}');
+        $this->apiKey = $apiKey ?: (getenv('CHASM_API_KEY') ?: null);
+        $this->timeout = $timeout;
+    }
+}
+
+class Client
+{
+    public const VERSION = '{{version}}';
+    public const API_VERSION = '{{api_version}}';
+
+    private Config $config;
+
+    public function __construct(?Config $config = null)
+    {
+        $this->config = $config ?? new Config();
+    }
+
+    public function health(): array
+    {
+        return $this->get('/api/health');
+    }
+
+    public function stats(): array
+    {
+        return $this->get('/api/stats');
+    }
+
+    public function listSessions(?int $limit = null): array
+    {
+        $path = '/api/sessions';
+        if ($limit !== null) {
+            $path .= '?limit=' . $limit;
+        }
+        return $this->get($path);
+    }
+
+    public function getSession(string $id): array
+    {
+        return $this->get('/api/sessions/' . rawurlencode($id));
+    }
+
+    public function searchSessions(string $query): array
+    {
+        return $this->get('/api/sessions/search?q=' . rawurlencode($query));
+    }
+
+    public function listWorkspaces(): array
+    {
+        return $this->get('/api/workspaces');
+    }
+
+    public function getWorkspace(string $id): array
+    {
+        return $this->get('/api/workspaces/' . rawurlencode($id));
+    }
+
+    public function harvest(): array
+    {
+        return $this->post('/api/harvest', []);
+    }
+
+    private function get(string $path): array
+    {
+        return $this->send('GET', $path, null);
+    }
+
+    private function post(string $path, array $body): array
+    {
+        return $this->send('POST', $path, $body);
+    }
+
+    private function send(string $method, string $path, ?array $body): array
+    {
+        $headers = [
+            'Content-Type: application/json',
+            'User-Agent: chasm-php/' . self::VERSION,
+        ];
+        if ($this->config->apiKey) {
+            $headers[] = 'Authorization: Bearer ' . $this->config->apiKey;
+        }
+
+        $ch = curl_init($this->config->baseUrl . $path);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->config->timeout);
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode((object) $body));
+        }
+
+        $responseBody = curl_exec($ch);
+        if ($responseBody === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            throw new \RuntimeException('chasm: request failed: ' . $error);
+        }
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status >= 400) {
+            throw new ChasmException((string) $responseBody, $status);
+        }
+
+        $decoded = json_decode((string) $responseBody, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+}
+"#;
 // ============================================================================
 // SDK Generator
 // ============================================================================
@@ -925,12 +1591,22 @@ impl SdkGenerator {
     }
 
     /// Generate SDK for a language
+    ///
+    /// Matched exhaustively on purpose. The arm here used to be `_ =>
+    /// format!("// SDK for {language} not yet implemented")`, which returned a
+    /// comment where a caller expected a library: five of the eight languages
+    /// silently produced a one-line file. Listing every variant means adding a
+    /// language fails to compile until it has a template.
     pub fn generate(&self, language: SdkLanguage) -> String {
         let template = match language {
             SdkLanguage::Python => PYTHON_SDK_TEMPLATE,
             SdkLanguage::NodeJs => NODEJS_SDK_TEMPLATE,
             SdkLanguage::Go => GO_SDK_TEMPLATE,
-            _ => return format!("// SDK for {} not yet implemented", language),
+            SdkLanguage::Rust => RUST_SDK_TEMPLATE,
+            SdkLanguage::Java => JAVA_SDK_TEMPLATE,
+            SdkLanguage::CSharp => CSHARP_SDK_TEMPLATE,
+            SdkLanguage::Ruby => RUBY_SDK_TEMPLATE,
+            SdkLanguage::Php => PHP_SDK_TEMPLATE,
         };
 
         template
@@ -968,7 +1644,7 @@ impl Default for SdkConfig {
         Self {
             version: "1.0.0".to_string(),
             base_url: "http://localhost:8787".to_string(),
-            languages: vec![SdkLanguage::Python, SdkLanguage::NodeJs, SdkLanguage::Go],
+            languages: SdkLanguage::ALL.to_vec(),
             api_version: "v1".to_string(),
         }
     }
@@ -992,5 +1668,101 @@ mod tests {
 
         let go_sdk = generator.generate(SdkLanguage::Go);
         assert!(go_sdk.contains("type Client struct"));
+    }
+
+    fn generated(language: SdkLanguage) -> String {
+        SdkGenerator::new(SdkConfig::default()).generate(language)
+    }
+
+    /// Five of the eight languages used to return
+    /// `// SDK for rust not yet implemented` -- a *string*, not an error, so a
+    /// caller wrote a one-line file and found out later.
+    #[test]
+    fn every_language_generates_a_real_sdk() {
+        for language in SdkLanguage::ALL {
+            let sdk = generated(language.clone());
+            assert!(
+                !sdk.contains("not yet implemented"),
+                "{language} still returns a placeholder"
+            );
+            assert!(
+                sdk.len() > 500,
+                "{language} produced {} bytes, which is not a library",
+                sdk.len()
+            );
+        }
+    }
+
+    /// An unsubstituted `{{version}}` would ship into generated source, where
+    /// it is a syntax error in some of these languages and a wrong value in
+    /// the rest.
+    #[test]
+    fn no_placeholder_survives_generation() {
+        for language in SdkLanguage::ALL {
+            let sdk = generated(language.clone());
+            assert!(
+                !sdk.contains("{{"),
+                "{language} left an unsubstituted placeholder"
+            );
+            assert!(
+                sdk.contains("1.0.0"),
+                "{language} did not get the version substituted"
+            );
+        }
+    }
+
+    /// Every SDK must reach the API the same way, or a client library becomes
+    /// a per-language guess about what the server exposes.
+    #[test]
+    fn every_sdk_talks_to_the_same_api_surface() {
+        for language in SdkLanguage::ALL {
+            let sdk = generated(language.clone());
+            for path in [
+                "/api/health",
+                "/api/stats",
+                "/api/sessions",
+                "/api/workspaces",
+            ] {
+                assert!(sdk.contains(path), "{language} never calls {path}");
+            }
+            assert!(
+                sdk.contains("CHASM_BASE_URL") && sdk.contains("CHASM_API_KEY"),
+                "{language} ignores the environment configuration the others honour"
+            );
+        }
+    }
+
+    /// The paths the SDKs call must be paths the server routes.
+    ///
+    /// This is not hypothetical: every SDK called `/health`, which 404s -- the
+    /// route is inside the `/api` scope -- and `/api/harvest/status`, which
+    /// does not exist at all. Both shipped. Checking against `openapi.yaml`,
+    /// which its own tests hold to the running server, stops that recurring.
+    #[test]
+    fn sdk_paths_exist_in_the_openapi_spec() {
+        let spec: serde_json::Value =
+            serde_yaml::from_str(include_str!("../../openapi.yaml")).expect("spec parses");
+        let paths = spec["paths"].as_object().expect("spec has paths");
+
+        // Spec paths are relative to a `/api` server base unless the operation
+        // overrides it, so compare on the `/api`-prefixed form.
+        let documented: std::collections::HashSet<String> =
+            paths.keys().map(|p| format!("/api{p}")).collect();
+
+        let re = regex::Regex::new(r#"/api/[a-z0-9/_-]+"#).expect("regex");
+        for language in SdkLanguage::ALL {
+            let sdk = generated(language.clone());
+            for m in re.find_iter(&sdk) {
+                let called = m.as_str().trim_end_matches('/');
+                // Ignore prefixes that are built up before an id is appended.
+                if called.ends_with("/sessions") || called.ends_with("/workspaces") {
+                    // still a real path; fall through to the check
+                }
+                assert!(
+                    documented.contains(called),
+                    "{language} calls {called}, which openapi.yaml does not document"
+                );
+            }
+        }
     }
 }
