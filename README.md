@@ -278,6 +278,43 @@ The agency runtime writes to this as it runs agents. Permission requests
 expire: responding to a lapsed one returns 409 rather than a misleading
 success, because the agent that asked has already moved on.
 
+### Client SDKs
+
+`api::sdk` generates a single-file client for eight languages: Python,
+Node.js, Go, Rust, Java, C#, Ruby, and PHP.
+
+```rust
+use chasm::api::sdk::{SdkConfig, SdkGenerator, SdkLanguage};
+
+let generator = SdkGenerator::new(SdkConfig::default());
+let source = generator.generate(SdkLanguage::Go);
+let name = generator.get_filename(&SdkLanguage::Go);   // "chasm.go"
+```
+
+Every client covers the same core surface — health, stats, sessions
+(list/get/search), workspaces, and harvest — and each reads `CHASM_BASE_URL`
+and `CHASM_API_KEY` from the environment, falling back to the `base_url`
+baked in at generation time. Non-2xx responses raise a typed error carrying
+the status code rather than returning an empty result. None of them pull a
+dependency beyond their language's usual HTTP client.
+
+> **This is a library API with no caller yet.** There is no `chasm sdk`
+> subcommand and no HTTP route that serves a generated client, so today it is
+> reachable only from Rust code and the test suite. Wiring it to the CLI is
+> the obvious next step.
+
+Four tests guard it: every language must emit something substantial, no
+placeholder text may survive generation, every client must reach the same
+core surface and honour the same environment variables, and every path an
+SDK calls must exist in `openapi.yaml`. That last one matters — the three
+original clients called `/health`, which 404s because the API is mounted
+under `/api`, and `/api/harvest/status`, which does not exist at all.
+
+Verified out of tree by extracting each generated client and running it
+through its own toolchain: `node --check`, `gofmt -e`, `javac`, and a real
+`cargo check` against reqwest/serde/tokio all pass. Python, C#, Ruby, and PHP
+have no toolchain on the development machine and are reviewed by hand only.
+
 ## Conversation Analysis
 
 ```bash
@@ -389,7 +426,7 @@ enterprise layers are scaffolding at varying stages. Concretely:
 
 | Area                            | State                                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 879 tests passing.                                                                            |
+| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 903 tests passing (954 with `--features enterprise`).                                         |
 | Providers                       | **Working.** 11 local/OpenAI-compatible endpoints in the catalogue, 21 cloud providers listed, and 5 cloud share-link parsers (ChatGPT, Claude, Gemini, Perplexity, Poe). |
 | MCP server, TUI                 | **Working.**                                                                                                              |
 | REST API                        | **Working.** 137 operations across 105 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
@@ -397,6 +434,7 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | Enterprise (SSO/audit/retention)| **Working, all platforms.** OIDC (authorization code + PKCE) and SAML both run on the pure-Rust `chasm-sso`; SAML signatures are verified against wrapping attacks. `SqliteEnterpriseStore` implements every `DatabaseOps` method, so provider config, pending logins, sessions, audit events and retention policies persist. All 25 enterprise operations are served, probed by tests, and their response bodies documented. Until recently the lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
 | Conversation analysis           | **Model-backed.** `chasm analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
 | Embeddings / semantic search    | **Working, verified end to end.** `POST /api/search/semantic/index` embeds sessions and `GET /api/search/semantic` ranks them by cosine similarity. Exercised against a local OpenAI-compatible endpoint: every query ranked its own topic first, re-indexing is idempotent, and `force` rebuilds. The client's reordering-by-`index` is now covered by a test that fails if array position is trusted instead. Not yet run against OpenAI's own service, so their dialect (rate/token limits, error bodies) is still unverified. |
+| Client SDKs                     | **Generated, not yet exposed.** Real single-file clients for all eight languages, each covering the same core surface and honouring `CHASM_BASE_URL`/`CHASM_API_KEY`. Five of the eight previously returned the string `"// SDK for {} not yet implemented"`, so a caller got a one-line file that looked like a successful generation; `generate()` is now exhaustive over `SdkLanguage`, so adding a language fails to compile until it has a template. Node, Go, Java and Rust output is compiler-verified; Python, C#, Ruby and PHP are hand-reviewed only. No CLI subcommand or route calls the generator yet — see [Client SDKs](#client-sdks). |
 | Session sharing                 | **Working, local only.** Revocable, optionally-expiring tokens readable through your own server. Nothing is uploaded anywhere — see [Sharing](#sharing). |
 | chasm-desktop                   | **Working.** Wraps chasm-web and runs the API server in-process on 127.0.0.1:8788, so it needs no separately started backend. No desktop-specific UI. |
 | chasm-web                       | **Working.** `AgentInbox` is backed by `/api/inbox`.                                                                      |
