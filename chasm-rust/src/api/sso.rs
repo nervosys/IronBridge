@@ -551,7 +551,12 @@ impl SsoService {
         // must validate the signature, and a wrong or attacker-chosen guess
         // makes verification fail below. Nothing from `unverified` is allowed
         // to reach the session.
-        let unverified = self.parse_saml_response(&response_str)?;
+        // Status lives in the response envelope, which assertion-level signing
+        // leaves outside the signed region. Read it here, from the document
+        // that still has it; see `extract_status` for why that is safe.
+        let status = Self::extract_status(&response_str);
+
+        let unverified = self.parse_saml_response(&response_str, status.clone())?;
         let unverified_assertion = unverified
             .assertion
             .as_ref()
@@ -570,7 +575,7 @@ impl SsoService {
         let verified_xml = Self::verify_and_reduce(&response_str, &idp)?;
         drop(unverified);
 
-        let saml_response = self.parse_saml_response(&verified_xml)?;
+        let saml_response = self.parse_saml_response(&verified_xml, status)?;
 
         if saml_response.status != SamlStatus::Success {
             return Err(format!(
@@ -666,15 +671,27 @@ impl SsoService {
 
     // Helper methods
 
-    fn parse_saml_response(&self, xml: &str) -> Result<SamlResponse, String> {
-        // Simplified parsing - production would use proper XML library
-        // This is a placeholder that extracts basic information
-        let id = Self::extract_xml_attr(xml, "Response", "ID").unwrap_or_default();
-        let in_response_to =
-            Self::extract_xml_attr(xml, "Response", "InResponseTo").unwrap_or_default();
-        let issuer = Self::extract_xml_element(xml, "Issuer").unwrap_or_default();
-
-        let status = if xml.contains("urn:oasis:names:tc:SAML:2.0:status:Success") {
+    /// Read the `<samlp:Status>` code out of a response envelope.
+    ///
+    /// Separated from [`Self::parse_saml_response`] because the two are read
+    /// from *different documents*, and conflating them broke every login
+    /// against an IdP that signs the assertion rather than the whole response
+    /// -- which is Okta's and Entra's default.
+    ///
+    /// When the signature covers only the `<saml:Assertion>`, the reduced
+    /// document handed back by [`Self::verify_and_reduce`] is that assertion,
+    /// and `<samlp:Status>` sits outside it in the envelope that was discarded.
+    /// Reading status from the reduced document therefore found nothing and
+    /// yielded `Unknown`, which the caller rejects.
+    ///
+    /// Taking it from the unverified envelope is sound because status is not
+    /// what authenticates anyone. The assertion is: it must still be present
+    /// and must still have survived signature verification. An attacker who
+    /// rewrites `Status` to Success without a validly signed assertion gets
+    /// "No signed assertion"; one who *has* a validly signed assertion did not
+    /// need to touch `Status` at all.
+    fn extract_status(xml: &str) -> SamlStatus {
+        if xml.contains("urn:oasis:names:tc:SAML:2.0:status:Success") {
             SamlStatus::Success
         } else if xml.contains("urn:oasis:names:tc:SAML:2.0:status:Requester") {
             SamlStatus::Requester
@@ -684,7 +701,23 @@ impl SsoService {
             SamlStatus::AuthnFailed
         } else {
             SamlStatus::Unknown("Unknown status".to_string())
-        };
+        }
+    }
+
+    /// Extract the fields Chasm needs from a SAML document.
+    ///
+    /// Deliberately a narrow string scan rather than a full XML parse. It runs
+    /// on the signature-reduced document -- see [`Self::verify_and_reduce`] --
+    /// where every element is one the IdP signed, so there are no unsigned
+    /// siblings to be confused by and no wrapping attack to defend against
+    /// here. The defence lives at the reduction step, not in this function.
+    ///
+    /// Note that `status` is *not* read here; see [`Self::extract_status`].
+    fn parse_saml_response(&self, xml: &str, status: SamlStatus) -> Result<SamlResponse, String> {
+        let id = Self::extract_xml_attr(xml, "Response", "ID").unwrap_or_default();
+        let in_response_to =
+            Self::extract_xml_attr(xml, "Response", "InResponseTo").unwrap_or_default();
+        let issuer = Self::extract_xml_element(xml, "Issuer").unwrap_or_default();
 
         // Parse assertion if present
         let assertion = if xml.contains("<saml:Assertion") || xml.contains("<Assertion") {
@@ -1428,5 +1461,70 @@ mod signature_tests {
             SsoService::verify_and_reduce(&signed_response("alice@example.com"), &armoured).is_ok(),
             "a PEM-armoured certificate should be accepted"
         );
+    }
+
+    /// The status check must survive signature reduction.
+    ///
+    /// Every other test here stops at `verify_and_reduce`. The production path
+    /// keeps going: it re-parses the *reduced* document and rejects anything
+    /// whose status is not Success. When the IdP signs the Assertion rather
+    /// than the whole Response -- which Okta and Entra do by default -- the
+    /// reduced document is the Assertion, and `<samlp:Status>` lives outside
+    /// it. A status read from the reduced document is therefore absent, and a
+    /// naive `contains("...Success")` fails every real login.
+    #[test]
+    fn status_is_read_from_the_response_not_the_reduced_assertion() {
+        let signed = signed_response("alice@example.com");
+        let reduced = SsoService::verify_and_reduce(&signed, &idp()).unwrap();
+
+        assert!(
+            !reduced.contains("status:Success"),
+            "precondition: the signed assertion should not carry the response status"
+        );
+
+        // What the old code computed, reading status from the reduced
+        // document. Anything other than Success is rejected by the caller, so
+        // this is the shape of the bug: a correctly signed, entirely valid
+        // login refused as "SAML authentication failed".
+        assert_ne!(
+            SsoService::extract_status(&reduced),
+            SamlStatus::Success,
+            "if this ever becomes Success the regression guard below is vacuous"
+        );
+
+        // What it computes now, reading from the envelope.
+        assert_eq!(
+            SsoService::extract_status(&signed),
+            SamlStatus::Success,
+            "status comes from the response envelope"
+        );
+    }
+
+    /// Moving the status read must not weaken the thing that authenticates.
+    #[test]
+    fn a_success_status_without_a_signed_assertion_is_still_refused() {
+        // An attacker rewriting Status to Success gains nothing: the assertion
+        // is the credential, and this one is unsigned.
+        let forged = unsigned_response("mallory@example.com");
+
+        assert_eq!(
+            SsoService::extract_status(&forged),
+            SamlStatus::Success,
+            "the forged envelope does claim success"
+        );
+        assert!(
+            SsoService::verify_and_reduce(&forged, &idp()).is_err(),
+            "but it must not survive signature verification"
+        );
+    }
+
+    #[test]
+    fn a_failed_authentication_is_reported_as_such() {
+        let failure = r#"<?xml version="1.0"?>
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_r1">
+  <samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester"/></samlp:Status>
+</samlp:Response>"#;
+
+        assert_eq!(SsoService::extract_status(failure), SamlStatus::Requester);
     }
 }

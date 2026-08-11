@@ -215,80 +215,61 @@ impl ArchivalAgent {
         state.policies.clone()
     }
 
-    /// Scan for archival candidates
+    /// Scan for archival candidates.
+    ///
+    /// Always empty. Finding candidates means querying sessions by age,
+    /// message count, provider and tags, and [`ArchivalAgent`] holds no
+    /// database handle to query -- it owns policies and statistics, nothing
+    /// else. Returning nothing is therefore correct rather than provisional:
+    /// there is no set of sessions this type is in a position to name.
     pub async fn scan_candidates(&self) -> Vec<ArchivalCandidate> {
-        let state = self.state.read().await;
-        let candidates = Vec::new();
-        let _now = Utc::now();
-
-        // In real implementation, query database for sessions
-        // For now, return placeholder logic
-        for policy in &state.policies {
-            if !policy.enabled {
-                continue;
-            }
-
-            // Would query: SELECT * FROM sessions WHERE
-            // - updated_at < now - inactive_days
-            // - message_count >= min_messages
-            // - NOT archived
-            // - provider IN policies.providers (if specified)
-            // - workspace_id IN policies.workspace_ids (if specified)
-            // - tags NOT IN exclude_tags
-        }
-
-        candidates
+        Vec::new()
     }
 
-    /// Evaluate a session for archival
+    /// Evaluate a session for archival.
+    ///
+    /// Always declines, because this type cannot see the session.
+    ///
+    /// # What this used to do
+    ///
+    /// It looped over the enabled policies, pushed every one of them into
+    /// `matched_policies` without testing a single condition, and then -- since
+    /// the list was non-empty -- returned `should_archive: true` with
+    /// `confidence: 0.85`. The `session_id` argument was echoed into the result
+    /// and otherwise unused. Any session at all, examined or not, existing or
+    /// not, came back marked for archival with a number attached that looked
+    /// like it had been computed.
+    ///
+    /// [`Self::run`] gates on `should_archive && confidence >= 0.7`, so that
+    /// verdict was one populated `scan_candidates` away from archiving
+    /// everything it was handed. Declining is the only answer this type can
+    /// honestly give until it can read a session.
     pub async fn evaluate_session(&self, session_id: &str) -> ArchivalDecision {
-        let state = self.state.read().await;
-        let mut matched_policies = Vec::new();
-        let mut reasons = Vec::new();
-        let mut should_archive = false;
-        let mut confidence = 0.0;
-
-        // Check against all enabled policies
-        for policy in &state.policies {
-            if !policy.enabled {
-                continue;
-            }
-
-            // In real implementation:
-            // 1. Fetch session from database
-            // 2. Check each policy condition
-            // 3. Use LLM for nuanced decisions if needed
-
-            // Placeholder decision logic
-            matched_policies.push(policy.name.clone());
-        }
-
-        if !matched_policies.is_empty() {
-            should_archive = true;
-            confidence = 0.85;
-            reasons.push("Matched archival policies".to_string());
-        }
-
         ArchivalDecision {
             session_id: session_id.to_string(),
-            should_archive,
-            confidence,
-            reasoning: reasons.join("; "),
-            policies: matched_policies,
+            should_archive: false,
+            confidence: 0.0,
+            reasoning: "cannot evaluate: the archival agent has no access to \
+                        session data, so no policy condition can be tested"
+                .to_string(),
+            policies: Vec::new(),
         }
     }
 
-    /// Archive a single session
-    pub async fn archive_session(&self, _session_id: &str) -> Result<bool, String> {
-        // In real implementation:
-        // 1. Mark session as archived in database
-        // 2. Optionally compress/export
-        // 3. Update statistics
-
-        let mut state = self.state.write().await;
-        state.stats.total_archived += 1;
-
-        Ok(true)
+    /// Archive a single session.
+    ///
+    /// Always an error. Archiving means marking the session in the database and
+    /// optionally exporting it, and this type has no database handle.
+    ///
+    /// It previously incremented `stats.total_archived` and returned `Ok(true)`
+    /// without touching anything, so the statistics counted archives that had
+    /// not occurred -- and a caller checking the return value was told the
+    /// session was safely put away when it was untouched.
+    pub async fn archive_session(&self, session_id: &str) -> Result<bool, String> {
+        Err(format!(
+            "cannot archive {session_id}: the archival agent has no access to \
+             session storage"
+        ))
     }
 
     /// Run the archival agent
@@ -426,18 +407,24 @@ impl ArchivalScheduler {
         }
     }
 
-    /// Start the scheduler
-    /// Note: This currently logs a start message. Full background scheduling
-    /// requires a LocalSet or refactoring ChatDatabase for Send+Sync.
+    /// Mark the scheduler active. Nothing is scheduled.
+    ///
+    /// No timer is created and no task is spawned: after this returns,
+    /// [`Self::is_active`] reports `true` and [`ArchivalAgent::run`] will not
+    /// be called again unless a caller calls it. Background scheduling needs a
+    /// `LocalSet`, or `ChatDatabase` made `Send + Sync`, and neither is done.
+    ///
+    /// The name is kept because it is public API, but "started" here means
+    /// only that the flag is set -- which is why the message below says so
+    /// rather than implying a loop is now running.
     pub async fn start(&self) {
         let mut active = self.active.write().await;
         *active = true;
         drop(active);
 
-        // TODO: Implement background scheduling with LocalSet
-        // For now, just mark as active - call run() manually
         println!(
-            "[ArchivalScheduler] Started with interval {:?}. Call run() to execute.",
+            "[ArchivalScheduler] Marked active (interval {:?}). No background \
+             task is running -- call run() to execute an archival pass.",
             self.interval
         );
     }
@@ -491,5 +478,61 @@ mod tests {
         let agent = ArchivalAgent::new();
         let decision = agent.evaluate_session("test-session-123").await;
         assert!(!decision.session_id.is_empty());
+    }
+
+    /// The old verdict was `should_archive: true, confidence: 0.85` for any
+    /// session, reached without reading one. `run` archives anything above
+    /// 0.7, so this is the guard on that.
+    #[tokio::test]
+    async fn an_unexaminable_session_is_never_recommended_for_archival() {
+        let agent = ArchivalAgent::new();
+        agent
+            .add_policy(ArchivalPolicy {
+                enabled: true,
+                ..ArchivalPolicy::default()
+            })
+            .await;
+
+        let decision = agent.evaluate_session("anything-at-all").await;
+
+        assert!(!decision.should_archive, "{}", decision.reasoning);
+        assert!(
+            decision.confidence < 0.7,
+            "confidence {} would clear the archival threshold in `run`",
+            decision.confidence
+        );
+        assert!(
+            decision.policies.is_empty(),
+            "no policy was actually tested, so none should be reported as matched"
+        );
+    }
+
+    #[tokio::test]
+    async fn archiving_reports_failure_rather_than_counting_a_phantom() {
+        let agent = ArchivalAgent::new();
+
+        assert!(agent.archive_session("s1").await.is_err());
+        assert_eq!(
+            agent.get_stats().await.total_archived,
+            0,
+            "statistics must not count an archive that did not happen"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_archives_nothing_and_says_nothing_was_archived() {
+        let agent = ArchivalAgent::new();
+        agent
+            .add_policy(ArchivalPolicy {
+                enabled: true,
+                ..ArchivalPolicy::default()
+            })
+            .await;
+
+        let result = agent.run().await;
+
+        assert_eq!(result.archived_count, 0);
+        assert_eq!(result.bytes_saved, 0);
+        assert_eq!(agent.get_stats().await.total_archived, 0);
     }
 }

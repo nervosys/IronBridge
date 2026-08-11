@@ -33,8 +33,6 @@ pub struct OpenAICompatProvider {
     api_key: Option<String>,
     /// Default model
     model: Option<String>,
-    /// Whether the endpoint is available
-    available: bool,
     /// Local data path (if any)
     data_path: Option<PathBuf>,
 }
@@ -83,14 +81,12 @@ impl OpenAICompatProvider {
         name: impl Into<String>,
         endpoint: impl Into<String>,
     ) -> Self {
-        let endpoint = endpoint.into();
         Self {
             provider_type,
             name: name.into(),
-            endpoint: endpoint.clone(),
+            endpoint: endpoint.into(),
             api_key: None,
             model: None,
-            available: Self::check_availability(&endpoint),
             data_path: None,
         }
     }
@@ -113,10 +109,24 @@ impl OpenAICompatProvider {
         self
     }
 
-    /// Check if the endpoint is available
-    fn check_availability(endpoint: &str) -> bool {
-        // Basic check - would use HTTP client in production
-        !endpoint.is_empty()
+    /// Whether something is listening at this provider's endpoint.
+    ///
+    /// Was a stored `available` field set from `!endpoint.is_empty()`, which is
+    /// true of every endpoint this module builds -- each has a hard-coded
+    /// localhost default. The effect was that
+    /// `discover_openai_compatible_providers` reported vLLM, LM Studio,
+    /// LocalAI, Text Generation WebUI, Jan, GPT4All, Foundry and Llamafile all
+    /// running, on every machine, installed or not.
+    /// `ProviderRegistry::available_providers` filters on exactly this, so the
+    /// filter passed everything.
+    ///
+    /// Answered on demand rather than cached in a field, so a provider built
+    /// directly through [`Self::new`] reports the truth without the caller
+    /// having to know to refresh it. Repeat calls are cheap: see
+    /// [`super::endpoint_is_listening`], which memoises per endpoint and also
+    /// documents the limits of what a TCP probe establishes.
+    pub fn check_availability(&self) -> bool {
+        super::endpoint_is_listening(&self.endpoint)
     }
 
     /// Convert CSM session to OpenAI message format
@@ -227,7 +237,7 @@ impl ChatProvider for OpenAICompatProvider {
     }
 
     fn is_available(&self) -> bool {
-        self.available
+        self.check_availability()
     }
 
     fn sessions_path(&self) -> Option<PathBuf> {
@@ -303,6 +313,16 @@ pub fn discover_openai_compatible_providers() -> Vec<OpenAICompatProvider> {
     if let Some(provider) = discover_llamafile() {
         providers.push(provider);
     }
+
+    // Warm the probe cache concurrently. Construction does no I/O, so without
+    // this the first caller to ask each provider whether it is available pays
+    // the timeouts one after another -- the sum of eight, rather than the
+    // longest of them. On a machine running none of these that is the
+    // difference between roughly half a second and four.
+    use rayon::prelude::*;
+    providers.par_iter().for_each(|provider| {
+        let _ = super::endpoint_is_listening(&provider.endpoint);
+    });
 
     providers
 }

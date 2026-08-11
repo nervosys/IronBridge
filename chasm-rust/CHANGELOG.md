@@ -54,6 +54,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SAML login failed against any IdP that signs the assertion** — the status
+  code was read from the signature-*reduced* document. When the signature
+  covers the `<saml:Assertion>` rather than the whole response — Okta's and
+  Entra's default — `<samlp:Status>` sits outside the signed region and is gone
+  by then, so the status resolved to `Unknown` and every valid login was
+  rejected as "SAML authentication failed". Status is now read from the
+  envelope; the assertion still has to survive verification, which is what
+  actually authenticates. No test covered the step past `verify_and_reduce`,
+  which is why this went unseen; three now do.
+- **Every local LLM provider reported itself running** — `is_available` was
+  `!endpoint.is_empty()`, and every endpoint has a hard-coded localhost
+  default, so `chasm provider list` claimed Ollama, vLLM, LM Studio, LocalAI,
+  Text Generation WebUI, Jan, GPT4All, Foundry and Llamafile were all up on
+  every machine. Replaced with a TCP probe, memoised per endpoint and run
+  concurrently across providers. Measured on this machine: 9 available before,
+  0 after with nothing running, 1 after starting a listener on Ollama's port.
+  The integration test asserted the old behaviour in so many words — "should
+  return true since endpoint is not empty" — which is how it survived.
+- **The archival agent recommended archiving every session** —
+  `evaluate_session` pushed every enabled policy into `matched_policies`
+  without testing one condition, then returned `should_archive: true` with
+  `confidence: 0.85`, for any session id, without reading the session. `run`
+  archives anything above 0.7. `archive_session` incremented
+  `stats.total_archived` and returned `Ok(true)` while touching nothing. Both
+  now decline: the agent holds no database handle, so it cannot evaluate or
+  archive anything.
+- **Plugin hooks reported success without running** — `emit` returned
+  `success: true` and `"handled": true` for every matched hook, and there is no
+  plugin host to call handlers. Now returns the failure with an explanation.
+  `PluginRegistry::search` returned `Ok(vec![])` for a search it never
+  performed; "no matches" and "no search" are different answers.
+- **M365 Copilot fetch returned an empty conversation list** rather than an
+  error, so a harvest recorded a completed, empty fetch. No Graph request is
+  made; it now says so.
+- **PDF reports were HTML named `.pdf`** — no renderer is wired in, so the
+  bytes are HTML for downstream conversion. The extension is now
+  `.print.html`, which is what the file actually is.
 - **Swarm delegation was decided, paid for, and discarded** — `run_swarm` asked
   the coordinator which workers a task needed, then ran every worker anyway on
   the original input. Each worker is a model call, so the delegation step was

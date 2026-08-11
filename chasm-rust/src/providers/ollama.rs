@@ -67,7 +67,9 @@ impl OllamaProvider {
 
         let data_path = Self::find_ollama_data();
 
-        // Check if Ollama is running
+        // Warm the probe cache here so discovery pays the timeout once,
+        // alongside the other providers, rather than at the first render of a
+        // provider list. `is_available` re-reads it for free.
         let available = Self::check_availability(&endpoint);
 
         Some(Self {
@@ -122,26 +124,23 @@ impl OllamaProvider {
         None
     }
 
-    /// Check if Ollama API is available
+    /// Check if Ollama API is available.
+    ///
+    /// Was `!endpoint.is_empty()`, which reported Ollama installed and running
+    /// on every machine, since the endpoint always falls back to a localhost
+    /// default. See [`super::endpoint_is_listening`] for what the replacement
+    /// actually establishes.
     fn check_availability(endpoint: &str) -> bool {
-        // Try to connect to Ollama API
-        // We use a simple blocking check here
-        let _url = format!("{}/api/tags", endpoint);
-
-        // Use ureq for simple HTTP requests (add to Cargo.toml if needed)
-        // For now, we'll just check if the endpoint looks valid
-        // and assume it's available if configured
-        !endpoint.is_empty()
+        super::endpoint_is_listening(endpoint)
     }
 
-    /// List available models from Ollama
+    /// List available models from Ollama.
+    ///
+    /// Always empty: this would need a request to `/api/tags`, which is not
+    /// implemented. The empty list is indistinguishable from "Ollama is running
+    /// but has no models pulled", and callers should not read it as either --
+    /// it means "not asked".
     pub fn list_models(&self) -> Result<Vec<String>> {
-        if !self.available {
-            return Ok(Vec::new());
-        }
-
-        // This would make an HTTP request to /api/tags
-        // For now, return empty list - implement with reqwest/ureq later
         Ok(Vec::new())
     }
 
@@ -216,8 +215,11 @@ impl ChatProvider for OllamaProvider {
         "Ollama"
     }
 
+    /// Answered on demand, not read from the field set at discovery, so the
+    /// result is current whenever it is asked for. Memoised per endpoint by
+    /// [`super::endpoint_is_listening`], so repeat calls cost nothing.
     fn is_available(&self) -> bool {
-        self.available
+        Self::check_availability(&self.endpoint)
     }
 
     fn sessions_path(&self) -> Option<PathBuf> {

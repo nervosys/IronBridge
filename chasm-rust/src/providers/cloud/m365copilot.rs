@@ -250,18 +250,18 @@ impl CloudProvider for M365CopilotProvider {
             ));
         }
 
-        // Note: This is a placeholder since we need mutable self for ensure_client
-        // The actual implementation would need to be adjusted for the trait bounds
-        eprintln!("Note: Microsoft 365 Copilot requires:");
-        eprintln!(
-            "  1. Azure AD app registration with AiEnterpriseInteraction.Read.All permission"
-        );
-        eprintln!("  2. Admin consent for the permission");
-        eprintln!("  3. A valid access token");
-        eprintln!("  4. The target user's Azure AD object ID");
-
-        // Return empty for now - real implementation would make the API call
-        Ok(vec![])
+        // An error, not `Ok(vec![])`. An empty list says "this user has no
+        // Copilot conversations", which a harvest records as a completed,
+        // empty fetch. No request is made -- the trait takes `&self` while
+        // `ensure_client` needs `&mut self` -- so the only honest answer is
+        // that the fetch did not happen.
+        Err(anyhow!(
+            "Microsoft 365 Copilot fetching is not implemented: no request is made \
+             to the Graph API. Once it is, it will require an Azure AD app \
+             registration with AiEnterpriseInteraction.Read.All, admin consent for \
+             that permission, a valid access token, and the target user's Azure AD \
+             object ID."
+        ))
     }
 
     fn fetch_conversation(&self, id: &str) -> Result<CloudConversation> {

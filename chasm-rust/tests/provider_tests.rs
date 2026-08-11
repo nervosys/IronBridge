@@ -759,14 +759,48 @@ mod openai_compat_tests {
         assert_eq!(provider.name(), "vLLM");
     }
 
+    /// Availability reflects whether anything is listening.
+    ///
+    /// This test previously asserted the opposite, with the comment "should
+    /// return true since endpoint is not empty" -- it encoded the bug, which
+    /// is why the bug survived. `is_available` was a string emptiness check,
+    /// so every OpenAI-compatible provider reported itself running on every
+    /// machine.
+    ///
+    /// Both directions are exercised against a socket this test controls, so
+    /// the result does not depend on what happens to be installed.
     #[test]
     fn test_openai_compat_provider_is_available() {
-        let provider =
-            OpenAICompatProvider::new(ProviderType::Vllm, "vLLM", "http://localhost:8000");
+        use std::net::TcpListener;
 
-        // Should return true since endpoint is not empty
-        // Actual connectivity check is not done in tests
-        assert!(provider.is_available());
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let live = OpenAICompatProvider::new(
+            ProviderType::Vllm,
+            "vLLM",
+            format!("http://127.0.0.1:{port}"),
+        );
+        assert!(
+            live.is_available(),
+            "a listening endpoint should report available"
+        );
+
+        // Free a port, then ask about it: the address was valid a moment ago
+        // and nothing is there now, which is what a stopped server looks like.
+        let spare = TcpListener::bind("127.0.0.1:0").unwrap();
+        let dead_port = spare.local_addr().unwrap().port();
+        drop(spare);
+
+        let dead = OpenAICompatProvider::new(
+            ProviderType::Vllm,
+            "vLLM",
+            format!("http://127.0.0.1:{dead_port}"),
+        );
+        assert!(
+            !dead.is_available(),
+            "a closed endpoint must not report available"
+        );
     }
 
     #[test]

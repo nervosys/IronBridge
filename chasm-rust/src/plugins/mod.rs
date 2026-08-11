@@ -563,16 +563,19 @@ impl PluginManager {
 
             let start = std::time::Instant::now();
 
-            // In a real implementation, this would call the plugin's handler
-            // For now, we just record the invocation
+            // There is no plugin host: nothing loads a handler, so nothing can
+            // be called. This used to report `success: true` with
+            // `"handled": true` and no error, for a hook that was never
+            // invoked -- a plugin author watching the results would see every
+            // hook firing cleanly while their code never ran.
             let result = HookResult {
                 plugin_id: hook.plugin_id.clone(),
-                success: true,
-                data: Some(serde_json::json!({
-                    "event": event_name,
-                    "handled": true
-                })),
-                error: None,
+                success: false,
+                data: None,
+                error: Some(format!(
+                    "hook for `{event_name}` was matched but not executed: \
+                     this build has no plugin host, so handlers are never called"
+                )),
                 execution_ms: start.elapsed().as_millis() as u64,
             };
 
@@ -711,15 +714,22 @@ impl PluginRegistry {
         Self { registry_url }
     }
 
-    /// Search for plugins
+    /// Search for plugins.
+    ///
+    /// Always an error. There is no registry service behind `registry_url`,
+    /// and no request is made. Returning an empty `Ok` would be worse than
+    /// useless here: "no plugins match your query" and "no search happened"
+    /// are different answers, and only one of them should stop a caller from
+    /// looking further.
     pub async fn search(
         &self,
         _query: &str,
         _category: Option<PluginCategory>,
     ) -> Result<Vec<RegistryEntry>> {
-        // In a real implementation, this would make an HTTP request
-        // For now, return empty results
-        Ok(Vec::new())
+        Err(anyhow!(
+            "plugin registry search is not implemented; no request was made to {}",
+            self.registry_url
+        ))
     }
 
     /// Get plugin details

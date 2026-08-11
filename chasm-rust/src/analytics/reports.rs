@@ -438,14 +438,21 @@ impl ReportGenerator {
         html
     }
 
-    /// Generate PDF placeholder (actual PDF generation would require a PDF library)
+    /// Render the print-oriented HTML that `ReportFormat::Pdf` produces.
+    ///
+    /// This emits **HTML, not PDF**. Producing a real PDF needs a renderer
+    /// (`printpdf`, `wkhtmltopdf`, a headless browser) and none is wired in.
+    /// The output is intended to be handed to one of those, or printed to PDF
+    /// from a browser.
+    ///
+    /// `get_filename` gives it a `.print.html` extension for that reason: the
+    /// bytes are HTML, and calling the file `.pdf` produced something no PDF
+    /// reader would open.
     fn generate_pdf_placeholder(
         &self,
         request: &ReportRequest,
         dashboard: &TeamDashboard,
     ) -> String {
-        // In production, use a library like printpdf or wkhtmltopdf
-        // For now, return HTML that can be converted to PDF
         self.generate_html(request, dashboard)
     }
 
@@ -493,7 +500,10 @@ impl ReportGenerator {
             ReportFormat::Csv => "csv",
             ReportFormat::Json => "json",
             ReportFormat::Html => "html",
-            ReportFormat::Pdf => "pdf",
+            // Not "pdf". `ReportFormat::Pdf` produces HTML for downstream
+            // conversion -- see `generate_pdf_placeholder` -- and naming HTML
+            // bytes `.pdf` hands the user a file no reader will open.
+            ReportFormat::Pdf => "print.html",
         };
 
         let timestamp = Utc::now().format("%Y%m%d-%H%M%S");
