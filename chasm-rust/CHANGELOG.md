@@ -54,6 +54,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`SyncManager::sync_all` reported a successful sync it had not performed** —
+  it listed the remote, discarded the answer, stamped `last_full_sync` with the
+  current time and returned zero uploads, zero downloads, zero conflicts and no
+  errors. A caller using that timestamp to decide what still needed backing up
+  would have concluded that nothing did. It now reconciles tracked sessions
+  against the remote listing, sets each session's `SyncStatus`, and updates the
+  pending counters — and sets `last_full_sync` only when nothing is
+  outstanding, since that is the only case where the claim is true. It still
+  transfers nothing (it has no handle on session content); the doc comment says
+  so, and `uploaded`/`downloaded` are documented as counts of transfers
+  performed. A session that vanished remotely after a successful upload is
+  flagged `Conflict` rather than re-uploaded, so a deletion made from another
+  machine is not silently undone.
 - **WebSocket requests that got no reply at all** — `stream_start`,
   `stream_cancel`, `stream_input` and `agent_command` returned `None`, which put
   nothing on the wire. A client called `stream_start` and waited for a token

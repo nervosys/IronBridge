@@ -7,6 +7,7 @@
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -496,34 +497,140 @@ impl SyncManager {
         &self.state
     }
 
-    /// Sync all sessions
+    /// Reconcile tracked sessions against what the remote actually holds.
+    ///
+    /// # What this does, and what it does not
+    ///
+    /// It compares [`SyncState::sessions`] with `list_remote_sessions`, sets
+    /// each session's [`SyncStatus`], and updates the pending counters. It
+    /// **transfers nothing**: moving bytes needs the session content, which
+    /// this type has no handle on -- call [`Self::upload_session`] and
+    /// [`Self::download_session`] for the sessions this marks as pending.
+    ///
+    /// The returned `uploaded` and `downloaded` are therefore always zero. They
+    /// are counts of transfers performed, and no transfer is performed here.
+    ///
+    /// # Why it is written this way
+    ///
+    /// The previous version listed the remote, discarded the answer, stamped
+    /// `last_full_sync` with the current time, and returned a `SyncResult` of
+    /// all zeroes and no errors -- an unblemished report of a sync that never
+    /// happened. Anything trusting that timestamp to decide what still needed
+    /// backing up would have concluded, wrongly, that everything was safe.
+    ///
+    /// So `last_full_sync` is now set only when reconciliation finds nothing
+    /// outstanding, because that is the only circumstance in which "fully
+    /// synced, as of now" is a true statement.
     pub async fn sync_all(&mut self) -> Result<SyncResult> {
         let service = self
             .service
             .as_ref()
             .ok_or_else(|| anyhow!("Sync service not initialized"))?;
 
-        let result = SyncResult {
+        let remote = service.list_remote_sessions().await?;
+        let remote_by_id: HashMap<&str, &RemoteSessionInfo> = remote
+            .iter()
+            .map(|info| (info.session_id.as_str(), info))
+            .collect();
+
+        let mut conflicts = 0u32;
+        let mut pending_uploads = 0u32;
+        let mut pending_downloads = 0u32;
+
+        for local in &mut self.state.sessions {
+            match remote_by_id.get(local.session_id.as_str()) {
+                // Present on both sides. The hash we last saw for the remote
+                // is the pivot: if it still matches, only the local side can
+                // have moved; if it does not, the remote moved too, and a
+                // local change on top of that is a genuine conflict.
+                Some(info) => {
+                    local.remote_modified = Some(info.modified_at);
+
+                    let remote_unchanged = local.remote_hash.as_deref() == Some(&info.content_hash);
+                    let local_unchanged = local.local_hash == info.content_hash;
+
+                    local.status = match (remote_unchanged, local_unchanged) {
+                        (_, true) => SyncStatus::Synced,
+                        (true, false) => SyncStatus::PendingUpload,
+                        // Both sides moved since we last looked, or we have
+                        // never seen this remote copy at all. Either way the
+                        // hashes cannot say whose version should win, so this
+                        // refuses to pick rather than guessing and losing one.
+                        (false, false) => SyncStatus::Conflict,
+                    };
+
+                    local.remote_hash = Some(info.content_hash.clone());
+                }
+
+                // Absent remotely. Either it was never uploaded, or someone
+                // deleted it there. `remote_hash` distinguishes the two, and
+                // only the first is safe to resolve by uploading.
+                None => {
+                    local.status = if local.remote_hash.is_some() {
+                        SyncStatus::Conflict
+                    } else {
+                        SyncStatus::PendingUpload
+                    };
+                    local.remote_modified = None;
+                }
+            }
+
+            match local.status {
+                SyncStatus::PendingUpload => pending_uploads += 1,
+                SyncStatus::PendingDownload => pending_downloads += 1,
+                SyncStatus::Conflict => conflicts += 1,
+                _ => {}
+            }
+        }
+
+        // Remote sessions we have no local record of are downloads waiting to
+        // happen. Tracking them here is what makes them visible to a caller.
+        let known: HashSet<&str> = self
+            .state
+            .sessions
+            .iter()
+            .map(|s| s.session_id.as_str())
+            .collect();
+        let new_remote: Vec<_> = remote
+            .iter()
+            .filter(|info| !known.contains(info.session_id.as_str()))
+            .cloned()
+            .collect();
+
+        for info in new_remote {
+            pending_downloads += 1;
+            self.state.sessions.push(SessionSyncState {
+                session_id: info.session_id.clone(),
+                local_modified: 0,
+                remote_modified: Some(info.modified_at),
+                local_hash: String::new(),
+                remote_hash: Some(info.content_hash.clone()),
+                status: SyncStatus::PendingDownload,
+                last_sync_attempt: None,
+                last_sync_success: None,
+                last_error: None,
+            });
+        }
+
+        self.state.pending_uploads = pending_uploads;
+        self.state.pending_downloads = pending_downloads;
+        self.state.conflicts = conflicts;
+
+        if pending_uploads == 0 && pending_downloads == 0 && conflicts == 0 {
+            self.state.last_full_sync = Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+            );
+        }
+
+        Ok(SyncResult {
             uploaded: 0,
             downloaded: 0,
-            conflicts: 0,
+            conflicts,
             errors: Vec::new(),
-        };
-
-        // Get remote sessions
-        let _remote_sessions = service.list_remote_sessions().await?;
-
-        // Update state
-        self.state.last_full_sync = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs() as i64,
-        );
-
-        // TODO: Compare local and remote, perform sync operations
-
-        Ok(result)
+        })
     }
 
     /// Upload a specific session
@@ -593,5 +700,193 @@ mod tests {
         service.delete_remote_session("test-session").await.unwrap();
         let sessions = service.list_remote_sessions().await.unwrap();
         assert!(sessions.is_empty());
+    }
+
+    // =========================================================================
+    // Reconciliation
+    // =========================================================================
+
+    /// A manager wired to a real `LocalSyncService` over a temp directory.
+    fn manager_at(sync_dir: PathBuf) -> SyncManager {
+        let mut manager = SyncManager::new(CloudSyncConfig::default());
+        manager.service = Some(Box::new(LocalSyncService::new(sync_dir)));
+        manager
+    }
+
+    /// Whatever hash `LocalSyncService` would report for a file it holds.
+    ///
+    /// Derived rather than hard-coded: the scheme is `len-mtime`, and a test
+    /// that reimplements it would keep passing if the real one changed.
+    async fn remote_hash(manager: &SyncManager, id: &str) -> String {
+        manager
+            .service
+            .as_ref()
+            .unwrap()
+            .get_remote_metadata(id)
+            .await
+            .unwrap()
+            .expect("session should exist remotely")
+            .content_hash
+    }
+
+    fn tracked(id: &str, local_hash: &str, remote_hash: Option<&str>) -> SessionSyncState {
+        SessionSyncState {
+            session_id: id.to_string(),
+            local_modified: 0,
+            remote_modified: None,
+            local_hash: local_hash.to_string(),
+            remote_hash: remote_hash.map(str::to_string),
+            status: SyncStatus::NeverSynced,
+            last_sync_attempt: None,
+            last_sync_success: None,
+            last_error: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_sync_that_moved_nothing_does_not_claim_a_full_sync() {
+        // The regression this guards: `sync_all` used to stamp
+        // `last_full_sync` unconditionally and return a spotless result, so a
+        // caller deciding what still needed backing up would conclude that
+        // nothing did.
+        let temp = tempdir().unwrap();
+        let mut manager = manager_at(temp.path().join("sync"));
+        manager
+            .state
+            .sessions
+            .push(tracked("never-uploaded", "abc", None));
+
+        let result = manager.sync_all().await.unwrap();
+
+        assert_eq!(manager.state.pending_uploads, 1);
+        assert!(
+            manager.state.last_full_sync.is_none(),
+            "a sync with work outstanding must not record itself as complete"
+        );
+        assert_eq!(result.uploaded, 0, "nothing was transferred");
+    }
+
+    #[tokio::test]
+    async fn a_genuinely_settled_state_does_record_a_full_sync() {
+        let temp = tempdir().unwrap();
+        let dir = temp.path().join("sync");
+        let mut manager = manager_at(dir);
+
+        manager
+            .service
+            .as_ref()
+            .unwrap()
+            .upload_session("s1", b"contents")
+            .await
+            .unwrap();
+        let hash = remote_hash(&manager, "s1").await;
+        manager
+            .state
+            .sessions
+            .push(tracked("s1", &hash, Some(&hash)));
+
+        manager.sync_all().await.unwrap();
+
+        assert_eq!(manager.state.sessions[0].status, SyncStatus::Synced);
+        assert_eq!(manager.state.pending_uploads, 0);
+        assert!(manager.state.last_full_sync.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_remote_only_session_becomes_a_pending_download() {
+        let temp = tempdir().unwrap();
+        let mut manager = manager_at(temp.path().join("sync"));
+        manager
+            .service
+            .as_ref()
+            .unwrap()
+            .upload_session("theirs", b"data")
+            .await
+            .unwrap();
+
+        manager.sync_all().await.unwrap();
+
+        assert_eq!(manager.state.pending_downloads, 1);
+        assert_eq!(manager.state.sessions.len(), 1);
+        assert_eq!(manager.state.sessions[0].session_id, "theirs");
+        assert_eq!(
+            manager.state.sessions[0].status,
+            SyncStatus::PendingDownload
+        );
+        assert!(manager.state.last_full_sync.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_locally_edited_session_is_an_upload_not_a_conflict() {
+        let temp = tempdir().unwrap();
+        let mut manager = manager_at(temp.path().join("sync"));
+        manager
+            .service
+            .as_ref()
+            .unwrap()
+            .upload_session("s1", b"data")
+            .await
+            .unwrap();
+        let hash = remote_hash(&manager, "s1").await;
+
+        // Remote is where we left it; only our copy moved on.
+        manager
+            .state
+            .sessions
+            .push(tracked("s1", "locally-changed", Some(&hash)));
+
+        manager.sync_all().await.unwrap();
+
+        assert_eq!(manager.state.sessions[0].status, SyncStatus::PendingUpload);
+        assert_eq!(manager.state.conflicts, 0);
+    }
+
+    #[tokio::test]
+    async fn both_sides_moving_is_a_conflict_rather_than_a_guess() {
+        let temp = tempdir().unwrap();
+        let mut manager = manager_at(temp.path().join("sync"));
+        manager
+            .service
+            .as_ref()
+            .unwrap()
+            .upload_session("s1", b"their new data")
+            .await
+            .unwrap();
+
+        // We last saw a different remote hash, and our copy differs too.
+        manager
+            .state
+            .sessions
+            .push(tracked("s1", "our-version", Some("a-stale-remote-hash")));
+
+        let result = manager.sync_all().await.unwrap();
+
+        assert_eq!(manager.state.sessions[0].status, SyncStatus::Conflict);
+        assert_eq!(result.conflicts, 1);
+        assert!(manager.state.last_full_sync.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_session_deleted_remotely_is_a_conflict_not_a_re_upload() {
+        // We have uploaded this before -- `remote_hash` is set -- and now it is
+        // gone from the remote. Silently re-uploading would undo a deliberate
+        // deletion made from another machine.
+        let temp = tempdir().unwrap();
+        let mut manager = manager_at(temp.path().join("sync"));
+        manager
+            .state
+            .sessions
+            .push(tracked("was-there", "abc", Some("abc")));
+
+        manager.sync_all().await.unwrap();
+
+        assert_eq!(manager.state.sessions[0].status, SyncStatus::Conflict);
+        assert_eq!(manager.state.pending_uploads, 0);
+    }
+
+    #[tokio::test]
+    async fn reconciling_without_a_service_is_an_error() {
+        let mut manager = SyncManager::new(CloudSyncConfig::default());
+        assert!(manager.sync_all().await.is_err());
     }
 }
