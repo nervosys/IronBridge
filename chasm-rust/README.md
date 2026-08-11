@@ -293,6 +293,22 @@ chasm mcp serve
 
 ## 🏢 Enterprise Features
 
+> **⚠️ The three sections below describe code that is not compiled.**
+> `src/enterprise/` — multi-tenancy, compliance and white-labelling, 2,044
+> lines — is not declared in `lib.rs`, so it is not part of any build. It does
+> compile cleanly when declared, unlike the provider files that were deleted
+> for the same reason, but nothing calls it: there are no routes, no
+> persistence and no CLI surface. Read what follows as a design that exists in
+> source form, not as behaviour you can invoke.
+>
+> What *is* built and served under `--features enterprise` is SSO (`/sso`,
+> `/oidc`), audit logging (`/audit`) and retention policy (`/retention`) —
+> see [REST API](docs/api/rest.md). Audit and retention are separate
+> implementations in `src/api/`, not the ones in `src/enterprise/compliance.rs`.
+>
+> `tests/module_reachability.rs` holds these four files in an explicit list so
+> the gap cannot be forgotten, and fails on any *new* unreachable file.
+
 ### Multi-Tenancy
 
 Support for multiple isolated tenants with subscription tiers:

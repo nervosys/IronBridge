@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   if there is exactly one; an ambiguous target is an error rather than a guess.
 - **Llamafile discovery** — registered alongside the other OpenAI-compatible
   endpoints, honouring `LLAMAFILE_ENDPOINT`.
+- **`tests/module_reachability.rs`** — fails if any `.rs` file under `src/` is
+  not reachable from a crate root. A file no `mod` declaration names is never
+  read by rustc, so it drifts out of sync while `build`, `clippy` and `test`
+  all stay green. This has now happened three times (`api/handlers.rs`, the
+  seven provider files, and `src/enterprise/`); each was found by hand, months
+  late. Verified by planting an orphan and watching the test fail.
+
+### Known
+
+- **`src/enterprise/` is not compiled** — 2,044 lines of multi-tenancy,
+  white-labelling and compliance code, never declared in `lib.rs`. Unlike the
+  deleted provider files it compiles cleanly, so this is functioning work that
+  was simply never wired up; whether to connect it or drop it is a product
+  decision. Recorded in `KNOWN_ORPHANS` and flagged in the README, which
+  documented all three as features.
 
 ### Removed
 
