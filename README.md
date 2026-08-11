@@ -115,16 +115,20 @@ chasm harvest share <url>          # Import share link
 | **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
 | **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
 
-> **chasm-app is not finished.** Sessions, workspaces, chat and harvest
-> statistics come from the API. Five screens — Accounts, Developer, Protocols,
-> Research and SWE — still render built-in sample records (`sampleAccounts`,
-> `sampleMemories`, `samplePapers`, …) as though they were yours, and make no
+> **chasm-app is not finished.** Sessions, workspaces, chat, harvest
+> statistics and providers come from the API. Four screens — Accounts,
+> Developer, Protocols and Research — still render built-in sample records
+> (`sampleAccounts`, `samplePapers`, …) as though they were yours, and make no
 > API call at all. Their pull-to-refresh spins for a second and reloads
 > nothing.
 >
-> Two of them could be wired today: `/swe/*` is nine live endpoints and
-> `/providers` is two. Research, Datasets and Protocols have no backend to wire
-> to — no such paths exist in the server.
+> SWE could be wired today: `/swe/*` is nine live endpoints. Research,
+> Datasets, Protocols and Accounts have no backend to wire to — no such paths
+> exist in the server.
+>
+> On the Providers screen, the enable/disable switch is local to the session.
+> Persisting it needs `PUT /api/providers/{id}`, which the server does not
+> route; the app says so when you toggle rather than implying it saved.
 >
 > This does not affect the CLI, the API, chasm-web or chasm-desktop.
 

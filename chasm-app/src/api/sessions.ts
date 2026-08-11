@@ -255,43 +255,28 @@ export const messages = {
 // Providers API (matches csm-web)
 // =============================================================================
 
+/**
+ * The three provider endpoints the server actually routes.
+ *
+ * This object used to have nine methods. Six of them -- `get`, `create`,
+ * `update`, `delete`, `checkHealth` and `models` -- addressed paths the server
+ * has never registered, and `healthCheck` used `/api/providers/health`, which
+ * is not where health lives either. All seven would have returned 404. None
+ * had a caller, so nothing had ever exercised them.
+ *
+ * `chasm-web/src/api/client.ts` already carried the correction, with a comment
+ * spelling out the health path; it simply never reached this file. Keeping the
+ * two clients to the same three calls is what stops that from recurring.
+ */
 export const providers = {
     async list(): Promise<Provider[]> {
         const response = await apiClient.get('/api/providers');
         return unwrapResponse(response) || [];
     },
 
-    async get(id: string): Promise<Provider> {
-        const response = await apiClient.get(`/api/providers/${encodeURIComponent(id)}`);
-        return unwrapResponse(response);
-    },
-
-    async create(data: Partial<Provider>): Promise<Provider> {
-        const response = await apiClient.post('/api/providers', data);
-        return unwrapResponse(response);
-    },
-
-    async update(id: string, data: Partial<Provider>): Promise<Provider> {
-        const response = await apiClient.put(`/api/providers/${encodeURIComponent(id)}`, data);
-        return unwrapResponse(response);
-    },
-
-    async delete(id: string): Promise<void> {
-        await apiClient.delete(`/api/providers/${encodeURIComponent(id)}`);
-    },
-
-    async healthCheck(): Promise<ProviderHealth[]> {
-        const response = await apiClient.get('/api/providers/health');
-        return unwrapResponse(response) || [];
-    },
-
-    async checkHealth(id: string): Promise<ProviderHealth> {
-        const response = await apiClient.get(`/api/providers/${encodeURIComponent(id)}/health`);
-        return unwrapResponse(response);
-    },
-
-    async models(id: string): Promise<string[]> {
-        const response = await apiClient.get(`/api/providers/${encodeURIComponent(id)}/models`);
+    /** Served as `/api/system/providers/health`; there is no `/api/providers/health`. */
+    async health(): Promise<ProviderHealth[]> {
+        const response = await apiClient.get('/api/system/providers/health');
         return unwrapResponse(response) || [];
     },
 

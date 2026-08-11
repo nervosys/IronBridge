@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { providers as providersApi } from '../api/sessions';
 
 interface Provider {
     id: string;
@@ -26,94 +27,82 @@ interface Provider {
     apiEndpoint?: string;
     models: string[];
     enabled: boolean;
-    quotaUsed?: number;
-    quotaLimit?: number;
 }
 
-const defaultProviders: Provider[] = [
-    {
-        id: 'openai',
-        name: 'OpenAI',
-        type: 'cloud',
-        icon: '🤖',
-        status: 'connected',
-        apiEndpoint: 'https://api.openai.com/v1',
-        models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1-preview', 'o1-mini'],
-        enabled: true,
-        quotaUsed: 45,
-        quotaLimit: 100,
-    },
-    {
-        id: 'anthropic',
-        name: 'Anthropic',
-        type: 'cloud',
-        icon: '🧠',
-        status: 'connected',
-        apiEndpoint: 'https://api.anthropic.com/v1',
-        models: ['claude-3-5-sonnet', 'claude-3-opus', 'claude-3-haiku'],
-        enabled: true,
-        quotaUsed: 23,
-        quotaLimit: 50,
-    },
-    {
-        id: 'google',
-        name: 'Google AI',
-        type: 'cloud',
-        icon: '✨',
-        status: 'configured',
-        apiEndpoint: 'https://generativelanguage.googleapis.com/v1',
-        models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
-        enabled: true,
-    },
-    {
-        id: 'azure',
-        name: 'Azure OpenAI',
-        type: 'cloud',
-        icon: '☁️',
-        status: 'disconnected',
-        models: ['gpt-4', 'gpt-35-turbo'],
-        enabled: false,
-    },
-    {
-        id: 'ollama',
-        name: 'Ollama',
-        type: 'local',
-        icon: '🦙',
-        status: 'connected',
-        apiEndpoint: 'http://localhost:11434',
-        models: ['llama3.2', 'codellama', 'mistral', 'phi3'],
-        enabled: true,
-    },
-    {
-        id: 'lmstudio',
-        name: 'LM Studio',
-        type: 'local',
-        icon: '🎛️',
-        status: 'configured',
-        apiEndpoint: 'http://localhost:1234/v1',
-        models: ['local-model'],
-        enabled: false,
-    },
-    {
-        id: 'llamacpp',
-        name: 'llama.cpp',
-        type: 'local',
-        icon: '⚡',
-        status: 'disconnected',
-        apiEndpoint: 'http://localhost:8080',
-        models: [],
-        enabled: false,
-    },
-];
+
+/** Provider ids the server reports that run on the user's own machine. */
+const LOCAL_PROVIDER_TYPES = new Set(['ollama', 'lm-studio', 'cursor', 'copilot']);
+
+/**
+ * Fold a server provider and its health row into what this screen renders.
+ *
+ * `status` comes from the health endpoint, never from a guess: the server
+ * distinguishes connected / disconnected / error / unknown, and `unknown` is a
+ * real answer here -- it is what a cloud provider reports when the server holds
+ * no credentials for it and will not pretend to know.
+ */
+function toScreenProvider(
+    p: { id: string; name: string; type?: string; enabled?: boolean; base_url?: string; models?: string[] },
+    health: Map<string, string>
+): Provider {
+    const serverType = (p.type ?? '').toLowerCase();
+    const isLocal =
+        LOCAL_PROVIDER_TYPES.has(serverType) ||
+        /localhost|127\.0\.0\.1|\[::1\]/.test(p.base_url ?? '');
+
+    const reported = health.get(p.id);
+    const status: Provider['status'] =
+        reported === 'connected' ? 'connected' : reported === 'error' ? 'disconnected' : 'configured';
+
+    return {
+        id: p.id,
+        name: p.name,
+        type: isLocal ? 'local' : 'cloud',
+        icon: isLocal ? '💻' : '☁️',
+        status,
+        apiEndpoint: p.base_url,
+        models: p.models ?? [],
+        enabled: p.enabled ?? false,
+        // No quota fields: the server reports none, and the numbers that used
+        // to sit here (45 of 100, and so on) were invented.
+    };
+}
 
 export function ProvidersScreen() {
     const { colors, isDark } = useTheme();
-    const [providers, setProviders] = useState<Provider[]>(defaultProviders);
+    // Was seeded from `defaultProviders`, a hard-coded list that declared
+    // OpenAI "connected" with 45 of 100 quota used on a machine that had never
+    // contacted it. Starts empty now and fills from `/api/providers`.
+    const [providers, setProviders] = useState<Provider[]>([]);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [filterType, setFilterType] = useState<'all' | 'cloud' | 'local'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+
+    const loadProviders = useCallback(async () => {
+        try {
+            const [list, healthRows] = await Promise.all([
+                providersApi.list(),
+                // Health is advisory: a server that lists providers but cannot
+                // report health should still render the list.
+                providersApi.health().catch(() => []),
+            ]);
+            const health = new Map(
+                healthRows.map((h: any) => [h.providerId ?? h.provider_id, h.status])
+            );
+            setProviders(list.map((p: any) => toScreenProvider(p, health)));
+            setLoadError(null);
+        } catch (err) {
+            setProviders([]);
+            setLoadError(err instanceof Error ? err.message : 'Could not reach the Chasm server');
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadProviders();
+    }, [loadProviders]);
 
     // Filter providers
     const filteredProviders = useMemo(() => {
@@ -133,25 +122,63 @@ export function ProvidersScreen() {
         localCount: providers.filter(p => p.type === 'local').length,
     }), [providers]);
 
+    /**
+     * Local only -- this does not persist.
+     *
+     * Enabling a provider server-side would need `PUT /api/providers/{id}`,
+     * which the server does not route. The switch therefore survives until the
+     * next load and no further, and the toast says so rather than letting the
+     * user believe a setting was saved.
+     */
     const handleToggleProvider = (id: string) => {
+        const provider = providers.find(p => p.id === id);
         setProviders(prev => prev.map(p =>
             p.id === id ? { ...p, enabled: !p.enabled } : p
         ));
+        if (provider) {
+            Alert.alert(
+                'Not saved',
+                `${provider.name} was toggled for this session only. Chasm has no endpoint ` +
+                `for changing provider settings yet, so this resets when the screen reloads.`
+            );
+        }
     };
 
-    const handleTestConnection = (provider: Provider) => {
-        Alert.alert('Testing Connection', `Testing connection to ${provider.name}...`);
-        setTimeout(() => {
+    // Was: show "Testing...", wait a second, then mark the provider connected
+    // unconditionally. It tested nothing and could not fail, so the green dot
+    // afterwards meant only that a second had passed.
+    const handleTestConnection = async (provider: Provider) => {
+        try {
+            const result = await providersApi.test(provider.id);
             setProviders(prev => prev.map(p =>
-                p.id === provider.id ? { ...p, status: 'connected' } : p
+                p.id === provider.id
+                    ? { ...p, status: result.success ? 'connected' : 'disconnected' }
+                    : p
             ));
-        }, 1000);
+            Alert.alert(
+                result.success ? 'Connected' : 'Connection failed',
+                result.success
+                    ? `${provider.name} answered in ${result.latency} ms.`
+                    : `${provider.name} did not answer.`
+            );
+        } catch (err) {
+            setProviders(prev => prev.map(p =>
+                p.id === provider.id ? { ...p, status: 'disconnected' } : p
+            ));
+            Alert.alert(
+                'Connection failed',
+                err instanceof Error ? err.message : `Could not test ${provider.name}.`
+            );
+        }
     };
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        // Simulate refresh
-        setTimeout(() => setIsRefreshing(false), 1000);
+        try {
+            await loadProviders();
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const getStatusColor = (status: Provider['status']) => {
@@ -224,6 +251,20 @@ export function ProvidersScreen() {
                     <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
                 }
             >
+                {/* An empty list and a failed request look identical once
+                    rendered, so they are told apart here rather than both
+                    reading as "you have no providers". */}
+                {filteredProviders.length === 0 && (
+                    <View style={[styles.providerCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={{ color: colors.textSecondary }}>
+                            {loadError
+                                ? `Providers unavailable: ${loadError}`
+                                : providers.length === 0
+                                    ? 'No providers configured on the server.'
+                                    : 'No providers match this filter.'}
+                        </Text>
+                    </View>
+                )}
                 {filteredProviders.map((provider) => (
                     <TouchableOpacity
                         key={provider.id}
@@ -276,25 +317,11 @@ export function ProvidersScreen() {
                             </View>
                         )}
 
-                        {/* Quota */}
-                        {provider.quotaUsed !== undefined && provider.quotaLimit && (
-                            <View style={styles.quotaSection}>
-                                <View style={styles.quotaHeader}>
-                                    <Text style={[styles.quotaLabel, { color: colors.textSecondary }]}>Quota</Text>
-                                    <Text style={[styles.quotaValue, { color: colors.text }]}>
-                                        ${provider.quotaUsed} / ${provider.quotaLimit}
-                                    </Text>
-                                </View>
-                                <View style={[styles.quotaBar, { backgroundColor: colors.background }]}>
-                                    <View
-                                        style={[styles.quotaFill, {
-                                            width: `${(provider.quotaUsed / provider.quotaLimit) * 100}%`,
-                                            backgroundColor: provider.quotaUsed / provider.quotaLimit > 0.8 ? '#ef4444' : colors.primary,
-                                        }]}
-                                    />
-                                </View>
-                            </View>
-                        )}
+                        {/* No quota bar. The server reports no quota for any
+                            provider, so this could only ever have rendered the
+                            invented "45 / 100" the fixture carried. If quota
+                            is added server-side, add it to `toScreenProvider`
+                            and bring the bar back with it. */}
 
                         {/* Actions */}
                         <View style={styles.cardActions}>
@@ -529,29 +556,6 @@ const styles = StyleSheet.create({
     moreModels: {
         fontSize: 11,
         alignSelf: 'center',
-    },
-    quotaSection: {
-        marginTop: 12,
-    },
-    quotaHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 6,
-    },
-    quotaLabel: {
-        fontSize: 11,
-    },
-    quotaValue: {
-        fontSize: 11,
-        fontWeight: '600',
-    },
-    quotaBar: {
-        height: 4,
-        borderRadius: 2,
-    },
-    quotaFill: {
-        height: '100%',
-        borderRadius: 2,
     },
     cardActions: {
         flexDirection: 'row',
