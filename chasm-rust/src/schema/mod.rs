@@ -25,8 +25,9 @@
 //!
 //! ## Usage
 //!
-//! ```rust,ignore
-//! use csm::schema::{SchemaRegistry, SchemaVersion};
+//! ```
+//! use chasm::schema::SchemaRegistry;
+//! use std::path::Path;
 //!
 //! let registry = SchemaRegistry::new();
 //!
@@ -35,12 +36,17 @@
 //!     println!("{}: {} fields", schema.id(), schema.field_count());
 //! }
 //!
-//! // Detect schema for a workspace
-//! let detected = registry.detect_schema("/path/to/workspace")?;
+//! // Detect the schema of a workspace directory. Note that an absent
+//! // directory is not an error here -- it reports no confident match, which
+//! // is a different thing from failing.
+//! let detected = registry.detect_schema_from_workspace(Path::new("/nonexistent"))?;
+//! println!("{detected:?}");
 //!
 //! // Query the ontology
 //! let ontology = registry.ontology();
 //! let mappings = ontology.cross_provider_mappings("copilot-jsonl-v1", "cursor-v1");
+//! println!("{} mapping(s)", mappings.len());
+//! # Ok::<(), anyhow::Error>(())
 //! ```
 
 mod ontology;

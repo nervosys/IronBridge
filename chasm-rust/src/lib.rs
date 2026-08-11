@@ -22,18 +22,22 @@
 //!
 //! The `Agency` module provides a Rust-native framework for building AI agents:
 //!
-//! ```rust,ignore
-//! use csm::Agency::{Agent, AgentBuilder, Runtime, Tool};
+//! ```no_run
+//! use chasm::agency::{AgentBuilder, BuiltinTools, Runtime};
 //!
+//! # async fn example() -> anyhow::Result<()> {
 //! let agent = AgentBuilder::new("assistant")
 //!     .instruction("You are a helpful assistant.")
 //!     .model("gemini-2.5-flash")
-//!     .tool(Tool::web_search())
+//!     .tool(BuiltinTools::web_search())
 //!     .build();
 //!
-//! let runtime = Runtime::new()?;
+//! let mut runtime = Runtime::new()?;
 //! runtime.register_agent(agent);
-//! let result = runtime.run("assistant", "Hello!").await?;
+//! let result = runtime.run("assistant", "Hello!", None).await?;
+//! println!("{}", result.response);
+//! # Ok(())
+//! # }
 //! ```
 
 // Library modules export public APIs for external use - suppress dead_code warnings

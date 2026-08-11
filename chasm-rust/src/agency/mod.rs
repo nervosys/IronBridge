@@ -18,17 +18,23 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
-//! use csm::Agency::{Agent, AgentBuilder, Tool, Runtime};
+//! ```no_run
+//! use chasm::agency::{AgentBuilder, BuiltinTools, Runtime};
 //!
+//! # async fn example() -> anyhow::Result<()> {
 //! let search_agent = AgentBuilder::new("researcher")
 //!     .model("gemini-2.5-flash")
 //!     .instruction("You are a helpful research assistant.")
-//!     .tool(Tool::web_search())
+//!     .tool(BuiltinTools::web_search())
 //!     .build();
 //!
-//! let runtime = Runtime::new();
-//! let result = runtime.run(&search_agent, "What is quantum computing?").await?;
+//! // Agents are registered by name and then addressed by that name --
+//! // `run` does not take the agent itself.
+//! let mut runtime = Runtime::new()?;
+//! runtime.register_agent(search_agent);
+//! let result = runtime.run("researcher", "What is quantum computing?", None).await?;
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod agent;

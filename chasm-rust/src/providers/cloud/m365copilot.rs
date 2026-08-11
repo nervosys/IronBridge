@@ -29,17 +29,21 @@
 //!
 //! ## Example Usage
 //!
-//! ```rust,ignore
-//! use csm::providers::cloud::m365copilot::M365CopilotProvider;
-//! use csm::providers::cloud::CloudProvider;
+//! ```no_run
+//! use chasm::providers::cloud::m365copilot::M365CopilotProvider;
+//! use chasm::providers::cloud::{CloudProvider, FetchOptions};
 //!
+//! # fn example(access_token: String) -> anyhow::Result<()> {
 //! // Create provider with Azure AD access token
 //! let mut provider = M365CopilotProvider::new(Some(access_token));
 //! provider.set_user_id("user-uuid".to_string());
 //!
-//! // List conversations
+//! // Note: `list_conversations` currently returns an error -- no Graph
+//! // request is made. See its documentation.
 //! let options = FetchOptions::default();
 //! let conversations = provider.list_conversations(&options)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::common::{

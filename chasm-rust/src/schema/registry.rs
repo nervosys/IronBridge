@@ -22,7 +22,9 @@ use std::path::Path;
 
 /// Central registry of all known AI chat provider schemas.
 ///
-/// ```rust,ignore
+/// ```
+/// use chasm::schema::SchemaRegistry;
+///
 /// let registry = SchemaRegistry::new();
 ///
 /// // List all schemas
@@ -30,8 +32,11 @@ use std::path::Path;
 ///     println!("{}: {} fields", schema.id(), schema.field_count());
 /// }
 ///
-/// // Detect schema for a workspace
-/// let detected = registry.detect_schema("/path/to/session.jsonl")?;
+/// // Detect the schema of a session file. There are two entry points --
+/// // `detect_schema_from_file` for a single file, `detect_schema_from_workspace`
+/// // for a directory -- and both return an error when nothing matches.
+/// let detected = registry.detect_schema_from_file(std::path::Path::new("session.jsonl"));
+/// assert!(detected.is_err(), "no such file here");
 /// ```
 pub struct SchemaRegistry {
     /// All registered schemas indexed by their version ID
