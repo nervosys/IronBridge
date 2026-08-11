@@ -551,9 +551,21 @@ chasm doctor --fix
 
 | Command | Description |
 |---|---|
-| `chasm telemetry status` | Show telemetry status |
-| `chasm telemetry enable` | Enable anonymous telemetry |
-| `chasm telemetry disable` | Disable telemetry |
+| `chasm telemetry status` | Show status and installation ID (alias for `info`) |
+| `chasm telemetry enable` | Allow local recording (alias for `opt-in`) |
+| `chasm telemetry disable` | Refuse it (alias for `opt-out`) |
+| `chasm telemetry record` | Write one record locally |
+| `chasm telemetry query` | Read the records back |
+| `chasm telemetry export` | Export records as JSON or CSV |
+| `chasm telemetry config` | Set **your own** remote endpoint and API key |
+| `chasm telemetry sync` | POST recorded rows to that endpoint |
 
 !!! info "Privacy"
-    Telemetry is opt-in and anonymous. No session content is ever transmitted.
+    Chasm has no built-in analytics endpoint and sends nothing on its own.
+    Nothing is recorded automatically either — `chasm telemetry record` is
+    the only writer, with the data you pass it, into a local JSONL file.
+
+    `sync` transmits, but only after you have supplied an endpoint and API
+    key via `config`, and only to the destination you named. There is no
+    Nervosys default. Separately, setting `OTEL_EXPORTER_OTLP_ENDPOINT`
+    exports traces to that collector — also one you chose.

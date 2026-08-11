@@ -421,17 +421,19 @@ impl TelemetryCollector {
         &self.config.installation_id
     }
 
-    /// Flush events (in future: send to telemetry endpoint)
-    /// Currently just clears the buffer - actual sending will be implemented later
+    /// Discard the buffered events.
+    ///
+    /// This is not a stub awaiting a backend. There is no Nervosys ingest
+    /// endpoint, and adding one would be a decision about what leaves a user's
+    /// machine, not a matter of finishing an implementation. Until such a
+    /// decision is made and disclosed, dropping the buffer is the correct
+    /// behaviour, and `flush` is honest about being a drop.
+    ///
+    /// Note that nothing populates this buffer either: no caller in the tree
+    /// invokes [`Self::track`] or [`Self::track_command`]. What users can
+    /// record deliberately, and send to an endpoint of their own choosing,
+    /// lives in `TelemetryStore` further down this file.
     pub fn flush(&mut self) -> Result<()> {
-        if !self.is_enabled() || self.events.is_empty() {
-            return Ok(());
-        }
-
-        // TODO: In future versions, send events to telemetry endpoint
-        // For now, we just clear the buffer
-        // The endpoint and sending logic will be added when the backend is ready
-
         self.events.clear();
         Ok(())
     }
@@ -444,31 +446,47 @@ impl Drop for TelemetryCollector {
     }
 }
 
-/// What data is collected (for user information)
+/// What this build actually does with telemetry.
+///
+/// This text used to describe an analytics pipeline that does not exist. It
+/// announced that Chasm "collects anonymous usage data", listed commands,
+/// provider types, session counts and error types as things it gathered, and
+/// framed the choice as opting out of collection.
+///
+/// None of that happened. [`TelemetryCollector`] has no callers anywhere in the
+/// tree -- nothing ever calls `track_command` -- and its `flush` discards the
+/// buffer rather than sending it. There is no default endpoint, so even a
+/// populated buffer had nowhere to go. A privacy notice that overstates
+/// collection is still a false privacy notice, and it invites users to opt out
+/// of something that was never running.
 pub const TELEMETRY_INFO: &str = r#"
-Chasm collects anonymous usage data to help improve the product.
+Chasm sends nothing anywhere on its own. There is no Nervosys endpoint
+built in, and no data leaves this machine unless you configure a
+destination yourself.
 
-WHAT WE COLLECT:
-  • Commands used (e.g., 'harvest', 'merge', 'export')
-  • Provider types detected (e.g., 'copilot', 'cursor', 'ollama')
-  • Session counts (numbers only, no content)
-  • Error types (no personal details or file paths)
-  • Anonymous installation ID (randomly generated UUID)
+WHAT IS RECORDED AUTOMATICALLY:
+  • Nothing. Records are written only by `chasm telemetry record`,
+    with the category, event and data you pass to it.
 
-WHAT WE DO NOT COLLECT:
-  • Chat messages or content
-  • File paths or project names
-  • Personal information
-  • API keys or credentials
-  • IP addresses (beyond what's needed for HTTPS)
+WHAT IS SENT:
+  • Nothing, until you run `chasm telemetry config` to set your own
+    endpoint and API key and enable remote sync. Then, and only when
+    you run `chasm telemetry sync`, your recorded rows are POSTed to
+    that endpoint -- yours, not ours.
+  • Separately, if OTEL_EXPORTER_OTLP_ENDPOINT is set in your
+    environment, traces go to that collector. Also yours.
+
+WHERE IT LIVES:
+  • Records are plain JSONL under your local config directory. Read
+    them with `chasm telemetry query`, or delete the file.
 
 Your installation ID: {installation_id}
 Status: {status}
 
-Manage your preference:
-  chasm telemetry opt-in   - Enable data collection (default)
-  chasm telemetry opt-out  - Disable data collection
-  chasm telemetry reset    - Generate new anonymous ID
+The status below governs whether local records are written at all:
+  chasm telemetry opt-in   - Allow local recording (default)
+  chasm telemetry opt-out  - Refuse it
+  chasm telemetry reset    - Generate a new installation ID
 "#;
 
 // =============================================================================

@@ -21,8 +21,12 @@ pub fn telemetry_opt_in() -> Result<()> {
         );
     } else {
         config.opt_in()?;
+        // Deliberately not "thank you for helping improve Chasm". Nothing is
+        // sent to Nervosys -- this flag only permits `chasm telemetry record`
+        // to write to a local file. Thanking someone for data you do not
+        // receive misrepresents what they just agreed to.
         println!(
-            "{} Telemetry {} - thank you for helping improve Chasm!",
+            "{} Local telemetry recording {}",
             "[OK]".green().bold(),
             "enabled".green().bold()
         );
@@ -30,7 +34,8 @@ pub fn telemetry_opt_in() -> Result<()> {
 
     println!();
     println!(
-        "To see what data is collected, run: {}",
+        "Records stay on this machine unless you configure your own endpoint. \
+         For details, run: {}",
         "chasm telemetry info".cyan()
     );
 

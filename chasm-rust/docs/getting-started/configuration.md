@@ -81,10 +81,21 @@ chasm harvest run --providers ollama,lmstudio
 
 ## Telemetry
 
-Telemetry is **opt-in** and anonymous. No session content is ever transmitted.
+Chasm has **no built-in analytics endpoint** and transmits nothing on its own.
+Nothing is recorded automatically: `chasm telemetry record` is the only writer,
+and it records what you pass it, into a local JSONL file.
+
+The setting below controls whether that local recording is permitted at all.
 
 ```bash
 chasm telemetry status   # Check current status
-chasm telemetry enable   # Enable
-chasm telemetry disable  # Disable
+chasm telemetry enable   # Allow local recording
+chasm telemetry disable  # Refuse it
+```
+
+To send those records anywhere, you must name the destination yourself:
+
+```bash
+chasm telemetry config --endpoint https://your-collector.example --api-key ...
+chasm telemetry sync     # POSTs to the endpoint you configured, nowhere else
 ```

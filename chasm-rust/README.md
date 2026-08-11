@@ -212,7 +212,7 @@ chasm register recursive --force /path/to/projects
 | `chasm register trim --all`   | Trim sessions over 10MB to keep recent requests        |
 | `chasm shard session <file>`  | Split a session into linked shards by request count    |
 | `chasm shard workspace`       | Shard all oversized sessions in a workspace            |
-| `chasm telemetry`             | Manage anonymous usage data collection                 |
+| `chasm telemetry`             | Record events locally; nothing is sent without your own endpoint |
 
 ### Server
 
