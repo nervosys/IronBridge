@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   if there is exactly one; an ambiguous target is an error rather than a guess.
 - **Llamafile discovery** — registered alongside the other OpenAI-compatible
   endpoints, honouring `LLAMAFILE_ENDPOINT`.
-- **`tests/module_reachability.rs`** — fails if any `.rs` file under `src/` is
-  not reachable from a crate root. A file no `mod` declaration names is never
+- **`tests/module_reachability.rs`** — fails if any `.rs` file in any of the
+  three crates (`chasm-rust`, `chasm-sso`, `chasm-desktop`) is not reachable
+  from a crate root. A file no `mod` declaration names is never
   read by rustc, so it drifts out of sync while `build`, `clippy` and `test`
   all stay green. This has now happened three times (`api/handlers.rs`, the
   seven provider files, and `src/enterprise/`); each was found by hand, months

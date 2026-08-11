@@ -22,6 +22,13 @@
 //! The first two were found by hand, long after the fact. The third was found
 //! by the first run of this test. That is the argument for it.
 //!
+//! # Scope
+//!
+//! All three crates -- `chasm-rust`, `chasm-sso` and `chasm-desktop`. The other
+//! two were clean when they were added here, and are covered so they stay that
+//! way; this failure mode is not a property of a large crate, only of nobody
+//! looking.
+//!
 //! # What it does not check
 //!
 //! Reachability, not usefulness. A module that is declared but whose functions
@@ -32,11 +39,22 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 
-/// The crate roots. Every other module hangs off one of these.
+/// Every crate in the repository, and the roots each one compiles from.
 ///
-/// `main.rs` and `mcp/main.rs` are the `[[bin]]` targets declared in
-/// `Cargo.toml`; keep this list in step with that section.
-const ROOTS: &[&str] = &["src/lib.rs", "src/main.rs", "src/mcp/main.rs"];
+/// Paths are relative to the repository root. The roots are the `[lib]` and
+/// `[[bin]]` targets in each `Cargo.toml`; keep them in step with that file.
+///
+/// `chasm-sso` and `chasm-desktop` were clean when this test was extended to
+/// cover them, and are listed so they stay that way. Rot of this kind is not a
+/// property of a large crate -- it is a property of nobody looking.
+const CRATES: &[(&str, &[&str])] = &[
+    (
+        "chasm-rust",
+        &["src/lib.rs", "src/main.rs", "src/mcp/main.rs"],
+    ),
+    ("chasm-sso", &["src/lib.rs"]),
+    ("chasm-desktop", &["src/main.rs"]),
+];
 
 /// Orphans that are known, deliberate, and waiting on a decision.
 ///
@@ -54,14 +72,22 @@ const ROOTS: &[&str] = &["src/lib.rs", "src/main.rs", "src/mcp/main.rs"];
 ///
 /// Note that `README.md` documents all three as Enterprise Features.
 const KNOWN_ORPHANS: &[&str] = &[
-    "src/enterprise/mod.rs",
-    "src/enterprise/compliance.rs",
-    "src/enterprise/multitenancy.rs",
-    "src/enterprise/whitelabel.rs",
+    "chasm-rust/src/enterprise/mod.rs",
+    "chasm-rust/src/enterprise/compliance.rs",
+    "chasm-rust/src/enterprise/multitenancy.rs",
+    "chasm-rust/src/enterprise/whitelabel.rs",
 ];
 
-fn crate_dir() -> PathBuf {
+/// The repository root, reached from this crate's manifest directory.
+///
+/// The test lives in `chasm-rust` but covers every crate, because there is no
+/// workspace `Cargo.toml` to hang a shared test off and one guard that sees
+/// everything beats three that each see a third.
+fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("chasm-rust has a parent directory")
+        .to_path_buf()
 }
 
 /// Strip `//` comments and the contents of string literals.
@@ -163,19 +189,22 @@ fn resolve(parent: &Path, name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Walk out from the roots, collecting every file the compiler would read.
+/// Walk out from every crate's roots, collecting the files rustc would read.
 fn reachable_files() -> HashSet<PathBuf> {
-    let root_dir = crate_dir();
+    let repo = repo_root();
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut queue: VecDeque<PathBuf> = VecDeque::new();
 
-    for root in ROOTS {
-        let path = root_dir.join(root);
-        assert!(
-            path.is_file(),
-            "declared crate root {root} does not exist; ROOTS is out of step with Cargo.toml"
-        );
-        queue.push_back(path);
+    for (krate, roots) in CRATES {
+        for root in *roots {
+            let path = repo.join(krate).join(root);
+            assert!(
+                path.is_file(),
+                "declared root {krate}/{root} does not exist; \
+                 CRATES is out of step with {krate}/Cargo.toml"
+            );
+            queue.push_back(path);
+        }
     }
 
     while let Some(file) = queue.pop_front() {
@@ -200,7 +229,7 @@ fn reachable_files() -> HashSet<PathBuf> {
     seen
 }
 
-/// Every `.rs` file physically present under `src/`.
+/// Every `.rs` file physically present under any crate's `src/`.
 fn files_on_disk() -> HashSet<PathBuf> {
     fn walk(dir: &Path, out: &mut HashSet<PathBuf>) {
         for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display())) {
@@ -213,9 +242,22 @@ fn files_on_disk() -> HashSet<PathBuf> {
         }
     }
 
+    let repo = repo_root();
     let mut out = HashSet::new();
-    walk(&crate_dir().join("src"), &mut out);
+    for (krate, _) in CRATES {
+        walk(&repo.join(krate).join("src"), &mut out);
+    }
     out
+}
+
+/// A repo-relative, forward-slashed path, so failure messages and the
+/// `KNOWN_ORPHANS` entries they tell you to write look the same on every OS.
+fn display_path(path: &Path) -> String {
+    path.strip_prefix(repo_root())
+        .unwrap_or(path)
+        .display()
+        .to_string()
+        .replace('\\', "/")
 }
 
 #[test]
@@ -223,25 +265,18 @@ fn every_source_file_is_compiled() {
     let reachable = reachable_files();
     let on_disk = files_on_disk();
 
-    let root = crate_dir();
     let known: HashSet<&str> = KNOWN_ORPHANS.iter().copied().collect();
 
     let mut orphans: Vec<String> = on_disk
         .difference(&reachable)
-        .map(|p| {
-            p.strip_prefix(&root)
-                .unwrap_or(p)
-                .display()
-                .to_string()
-                .replace('\\', "/")
-        })
+        .map(|p| display_path(p))
         .filter(|p| !known.contains(p.as_str()))
         .collect();
     orphans.sort();
 
     assert!(
         orphans.is_empty(),
-        "{} file(s) under src/ are never compiled -- no `mod` declaration reaches them, \
+        "{} source file(s) are never compiled -- no `mod` declaration reaches them, \
          so rustc has never checked a line of them:\n  {}\n\n\
          Either declare them in the parent module or delete them. A file the compiler \
          cannot see will drift out of sync with the code around it and nothing will say so.",
@@ -255,11 +290,11 @@ fn the_holding_pen_does_not_outlive_its_contents() {
     // Once an orphan is wired in or deleted, its entry here is stale and would
     // silently excuse a future file of the same name. Resolving one means
     // shortening this list.
-    let root = crate_dir();
+    let repo = repo_root();
     let reachable = reachable_files();
 
     for entry in KNOWN_ORPHANS {
-        let path = root.join(entry);
+        let path = repo.join(entry);
         assert!(
             path.is_file(),
             "{entry} is listed in KNOWN_ORPHANS but no longer exists -- remove the entry"
