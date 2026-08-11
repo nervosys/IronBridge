@@ -292,6 +292,78 @@ export async function getProviders(): Promise<Provider[]> {
 }
 
 // =============================================================================
+// Software-engineering project context (`/api/swe/*`)
+// =============================================================================
+
+/**
+ * Shapes copied from `openapi.yaml`, not invented here.
+ *
+ * The SWE screen previously defined its own `CodeMemory` with `title`, `tags`,
+ * `codeSnippet` and `useCount`. The server stores none of those: a memory is a
+ * key/value pair with a category, an importance and an access count. Modelling
+ * the screen on the fixture rather than the API is what made the two disagree.
+ */
+export interface SweProject {
+    id: string;
+    name: string;
+    path: string;
+    description?: string | null;
+    gitRemote?: string | null;
+    gitBranch?: string | null;
+    language?: string | null;
+    framework?: string | null;
+    lastOpened: number;
+    createdAt: number;
+}
+
+export interface SweMemory {
+    id: string;
+    projectId: string;
+    key: string;
+    value: string;
+    category: string;
+    importance: string;
+    source: string;
+    sourceMessageId?: string | null;
+    expiresAt?: number | null;
+    accessCount: number;
+    lastAccessed?: number | null;
+    createdAt: number;
+}
+
+export interface SweRule {
+    id: string;
+    projectId: string;
+    rule: string;
+    description?: string | null;
+    category: string;
+    priority: number;
+    enabled: boolean;
+    scope?: string | null;
+}
+
+export const swe = {
+    async projects(): Promise<SweProject[]> {
+        const response = await apiClient.get('/api/swe/projects');
+        return unwrapResponse(response) || [];
+    },
+
+    async memory(projectId: string): Promise<SweMemory[]> {
+        const response = await apiClient.get(
+            `/api/swe/projects/${encodeURIComponent(projectId)}/memory`
+        );
+        return unwrapResponse(response) || [];
+    },
+
+    async rules(projectId: string): Promise<SweRule[]> {
+        const response = await apiClient.get(
+            `/api/swe/projects/${encodeURIComponent(projectId)}/rules`
+        );
+        return unwrapResponse(response) || [];
+    },
+};
+
+// =============================================================================
 // Search API (matches csm-web)
 // =============================================================================
 

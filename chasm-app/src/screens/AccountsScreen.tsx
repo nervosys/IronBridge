@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
 interface Account {
     id: string;
@@ -176,6 +177,7 @@ export function AccountsScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <ExampleDataBanner what="linked accounts" endpoint="/api/accounts" />
             {/* Stats */}
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

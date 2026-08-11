@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -13,86 +13,33 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { swe as sweApi } from '../api/sessions';
+import type { SweMemory, SweProject } from '../api/sessions';
 
-interface CodeMemory {
-    id: string;
-    type: 'solution' | 'pattern' | 'debug' | 'review';
-    title: string;
-    description: string;
-    language: string;
-    tags: string[];
-    codeSnippet?: string;
-    linkedSession?: string;
-    createdAt: string;
-    useCount: number;
-}
-
-interface ProjectContext {
-    id: string;
-    name: string;
-    path: string;
-    language: string;
-    lastAccessed: string;
-    memoriesCount: number;
-}
-
-const sampleMemories: CodeMemory[] = [
-    {
-        id: '1',
-        type: 'solution',
-        title: 'React Hook Dependency Array Fix',
-        description: 'Resolved infinite re-render loop by properly memoizing callback dependencies',
-        language: 'typescript',
-        tags: ['react', 'hooks', 'performance'],
-        codeSnippet: 'const memoizedCallback = useCallback(() => {\n  doSomething(a, b);\n}, [a, b]);',
-        createdAt: '2024-12-12T10:00:00Z',
-        useCount: 5,
-    },
-    {
-        id: '2',
-        type: 'pattern',
-        title: 'API Error Handling Pattern',
-        description: 'Consistent error handling with retry logic and user feedback',
-        language: 'typescript',
-        tags: ['api', 'error-handling', 'async'],
-        createdAt: '2024-12-10T14:30:00Z',
-        useCount: 12,
-    },
-    {
-        id: '3',
-        type: 'debug',
-        title: 'SQLite Connection Pool Issue',
-        description: 'Fixed connection exhaustion by implementing proper pooling',
-        language: 'rust',
-        tags: ['database', 'sqlite', 'performance'],
-        linkedSession: 'session_abc123',
-        createdAt: '2024-12-08T09:15:00Z',
-        useCount: 3,
-    },
-    {
-        id: '4',
-        type: 'review',
-        title: 'Authentication Flow Improvements',
-        description: 'PR review notes on OAuth2 PKCE implementation',
-        language: 'typescript',
-        tags: ['security', 'auth', 'oauth'],
-        createdAt: '2024-12-05T16:00:00Z',
-        useCount: 2,
-    },
-];
-
-const sampleProjects: ProjectContext[] = [
-    { id: '1', name: 'Chasm', path: '/dev/chasm', language: 'Rust/TypeScript', lastAccessed: '2024-12-12', memoriesCount: 24 },
-    { id: '2', name: 'csm-web', path: '/dev/csm/csm-web', language: 'TypeScript', lastAccessed: '2024-12-12', memoriesCount: 18 },
-    { id: '3', name: 'csm-app', path: '/dev/csm/csm-app', language: 'TypeScript', lastAccessed: '2024-12-11', memoriesCount: 12 },
-];
-
-const typeConfig = {
+/**
+ * Icons for the memory categories the server is known to emit.
+ *
+ * Looked up through {@link categoryStyle} rather than indexed directly: the
+ * server does not constrain `category` to this set, and an unrecognised value
+ * must render rather than crash on `undefined.icon`.
+ */
+const typeConfig: Record<string, { icon: string; color: string; label: string }> = {
     solution: { icon: 'bulb-outline', color: '#10b981', label: 'Solution' },
     pattern: { icon: 'git-branch-outline', color: '#3b82f6', label: 'Pattern' },
     debug: { icon: 'bug-outline', color: '#f59e0b', label: 'Debug' },
     review: { icon: 'eye-outline', color: '#8b5cf6', label: 'Review' },
+    architecture: { icon: 'construct-outline', color: '#ec4899', label: 'Architecture' },
+    convention: { icon: 'list-outline', color: '#14b8a6', label: 'Convention' },
 };
+
+const FALLBACK_CATEGORY = { icon: 'document-text-outline', color: '#6b7280', label: 'Other' };
+
+function categoryStyle(category: string) {
+    return typeConfig[category?.toLowerCase()] ?? {
+        ...FALLBACK_CATEGORY,
+        label: category || FALLBACK_CATEGORY.label,
+    };
+}
 
 const languageColors: Record<string, string> = {
     typescript: '#3178c6',
@@ -105,22 +52,66 @@ const languageColors: Record<string, string> = {
 export function SWEScreen() {
     const { colors } = useTheme();
     const [activeTab, setActiveTab] = useState<'memories' | 'projects' | 'search'>('memories');
-    const [memories] = useState<CodeMemory[]>(sampleMemories);
-    const [projects] = useState<ProjectContext[]>(sampleProjects);
+    // Both were seeded from `sampleMemories` / `sampleProjects`: invented
+    // records about invented repositories, shown as this user's project
+    // context. They now come from `/api/swe/*`, and the screen's types were
+    // rewritten to match what the server actually stores -- a memory is a
+    // key/value pair with a category and an access count, not the title, tags
+    // and code snippet the fixture described.
+    const [memories, setMemories] = useState<SweMemory[]>([]);
+    const [projects, setProjects] = useState<SweProject[]>([]);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState<string>('all');
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    const load = useCallback(async () => {
+        try {
+            const projectList = await sweApi.projects();
+            setProjects(projectList);
+
+            // Memory is per-project; the screen shows one combined list, so
+            // every project's memory is fetched and merged. A project whose
+            // memory cannot be read is skipped rather than failing the lot.
+            const perProject = await Promise.all(
+                projectList.map(p => sweApi.memory(p.id).catch(() => [] as SweMemory[]))
+            );
+            setMemories(perProject.flat());
+            setLoadError(null);
+        } catch (err) {
+            setProjects([]);
+            setMemories([]);
+            setLoadError(err instanceof Error ? err.message : 'Could not reach the Chasm server');
+        }
+    }, []);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    /** Categories actually present, so the filter row cannot offer an empty one. */
+    const categories = useMemo(
+        () => Array.from(new Set(memories.map(m => m.category).filter(Boolean))).sort(),
+        [memories]
+    );
+
+    const memoriesPerProject = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const m of memories) counts.set(m.projectId, (counts.get(m.projectId) ?? 0) + 1);
+        return counts;
+    }, [memories]);
+
     const filteredMemories = useMemo(() => {
         let result = memories;
         if (filterType !== 'all') {
-            result = result.filter(m => m.type === filterType);
+            result = result.filter(m => m.category === filterType);
         }
         if (searchQuery) {
+            const q = searchQuery.toLowerCase();
             result = result.filter(m =>
-                m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                m.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                m.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+                m.key.toLowerCase().includes(q) ||
+                m.value.toLowerCase().includes(q) ||
+                m.category.toLowerCase().includes(q)
             );
         }
         return result;
@@ -128,14 +119,18 @@ export function SWEScreen() {
 
     const stats = useMemo(() => ({
         total: memories.length,
-        solutions: memories.filter(m => m.type === 'solution').length,
-        patterns: memories.filter(m => m.type === 'pattern').length,
-        totalUses: memories.reduce((sum, m) => sum + m.useCount, 0),
+        solutions: memories.filter(m => m.category === 'solution').length,
+        patterns: memories.filter(m => m.category === 'pattern').length,
+        totalUses: memories.reduce((sum, m) => sum + m.accessCount, 0),
     }), [memories]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
+        try {
+            await load();
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const formatRelativeTime = (dateStr: string) => {
@@ -211,7 +206,10 @@ export function SWEScreen() {
             {activeTab === 'memories' && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
                     <View style={styles.filterRow}>
-                        {['all', 'solution', 'pattern', 'debug', 'review'].map((type) => (
+                        {/* Built from the categories present rather than a fixed
+                            list, so the row cannot offer a filter that matches
+                            nothing or omit one the server actually uses. */}
+                        {['all', ...categories].map((type) => (
                             <TouchableOpacity
                                 key={type}
                                 style={[styles.filterChip, {
@@ -245,8 +243,19 @@ export function SWEScreen() {
             >
                 {activeTab === 'memories' && (
                     <>
+                        {filteredMemories.length === 0 && (
+                            <View style={[styles.memoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={{ color: colors.textSecondary }}>
+                                    {loadError
+                                        ? `Project context unavailable: ${loadError}`
+                                        : memories.length === 0
+                                            ? 'No project memory recorded yet.'
+                                            : 'No memory matches this filter.'}
+                                </Text>
+                            </View>
+                        )}
                         {filteredMemories.map((memory) => {
-                            const typeStyle = typeConfig[memory.type];
+                            const typeStyle = categoryStyle(memory.category);
 
                             return (
                                 <View
@@ -258,46 +267,31 @@ export function SWEScreen() {
                                             <Ionicons name={typeStyle.icon as any} size={18} color={typeStyle.color} />
                                         </View>
                                         <View style={styles.memoryInfo}>
-                                            <Text style={[styles.memoryTitle, { color: colors.text }]}>{memory.title}</Text>
+                                            <Text style={[styles.memoryTitle, { color: colors.text }]}>{memory.key}</Text>
                                             <View style={styles.memoryMeta}>
-                                                <View style={[styles.langBadge, {
-                                                    backgroundColor: `${languageColors[memory.language] || colors.primary}20`
-                                                }]}>
-                                                    <Text style={[styles.langText, {
-                                                        color: languageColors[memory.language] || colors.primary
-                                                    }]}>
-                                                        {memory.language}
+                                                <View style={[styles.langBadge, { backgroundColor: `${typeStyle.color}20` }]}>
+                                                    <Text style={[styles.langText, { color: typeStyle.color }]}>
+                                                        {typeStyle.label}
                                                     </Text>
                                                 </View>
+                                                {/* `accessCount`, not an invented "useCount". */}
                                                 <Text style={[styles.useCount, { color: colors.textSecondary }]}>
-                                                    Used {memory.useCount}x
+                                                    Used {memory.accessCount}x
                                                 </Text>
                                             </View>
                                         </View>
                                         <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                                            {formatRelativeTime(memory.createdAt)}
+                                            {formatRelativeTime(new Date(memory.createdAt).toISOString())}
                                         </Text>
                                     </View>
 
                                     <Text style={[styles.memoryDescription, { color: colors.text }]}>
-                                        {memory.description}
+                                        {memory.value}
                                     </Text>
 
-                                    {memory.codeSnippet && (
-                                        <View style={[styles.codeBlock, { backgroundColor: colors.background }]}>
-                                            <Text style={[styles.codeText, { color: colors.text }]} numberOfLines={4}>
-                                                {memory.codeSnippet}
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                    <View style={styles.tagRow}>
-                                        {memory.tags.map((tag) => (
-                                            <View key={tag} style={[styles.tag, { backgroundColor: colors.background }]}>
-                                                <Text style={[styles.tagText, { color: colors.textSecondary }]}>#{tag}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
+                                    {/* No tag row and no code block: the server stores neither
+                                        for a memory, so both could only ever have rendered the
+                                        fixture's invention. */}
                                 </View>
                             );
                         })}
@@ -307,6 +301,15 @@ export function SWEScreen() {
                 {activeTab === 'projects' && (
                     <>
                         <Text style={[styles.sectionTitle, { color: colors.text }]}>Project Contexts</Text>
+                        {projects.length === 0 && (
+                            <View style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={{ color: colors.textSecondary }}>
+                                    {loadError
+                                        ? `Projects unavailable: ${loadError}`
+                                        : 'No SWE projects registered.'}
+                                </Text>
+                            </View>
+                        )}
                         {projects.map((project) => (
                             <View
                                 key={project.id}
@@ -321,14 +324,26 @@ export function SWEScreen() {
                                 </View>
                                 <View style={styles.projectStats}>
                                     <View style={styles.projectStat}>
-                                        <Text style={[styles.projectStatValue, { color: colors.text }]}>{project.memoriesCount}</Text>
+                                        {/* Counted from the memory actually fetched, rather
+                                            than a `memoriesCount` the server does not send. */}
+                                        <Text style={[styles.projectStatValue, { color: colors.text }]}>
+                                            {memoriesPerProject.get(project.id) ?? 0}
+                                        </Text>
                                         <Text style={[styles.projectStatLabel, { color: colors.textSecondary }]}>memories</Text>
                                     </View>
-                                    <View style={[styles.langBadge, { backgroundColor: colors.background }]}>
-                                        <Text style={[styles.langText, { color: colors.primary }]}>{project.language}</Text>
-                                    </View>
+                                    {project.language && (
+                                        <View style={[styles.langBadge, {
+                                            backgroundColor: `${languageColors[project.language.toLowerCase()] ?? colors.primary}20`
+                                        }]}>
+                                            <Text style={[styles.langText, {
+                                                color: languageColors[project.language.toLowerCase()] ?? colors.primary
+                                            }]}>
+                                                {project.language}
+                                            </Text>
+                                        </View>
+                                    )}
                                     <Text style={[styles.projectDate, { color: colors.textSecondary }]}>
-                                        {formatRelativeTime(project.lastAccessed)}
+                                        {formatRelativeTime(new Date(project.lastOpened).toISOString())}
                                     </Text>
                                 </View>
                             </View>
@@ -339,30 +354,48 @@ export function SWEScreen() {
                 {activeTab === 'search' && (
                     <View style={styles.semanticSearch}>
                         <View style={[styles.searchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <Text style={[styles.searchCardTitle, { color: colors.text }]}>Semantic Code Search</Text>
+                            {/* Was titled "Semantic Code Search" and promised natural-language
+                                queries. There is no embedding search behind this screen, and
+                                the button had no onPress at all -- pressing it did nothing,
+                                silently. It now runs the same substring match the Memories tab
+                                uses, and says that is what it does. */}
+                            <Text style={[styles.searchCardTitle, { color: colors.text }]}>Search project memory</Text>
                             <Text style={[styles.searchCardDesc, { color: colors.textSecondary }]}>
-                                Search your code memories using natural language queries. Find patterns, solutions, and debugging notes across all projects.
+                                Matches text in a memory's key, value or category across all
+                                projects. This is a substring match, not a semantic one.
                             </Text>
                             <TextInput
                                 style={[styles.semanticInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                                placeholder="e.g., 'How do I handle async errors in React?'"
+                                placeholder="e.g. 'retry' or 'async'"
                                 placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
                                 multiline
                                 numberOfLines={3}
                             />
-                            <TouchableOpacity style={[styles.searchButton, { backgroundColor: colors.primary }]}>
+                            <TouchableOpacity
+                                style={[styles.searchButton, { backgroundColor: colors.primary }]}
+                                onPress={() => {
+                                    setFilterType('all');
+                                    setActiveTab('memories');
+                                }}
+                            >
                                 <Ionicons name="search" size={18} color="#fff" />
-                                <Text style={styles.searchButtonText}>Search Memories</Text>
+                                <Text style={styles.searchButtonText}>
+                                    {searchQuery
+                                        ? `Show ${filteredMemories.length} match${filteredMemories.length === 1 ? '' : 'es'}`
+                                        : 'Search Memories'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 )}
             </ScrollView>
 
-            {/* FAB */}
-            <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]}>
-                <Ionicons name="add" size={28} color="#fff" />
-            </TouchableOpacity>
+            {/* No floating "add" button. It had no onPress: it was a button that
+                did nothing when pressed. Creating a memory needs a project
+                picker and a key/value form against
+                POST /api/swe/projects/{id}/memory, which is not built. */}
         </View>
     );
 }
@@ -509,29 +542,6 @@ const styles = StyleSheet.create({
         lineHeight: 19,
         marginBottom: 10,
     },
-    codeBlock: {
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 10,
-    },
-    codeText: {
-        fontFamily: 'monospace',
-        fontSize: 11,
-        lineHeight: 16,
-    },
-    tagRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    tag: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 4,
-    },
-    tagText: {
-        fontSize: 11,
-    },
     projectCard: {
         borderRadius: 12,
         borderWidth: 1,
@@ -615,21 +625,6 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 15,
         fontWeight: '600',
-    },
-    fab: {
-        position: 'absolute',
-        bottom: 24,
-        right: 24,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
     },
 });
 
