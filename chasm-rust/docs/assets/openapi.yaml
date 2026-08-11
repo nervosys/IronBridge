@@ -19,6 +19,22 @@ info:
     Real-time updates are available via WebSocket at `ws://<host>/ws`. Note that
     `/ws` is mounted at the server root, not under the `/api` base URL below.
 
+    Client frames are tagged JSON: `subscribe`, `unsubscribe`, `ping`,
+    `sync_request`, `stream_start`, `stream_cancel`, `stream_input` and
+    `agent_command`. Every one of them is answered.
+
+    `sync_request` returns the same delta as `GET /sync/delta?from=N`, as one
+    `sync_event` per change in version order. Two cases answer with an error
+    instead of an empty result, because sending nothing would read as "you are
+    up to date": `history_truncated` when the requested version has aged out of
+    the retained event history, and `version_ahead` when the client's version
+    exceeds the server's. Both mean the client needs a full snapshot.
+
+    The stream operations and `agent_command` are **not implemented** on this
+    server and answer `stream_error` / `error` with code `unsupported`. They are
+    part of the protocol and are refused explicitly rather than ignored, so a
+    caller is never left waiting on a reply that is not coming.
+
     ## Scope
 
     This document describes only endpoints the server actually routes. Paths that

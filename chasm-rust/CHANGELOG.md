@@ -44,8 +44,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   duplicates, not capability. The 1.5.0 entry below listing them as supported
   was describing files, not behaviour.
 
+- **WebSocket `sync_request`** — now answered, reusing the delta machinery that
+  already backs `GET /sync/delta?from=N`. Changes are replayed one `sync_event`
+  per change in version order, not grouped by operation the way `get_delta`
+  returns them: bucketing would replay a delete before the create it followed.
+  A request reaching past the retained history answers `history_truncated`, and
+  one ahead of the server answers `version_ahead` — both silence bugs waiting
+  to happen, since an empty delta reads as "you are up to date".
+
 ### Fixed
 
+- **WebSocket requests that got no reply at all** — `stream_start`,
+  `stream_cancel`, `stream_input` and `agent_command` returned `None`, which put
+  nothing on the wire. A client called `stream_start` and waited for a token
+  that was never coming, unable to tell a slow model from a feature that does
+  not exist. They are still not implemented, but they now answer `stream_error`
+  or `error` with code `unsupported`, so the caller is unblocked and told why.
 - **Export stubs that promised a roadmap** — `export_session` for Ollama and
   the OpenAI-compatible providers said "not yet implemented". Both are
   stateless inference endpoints with nowhere to put a conversation, so the

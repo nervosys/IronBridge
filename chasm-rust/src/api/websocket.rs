@@ -216,12 +216,119 @@ impl Default for WebSocketState {
 // WebSocket Handler
 // =============================================================================
 
-/// Handle incoming WebSocket message
+/// The code returned for a message this server understands but will not act on.
+///
+/// Distinct from `invalid_message`, which means the frame did not parse. A
+/// client seeing `unsupported` sent something well-formed; retrying it will not
+/// help, and it should stop waiting.
+const UNSUPPORTED: &str = "unsupported";
+
+/// Turn a `sync::SyncEvent` into its WebSocket form.
+///
+/// The two structs carry the same information in different shapes -- `sync.rs`
+/// uses typed enums, the wire protocol here uses strings. Serialising the enum
+/// and taking the string keeps the two spellings in step: if a variant is
+/// renamed, both sides move together rather than drifting apart.
+fn to_ws_sync_event(event: &crate::api::sync::SyncEvent) -> WsServerMessage {
+    fn as_str(value: &impl Serialize) -> String {
+        serde_json::to_value(value)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_else(|| "unknown".to_string())
+    }
+
+    WsServerMessage::SyncEvent {
+        entity_type: as_str(&event.entity_type),
+        entity_id: event.entity_id.clone(),
+        operation: as_str(&event.operation),
+        data: event.data.clone(),
+        version: event.version,
+    }
+}
+
+/// Answer a `sync_request` from the event history in [`crate::api::sync`].
+///
+/// This is the same delta `GET /sync/delta?from=N` returns, pushed over the
+/// socket instead. Two cases are errors rather than an empty result, because
+/// silently sending nothing would leave the client believing it is current when
+/// it is not:
+///
+/// * **The history no longer reaches back that far.** `SyncState` trims to
+///   `max_history` events, so a client that has been away long enough asks for
+///   a version that has been discarded. The events between are gone; only a
+///   full snapshot can recover, and the client has to be told that.
+/// * **The client is ahead of the server.** That means the server's history was
+///   reset underneath it. An empty delta would read as "nothing changed" when
+///   in truth everything did.
+fn handle_sync_request(
+    from_version: u64,
+    sync: Option<&crate::api::sync::SharedSyncState>,
+) -> Vec<WsServerMessage> {
+    let Some(sync) = sync else {
+        return vec![WsServerMessage::Error {
+            code: "sync_unavailable".to_string(),
+            message: "this server was started without sync state".to_string(),
+        }];
+    };
+
+    let Ok(state) = sync.read() else {
+        return vec![WsServerMessage::Error {
+            code: "sync_unavailable".to_string(),
+            message: "sync state is poisoned".to_string(),
+        }];
+    };
+
+    if from_version > state.version {
+        return vec![WsServerMessage::Error {
+            code: "version_ahead".to_string(),
+            message: format!(
+                "client is at version {from_version} but the server is at {}; \
+                 the server history was reset -- request a full snapshot",
+                state.version
+            ),
+        }];
+    }
+
+    // Versions are contiguous: `add_event` increments by one and pushes every
+    // event, so the first retained version tells us exactly what was trimmed.
+    if let Some(oldest) = state.events.first().map(|e| e.version) {
+        if from_version + 1 < oldest {
+            return vec![WsServerMessage::Error {
+                code: "history_truncated".to_string(),
+                message: format!(
+                    "changes from version {from_version} are no longer retained \
+                     (history starts at {oldest}); request a full snapshot",
+                ),
+            }];
+        }
+    }
+
+    let delta = state.get_delta(from_version);
+
+    // One message per change, in version order. `get_delta` sorts by operation,
+    // which would replay a delete before the create it follows.
+    let mut events: Vec<_> = delta
+        .created
+        .iter()
+        .chain(&delta.updated)
+        .chain(&delta.deleted)
+        .collect();
+    events.sort_by_key(|e| e.version);
+
+    events.into_iter().map(to_ws_sync_event).collect()
+}
+
+/// Handle incoming WebSocket message.
+///
+/// Returns every message to send back, in order. Most requests answer with one;
+/// a sync request answers with one per change, and an unsupported request
+/// answers with an error rather than nothing -- see [`UNSUPPORTED`].
 fn handle_client_message(
     client_id: &str,
     msg: WsClientMessage,
     state: &WebSocketState,
-) -> Option<WsServerMessage> {
+    sync: Option<&crate::api::sync::SharedSyncState>,
+) -> Vec<WsServerMessage> {
     match msg {
         WsClientMessage::Subscribe { channel } => {
             // Update client subscriptions
@@ -232,7 +339,7 @@ fn handle_client_message(
                     }
                 }
             }
-            Some(WsServerMessage::Subscribed { channel })
+            vec![WsServerMessage::Subscribed { channel }]
         }
 
         WsClientMessage::Unsubscribe { channel } => {
@@ -242,30 +349,35 @@ fn handle_client_message(
                     client.subscriptions.retain(|c| c != &channel);
                 }
             }
-            Some(WsServerMessage::Unsubscribed { channel })
+            vec![WsServerMessage::Unsubscribed { channel }]
         }
 
-        WsClientMessage::Ping { timestamp } => Some(WsServerMessage::Pong { timestamp }),
+        WsClientMessage::Ping { timestamp } => vec![WsServerMessage::Pong { timestamp }],
 
+        // The three stream operations and `agent_command` have no
+        // implementation behind them. They used to return `None`, which put
+        // nothing on the wire at all: a client called `stream_start` and waited
+        // for a token that was never coming, with no way to tell a slow model
+        // from an unimplemented feature. Answering with an error is not the
+        // feature, but it is the truth, and it unblocks the caller.
         WsClientMessage::StreamStart { session_id, model } => {
-            log::info!(
-                "Client {} requested stream start for {} with model {}",
-                client_id,
+            log::info!("Client {client_id} requested stream start for {session_id} ({model})");
+            vec![WsServerMessage::StreamError {
                 session_id,
-                model
-            );
-            // TODO: Implement streaming start
-            None
+                error: "streaming is not implemented on this server; \
+                        use the REST API to append messages"
+                    .to_string(),
+            }]
         }
 
         WsClientMessage::StreamCancel { session_id } => {
-            log::info!(
-                "Client {} requested stream cancel for {}",
-                client_id,
-                session_id
-            );
-            // TODO: Implement streaming cancel
-            None
+            log::info!("Client {client_id} requested stream cancel for {session_id}");
+            vec![WsServerMessage::StreamError {
+                session_id,
+                error: "streaming is not implemented on this server, so there is \
+                        nothing to cancel"
+                    .to_string(),
+            }]
         }
 
         WsClientMessage::StreamInput {
@@ -273,13 +385,15 @@ fn handle_client_message(
             content,
         } => {
             log::info!(
-                "Client {} sent input for {}: {} bytes",
-                client_id,
-                session_id,
+                "Client {client_id} sent input for {session_id}: {} bytes",
                 content.len()
             );
-            // TODO: Implement streaming input
-            None
+            vec![WsServerMessage::StreamError {
+                session_id,
+                error: "streaming is not implemented on this server; \
+                        the input was discarded"
+                    .to_string(),
+            }]
         }
 
         WsClientMessage::AgentCommand {
@@ -287,34 +401,34 @@ fn handle_client_message(
             command,
             params,
         } => {
-            log::info!(
-                "Client {} sent agent command {} to {}: {:?}",
-                client_id,
-                command,
-                agent_id,
-                params
-            );
-            // TODO: Implement agent commands
-            None
+            log::info!("Client {client_id} sent agent command {command} to {agent_id}: {params:?}");
+            vec![WsServerMessage::Error {
+                code: UNSUPPORTED.to_string(),
+                message: format!(
+                    "agent commands are not served over this socket; \
+                     `{command}` for agent `{agent_id}` was discarded"
+                ),
+            }]
         }
 
         WsClientMessage::SyncRequest { from_version } => {
-            log::info!(
-                "Client {} requested sync from version {}",
-                client_id,
-                from_version
-            );
-            // TODO: Implement sync delta response
-            None
+            log::info!("Client {client_id} requested sync from version {from_version}");
+            handle_sync_request(from_version, sync)
         }
     }
 }
 
 /// WebSocket endpoint handler using actix-ws
+///
+/// `sync_state` is optional on purpose. It is registered by `start_server`, but
+/// a test harness or an embedder mounting only `/ws` need not provide it; a
+/// required extractor would turn that into a 500 on connect. Absent it, sync
+/// requests answer `sync_unavailable` and everything else still works.
 pub async fn ws_handler(
     req: HttpRequest,
     body: web::Payload,
     state: web::Data<WebSocketState>,
+    sync_state: Option<web::Data<crate::api::sync::SharedSyncState>>,
 ) -> Result<HttpResponse, Error> {
     // Perform WebSocket handshake
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
@@ -341,6 +455,7 @@ pub async fn ws_handler(
 
     // Spawn handler task
     let client_id_clone = client_id.clone();
+    let sync_for_task = sync_state.map(|d| d.into_inner());
     actix_web::rt::spawn(async move {
         let mut heartbeat_interval = tokio::time::interval(HEARTBEAT_INTERVAL);
         let mut last_heartbeat = Instant::now();
@@ -353,11 +468,13 @@ pub async fn ws_handler(
                         Ok(actix_ws::Message::Text(text)) => {
                             last_heartbeat = Instant::now();
                             if let Ok(client_msg) = serde_json::from_str::<WsClientMessage>(&text) {
-                                if let Some(response) = handle_client_message(
+                                let responses = handle_client_message(
                                     &client_id_clone,
                                     client_msg,
                                     &state_clone,
-                                ) {
+                                    sync_for_task.as_deref(),
+                                );
+                                for response in responses {
                                     if let Ok(json) = serde_json::to_string(&response) {
                                         let _ = session.text(json).await;
                                     }
@@ -473,4 +590,302 @@ pub fn broadcast_agent_event(
         data,
     };
     state.broadcast_to_channel(&format!("agent:{}", agent_id), msg);
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::sync::{
+        create_sync_state, SharedSyncState, SyncEntityType, SyncEvent, SyncOperation,
+    };
+
+    fn state_with_client(id: &str) -> WebSocketState {
+        let state = WebSocketState::new();
+        state.register_client(id);
+        state
+    }
+
+    fn event(entity_id: &str, operation: SyncOperation) -> SyncEvent {
+        SyncEvent {
+            id: format!("evt-{entity_id}"),
+            entity_type: SyncEntityType::Session,
+            operation,
+            entity_id: entity_id.to_string(),
+            data: None,
+            timestamp: 0,
+            client_id: "seed".to_string(),
+            version: 0, // assigned by `add_event`
+        }
+    }
+
+    /// A sync state holding `n` events, versions 1..=n.
+    fn sync_with(n: usize) -> SharedSyncState {
+        let sync = create_sync_state();
+        {
+            let mut s = sync.write().unwrap();
+            for i in 1..=n {
+                s.add_event(event(&format!("s{i}"), SyncOperation::Update));
+            }
+        }
+        sync
+    }
+
+    fn ask(msg: WsClientMessage, sync: Option<&SharedSyncState>) -> Vec<WsServerMessage> {
+        let state = state_with_client("c1");
+        handle_client_message("c1", msg, &state, sync)
+    }
+
+    #[test]
+    fn a_sync_request_returns_one_message_per_change() {
+        let sync = sync_with(3);
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 1 },
+            Some(&sync),
+        );
+
+        assert_eq!(out.len(), 2, "versions 2 and 3 are newer than 1");
+        let versions: Vec<u64> = out
+            .iter()
+            .map(|m| match m {
+                WsServerMessage::SyncEvent { version, .. } => *version,
+                other => panic!("expected a sync_event, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(versions, vec![2, 3]);
+    }
+
+    #[test]
+    fn changes_replay_in_version_order_not_grouped_by_operation() {
+        // `get_delta` buckets by operation, so a delete at version 2 would
+        // otherwise arrive before a create at version 3 -- replaying the
+        // history in an order that never happened.
+        let sync = create_sync_state();
+        {
+            let mut s = sync.write().unwrap();
+            s.add_event(event("a", SyncOperation::Create)); // v1
+            s.add_event(event("b", SyncOperation::Delete)); // v2
+            s.add_event(event("c", SyncOperation::Create)); // v3
+            s.add_event(event("d", SyncOperation::Update)); // v4
+        }
+
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 0 },
+            Some(&sync),
+        );
+        let versions: Vec<u64> = out
+            .iter()
+            .map(|m| match m {
+                WsServerMessage::SyncEvent { version, .. } => *version,
+                other => panic!("expected a sync_event, got {other:?}"),
+            })
+            .collect();
+
+        assert_eq!(versions, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn an_up_to_date_client_gets_nothing_and_that_is_correct() {
+        let sync = sync_with(2);
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 2 },
+            Some(&sync),
+        );
+        assert!(out.is_empty(), "no changes since version 2: {out:?}");
+    }
+
+    #[test]
+    fn a_client_ahead_of_the_server_is_told_so() {
+        let sync = sync_with(2);
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 99 },
+            Some(&sync),
+        );
+
+        match out.as_slice() {
+            [WsServerMessage::Error { code, message }] => {
+                assert_eq!(code, "version_ahead");
+                assert!(message.contains("snapshot"), "unhelpful: {message}");
+            }
+            other => panic!("expected one error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_trimmed_history_is_an_error_rather_than_a_partial_delta() {
+        // Silently returning what survives would leave the client believing it
+        // is current while the trimmed events are gone for good.
+        let sync = create_sync_state();
+        {
+            let mut s = sync.write().unwrap();
+            s.max_history = 3;
+            for i in 1..=6 {
+                s.add_event(event(&format!("s{i}"), SyncOperation::Update));
+            }
+            assert_eq!(s.events.first().unwrap().version, 4, "history should trim");
+        }
+
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 1 },
+            Some(&sync),
+        );
+
+        match out.as_slice() {
+            [WsServerMessage::Error { code, message }] => {
+                assert_eq!(code, "history_truncated");
+                assert!(message.contains("snapshot"), "unhelpful: {message}");
+            }
+            other => panic!("expected one error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_oldest_still_retained_version_is_not_treated_as_a_gap() {
+        // A client at version 3 asks for 4 onward, and 4 is the oldest kept.
+        // Nothing is missing; this is the boundary the truncation check must
+        // not fire on.
+        let sync = create_sync_state();
+        {
+            let mut s = sync.write().unwrap();
+            s.max_history = 3;
+            for i in 1..=6 {
+                s.add_event(event(&format!("s{i}"), SyncOperation::Update));
+            }
+        }
+
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 3 },
+            Some(&sync),
+        );
+        assert_eq!(out.len(), 3, "versions 4, 5 and 6: {out:?}");
+    }
+
+    #[test]
+    fn sync_without_a_configured_state_says_so() {
+        let out = ask(WsClientMessage::SyncRequest { from_version: 0 }, None);
+        match out.as_slice() {
+            [WsServerMessage::Error { code, .. }] => assert_eq!(code, "sync_unavailable"),
+            other => panic!("expected one error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn entity_type_and_operation_survive_the_crossing() {
+        let sync = create_sync_state();
+        {
+            let mut s = sync.write().unwrap();
+            s.add_event(SyncEvent {
+                entity_type: SyncEntityType::Workspace,
+                operation: SyncOperation::Delete,
+                data: Some(serde_json::json!({"kept": true})),
+                ..event("w1", SyncOperation::Delete)
+            });
+        }
+
+        let out = ask(
+            WsClientMessage::SyncRequest { from_version: 0 },
+            Some(&sync),
+        );
+        match out.as_slice() {
+            [WsServerMessage::SyncEvent {
+                entity_type,
+                entity_id,
+                operation,
+                data,
+                ..
+            }] => {
+                assert_eq!(entity_type, "workspace");
+                assert_eq!(operation, "delete");
+                assert_eq!(entity_id, "w1");
+                assert_eq!(data.as_ref().unwrap()["kept"], true);
+            }
+            other => panic!("expected one sync_event, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn every_unimplemented_request_answers_instead_of_going_quiet() {
+        // The bug this replaced: these returned `None`, so a caller waited
+        // forever with no way to distinguish a slow model from a missing
+        // feature. Whatever else is true, the client must hear something back.
+        let requests = vec![
+            WsClientMessage::StreamStart {
+                session_id: "s1".to_string(),
+                model: "gpt-4".to_string(),
+            },
+            WsClientMessage::StreamCancel {
+                session_id: "s1".to_string(),
+            },
+            WsClientMessage::StreamInput {
+                session_id: "s1".to_string(),
+                content: "hello".to_string(),
+            },
+            WsClientMessage::AgentCommand {
+                agent_id: "a1".to_string(),
+                command: "run".to_string(),
+                params: None,
+            },
+        ];
+
+        for request in requests {
+            let out = ask(request.clone(), None);
+            assert_eq!(out.len(), 1, "{request:?} answered {out:?}");
+            assert!(
+                matches!(
+                    out[0],
+                    WsServerMessage::StreamError { .. } | WsServerMessage::Error { .. }
+                ),
+                "{request:?} answered {:?}, which a client would read as success",
+                out[0]
+            );
+        }
+    }
+
+    #[test]
+    fn subscribe_and_unsubscribe_still_answer_once() {
+        let state = state_with_client("c1");
+
+        let out = handle_client_message(
+            "c1",
+            WsClientMessage::Subscribe {
+                channel: "sessions".to_string(),
+            },
+            &state,
+            None,
+        );
+        assert!(matches!(
+            out.as_slice(),
+            [WsServerMessage::Subscribed { .. }]
+        ));
+        assert_eq!(
+            state.clients.read().unwrap()["c1"].subscriptions,
+            vec!["sessions"]
+        );
+
+        let out = handle_client_message(
+            "c1",
+            WsClientMessage::Unsubscribe {
+                channel: "sessions".to_string(),
+            },
+            &state,
+            None,
+        );
+        assert!(matches!(
+            out.as_slice(),
+            [WsServerMessage::Unsubscribed { .. }]
+        ));
+        assert!(state.clients.read().unwrap()["c1"].subscriptions.is_empty());
+    }
+
+    #[test]
+    fn a_ping_comes_back_with_its_own_timestamp() {
+        let out = ask(WsClientMessage::Ping { timestamp: 1234 }, None);
+        assert!(matches!(
+            out.as_slice(),
+            [WsServerMessage::Pong { timestamp: 1234 }]
+        ));
+    }
 }
