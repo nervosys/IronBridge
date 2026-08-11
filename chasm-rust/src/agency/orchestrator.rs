@@ -316,6 +316,12 @@ impl Orchestrator {
     }
 
     /// Run a swarm with coordinator
+    ///
+    /// The coordinator is asked which workers the task needs, and only those
+    /// run. Before this, its answer was computed, charged for, and thrown away:
+    /// every worker ran on every task regardless of what the coordinator
+    /// decided, which made the delegation step pure cost. See
+    /// [`select_workers`] for what happens when the answer cannot be read.
     pub async fn run_swarm(
         &self,
         swarm: &Swarm,
@@ -338,8 +344,14 @@ impl Orchestrator {
             .map(|w| format!("- {}: {}", w.name(), w.description()))
             .collect();
 
+        // The `DELEGATE:` line is what makes delegation actionable. Without a
+        // machine-readable answer there is nothing to act on, and the previous
+        // version simply ran every worker -- see `select_workers`.
         let coordinator_input = format!(
-            "Task: {}\n\nAvailable workers:\n{}\n\nAnalyze the task and delegate to appropriate workers.",
+            "Task: {}\n\nAvailable workers:\n{}\n\nAnalyze the task and delegate to appropriate workers.\n\
+             End your reply with a single line naming the workers to run, exactly:\n\
+             DELEGATE: <comma-separated worker names>\n\
+             Name only workers from the list above. Name all of them if the task needs all of them.",
             input,
             worker_info.join("\n")
         );
@@ -367,10 +379,30 @@ impl Orchestrator {
         events.push(handoff_event.clone());
         ctx.emit(handoff_event).await;
 
-        // TODO: Parse coordinator response to determine which workers to call
-        // For now, run all workers in parallel with the original input
-        for worker_arc in &swarm.workers {
-            let worker = worker_arc.as_ref();
+        let worker_names: Vec<&str> = swarm.workers.iter().map(|w| w.name()).collect();
+        let selected = select_workers(&coord_result.response, &worker_names);
+
+        if selected.len() < swarm.workers.len() {
+            let skipped: Vec<&str> = worker_names
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !selected.contains(i))
+                .map(|(_, name)| *name)
+                .collect();
+            log::info!(
+                "Coordinator {} delegated to {} of {} workers; skipping {}",
+                coordinator.name(),
+                selected.len(),
+                swarm.workers.len(),
+                skipped.join(", ")
+            );
+        }
+
+        // Sequential, despite what this loop used to claim in a comment: each
+        // worker awaits the previous one. Running them concurrently would need
+        // `ctx` to be shareable, which it is not.
+        for index in selected {
+            let worker = swarm.workers[index].as_ref();
             let mut worker_session = Session::new(worker.name(), ctx.user_id.clone());
 
             let worker_result = self
@@ -413,6 +445,89 @@ impl Orchestrator {
             duration_ms: start_time.elapsed().as_millis() as u64,
             iterations: 1,
         })
+    }
+}
+
+/// Read a coordinator's reply and decide which workers to run.
+///
+/// Returns indices into `worker_names`, in the order the workers were declared
+/// rather than the order they were mentioned -- a coordinator listing them
+/// backwards should not reorder the swarm.
+///
+/// # How the reply is read
+///
+/// First the `DELEGATE: a, b` line the prompt asks for, taking the last one if
+/// a model emits several (the final answer, not an example it talked itself
+/// through). Names are matched case-insensitively against the real worker list,
+/// and anything unrecognised is ignored -- a hallucinated worker cannot conjure
+/// an agent that does not exist.
+///
+/// If there is no usable `DELEGATE:` line, the reply is scanned for worker
+/// names appearing anywhere in it.
+///
+/// # Falling back to everyone
+///
+/// If neither approach names a worker, *all* workers run. That is the old
+/// unconditional behaviour, kept deliberately as the failure mode: a
+/// coordinator that answers in an unexpected shape should cost too much, not
+/// silently do nothing. Returning an empty selection would produce a swarm that
+/// consulted its coordinator and then performed no work at all.
+///
+/// # What this cannot do
+///
+/// Substring scanning has no idea what the surrounding sentence means. A reply
+/// saying "the reviewer is not needed here" still selects `reviewer`. The
+/// `DELEGATE:` line exists precisely so the common path does not depend on
+/// reading prose, and the scan is only a safety net beneath it.
+pub fn select_workers(response: &str, worker_names: &[&str]) -> Vec<usize> {
+    if worker_names.is_empty() {
+        return Vec::new();
+    }
+
+    let named = |listed: &str| -> Vec<usize> {
+        let wanted: Vec<String> = listed
+            .split(',')
+            .map(|s| s.trim().trim_matches(['`', '"', '\'', '*']).to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        worker_names
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| wanted.iter().any(|w| w == &name.to_lowercase()))
+            .map(|(i, _)| i)
+            .collect()
+    };
+
+    // The last DELEGATE: line wins; earlier ones may be the model reasoning
+    // aloud before committing.
+    let delegated = response
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim().trim_start_matches(['*', '#', '-', ' ']);
+            trimmed
+                .strip_prefix("DELEGATE:")
+                .or_else(|| trimmed.strip_prefix("delegate:"))
+        })
+        .map(named)
+        .rfind(|selected| !selected.is_empty());
+
+    if let Some(selected) = delegated {
+        return selected;
+    }
+
+    let haystack = response.to_lowercase();
+    let mentioned: Vec<usize> = worker_names
+        .iter()
+        .enumerate()
+        .filter(|(_, name)| !name.is_empty() && haystack.contains(&name.to_lowercase()))
+        .map(|(i, _)| i)
+        .collect();
+
+    if mentioned.is_empty() {
+        (0..worker_names.len()).collect()
+    } else {
+        mentioned
     }
 }
 
@@ -489,5 +604,95 @@ mod tests {
 
         assert!(!result.response.is_empty());
         assert_eq!(result.agent_results.len(), 2);
+    }
+
+    // =========================================================================
+    // Worker selection
+    // =========================================================================
+
+    const WORKERS: &[&str] = &["researcher", "coder", "reviewer"];
+
+    #[test]
+    fn a_delegate_line_selects_exactly_those_workers() {
+        let reply = "I'll split this up.\nDELEGATE: researcher, coder";
+        assert_eq!(select_workers(reply, WORKERS), vec![0, 1]);
+    }
+
+    #[test]
+    fn selection_follows_declaration_order_not_mention_order() {
+        // A coordinator listing them backwards must not reorder the swarm.
+        let reply = "DELEGATE: reviewer, researcher";
+        assert_eq!(select_workers(reply, WORKERS), vec![0, 2]);
+    }
+
+    #[test]
+    fn the_last_delegate_line_wins() {
+        // Models reason aloud. An earlier line can be a draft it then revised.
+        let reply =
+            "First thought:\nDELEGATE: researcher\n\nOn reflection:\nDELEGATE: coder, reviewer";
+        assert_eq!(select_workers(reply, WORKERS), vec![1, 2]);
+    }
+
+    #[test]
+    fn decoration_around_the_line_does_not_hide_it() {
+        for reply in [
+            "**DELEGATE: coder**",
+            "- DELEGATE: coder",
+            "# DELEGATE: coder",
+            "  delegate: coder  ",
+            "DELEGATE: `coder`",
+            "DELEGATE: \"coder\"",
+        ] {
+            assert_eq!(
+                select_workers(reply, WORKERS),
+                vec![1],
+                "failed on {reply:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_invented_worker_cannot_conjure_an_agent() {
+        let reply = "DELEGATE: researcher, security-auditor";
+        assert_eq!(
+            select_workers(reply, WORKERS),
+            vec![0],
+            "only real workers may be selected"
+        );
+    }
+
+    #[test]
+    fn a_reply_naming_workers_in_prose_still_delegates() {
+        let reply = "The coder should handle this one on their own.";
+        assert_eq!(select_workers(reply, WORKERS), vec![1]);
+    }
+
+    #[test]
+    fn an_unreadable_reply_runs_everyone_rather_than_no_one() {
+        // The deliberate failure mode: costing too much beats a swarm that
+        // consults its coordinator and then does nothing.
+        let reply = "I have considered the matter carefully.";
+        assert_eq!(select_workers(reply, WORKERS), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn a_delegate_line_naming_nobody_real_falls_through_to_the_scan() {
+        // The line parsed but matched nothing, so it is not a usable answer.
+        // The prose below it still mentions a worker.
+        let reply = "The reviewer should look at this.\nDELEGATE: nobody-at-all";
+        assert_eq!(select_workers(reply, WORKERS), vec![2]);
+    }
+
+    #[test]
+    fn an_empty_swarm_selects_nothing() {
+        assert!(select_workers("DELEGATE: anyone", &[]).is_empty());
+    }
+
+    #[test]
+    fn worker_names_are_matched_without_regard_to_case() {
+        assert_eq!(
+            select_workers("DELEGATE: CODER, Reviewer", WORKERS),
+            vec![1, 2]
+        );
     }
 }

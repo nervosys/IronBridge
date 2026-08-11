@@ -54,6 +54,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Swarm delegation was decided, paid for, and discarded** — `run_swarm` asked
+  the coordinator which workers a task needed, then ran every worker anyway on
+  the original input. Each worker is a model call, so the delegation step was
+  pure cost, and the CLI's description of swarm mode ("Tasks delegated to
+  specialists") described something that did not happen. The coordinator is now
+  asked for a `DELEGATE:` line and only the named workers run. Unrecognised
+  names are ignored, so a hallucinated worker cannot conjure an agent; a reply
+  with no usable answer runs everyone, which is the old behaviour kept
+  deliberately as the failure mode — costing too much beats a swarm that
+  consults its coordinator and then does nothing.
 - **`SyncManager::sync_all` reported a successful sync it had not performed** —
   it listed the remote, discarded the answer, stamped `last_full_sync` with the
   current time and returned zero uploads, zero downloads, zero conflicts and no
