@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { stats as statsApi } from '../api/sessions';
+import type { Stats } from '../api/sessions';
 
 interface ShareLink {
     id: string;
@@ -33,26 +35,45 @@ function detectProvider(url: string): string {
     return 'Unknown';
 }
 
-// Mock data for demonstration
-const mockHarvestStats = {
-    totalSessions: 156,
-    totalMessages: 4523,
-    lastHarvest: '2h ago',
-    dbSize: '22.6 MB',
-};
-
-const mockProviderDistribution: [string, number][] = [
-    ['GitHub Copilot', 67],
-    ['ChatGPT', 45],
-    ['Claude', 28],
-    ['Gemini', 16],
-];
+/// Shown in a stat card when the number is not known yet, or could not be
+/// fetched. Deliberately not `0`: a zero is a claim about the database, and
+/// "we could not reach the server" is not the same as "you have no sessions".
+const UNKNOWN = '—';
 
 export function HarvestScreen() {
     const { colors } = useTheme();
     const [shareUrl, setShareUrl] = useState('');
     const [pendingShares, setPendingShares] = useState<ShareLink[]>([]);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // These used to be `mockHarvestStats` and `mockProviderDistribution`:
+    // hard-coded constants -- 156 sessions, 4,523 messages, 22.6 MB, "2h ago"
+    // -- rendered as though they were this user's data, with no API call
+    // behind them and no demo-mode flag gating them. The root README states
+    // the policy for chasm-web ("an empty or failing backend renders as empty
+    // or as an error, never as fixtures"); the mobile app did not follow it.
+    const [harvestStats, setHarvestStats] = useState<Stats | null>(null);
+    const [statsError, setStatsError] = useState<string | null>(null);
+
+    const loadStats = useCallback(async () => {
+        try {
+            setHarvestStats(await statsApi.overview());
+            setStatsError(null);
+        } catch (err) {
+            setHarvestStats(null);
+            setStatsError(
+                err instanceof Error ? err.message : 'Could not reach the Chasm server'
+            );
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadStats();
+    }, [loadStats]);
+
+    const providerDistribution: [string, number][] = (harvestStats?.sessionsByProvider ?? [])
+        .map(({ provider, count }) => [provider, count] as [string, number])
+        .sort((a, b) => b[1] - a[1]);
 
     const handleAddShare = () => {
         if (!shareUrl.trim()) return;
@@ -86,9 +107,16 @@ export function HarvestScreen() {
         setPendingShares(prev => prev.filter(s => s.id !== id));
     };
 
+    // Was `setTimeout(() => setIsRefreshing(false), 1000)` -- a spinner that
+    // ran for a second and reloaded nothing, so pulling to refresh looked like
+    // it had fetched fresh data and had not.
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
+        try {
+            await loadStats();
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const handleHarvest = () => {
@@ -118,25 +146,45 @@ export function HarvestScreen() {
             <View style={styles.statsGrid}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Ionicons name="chatbubbles-outline" size={24} color={colors.primary} />
-                    <Text style={[styles.statValue, { color: colors.text }]}>{mockHarvestStats.totalSessions}</Text>
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                        {harvestStats ? harvestStats.totalSessions.toLocaleString() : UNKNOWN}
+                    </Text>
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Sessions</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Ionicons name="chatbox-outline" size={24} color="#10b981" />
-                    <Text style={[styles.statValue, { color: colors.text }]}>{mockHarvestStats.totalMessages}</Text>
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                        {harvestStats ? harvestStats.totalMessages.toLocaleString() : UNKNOWN}
+                    </Text>
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Messages</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="server-outline" size={24} color="#f59e0b" />
-                    <Text style={[styles.statValue, { color: colors.text }]}>{mockHarvestStats.dbSize}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>DB Size</Text>
+                    <Ionicons name="folder-outline" size={24} color="#f59e0b" />
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                        {harvestStats ? harvestStats.totalWorkspaces.toLocaleString() : UNKNOWN}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Workspaces</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="time-outline" size={24} color="#8b5cf6" />
-                    <Text style={[styles.statValue, { color: colors.text }]}>{mockHarvestStats.lastHarvest}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Last Harvest</Text>
+                    <Ionicons name="server-outline" size={24} color="#8b5cf6" />
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                        {/* Counted from the distribution rather than read from
+                            `totalProviders`, which the shared type marks
+                            optional -- the two cannot disagree this way. */}
+                        {harvestStats ? providerDistribution.length.toLocaleString() : UNKNOWN}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Providers</Text>
                 </View>
             </View>
+
+            {statsError && (
+                <View style={[styles.statsError, { borderColor: colors.border }]}>
+                    <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
+                    <Text style={[styles.statsErrorText, { color: colors.textSecondary }]}>
+                        Statistics unavailable: {statsError}
+                    </Text>
+                </View>
+            )}
 
             {/* Harvest Button */}
             <TouchableOpacity
@@ -226,13 +274,25 @@ export function HarvestScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                     <Ionicons name="pie-chart-outline" size={18} color={colors.text} /> Provider Distribution
                 </Text>
-                {mockProviderDistribution.map(([provider, count]) => (
+                {providerDistribution.length === 0 && (
+                    <Text style={[styles.distributionLabel, { color: colors.textSecondary }]}>
+                        {statsError
+                            ? 'Unavailable while the server cannot be reached.'
+                            : 'No sessions harvested yet.'}
+                    </Text>
+                )}
+                {providerDistribution.map(([provider, count]) => (
                     <View key={provider} style={styles.distributionItem}>
                         <Text style={[styles.distributionLabel, { color: colors.text }]}>{provider}</Text>
                         <View style={styles.distributionBarContainer}>
                             <View
                                 style={[styles.distributionBar, {
-                                    width: `${(count / mockHarvestStats.totalSessions) * 100}%`,
+                                    // Scaled against the largest provider, not
+                                    // the session total: a session can be
+                                    // counted under more than one provider, so
+                                    // the shares need not sum to the total and
+                                    // a bar could otherwise overflow its track.
+                                    width: `${(count / Math.max(...providerDistribution.map(p => p[1]))) * 100}%`,
                                     backgroundColor: colors.primary,
                                 }]}
                             />
@@ -282,6 +342,20 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         gap: 12,
         marginBottom: 16,
+    },
+    statsError: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        marginBottom: 16,
+    },
+    statsErrorText: {
+        flex: 1,
+        fontSize: 12,
     },
     statCard: {
         flex: 1,

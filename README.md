@@ -107,13 +107,26 @@ chasm harvest share <url>          # Import share link
 | --------------------- | --------------------------------- | -------------- |
 | **chasm-rust**        | Core Rust library and CLI         | ✅ Stable       |
 | **chasm-web**         | React web application             | ✅ Stable       |
-| **chasm-app**         | React Native mobile app           | ✅ Stable       |
+| **chasm-app**         | React Native mobile app           | ⚠️ Partly wired |
 | **chasm-desktop**     | Tauri desktop application         | ✅ Stable       |
 | **vscode-extension**  | VS Code extension                 | ✅ Stable       |
 | **browser-extension** | Chrome/Firefox extension          | ✅ Stable       |
 | **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable       |
 | **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
 | **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
+
+> **chasm-app is not finished.** Sessions, workspaces, chat and harvest
+> statistics come from the API. Five screens — Accounts, Developer, Protocols,
+> Research and SWE — still render built-in sample records (`sampleAccounts`,
+> `sampleMemories`, `samplePapers`, …) as though they were yours, and make no
+> API call at all. Their pull-to-refresh spins for a second and reloads
+> nothing.
+>
+> Two of them could be wired today: `/swe/*` is nine live endpoints and
+> `/providers` is two. Research, Datasets and Protocols have no backend to wire
+> to — no such paths exist in the server.
+>
+> This does not affect the CLI, the API, chasm-web or chasm-desktop.
 
 See [Implementation status](#implementation-status) for the per-area detail
 behind these labels, including which features need an API key or a
