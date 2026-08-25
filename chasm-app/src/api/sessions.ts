@@ -258,6 +258,18 @@ export const providers = {
         const response = await apiClient.post(`/api/providers/${encodeURIComponent(id)}/test`);
         return unwrapResponse(response);
     },
+
+    /**
+     * Switch a provider on or off, persistently.
+     *
+     * The catalogue is compiled into the server, so `enabled` is the only
+     * field this can change. Returns the updated provider; an id outside the
+     * catalogue is a 404.
+     */
+    async update(id: string, enabled: boolean): Promise<Provider> {
+        const response = await apiClient.put(`/api/providers/${encodeURIComponent(id)}`, { enabled });
+        return unwrapResponse(response);
+    },
 };
 
 // Legacy function export for backward compatibility

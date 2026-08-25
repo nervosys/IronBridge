@@ -389,6 +389,48 @@ paths:
                         items:
                           $ref: "#/components/schemas/Provider"
 
+  /providers/{id}:
+    put:
+      tags: [Providers]
+      summary: Switch a provider on or off
+      description: >
+        Persists the one mutable field on a provider. The catalogue itself is
+        compiled in, so nothing else about a provider can be changed here. An
+        id outside the catalogue is a 404 rather than a stored setting for a
+        provider that does not exist.
+      operationId: updateProvider
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Catalogue id, as returned by listProviders.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: The provider, with the new setting applied
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Provider"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /agents:
     get:
       tags: [Agents]
@@ -4142,33 +4184,54 @@ components:
 
     Provider:
       type: object
+      description: >
+        An entry in the compiled-in provider catalogue. Every field but
+        `enabled` is static: the catalogue cannot be edited over the API.
+      required: [id, name, type, status, icon, color, models, enabled]
       properties:
         id:
           type: string
+          description: Catalogue id, also the path parameter for updateProvider.
+          example: ollama
         name:
           type: string
+          example: Ollama
         type:
           type: string
-          enum:
-            [
-              copilot,
-              cursor,
-              chatgpt,
-              claude,
-              ollama,
-              lm-studio,
-              openai,
-              anthropic,
-              custom,
-            ]
-        enabled:
-          type: boolean
-        base_url:
+          description: >
+            Whether the provider runs on the user's own machine (`local`) or is
+            reached over the network (`cloud`). Clients should use this rather
+            than inferring it from the id.
+          enum: [cloud, local]
+        status:
           type: string
+          description: >
+            The catalogue's declared status. This is not a probe result -- for
+            a measured answer use `/system/providers/health`.
+          enum: [connected, disconnected]
+        icon:
+          type: string
+          description: Emoji used as the provider's glyph.
+          example: "🦙"
+        color:
+          type: string
+          description: Brand colour as a hex triplet.
+          example: "#000000"
+        endpoint:
+          type: string
+          description: >
+            Base URL, omitted for providers that declare none. Note the name:
+            this field is `endpoint`, not `base_url`.
+          example: http://localhost:11434
         models:
           type: array
           items:
             type: string
+        enabled:
+          type: boolean
+          description: >
+            Whether the user has switched this provider on. Defaults to true
+            and is persisted per id by updateProvider.
 
     Agent:
       type: object

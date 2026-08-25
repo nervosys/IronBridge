@@ -158,6 +158,7 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
             .route("/sessions/search", web::get().to(search_sessions))
             .route("/sessions/{id}", web::get().to(get_session))
             .route("/providers", web::get().to(list_providers))
+            .route("/providers/{id}", web::put().to(update_provider))
             .route("/stats", web::get().to(get_stats))
             .route("/stats/overview", web::get().to(get_stats))
             // Agent routes

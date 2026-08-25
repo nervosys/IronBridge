@@ -6,6 +6,8 @@
 
 #![allow(dead_code, unused_variables)]
 
+use std::collections::HashMap;
+
 use actix_web::{web, HttpResponse, Responder};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -999,6 +1001,15 @@ struct ProviderInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     endpoint: Option<String>,
     models: Vec<String>,
+    /// Whether the user has this provider switched on.
+    ///
+    /// The catalogue below is static, so this is the one field on a provider
+    /// that a user can change. It is stored per-id in `provider_settings` and
+    /// folded in by `list_providers`; a provider nobody has touched is on.
+    /// Nothing on the server consumes it yet -- it is a preference the clients
+    /// read -- but it is persisted so it survives a reload, which is what the
+    /// switch in the UI has always implied and never did.
+    enabled: bool,
 }
 
 impl ProviderInfo {
@@ -1023,6 +1034,8 @@ impl ProviderInfo {
             color: color.to_string(),
             endpoint: endpoint.map(|s| s.to_string()),
             models: models.into_iter().map(|s| s.to_string()).collect(),
+            // Default on; `list_providers` overrides from `provider_settings`.
+            enabled: true,
         }
     }
 
@@ -1043,12 +1056,111 @@ impl ProviderInfo {
             color: color.to_string(),
             endpoint: Some(endpoint.to_string()),
             models: models.into_iter().map(|s| s.to_string()).collect(),
+            // Default on; `list_providers` overrides from `provider_settings`.
+            enabled: true,
         }
     }
 }
 
-pub async fn list_providers() -> impl Responder {
-    ApiResponse::success(all_providers())
+/// Per-provider user settings.
+///
+/// Keyed by the catalogue id. Only ids that have been explicitly changed get a
+/// row, so the table stays empty on a fresh install and an absent row means
+/// "default", not "off".
+fn init_provider_settings_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS provider_settings (
+            provider_id TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Read the stored on/off overrides, keyed by provider id.
+fn provider_overrides(conn: &rusqlite::Connection) -> rusqlite::Result<HashMap<String, bool>> {
+    let mut stmt = conn.prepare("SELECT provider_id, enabled FROM provider_settings")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? != 0))
+    })?;
+    rows.collect()
+}
+
+pub async fn list_providers(state: web::Data<AppState>) -> impl Responder {
+    let db = state.db.lock().unwrap();
+
+    if let Err(e) = init_provider_settings_table(&db.conn) {
+        return ApiResponse::<()>::error(&format!("Database error: {e}"));
+    }
+
+    let overrides = match provider_overrides(&db.conn) {
+        Ok(o) => o,
+        Err(e) => return ApiResponse::<()>::error(&format!("Database error: {e}")),
+    };
+
+    let mut providers = all_providers();
+    for p in &mut providers {
+        if let Some(&enabled) = overrides.get(&p.id) {
+            p.enabled = enabled;
+        }
+    }
+
+    ApiResponse::success(providers)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProviderRequest {
+    pub enabled: bool,
+}
+
+/// Switch a provider on or off, persistently.
+///
+/// The catalogue itself is compiled in and cannot be edited over the API, so
+/// this writes only the one mutable bit. An id outside the catalogue is a 404
+/// rather than a stored row for a provider that does not exist -- otherwise
+/// `provider_settings` would accumulate entries nothing ever reads.
+pub async fn update_provider(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: web::Json<UpdateProviderRequest>,
+) -> impl Responder {
+    let id = path.into_inner();
+
+    let mut providers = all_providers();
+    let Some(provider) = providers.iter_mut().find(|p| p.id == id) else {
+        return HttpResponse::NotFound().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some(format!("Unknown provider: {id}")),
+        });
+    };
+
+    let db = state.db.lock().unwrap();
+
+    if let Err(e) = init_provider_settings_table(&db.conn) {
+        return ApiResponse::<()>::error(&format!("Database error: {e}"));
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let result = db.conn.execute(
+        "INSERT INTO provider_settings (provider_id, enabled, updated_at)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(provider_id) DO UPDATE SET enabled = ?2, updated_at = ?3",
+        params![id, body.enabled as i64, now],
+    );
+
+    if let Err(e) = result {
+        return ApiResponse::<()>::error(&format!("Failed to update provider: {e}"));
+    }
+
+    provider.enabled = body.enabled;
+    ApiResponse::success(provider)
 }
 
 /// The static provider catalogue.
@@ -2848,5 +2960,204 @@ mod provider_health_tests {
             .expect("copilot row");
         assert_eq!(copilot["status"], "unknown");
         assert!(copilot["latency"].is_null());
+    }
+}
+
+#[cfg(test)]
+mod provider_settings_tests {
+    use super::*;
+    use crate::ChatDatabase;
+    use actix_web::{test, App};
+    use std::path::PathBuf;
+
+    fn temp_state(tag: &str) -> (web::Data<AppState>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path: PathBuf = dir.path().join(format!("{tag}.db"));
+        crate::commands::create_harvest_database(&path).expect("harvest schema");
+        let db = ChatDatabase::open(&path).expect("open");
+        (web::Data::new(AppState::new(db, path)), dir)
+    }
+
+    macro_rules! app {
+        ($state:expr) => {
+            test::init_service(
+                App::new().app_data($state.clone()).service(
+                    web::scope("/api")
+                        .route("/providers", web::get().to(list_providers))
+                        .route("/providers/{id}", web::put().to(update_provider)),
+                ),
+            )
+            .await
+        };
+    }
+
+    async fn body_json(resp: actix_web::dev::ServiceResponse) -> serde_json::Value {
+        let bytes = test::read_body(resp).await;
+        serde_json::from_slice(&bytes).expect("json body")
+    }
+
+    async fn list(state: &web::Data<AppState>) -> Vec<serde_json::Value> {
+        let app = app!(state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/api/providers").to_request(),
+        )
+        .await;
+        body_json(resp).await["data"]
+            .as_array()
+            .expect("data is an array")
+            .clone()
+    }
+
+    /// Every provider carries the field, and it defaults to on.
+    ///
+    /// It did not exist at all before: the clients read `enabled` off each
+    /// provider and the server never sent it, so `enabled ?? false` made the
+    /// whole catalogue render as switched off and the screen's "enabled"
+    /// count read 0 of 32 on every install.
+    #[tokio::test]
+    async fn enabled_is_present_and_defaults_on() {
+        let (state, _dir) = temp_state("defaults");
+        let providers = list(&state).await;
+
+        assert!(!providers.is_empty(), "catalogue is empty");
+        for p in &providers {
+            assert_eq!(
+                p["enabled"].as_bool(),
+                Some(true),
+                "provider {} has no enabled field, or defaults off",
+                p["id"]
+            );
+        }
+    }
+
+    /// The whole point of the endpoint: the setting outlives the request.
+    #[tokio::test]
+    async fn disabling_a_provider_persists_to_the_next_list() {
+        let (state, _dir) = temp_state("persist");
+        let app = app!(&state);
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/providers/openai")
+                .set_json(serde_json::json!({ "enabled": false }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 200);
+        let body = body_json(resp).await;
+        assert_eq!(body["data"]["enabled"].as_bool(), Some(false));
+        assert_eq!(body["data"]["id"].as_str(), Some("openai"));
+
+        let providers = list(&state).await;
+        let openai = providers
+            .iter()
+            .find(|p| p["id"] == "openai")
+            .expect("openai in catalogue");
+        assert_eq!(openai["enabled"].as_bool(), Some(false));
+
+        // Only the one that was touched.
+        let others_on = providers
+            .iter()
+            .filter(|p| p["id"] != "openai")
+            .all(|p| p["enabled"] == true);
+        assert!(others_on, "disabling one provider changed the others");
+    }
+
+    /// Off and back on again, so the update is not one-way.
+    #[tokio::test]
+    async fn re_enabling_restores_the_provider() {
+        let (state, _dir) = temp_state("toggle");
+        let app = app!(&state);
+
+        for enabled in [false, true] {
+            let resp = test::call_service(
+                &app,
+                test::TestRequest::put()
+                    .uri("/api/providers/ollama")
+                    .set_json(serde_json::json!({ "enabled": enabled }))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(resp.status(), 200);
+
+            let providers = list(&state).await;
+            let ollama = providers.iter().find(|p| p["id"] == "ollama").unwrap();
+            assert_eq!(ollama["enabled"].as_bool(), Some(enabled));
+        }
+    }
+
+    /// An id outside the catalogue is a 404, not a stored row.
+    ///
+    /// Otherwise `provider_settings` would accumulate rows for providers that
+    /// do not exist, and the client would get a 200 for a write that can
+    /// never be read back.
+    #[tokio::test]
+    async fn unknown_provider_is_a_404() {
+        let (state, _dir) = temp_state("unknown");
+        let app = app!(&state);
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/providers/not-a-provider")
+                .set_json(serde_json::json!({ "enabled": false }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 404);
+
+        // and nothing was written
+        let db = state.db.lock().unwrap();
+        init_provider_settings_table(&db.conn).expect("table");
+        let count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM provider_settings", [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(count, 0, "a 404 still wrote a settings row");
+    }
+
+    /// The first call of an install must not fail on a missing table.
+    ///
+    /// This is the shape that bit `delete_account`: every other handler
+    /// created the table first, so the one that did not only failed on a
+    /// database that had never seen the feature.
+    #[tokio::test]
+    async fn update_works_before_any_list() {
+        let (state, _dir) = temp_state("cold");
+        let app = app!(&state);
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/providers/anthropic")
+                .set_json(serde_json::json!({ "enabled": false }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(resp.status(), 200, "cold update failed");
+    }
+
+    /// The response shape the clients actually read.
+    ///
+    /// `endpoint`, not `base_url`: the mobile screen read `base_url` and got
+    /// undefined every time, which silently disabled its localhost check.
+    #[tokio::test]
+    async fn local_providers_are_typed_local_and_carry_an_endpoint() {
+        let (state, _dir) = temp_state("shape");
+        let providers = list(&state).await;
+
+        let ollama = providers.iter().find(|p| p["id"] == "ollama").unwrap();
+        assert_eq!(ollama["type"].as_str(), Some("local"));
+        assert!(
+            ollama["endpoint"].as_str().is_some(),
+            "ollama has no endpoint field"
+        );
+        assert!(ollama["base_url"].is_null(), "base_url is not a field");
+
+        // Copilot is cloud, whatever its id suggests.
+        let copilot = providers.iter().find(|p| p["id"] == "copilot").unwrap();
+        assert_eq!(copilot["type"].as_str(), Some("cloud"));
     }
 }
