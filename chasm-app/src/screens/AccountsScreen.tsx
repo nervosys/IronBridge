@@ -246,9 +246,10 @@ export function AccountsScreen() {
                                 </TouchableOpacity>
                             </View>
                             <Text style={[styles.credentialNote, { color: colors.textSecondary }]}>
-                                Stored in the local Chasm database in the clear. Chasm has no
-                                encryption at rest yet, so anything that can read the database file
-                                can read this key.
+                                Encrypted with AES-256-GCM before it is stored, under a key the
+                                server derives from its CHASM_MASTER_KEY environment variable. If
+                                that is not set the server refuses to store the key rather than
+                                writing it in the clear, and saving will fail with that reason.
                             </Text>
                         </>
                     )}

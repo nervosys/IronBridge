@@ -193,6 +193,9 @@ Endpoints that refuse rather than guess:
   nothing.
 - `GET /api/stats/providers` reports `tokens: 0` where the store holds no
   token counts, rather than estimating.
+- `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
+  credential it is given. Without one it returns `400` naming the variable,
+  rather than writing the secret to the database in the clear.
 
 Deleting a workspace **detaches** its sessions rather than deleting them.
 Merging leaves its sources intact. A fork is an independent copy, not an alias.

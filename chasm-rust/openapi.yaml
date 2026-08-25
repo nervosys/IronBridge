@@ -922,8 +922,9 @@ paths:
       tags: [Settings]
       summary: List provider accounts
       description: >
-        Stored provider credentials, newest first. The credential itself is
-        never returned -- only the metadata around it.
+        Stored provider accounts, newest first. The credential itself is never
+        returned -- only the metadata around it. Credentials are held encrypted;
+        see createAccount.
       operationId: listAccounts
       responses:
         "200":
@@ -943,8 +944,18 @@ paths:
       tags: [Settings]
       summary: Add a provider account
       description: >
-        Stores a credential for a provider. The credential is written to the
-        local database as JSON in the clear; Chasm has no encryption at rest.
+        Stores a credential for a provider, encrypted with AES-256-GCM under a
+        key derived from the server's `CHASM_MASTER_KEY` environment variable
+        and a per-install salt.
+
+
+        If `CHASM_MASTER_KEY` is unset the request is refused with a 400 rather
+        than the credential being written in the clear. Set it in the server's
+        environment and restart.
+
+
+        The credential is never returned by any endpoint, including this one:
+        the response carries only the account metadata.
       operationId: createAccount
       requestBody:
         required: true
@@ -960,7 +971,7 @@ paths:
                   example: Anthropic
                 credentials:
                   type: object
-                  description: Opaque credential blob, stored verbatim and never read back out.
+                  description: Opaque credential blob, encrypted before storage and never read back out.
                   additionalProperties: true
       responses:
         "200":
@@ -974,6 +985,13 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/ProviderAccount"
+        "400":
+          description: >
+            No encryption key is configured, so the credential was not stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiEnvelope"
 
   /settings/accounts/{id}:
     delete:

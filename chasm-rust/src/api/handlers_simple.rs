@@ -13,6 +13,8 @@ use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use super::state::AppState;
+use crate::encryption::EncryptionManager;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 
 /// Check if a string is an empty code block marker (just ``` with no content)
 fn is_empty_code_block(s: &str) -> bool {
@@ -2475,7 +2477,144 @@ fn init_accounts_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         )",
         [],
     )?;
+
+    // Added after the table shipped, so existing databases need the column
+    // rather than the CREATE above. Rows written before this point are
+    // plaintext and say so, which is what lets them still be read.
+    if !column_exists(conn, "provider_accounts", "credentials_format")? {
+        conn.execute(
+            "ALTER TABLE provider_accounts
+             ADD COLUMN credentials_format TEXT NOT NULL DEFAULT 'plaintext'",
+            [],
+        )?;
+    }
     Ok(())
+}
+
+fn column_exists(conn: &rusqlite::Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        if row.get::<_, String>(1)? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The environment variable holding the credential encryption key.
+///
+/// Deliberately not a setting in the database: a key stored beside the
+/// ciphertext it protects is not a key. The operator decides where it lives.
+pub const MASTER_KEY_ENV: &str = "CHASM_MASTER_KEY";
+
+/// Format tag written alongside each credential.
+const FORMAT_ENCRYPTED: &str = "aes-256-gcm";
+const FORMAT_PLAINTEXT: &str = "plaintext";
+
+fn init_credential_salt_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS credential_crypto (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            salt TEXT NOT NULL
+        )",
+        [],
+    )?;
+    Ok(())
+}
+
+/// The install's credential salt, generated once and kept.
+///
+/// It has to be stable: the key is derived from the passphrase and this salt
+/// together, so a fresh salt would derive a different key and every credential
+/// already stored would stop decrypting. A salt is not secret -- it exists to
+/// make the derivation unique per install -- so keeping it in the database
+/// beside the ciphertext is fine in a way keeping the passphrase there is not.
+fn credential_salt(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<u8>> {
+    init_credential_salt_table(conn)?;
+
+    let existing: Option<String> = conn
+        .query_row("SELECT salt FROM credential_crypto WHERE id = 1", [], |r| {
+            r.get(0)
+        })
+        .optional()?;
+
+    if let Some(encoded) = existing {
+        if let Ok(bytes) = BASE64.decode(&encoded) {
+            return Ok(bytes);
+        }
+    }
+
+    let salt: [u8; 16] = rand::random();
+    let encoded = BASE64.encode(salt);
+    conn.execute(
+        "INSERT OR REPLACE INTO credential_crypto (id, salt) VALUES (1, ?1)",
+        params![encoded],
+    )?;
+    Ok(salt.to_vec())
+}
+
+/// Build the cipher for this install, or `None` if no key is configured.
+///
+/// `None` is not "store it in the clear" -- `create_account` refuses the write
+/// instead. Writing a secret to disk unprotected because a variable was unset
+/// is exactly the kind of quiet substitution this codebase is being audited
+/// for.
+fn credential_cipher(conn: &rusqlite::Connection) -> rusqlite::Result<Option<EncryptionManager>> {
+    let key = match std::env::var(MASTER_KEY_ENV) {
+        Ok(k) if !k.trim().is_empty() => k,
+        _ => return Ok(None),
+    };
+
+    let salt = credential_salt(conn)?;
+    match EncryptionManager::new(&key, &salt) {
+        Ok(manager) => Ok(Some(manager)),
+        // A key that cannot derive is a misconfiguration, not a reason to
+        // fall back to plaintext.
+        Err(e) => {
+            eprintln!("[WARN] accounts: {MASTER_KEY_ENV} is set but unusable: {e}");
+            Ok(None)
+        }
+    }
+}
+
+/// Read a stored credential back, whichever format it is in.
+///
+/// Nothing serves this over the API and nothing should -- the credential is
+/// write-only as far as clients are concerned. It exists so the encrypted
+/// write has a reader that proves it round-trips, and so whatever eventually
+/// uses a credential to call a provider has one path that handles both the
+/// rows written before encryption and the rows written after.
+#[allow(dead_code)]
+fn read_credential(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> rusqlite::Result<Option<Result<String, String>>> {
+    let row: Option<(String, String)> = conn
+        .query_row(
+            "SELECT credentials, credentials_format FROM provider_accounts WHERE id = ?1",
+            params![id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+
+    let Some((stored, format)) = row else {
+        return Ok(None);
+    };
+
+    if format != FORMAT_ENCRYPTED {
+        return Ok(Some(Ok(stored)));
+    }
+
+    let Some(cipher) = credential_cipher(conn)? else {
+        return Ok(Some(Err(format!(
+            "credential is encrypted but {MASTER_KEY_ENV} is not set"
+        ))));
+    };
+
+    Ok(Some(
+        cipher.decrypt_string(&stored).map_err(|e| e.to_string()),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -2522,11 +2661,19 @@ pub async fn list_accounts(state: web::Data<AppState>) -> impl Responder {
 
 /// Create a provider account
 ///
-/// The credential is stored as JSON in the `credentials` column, in the clear:
-/// this database has no encryption at rest and Chasm has no key management to
-/// give it one. The column is never read back out over the API, so a
-/// credential cannot leak through this endpoint -- but anything that can read
-/// the database file can read the secret. Callers should treat it accordingly.
+/// The credential is encrypted with AES-256-GCM before it is written, under a
+/// key derived from `CHASM_MASTER_KEY` and this install's salt.
+///
+/// It used to be written as plaintext JSON, because there was no key to
+/// encrypt it with. There still is not one unless the operator supplies it, so
+/// this refuses the write when the variable is unset rather than storing the
+/// secret in the clear and saying nothing: an endpoint that accepts a
+/// credential is understood to be protecting it, and a silent downgrade to
+/// plaintext is the same defect as a spinner that downloads nothing.
+///
+/// Rows written before this change are still readable -- they carry
+/// `credentials_format = 'plaintext'` and `read_credential` honours it -- but
+/// nothing writes that format any more.
 pub async fn create_account(
     state: web::Data<AppState>,
     body: web::Json<CreateAccountRequest>,
@@ -2537,6 +2684,11 @@ pub async fn create_account(
         return ApiResponse::<()>::error(&format!("Database error: {}", e));
     }
 
+    let cipher = match credential_cipher(&db.conn) {
+        Ok(c) => c,
+        Err(e) => return ApiResponse::<()>::error(&format!("Database error: {e}")),
+    };
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -2545,10 +2697,26 @@ pub async fn create_account(
     let name = format!("{} Account", body.provider);
     let credentials_json = serde_json::to_string(&body.credentials).unwrap();
 
+    let Some(cipher) = cipher else {
+        return HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some(format!(
+                "Refusing to store a credential unencrypted. Set {MASTER_KEY_ENV} \
+                 in the server's environment and restart, then try again."
+            )),
+        });
+    };
+
+    let stored = match cipher.encrypt_string(&credentials_json) {
+        Ok(c) => c,
+        Err(e) => return ApiResponse::<()>::error(&format!("Failed to encrypt credential: {e}")),
+    };
+
     let result = db.conn.execute(
-        "INSERT INTO provider_accounts (id, provider, name, credentials, is_default, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)",
-        params![id, body.provider, name, credentials_json, now, now],
+        "INSERT INTO provider_accounts (id, provider, name, credentials, credentials_format, is_default, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)",
+        params![id, body.provider, name, stored, FORMAT_ENCRYPTED, now, now],
     );
 
     match result {
@@ -3159,5 +3327,249 @@ mod provider_settings_tests {
         // Copilot is cloud, whatever its id suggests.
         let copilot = providers.iter().find(|p| p["id"] == "copilot").unwrap();
         assert_eq!(copilot["type"].as_str(), Some("cloud"));
+    }
+}
+
+#[cfg(test)]
+mod credential_encryption_tests {
+    use super::*;
+    use crate::ChatDatabase;
+    use actix_web::{test, App};
+    use std::path::PathBuf;
+
+    /// `CHASM_MASTER_KEY` is process-wide, so these tests must not run at the
+    /// same time as one another. Rust runs tests in threads by default, and a
+    /// test that unsets the variable while another is mid-write would flip
+    /// that write to the refusal path and fail it for the wrong reason.
+    /// Async-aware on purpose: every test below holds this across an `await`
+    /// while it drives the handler, which a `std::sync::Mutex` must not be.
+    static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    struct MasterKey;
+
+    impl MasterKey {
+        fn set(value: &str) -> Self {
+            std::env::set_var(MASTER_KEY_ENV, value);
+            MasterKey
+        }
+        fn unset() -> Self {
+            std::env::remove_var(MASTER_KEY_ENV);
+            MasterKey
+        }
+    }
+
+    impl Drop for MasterKey {
+        fn drop(&mut self) {
+            std::env::remove_var(MASTER_KEY_ENV);
+        }
+    }
+
+    fn temp_state(tag: &str) -> (web::Data<AppState>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path: PathBuf = dir.path().join(format!("{tag}.db"));
+        crate::commands::create_harvest_database(&path).expect("harvest schema");
+        let db = ChatDatabase::open(&path).expect("open");
+        (web::Data::new(AppState::new(db, path)), dir)
+    }
+
+    macro_rules! app {
+        ($state:expr) => {
+            test::init_service(
+                App::new().app_data($state.clone()).service(
+                    web::scope("/api")
+                        .route("/settings/accounts", web::get().to(list_accounts))
+                        .route("/settings/accounts", web::post().to(create_account)),
+                ),
+            )
+            .await
+        };
+    }
+
+    async fn post_account(
+        state: &web::Data<AppState>,
+        provider: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = app!(state);
+        test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/settings/accounts")
+                .set_json(serde_json::json!({
+                    "provider": provider,
+                    "credentials": { "apiKey": "sk-do-not-store-me" },
+                }))
+                .to_request(),
+        )
+        .await
+    }
+
+    /// The secret must not be findable in the database file.
+    ///
+    /// This is the assertion the feature exists for, so it reads the raw
+    /// column rather than trusting the format tag: a row marked encrypted that
+    /// still contains the key would pass a tag check and fail this.
+    #[tokio::test]
+    async fn a_stored_credential_is_not_recoverable_from_the_column() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("encrypted");
+
+        let resp = post_account(&state, "anthropic").await;
+        assert_eq!(resp.status(), 200);
+
+        let db = state.db.lock().unwrap();
+        let (stored, format): (String, String) = db
+            .conn
+            .query_row(
+                "SELECT credentials, credentials_format FROM provider_accounts",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("the account row");
+
+        assert_eq!(format, FORMAT_ENCRYPTED);
+        assert!(
+            !stored.contains("sk-do-not-store-me"),
+            "the credential is still in the column: {stored}"
+        );
+        assert!(
+            stored.contains("ciphertext"),
+            "not an EncryptedData envelope: {stored}"
+        );
+    }
+
+    /// Encrypted in must be the same thing out.
+    #[tokio::test]
+    async fn an_encrypted_credential_round_trips() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("roundtrip");
+
+        let resp = post_account(&state, "openai").await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value =
+            serde_json::from_slice(&test::read_body(resp).await).expect("json");
+        let id = body["data"]["id"].as_str().expect("id").to_string();
+
+        let db = state.db.lock().unwrap();
+        let recovered = read_credential(&db.conn, &id)
+            .expect("db")
+            .expect("row exists")
+            .expect("decrypts");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&recovered).expect("json"),
+            serde_json::json!({ "apiKey": "sk-do-not-store-me" })
+        );
+    }
+
+    /// With no key configured the write is refused, not silently downgraded.
+    ///
+    /// The whole point: a 200 here would mean the secret went to disk in the
+    /// clear while the client was told it was stored safely.
+    #[tokio::test]
+    async fn without_a_key_the_write_is_refused() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::unset();
+        let (state, _dir) = temp_state("nokey");
+
+        let resp = post_account(&state, "google").await;
+        assert_eq!(resp.status(), 400);
+
+        let db = state.db.lock().unwrap();
+        let count: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM provider_accounts", [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(count, 0, "a refused write still stored a row");
+    }
+
+    /// Rows written before encryption existed are still readable.
+    #[tokio::test]
+    async fn a_plaintext_row_still_reads() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("legacy");
+
+        {
+            let db = state.db.lock().unwrap();
+            init_accounts_table(&db.conn).expect("table");
+            db.conn
+                .execute(
+                    "INSERT INTO provider_accounts
+                     (id, provider, name, credentials, credentials_format,
+                      is_default, created_at, updated_at)
+                     VALUES ('old', 'openai', 'OpenAI Account', ?1, 'plaintext', 0, 1, 1)",
+                    params![r#"{"apiKey":"sk-written-before-encryption"}"#],
+                )
+                .expect("insert legacy row");
+        }
+
+        let db = state.db.lock().unwrap();
+        let recovered = read_credential(&db.conn, "old")
+            .expect("db")
+            .expect("row exists")
+            .expect("plaintext needs no key");
+        assert!(recovered.contains("sk-written-before-encryption"));
+    }
+
+    /// A different key must not decrypt an existing credential.
+    #[tokio::test]
+    async fn the_wrong_key_does_not_decrypt() {
+        let _guard = ENV_LOCK.lock().await;
+        let (state, _dir) = temp_state("wrongkey");
+
+        let id = {
+            let _key = MasterKey::set("the right passphrase");
+            let resp = post_account(&state, "mistral").await;
+            assert_eq!(resp.status(), 200);
+            let body: serde_json::Value =
+                serde_json::from_slice(&test::read_body(resp).await).expect("json");
+            body["data"]["id"].as_str().expect("id").to_string()
+        };
+
+        let _key = MasterKey::set("a different passphrase");
+        let db = state.db.lock().unwrap();
+        let outcome = read_credential(&db.conn, &id).expect("db").expect("row");
+        assert!(outcome.is_err(), "the wrong key decrypted the credential");
+    }
+
+    /// The salt survives, so a credential outlives the process that wrote it.
+    ///
+    /// A salt regenerated per call would derive a different key each time and
+    /// every stored credential would stop decrypting -- and because nothing
+    /// reads credentials back today, that would go unnoticed until something
+    /// finally did.
+    #[tokio::test]
+    async fn the_salt_is_stable_across_reads() {
+        let _guard = ENV_LOCK.lock().await;
+        let (state, _dir) = temp_state("salt");
+        let db = state.db.lock().unwrap();
+
+        let first = credential_salt(&db.conn).expect("salt");
+        let second = credential_salt(&db.conn).expect("salt");
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 16);
+    }
+
+    /// The listing still refuses to hand the credential back.
+    #[tokio::test]
+    async fn listing_accounts_never_returns_the_credential() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("listing");
+
+        assert_eq!(post_account(&state, "cohere").await.status(), 200);
+
+        let app = app!(&state);
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/settings/accounts")
+                .to_request(),
+        )
+        .await;
+        let raw = String::from_utf8(test::read_body(resp).await.to_vec()).expect("utf8");
+        assert!(!raw.contains("credential"), "listing leaked a field: {raw}");
+        assert!(!raw.contains("sk-do-not-store-me"));
     }
 }
