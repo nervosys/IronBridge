@@ -4,19 +4,14 @@
 import { useState, useMemo } from 'react';
 import {
     BarChart3,
-    TrendingUp,
     DollarSign,
-    Zap,
-    Target,
-    ArrowUpRight,
-    ArrowDownRight,
+    Expand,
     Filter,
-    Download,
-    RefreshCw,
     Info,
     Cpu,
     Loader2,
     AlertCircle,
+    RefreshCw,
 } from 'lucide-react';
 import { useProviders, useProviderHealth, useStatistics } from '../hooks/useApi';
 import {
@@ -28,77 +23,108 @@ import {
     Tooltip,
     Legend,
     ResponsiveContainer,
-    RadarChart,
-    PolarGrid,
-    PolarAngleAxis,
-    PolarRadiusAxis,
-    Radar,
     ScatterChart,
     Scatter,
-    ZAxis,
 } from 'recharts';
 
-// Provider/Model data with performance metrics
-const providerModels = [
+interface ModelSpec {
+    provider: string;
+    model: string;
+    type: 'cloud' | 'local';
+    category: 'chat' | 'reasoning' | 'code';
+    /** Published list price per 1M input tokens. `null` when Chasm does not know it. */
+    inputCost: number | null;
+    /** Published list price per 1M output tokens. `null` when Chasm does not know it. */
+    outputCost: number | null;
+    /** Published context window in tokens. `null` when Chasm does not know it. */
+    contextWindow: number | null;
+}
+
+/**
+ * A static reference table of published model attributes.
+ *
+ * This table used to carry `latency`, `tokensPerSec`, `accuracy`, `mmlu`,
+ * `humaneval`, `reasoning`, `coding` and `creative` per model. It drove a
+ * "Most Accurate" card, a speed ranking, a value score, a five-axis radar
+ * chart and a benchmark bar chart, and the footer said the numbers came "from
+ * reference sources".
+ *
+ * They came from nowhere. Chasm runs no benchmark and records no timing;
+ * "accuracy", "reasoning", "coding" and "creative" are not metrics anyone
+ * publishes; and MMLU and HumanEval are real benchmarks whose scores were
+ * being asserted here without a source to check them against. Worse, models
+ * discovered from the user's own connected providers were assigned `mmlu: 80,
+ * humaneval: 80, accuracy: 85` on the spot -- benchmark scores invented for a
+ * model the moment it appeared.
+ *
+ * All of it is gone. What remains is list price and context window, which the
+ * providers publish. Those still go stale; see the note the page renders.
+ */
+const providerModels: ModelSpec[] = [
     // OpenAI
-    { provider: 'OpenAI', model: 'gpt-4o', type: 'cloud', category: 'chat', inputCost: 2.50, outputCost: 10.00, latency: 850, tokensPerSec: 85, accuracy: 94, contextWindow: 128000, mmlu: 88.7, humaneval: 90.2, reasoning: 92, coding: 89, creative: 88 },
-    { provider: 'OpenAI', model: 'gpt-4o-mini', type: 'cloud', category: 'chat', inputCost: 0.15, outputCost: 0.60, latency: 420, tokensPerSec: 130, accuracy: 87, contextWindow: 128000, mmlu: 82.0, humaneval: 87.0, reasoning: 85, coding: 84, creative: 86 },
-    { provider: 'OpenAI', model: 'o1', type: 'cloud', category: 'reasoning', inputCost: 15.00, outputCost: 60.00, latency: 12000, tokensPerSec: 25, accuracy: 97, contextWindow: 200000, mmlu: 92.3, humaneval: 94.5, reasoning: 98, coding: 93, creative: 75 },
-    { provider: 'OpenAI', model: 'o1-mini', type: 'cloud', category: 'reasoning', inputCost: 3.00, outputCost: 12.00, latency: 4500, tokensPerSec: 45, accuracy: 93, contextWindow: 128000, mmlu: 85.2, humaneval: 92.0, reasoning: 95, coding: 91, creative: 72 },
+    { provider: 'OpenAI', model: 'gpt-4o', type: 'cloud', category: 'chat', inputCost: 2.5, outputCost: 10.0, contextWindow: 128000 },
+    { provider: 'OpenAI', model: 'gpt-4o-mini', type: 'cloud', category: 'chat', inputCost: 0.15, outputCost: 0.6, contextWindow: 128000 },
+    { provider: 'OpenAI', model: 'o1', type: 'cloud', category: 'reasoning', inputCost: 15.0, outputCost: 60.0, contextWindow: 200000 },
+    { provider: 'OpenAI', model: 'o1-mini', type: 'cloud', category: 'reasoning', inputCost: 3.0, outputCost: 12.0, contextWindow: 128000 },
 
     // Anthropic
-    { provider: 'Anthropic', model: 'claude-4-opus', type: 'cloud', category: 'chat', inputCost: 15.00, outputCost: 75.00, latency: 1200, tokensPerSec: 60, accuracy: 96, contextWindow: 200000, mmlu: 91.5, humaneval: 92.8, reasoning: 94, coding: 91, creative: 95 },
-    { provider: 'Anthropic', model: 'claude-4-sonnet', type: 'cloud', category: 'chat', inputCost: 3.00, outputCost: 15.00, latency: 680, tokensPerSec: 95, accuracy: 93, contextWindow: 200000, mmlu: 88.7, humaneval: 93.7, reasoning: 91, coding: 92, creative: 93 },
-    { provider: 'Anthropic', model: 'claude-3.5-sonnet', type: 'cloud', category: 'chat', inputCost: 3.00, outputCost: 15.00, latency: 650, tokensPerSec: 100, accuracy: 92, contextWindow: 200000, mmlu: 88.3, humaneval: 92.0, reasoning: 90, coding: 91, creative: 92 },
-    { provider: 'Anthropic', model: 'claude-3.5-haiku', type: 'cloud', category: 'chat', inputCost: 0.25, outputCost: 1.25, latency: 280, tokensPerSec: 180, accuracy: 85, contextWindow: 200000, mmlu: 75.2, humaneval: 88.1, reasoning: 82, coding: 86, creative: 84 },
+    { provider: 'Anthropic', model: 'claude-4-opus', type: 'cloud', category: 'chat', inputCost: 15.0, outputCost: 75.0, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-4-sonnet', type: 'cloud', category: 'chat', inputCost: 3.0, outputCost: 15.0, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-3.5-sonnet', type: 'cloud', category: 'chat', inputCost: 3.0, outputCost: 15.0, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-3.5-haiku', type: 'cloud', category: 'chat', inputCost: 0.25, outputCost: 1.25, contextWindow: 200000 },
 
     // Google
-    { provider: 'Google', model: 'gemini-2.0-flash', type: 'cloud', category: 'chat', inputCost: 0.075, outputCost: 0.30, latency: 320, tokensPerSec: 200, accuracy: 88, contextWindow: 1000000, mmlu: 85.0, humaneval: 85.5, reasoning: 86, coding: 84, creative: 87 },
-    { provider: 'Google', model: 'gemini-2.0-pro', type: 'cloud', category: 'chat', inputCost: 1.25, outputCost: 5.00, latency: 750, tokensPerSec: 90, accuracy: 92, contextWindow: 2000000, mmlu: 88.5, humaneval: 89.2, reasoning: 90, coding: 88, creative: 89 },
-    { provider: 'Google', model: 'gemini-1.5-pro', type: 'cloud', category: 'chat', inputCost: 1.25, outputCost: 5.00, latency: 800, tokensPerSec: 85, accuracy: 90, contextWindow: 2000000, mmlu: 86.5, humaneval: 87.0, reasoning: 88, coding: 86, creative: 88 },
+    { provider: 'Google', model: 'gemini-2.0-flash', type: 'cloud', category: 'chat', inputCost: 0.075, outputCost: 0.3, contextWindow: 1000000 },
+    { provider: 'Google', model: 'gemini-2.0-pro', type: 'cloud', category: 'chat', inputCost: 1.25, outputCost: 5.0, contextWindow: 2000000 },
 
     // DeepSeek
-    { provider: 'DeepSeek', model: 'deepseek-chat', type: 'cloud', category: 'chat', inputCost: 0.14, outputCost: 0.28, latency: 450, tokensPerSec: 120, accuracy: 89, contextWindow: 64000, mmlu: 84.0, humaneval: 88.5, reasoning: 87, coding: 90, creative: 85 },
-    { provider: 'DeepSeek', model: 'deepseek-reasoner', type: 'cloud', category: 'reasoning', inputCost: 0.55, outputCost: 2.19, latency: 8000, tokensPerSec: 35, accuracy: 94, contextWindow: 64000, mmlu: 90.8, humaneval: 92.3, reasoning: 96, coding: 93, creative: 70 },
-    { provider: 'DeepSeek', model: 'deepseek-coder', type: 'cloud', category: 'code', inputCost: 0.14, outputCost: 0.28, latency: 400, tokensPerSec: 130, accuracy: 91, contextWindow: 64000, mmlu: 78.0, humaneval: 93.5, reasoning: 82, coding: 95, creative: 65 },
-
-    // Perplexity
-    { provider: 'Perplexity', model: 'sonar-pro', type: 'cloud', category: 'search', inputCost: 3.00, outputCost: 15.00, latency: 1500, tokensPerSec: 70, accuracy: 91, contextWindow: 200000, mmlu: 87.0, humaneval: 82.0, reasoning: 88, coding: 80, creative: 85 },
-    { provider: 'Perplexity', model: 'sonar-reasoning-pro', type: 'cloud', category: 'reasoning', inputCost: 5.00, outputCost: 20.00, latency: 6000, tokensPerSec: 40, accuracy: 93, contextWindow: 200000, mmlu: 89.5, humaneval: 84.0, reasoning: 94, coding: 82, creative: 78 },
+    { provider: 'DeepSeek', model: 'deepseek-chat', type: 'cloud', category: 'chat', inputCost: 0.14, outputCost: 0.28, contextWindow: 64000 },
+    { provider: 'DeepSeek', model: 'deepseek-reasoner', type: 'cloud', category: 'reasoning', inputCost: 0.55, outputCost: 2.19, contextWindow: 64000 },
 
     // Qwen
-    { provider: 'Qwen', model: 'qwen-max', type: 'cloud', category: 'chat', inputCost: 1.60, outputCost: 6.40, latency: 600, tokensPerSec: 95, accuracy: 91, contextWindow: 32000, mmlu: 86.5, humaneval: 90.0, reasoning: 89, coding: 91, creative: 87 },
-    { provider: 'Qwen', model: 'qwen-plus', type: 'cloud', category: 'chat', inputCost: 0.40, outputCost: 1.60, latency: 380, tokensPerSec: 140, accuracy: 88, contextWindow: 131072, mmlu: 83.0, humaneval: 87.5, reasoning: 85, coding: 88, creative: 84 },
-    { provider: 'Qwen', model: 'qwen-turbo', type: 'cloud', category: 'chat', inputCost: 0.05, outputCost: 0.20, latency: 250, tokensPerSec: 180, accuracy: 82, contextWindow: 131072, mmlu: 78.0, humaneval: 82.0, reasoning: 79, coding: 83, creative: 80 },
+    { provider: 'Qwen', model: 'qwen-max', type: 'cloud', category: 'chat', inputCost: 1.6, outputCost: 6.4, contextWindow: 32000 },
 
-    // Local providers
-    { provider: 'Ollama', model: 'llama3.3-70b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 1200, tokensPerSec: 35, accuracy: 88, contextWindow: 128000, mmlu: 82.0, humaneval: 85.0, reasoning: 85, coding: 84, creative: 86 },
-    { provider: 'Ollama', model: 'qwen2.5-coder-32b', type: 'local', category: 'code', inputCost: 0, outputCost: 0, latency: 800, tokensPerSec: 45, accuracy: 87, contextWindow: 32768, mmlu: 75.0, humaneval: 91.0, reasoning: 78, coding: 92, creative: 70 },
-    { provider: 'Ollama', model: 'deepseek-r1-32b', type: 'local', category: 'reasoning', inputCost: 0, outputCost: 0, latency: 5000, tokensPerSec: 20, accuracy: 90, contextWindow: 64000, mmlu: 85.0, humaneval: 89.0, reasoning: 93, coding: 88, creative: 68 },
-    { provider: 'Ollama', model: 'mistral-7b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 180, tokensPerSec: 120, accuracy: 78, contextWindow: 32768, mmlu: 68.0, humaneval: 72.0, reasoning: 72, coding: 70, creative: 75 },
-
-    { provider: 'LM Studio', model: 'phi-4-14b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 350, tokensPerSec: 80, accuracy: 85, contextWindow: 16384, mmlu: 80.0, humaneval: 84.0, reasoning: 83, coding: 85, creative: 78 },
-    { provider: 'vLLM', model: 'llama-3.3-70b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 600, tokensPerSec: 85, accuracy: 88, contextWindow: 128000, mmlu: 82.0, humaneval: 85.0, reasoning: 85, coding: 84, creative: 86 },
-    { provider: 'llama.cpp', model: 'qwen2.5-72b-q4', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 900, tokensPerSec: 40, accuracy: 86, contextWindow: 32768, mmlu: 80.0, humaneval: 86.0, reasoning: 83, coding: 87, creative: 82 },
+    // Local providers -- no per-token price, so zero here is a fact, not a placeholder.
+    { provider: 'Ollama', model: 'llama3.3-70b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 128000 },
+    { provider: 'Ollama', model: 'qwen2.5-coder-32b', type: 'local', category: 'code', inputCost: 0, outputCost: 0, contextWindow: 32768 },
+    { provider: 'Ollama', model: 'deepseek-r1-32b', type: 'local', category: 'reasoning', inputCost: 0, outputCost: 0, contextWindow: 64000 },
+    { provider: 'Ollama', model: 'mistral-7b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 32768 },
+    { provider: 'LM Studio', model: 'phi-4-14b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 16384 },
+    { provider: 'vLLM', model: 'llama-3.3-70b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 128000 },
+    { provider: 'llama.cpp', model: 'qwen2.5-72b-q4', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 32768 },
 ];
 
-// Colors for providers
 const providerColors: Record<string, string> = {
-    'OpenAI': '#10a37f',
-    'Anthropic': '#d4a574',
-    'Google': '#4285f4',
-    'DeepSeek': '#0066ff',
-    'Perplexity': '#20b2aa',
-    'Qwen': '#ff6b35',
-    'Ollama': '#ffffff',
+    OpenAI: '#10a37f',
+    Anthropic: '#d4a574',
+    Google: '#4285f4',
+    DeepSeek: '#0066ff',
+    Qwen: '#ff6b35',
+    Ollama: '#8b5cf6',
     'LM Studio': '#a855f7',
-    'vLLM': '#0e7490',
+    vLLM: '#ec4899',
     'llama.cpp': '#22c55e',
 };
 
-type CompareMetric = 'cost' | 'speed' | 'accuracy' | 'value' | 'benchmarks';
-type ModelCategory = 'all' | 'chat' | 'reasoning' | 'code' | 'search';
+const LOCAL_PROVIDERS = ['ollama', 'lm-studio', 'vllm', 'llama.cpp', 'llamafile', 'localai', 'gpt4all', 'jan'];
+
+const UNKNOWN = '—';
+
+type CompareMetric = 'cost' | 'context';
+type ModelCategory = 'all' | 'chat' | 'reasoning' | 'code';
 type ProviderType = 'all' | 'cloud' | 'local';
+
+function formatCost(cost: number | null): string {
+    if (cost === null) return UNKNOWN;
+    if (cost === 0) return 'Free';
+    return `$${cost.toFixed(2)}`;
+}
+
+function formatContext(tokens: number | null): string {
+    if (tokens === null) return UNKNOWN;
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+    return `${(tokens / 1000).toFixed(0)}K`;
+}
 
 export default function Comparison() {
     // API Data
@@ -107,49 +133,35 @@ export default function Comparison() {
     const { data: statistics } = useStatistics();
 
     const [selectedProviders, setSelectedProviders] = useState<string[]>(['OpenAI', 'Anthropic', 'Google', 'DeepSeek']);
-    const [selectedModels, setSelectedModels] = useState<string[]>([]);
-    const [compareMetric, setCompareMetric] = useState<CompareMetric>('value');
+    const [compareMetric, setCompareMetric] = useState<CompareMetric>('cost');
     const [modelCategory, setModelCategory] = useState<ModelCategory>('all');
     const [providerType, setProviderType] = useState<ProviderType>('all');
-    const [showDetails, setShowDetails] = useState(true);
 
-    // Merge API providers with benchmark reference data
-    const enhancedModels = useMemo(() => {
-        // Start with benchmark reference data
+    // Merge the reference table with models discovered from the user's own
+    // providers. A discovered model gets nulls, not defaults: Chasm does not
+    // know what a model it has never heard of costs, and guessing $1.00/$3.00
+    // reads exactly like a published price.
+    const enhancedModels = useMemo<ModelSpec[]>(() => {
         const models = [...providerModels];
 
-        // Add any providers from API that aren't in benchmark data
         if (apiProviders) {
             for (const provider of apiProviders) {
-                const existingProvider = models.find(m =>
-                    m.provider.toLowerCase() === provider.name.toLowerCase()
-                );
+                const known = models.some((m) => m.provider.toLowerCase() === provider.name.toLowerCase());
+                if (known || !provider.models) continue;
 
-                if (!existingProvider && provider.models) {
-                    // Add models from API provider
-                    for (const modelName of provider.models) {
-                        const isLocal = provider.type === 'local' ||
-                            ['ollama', 'lm-studio', 'vllm', 'llama.cpp', 'llamafile', 'localai', 'gpt4all', 'jan']
-                                .includes(provider.name.toLowerCase());
-
-                        models.push({
-                            provider: provider.name,
-                            model: modelName,
-                            type: isLocal ? 'local' : 'cloud',
-                            category: 'chat' as const,
-                            inputCost: isLocal ? 0 : 1.00,  // Default pricing for unknown models
-                            outputCost: isLocal ? 0 : 3.00,
-                            latency: isLocal ? 500 : 600,
-                            tokensPerSec: isLocal ? 50 : 80,
-                            accuracy: 85,
-                            contextWindow: 32000,
-                            mmlu: 80,
-                            humaneval: 80,
-                            reasoning: 80,
-                            coding: 80,
-                            creative: 80,
-                        });
-                    }
+                const isLocal = provider.type === 'local' || LOCAL_PROVIDERS.includes(provider.name.toLowerCase());
+                for (const modelName of provider.models) {
+                    models.push({
+                        provider: provider.name,
+                        model: modelName,
+                        type: isLocal ? 'local' : 'cloud',
+                        category: 'chat',
+                        // Local models have no per-token price at all; that is a
+                        // fact. A cloud model Chasm has no entry for is unknown.
+                        inputCost: isLocal ? 0 : null,
+                        outputCost: isLocal ? 0 : null,
+                        contextWindow: null,
+                    });
                 }
             }
         }
@@ -157,110 +169,80 @@ export default function Comparison() {
         return models;
     }, [apiProviders]);
 
-    // Filter models based on selections
-    const filteredModels = enhancedModels.filter(m => {
+    const filteredModels = enhancedModels.filter((m) => {
         if (providerType !== 'all' && m.type !== providerType) return false;
         if (modelCategory !== 'all' && m.category !== modelCategory) return false;
         if (selectedProviders.length > 0 && !selectedProviders.includes(m.provider)) return false;
         return true;
     });
 
-    // Get unique providers (combine static + API)
     const allProviders = useMemo(() => {
-        const providers = new Set(providerModels.map(m => m.provider));
-        if (apiProviders) {
-            apiProviders.forEach(p => providers.add(p.name));
-        }
+        const providers = new Set(providerModels.map((m) => m.provider));
+        if (apiProviders) apiProviders.forEach((p) => providers.add(p.name));
         return [...providers];
     }, [apiProviders]);
 
-    // Provider health status for display
     const providerStatus = useMemo(() => {
         const status: Record<string, boolean> = {};
         if (providerHealthData) {
-            providerHealthData.forEach(h => {
+            providerHealthData.forEach((h) => {
                 status[h.providerId] = h.status === 'connected';
             });
         }
         return status;
     }, [providerHealthData]);
 
-    // Cost comparison data
-    const costData = filteredModels.map(m => ({
-        name: `${m.model}`,
-        provider: m.provider,
-        input: m.inputCost,
-        output: m.outputCost,
-        total: (m.inputCost + m.outputCost) / 2,
-    })).sort((a, b) => a.total - b.total);
-
-    // Speed comparison data
-    const speedData = filteredModels.map(m => ({
-        name: m.model,
-        provider: m.provider,
-        latency: m.latency,
-        tokensPerSec: m.tokensPerSec,
-    })).sort((a, b) => b.tokensPerSec - a.tokensPerSec);
-
-    // Value score (accuracy / cost, higher is better)
-    const valueData = filteredModels.map(m => {
-        const avgCost = (m.inputCost + m.outputCost) / 2 || 0.01; // Avoid division by zero for local
-        const valueScore = m.type === 'local' ? m.accuracy * 10 : (m.accuracy / avgCost) * 10;
-        return {
+    // Charts can only plot models whose figures are known.
+    const costData = filteredModels
+        .filter((m): m is ModelSpec & { inputCost: number; outputCost: number } =>
+            m.inputCost !== null && m.outputCost !== null)
+        .map((m) => ({
             name: m.model,
             provider: m.provider,
-            value: Math.round(valueScore),
-            accuracy: m.accuracy,
-            cost: avgCost,
-            type: m.type,
-        };
-    }).sort((a, b) => b.value - a.value);
+            input: m.inputCost,
+            output: m.outputCost,
+            total: (m.inputCost + m.outputCost) / 2,
+        }))
+        .sort((a, b) => a.total - b.total);
 
-    // Scatter data for cost vs performance
-    const scatterData = filteredModels.map(m => ({
-        x: (m.inputCost + m.outputCost) / 2,
-        y: m.accuracy,
-        z: m.tokensPerSec,
-        name: m.model,
-        provider: m.provider,
-    }));
+    const contextData = filteredModels
+        .filter((m): m is ModelSpec & { contextWindow: number } => m.contextWindow !== null)
+        .map((m) => ({
+            name: m.model,
+            provider: m.provider,
+            context: Math.round(m.contextWindow / 1000),
+        }))
+        .sort((a, b) => b.context - a.context);
 
-    // Models for radar comparison (top 5 by selection or default)
-    const radarModels = selectedModels.length > 0
-        ? filteredModels.filter(m => selectedModels.includes(`${m.provider}-${m.model}`)).slice(0, 5)
-        : filteredModels.slice(0, 5);
+    // Both axes here are published figures, so this plot says something real.
+    const scatterData = filteredModels
+        .filter((m): m is ModelSpec & { inputCost: number; outputCost: number; contextWindow: number } =>
+            m.inputCost !== null && m.outputCost !== null && m.contextWindow !== null)
+        .map((m) => ({
+            x: (m.inputCost + m.outputCost) / 2,
+            y: Math.round(m.contextWindow / 1000),
+            name: m.model,
+            provider: m.provider,
+        }));
 
-    const radarData = [
-        { metric: 'Reasoning', ...Object.fromEntries(radarModels.map(m => [`${m.provider}-${m.model}`, m.reasoning])) },
-        { metric: 'Coding', ...Object.fromEntries(radarModels.map(m => [`${m.provider}-${m.model}`, m.coding])) },
-        { metric: 'Creative', ...Object.fromEntries(radarModels.map(m => [`${m.provider}-${m.model}`, m.creative])) },
-        { metric: 'MMLU', ...Object.fromEntries(radarModels.map(m => [`${m.provider}-${m.model}`, m.mmlu])) },
-        { metric: 'HumanEval', ...Object.fromEntries(radarModels.map(m => [`${m.provider}-${m.model}`, m.humaneval])) },
-    ];
+    const unknownCount = filteredModels.filter(
+        (m) => m.inputCost === null || m.contextWindow === null
+    ).length;
 
     const toggleProvider = (provider: string) => {
-        setSelectedProviders(prev =>
-            prev.includes(provider)
-                ? prev.filter(p => p !== provider)
-                : [...prev, provider]
+        setSelectedProviders((prev) =>
+            prev.includes(provider) ? prev.filter((p) => p !== provider) : [...prev, provider]
         );
     };
 
-    const toggleModel = (modelKey: string) => {
-        setSelectedModels(prev =>
-            prev.includes(modelKey)
-                ? prev.filter(m => m !== modelKey)
-                : prev.length < 5 ? [...prev, modelKey] : prev
-        );
-    };
+    const cheapestModel = [...filteredModels]
+        .filter((m) => m.type === 'cloud' && m.inputCost !== null && m.outputCost !== null)
+        .sort((a, b) => (a.inputCost! + a.outputCost!) - (b.inputCost! + b.outputCost!))[0];
 
-    // Stats cards
-    const cheapestModel = [...filteredModels].filter(m => m.type === 'cloud').sort((a, b) => (a.inputCost + a.outputCost) - (b.inputCost + b.outputCost))[0];
-    const fastestModel = [...filteredModels].sort((a, b) => b.tokensPerSec - a.tokensPerSec)[0];
-    const mostAccurate = [...filteredModels].sort((a, b) => b.accuracy - a.accuracy)[0];
-    const bestValue = valueData[0];
+    const largestContext = [...filteredModels]
+        .filter((m) => m.contextWindow !== null)
+        .sort((a, b) => b.contextWindow! - a.contextWindow!)[0];
 
-    // Loading state
     if (providersLoading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -279,11 +261,9 @@ export default function Comparison() {
                 <div>
                     <h1 className="text-3xl font-bold text-[hsl(var(--foreground))]">Model Comparison</h1>
                     <p className="text-[hsl(var(--muted-foreground))] mt-1">
-                        Compare provider and model performance, cost, and value
+                        Published prices and context windows across providers
                         {apiProviders && (
-                            <span className="ml-2 text-xs">
-                                ({apiProviders.length} connected providers)
-                            </span>
+                            <span className="ml-2 text-xs">({apiProviders.length} connected providers)</span>
                         )}
                     </p>
                 </div>
@@ -293,10 +273,6 @@ export default function Comparison() {
                             <span className="font-medium">{statistics.totalSessions}</span> sessions tracked
                         </div>
                     )}
-                    <button className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors">
-                        <Download size={18} />
-                        Export
-                    </button>
                     <button
                         onClick={() => refetchProviders()}
                         className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
@@ -307,6 +283,20 @@ export default function Comparison() {
                 </div>
             </div>
 
+            {/* What this page is */}
+            <div className="flex items-start gap-2 text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))]/50 rounded-lg p-4">
+                <Info size={16} className="mt-0.5 shrink-0" />
+                <p>
+                    <span className="font-medium text-[hsl(var(--foreground))]">Reference table.</span>{' '}
+                    Published list prices and context windows, compiled into the app. Chasm does not
+                    benchmark models and does not measure latency, throughput or accuracy, so it does
+                    not report them. Check the provider&apos;s own pricing page before relying on a
+                    figure. Models found on your connected providers appear here too, with{' '}
+                    <span className="font-mono">{UNKNOWN}</span> where Chasm has no published figure
+                    for them.
+                </p>
+            </div>
+
             {/* Connected Providers Status */}
             {apiProviders && apiProviders.length > 0 && (
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
@@ -315,14 +305,13 @@ export default function Comparison() {
                         <span className="font-medium text-[hsl(var(--foreground))]">Connected Providers</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {apiProviders.map(provider => (
+                        {apiProviders.map((provider) => (
                             <div
                                 key={provider.id}
                                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[hsl(var(--muted))]"
                             >
                                 <span
-                                    className={`w-2 h-2 rounded-full ${providerStatus[provider.id] ? 'bg-green-500' : 'bg-red-500'
-                                        }`}
+                                    className={`w-2 h-2 rounded-full ${providerStatus[provider.id] ? 'bg-green-500' : 'bg-red-500'}`}
                                 />
                                 <span className="text-sm text-[hsl(var(--foreground))]">{provider.name}</span>
                                 {provider.models && (
@@ -344,11 +333,10 @@ export default function Comparison() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Provider Type */}
                     <div>
                         <label className="text-sm text-[hsl(var(--muted-foreground))] mb-2 block">Provider Type</label>
                         <div className="flex gap-2">
-                            {(['all', 'cloud', 'local'] as ProviderType[]).map(type => (
+                            {(['all', 'cloud', 'local'] as ProviderType[]).map((type) => (
                                 <button
                                     key={type}
                                     onClick={() => setProviderType(type)}
@@ -363,11 +351,10 @@ export default function Comparison() {
                         </div>
                     </div>
 
-                    {/* Model Category */}
                     <div>
                         <label className="text-sm text-[hsl(var(--muted-foreground))] mb-2 block">Category</label>
                         <div className="flex gap-2 flex-wrap">
-                            {(['all', 'chat', 'reasoning', 'code', 'search'] as ModelCategory[]).map(cat => (
+                            {(['all', 'chat', 'reasoning', 'code'] as ModelCategory[]).map((cat) => (
                                 <button
                                     key={cat}
                                     onClick={() => setModelCategory(cat)}
@@ -382,11 +369,10 @@ export default function Comparison() {
                         </div>
                     </div>
 
-                    {/* Compare By */}
                     <div>
                         <label className="text-sm text-[hsl(var(--muted-foreground))] mb-2 block">Compare By</label>
                         <div className="flex gap-2 flex-wrap">
-                            {(['cost', 'speed', 'accuracy', 'value', 'benchmarks'] as CompareMetric[]).map(metric => (
+                            {(['cost', 'context'] as CompareMetric[]).map((metric) => (
                                 <button
                                     key={metric}
                                     onClick={() => setCompareMetric(metric)}
@@ -402,11 +388,10 @@ export default function Comparison() {
                     </div>
                 </div>
 
-                {/* Provider Selection */}
                 <div className="mt-4 pt-4 border-t">
                     <label className="text-sm text-[hsl(var(--muted-foreground))] mb-2 block">Providers</label>
                     <div className="flex gap-2 flex-wrap">
-                        {allProviders.map(provider => (
+                        {allProviders.map((provider) => (
                             <button
                                 key={provider}
                                 onClick={() => toggleProvider(provider)}
@@ -427,73 +412,52 @@ export default function Comparison() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                         <DollarSign size={18} />
                         <span className="text-sm">Cheapest (Cloud)</span>
                     </div>
-                    {cheapestModel && (
+                    {cheapestModel ? (
                         <>
                             <p className="text-xl font-bold text-[hsl(var(--foreground))]">{cheapestModel.model}</p>
                             <p className="text-sm text-[hsl(var(--muted-foreground))]">{cheapestModel.provider}</p>
-                            <p className="text-sm text-green-500 flex items-center gap-1 mt-1">
-                                <ArrowDownRight size={14} />
-                                ${((cheapestModel.inputCost + cheapestModel.outputCost) / 2).toFixed(2)}/1M tokens
+                            <p className="text-sm text-green-500 mt-1">
+                                ${((cheapestModel.inputCost! + cheapestModel.outputCost!) / 2).toFixed(2)}/1M tokens
                             </p>
                         </>
+                    ) : (
+                        <p className="text-sm text-[hsl(var(--muted-foreground))]">No priced cloud model in this filter.</p>
                     )}
                 </div>
 
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <Zap size={18} />
-                        <span className="text-sm">Fastest</span>
+                        <Expand size={18} />
+                        <span className="text-sm">Largest Context</span>
                     </div>
-                    {fastestModel && (
+                    {largestContext ? (
                         <>
-                            <p className="text-xl font-bold text-[hsl(var(--foreground))]">{fastestModel.model}</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{fastestModel.provider}</p>
-                            <p className="text-sm text-cyan-700 flex items-center gap-1 mt-1">
-                                <ArrowUpRight size={14} />
-                                {fastestModel.tokensPerSec} tok/s
-                            </p>
+                            <p className="text-xl font-bold text-[hsl(var(--foreground))]">{largestContext.model}</p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{largestContext.provider}</p>
+                            <p className="text-sm text-blue-500 mt-1">{formatContext(largestContext.contextWindow)} tokens</p>
                         </>
+                    ) : (
+                        <p className="text-sm text-[hsl(var(--muted-foreground))]">No known context window in this filter.</p>
                     )}
                 </div>
 
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <Target size={18} />
-                        <span className="text-sm">Most Accurate</span>
+                        <Cpu size={18} />
+                        <span className="text-sm">Models Listed</span>
                     </div>
-                    {mostAccurate && (
-                        <>
-                            <p className="text-xl font-bold text-[hsl(var(--foreground))]">{mostAccurate.model}</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{mostAccurate.provider}</p>
-                            <p className="text-sm text-purple-500 flex items-center gap-1 mt-1">
-                                <ArrowUpRight size={14} />
-                                {mostAccurate.accuracy}% accuracy
-                            </p>
-                        </>
-                    )}
-                </div>
-
-                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <TrendingUp size={18} />
-                        <span className="text-sm">Best Value</span>
-                    </div>
-                    {bestValue && (
-                        <>
-                            <p className="text-xl font-bold text-[hsl(var(--foreground))]">{bestValue.name}</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{bestValue.provider}</p>
-                            <p className="text-sm text-amber-500 flex items-center gap-1 mt-1">
-                                <ArrowUpRight size={14} />
-                                Score: {bestValue.value}
-                            </p>
-                        </>
-                    )}
+                    <p className="text-xl font-bold text-[hsl(var(--foreground))]">{filteredModels.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                        {unknownCount > 0
+                            ? `${unknownCount} with figures Chasm does not have`
+                            : 'all with published figures'}
+                    </p>
                 </div>
             </div>
 
@@ -501,11 +465,7 @@ export default function Comparison() {
             <div className="bg-[hsl(var(--card))] rounded-xl p-6 border">
                 <h2 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
                     <BarChart3 size={20} />
-                    {compareMetric === 'cost' && 'Cost Comparison (per 1M tokens)'}
-                    {compareMetric === 'speed' && 'Speed Comparison'}
-                    {compareMetric === 'accuracy' && 'Accuracy Comparison'}
-                    {compareMetric === 'value' && 'Value Score (Accuracy / Cost)'}
-                    {compareMetric === 'benchmarks' && 'Performance Benchmarks (MMLU, HumanEval, Reasoning, Coding)'}
+                    {compareMetric === 'cost' ? 'Cost Comparison (per 1M tokens)' : 'Context Window (thousands of tokens)'}
                 </h2>
                 <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -523,192 +483,94 @@ export default function Comparison() {
                                 <Bar dataKey="input" name="Input Cost" fill="#22c55e" radius={[0, 4, 4, 0]} />
                                 <Bar dataKey="output" name="Output Cost" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                             </BarChart>
-                        ) : compareMetric === 'speed' ? (
-                            <BarChart data={speedData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                                <YAxis dataKey="name" type="category" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                                    labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                />
-                                <Legend />
-                                <Bar dataKey="tokensPerSec" name="Tokens/sec" fill="#0e7490" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        ) : compareMetric === 'value' ? (
-                            <BarChart data={valueData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                                <YAxis dataKey="name" type="category" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                                    labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                    formatter={(value) => [`${typeof value === 'number' ? value : 0}`, 'Value Score']}
-                                />
-                                <Bar dataKey="value" name="Value Score" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        ) : compareMetric === 'benchmarks' ? (
-                            <BarChart data={filteredModels.sort((a, b) => b.mmlu - a.mmlu).slice(0, 15)} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis type="number" domain={[50, 100]} stroke="hsl(var(--muted-foreground))" />
-                                <YAxis dataKey="model" type="category" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                                    labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                />
-                                <Legend />
-                                <Bar dataKey="mmlu" name="MMLU" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
-                                <Bar dataKey="humaneval" name="HumanEval" fill="#06b6d4" radius={[0, 4, 4, 0]} />
-                                <Bar dataKey="reasoning" name="Reasoning" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                                <Bar dataKey="coding" name="Coding" fill="#22c55e" radius={[0, 4, 4, 0]} />
-                            </BarChart>
                         ) : (
-                            <BarChart data={filteredModels.sort((a, b) => b.accuracy - a.accuracy)} layout="vertical">
+                            <BarChart data={contextData} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis type="number" domain={[70, 100]} stroke="hsl(var(--muted-foreground))" />
-                                <YAxis dataKey="model" type="category" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
+                                <YAxis dataKey="name" type="category" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                                     labelStyle={{ color: 'hsl(var(--foreground))' }}
-                                    formatter={(value) => [`${typeof value === 'number' ? value : 0}%`, 'Accuracy']}
+                                    formatter={(value) => [`${typeof value === 'number' ? value : 0}K tokens`, '']}
                                 />
-                                <Bar dataKey="accuracy" name="Accuracy" fill="#a855f7" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="context" name="Context (K tokens)" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
                             </BarChart>
                         )}
                     </ResponsiveContainer>
                 </div>
+                {unknownCount > 0 && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 flex items-center gap-1">
+                        <Info size={12} />
+                        {unknownCount} model{unknownCount === 1 ? '' : 's'} in this filter {unknownCount === 1 ? 'is' : 'are'} not
+                        plotted: Chasm has no published figure for {unknownCount === 1 ? 'it' : 'them'}.
+                    </p>
+                )}
             </div>
 
-            {/* Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Radar Chart - Benchmark Comparison */}
-                <div className="bg-[hsl(var(--card))] rounded-xl p-6 border">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
-                            <Target size={20} />
-                            Benchmark Comparison
-                        </h2>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">Select up to 5 models</span>
-                    </div>
-
-                    {/* Model selector for radar */}
-                    <div className="flex flex-wrap gap-2 mb-4 max-h-24 overflow-y-auto">
-                        {filteredModels.slice(0, 12).map(m => {
-                            const key = `${m.provider}-${m.model}`;
-                            const isSelected = selectedModels.includes(key) || (selectedModels.length === 0 && radarModels.includes(m));
-                            return (
-                                <button
-                                    key={key}
-                                    onClick={() => toggleModel(key)}
-                                    className={`px-2 py-1 rounded text-xs transition-colors ${isSelected
-                                        ? 'bg-[hsl(var(--primary))] text-white'
-                                        : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
-                                        }`}
-                                >
-                                    {m.model}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <RadarChart data={radarData}>
-                                <PolarGrid stroke="hsl(var(--border))" />
-                                <PolarAngleAxis dataKey="metric" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
-                                {radarModels.map((m) => (
-                                    <Radar
-                                        key={`${m.provider}-${m.model}`}
-                                        name={m.model}
-                                        dataKey={`${m.provider}-${m.model}`}
-                                        stroke={providerColors[m.provider]}
-                                        fill={providerColors[m.provider]}
-                                        fillOpacity={0.1}
-                                        strokeWidth={2}
-                                    />
-                                ))}
-                                <Legend />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                                />
-                            </RadarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Scatter Plot - Cost vs Performance */}
-                <div className="bg-[hsl(var(--card))] rounded-xl p-6 border">
-                    <h2 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
-                        <TrendingUp size={20} />
-                        Cost vs Performance
-                    </h2>
-                    <div className="h-[350px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis
-                                    type="number"
-                                    dataKey="x"
-                                    name="Cost"
-                                    unit="$"
-                                    stroke="hsl(var(--muted-foreground))"
-                                    label={{ value: 'Avg Cost ($/1M tokens)', position: 'bottom', fill: 'hsl(var(--muted-foreground))' }}
-                                />
-                                <YAxis
-                                    type="number"
-                                    dataKey="y"
-                                    name="Accuracy"
-                                    unit="%"
-                                    domain={[75, 100]}
-                                    stroke="hsl(var(--muted-foreground))"
-                                    label={{ value: 'Accuracy %', angle: -90, position: 'left', fill: 'hsl(var(--muted-foreground))' }}
-                                />
-                                <ZAxis type="number" dataKey="z" range={[50, 400]} name="Speed" />
-                                <Tooltip
-                                    cursor={{ strokeDasharray: '3 3' }}
-                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                                    formatter={(value, name) => {
-                                        const numValue = typeof value === 'number' ? value : 0;
-                                        if (name === 'Cost') return [`$${numValue.toFixed(2)}`, name];
-                                        if (name === 'Accuracy') return [`${numValue}%`, name];
-                                        return [numValue, String(name)];
-                                    }}
-                                    labelFormatter={(_, payload) => (payload as unknown as { payload?: { name?: string } }[])?.[0]?.payload?.name || ''}
-                                />
-                                {allProviders.filter(p => selectedProviders.includes(p)).map(provider => (
+            {/* Cost vs Context */}
+            <div className="bg-[hsl(var(--card))] rounded-xl p-6 border">
+                <h2 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                    <Expand size={20} />
+                    Cost vs Context Window
+                </h2>
+                <div className="h-[350px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis
+                                type="number"
+                                dataKey="x"
+                                name="Cost"
+                                unit="$"
+                                stroke="hsl(var(--muted-foreground))"
+                                label={{ value: 'Avg Cost ($/1M tokens)', position: 'bottom', fill: 'hsl(var(--muted-foreground))' }}
+                            />
+                            <YAxis
+                                type="number"
+                                dataKey="y"
+                                name="Context"
+                                unit="K"
+                                stroke="hsl(var(--muted-foreground))"
+                                label={{ value: 'Context (K tokens)', angle: -90, position: 'left', fill: 'hsl(var(--muted-foreground))' }}
+                            />
+                            <Tooltip
+                                cursor={{ strokeDasharray: '3 3' }}
+                                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                                formatter={(value, name) => {
+                                    const numValue = typeof value === 'number' ? value : 0;
+                                    if (name === 'Cost') return [`$${numValue.toFixed(2)}`, name];
+                                    return [`${numValue}K`, String(name)];
+                                }}
+                                labelFormatter={(_, payload) =>
+                                    (payload as unknown as { payload?: { name?: string } }[])?.[0]?.payload?.name || ''
+                                }
+                            />
+                            {allProviders
+                                .filter((p) => selectedProviders.includes(p))
+                                .map((provider) => (
                                     <Scatter
                                         key={provider}
                                         name={provider}
-                                        data={scatterData.filter(d => d.provider === provider)}
+                                        data={scatterData.filter((d) => d.provider === provider)}
                                         fill={providerColors[provider]}
                                     />
                                 ))}
-                                <Legend />
-                            </ScatterChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 flex items-center gap-1">
-                        <Info size={12} />
-                        Bubble size represents tokens/second. Top-left = high accuracy, low cost (best value)
-                    </p>
+                            <Legend />
+                        </ScatterChart>
+                    </ResponsiveContainer>
                 </div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 flex items-center gap-1">
+                    <Info size={12} />
+                    Both axes are published figures. Top-left is a large context window at a low price.
+                </p>
             </div>
 
             {/* Detailed Comparison Table */}
             <div className="bg-[hsl(var(--card))] rounded-xl p-6 border">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
-                        <Cpu size={20} />
-                        Detailed Model Specifications
-                    </h2>
-                    <button
-                        onClick={() => setShowDetails(!showDetails)}
-                        className="text-sm text-[hsl(var(--primary))] hover:underline"
-                    >
-                        {showDetails ? 'Show Less' : 'Show All Details'}
-                    </button>
-                </div>
+                <h2 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                    <Cpu size={20} />
+                    Detailed Model Specifications
+                </h2>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
@@ -718,22 +580,15 @@ export default function Comparison() {
                                 <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium">Type</th>
                                 <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Input $/1M</th>
                                 <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Output $/1M</th>
-                                <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Latency</th>
-                                <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Tok/s</th>
                                 <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Context</th>
-                                {showDetails && (
-                                    <>
-                                        <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">MMLU</th>
-                                        <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">HumanEval</th>
-                                        <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Reasoning</th>
-                                        <th className="pb-3 text-[hsl(var(--muted-foreground))] font-medium text-right">Coding</th>
-                                    </>
-                                )}
                             </tr>
                         </thead>
                         <tbody>
                             {filteredModels.map((m) => (
-                                <tr key={`${m.provider}-${m.model}`} className="border-b border-[hsl(var(--border))]/50 hover:bg-[hsl(var(--muted))]/50">
+                                <tr
+                                    key={`${m.provider}-${m.model}`}
+                                    className="border-b border-[hsl(var(--border))]/50 hover:bg-[hsl(var(--muted))]/50"
+                                >
                                     <td className="py-3">
                                         <span className="flex items-center gap-2">
                                             <span
@@ -745,50 +600,35 @@ export default function Comparison() {
                                     </td>
                                     <td className="py-3 font-medium text-[hsl(var(--foreground))]">{m.model}</td>
                                     <td className="py-3">
-                                        <span className={`px-2 py-0.5 rounded text-xs ${m.type === 'cloud'
-                                            ? 'bg-blue-500/20 text-blue-400'
-                                            : 'bg-green-500/20 text-green-400'
-                                            }`}>
+                                        <span
+                                            className={`px-2 py-0.5 rounded text-xs ${m.type === 'cloud'
+                                                ? 'bg-blue-500/20 text-blue-400'
+                                                : 'bg-green-500/20 text-green-400'
+                                                }`}
+                                        >
                                             {m.type}
                                         </span>
                                     </td>
                                     <td className="py-3 text-right font-mono">
-                                        {m.inputCost === 0 ? <span className="text-green-500">Free</span> : `$${m.inputCost.toFixed(2)}`}
+                                        {m.inputCost === 0 ? (
+                                            <span className="text-green-500">Free</span>
+                                        ) : (
+                                            formatCost(m.inputCost)
+                                        )}
                                     </td>
                                     <td className="py-3 text-right font-mono">
-                                        {m.outputCost === 0 ? <span className="text-green-500">Free</span> : `$${m.outputCost.toFixed(2)}`}
+                                        {m.outputCost === 0 ? (
+                                            <span className="text-green-500">Free</span>
+                                        ) : (
+                                            formatCost(m.outputCost)
+                                        )}
                                     </td>
-                                    <td className="py-3 text-right font-mono">{m.latency >= 1000 ? `${(m.latency / 1000).toFixed(1)}s` : `${m.latency}ms`}</td>
-                                    <td className="py-3 text-right font-mono">{m.tokensPerSec}</td>
-                                    <td className="py-3 text-right font-mono">{(m.contextWindow / 1000).toFixed(0)}K</td>
-                                    {showDetails && (
-                                        <>
-                                            <td className="py-3 text-right font-mono">{m.mmlu}</td>
-                                            <td className="py-3 text-right font-mono">{m.humaneval}</td>
-                                            <td className="py-3 text-right font-mono">{m.reasoning}</td>
-                                            <td className="py-3 text-right font-mono">{m.coding}</td>
-                                        </>
-                                    )}
+                                    <td className="py-3 text-right font-mono">{formatContext(m.contextWindow)}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
-            </div>
-
-            {/* Footer Note */}
-            <div className="flex items-start gap-2 text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))]/50 rounded-lg p-4">
-                <Info size={16} className="mt-0.5 shrink-0" />
-                <p>
-                    Benchmark data is from reference sources and may vary. Connected providers are shown with live status.
-                    Local model performance depends on hardware. Cost is shown per 1 million tokens.
-                    Value score = (Accuracy / Avg Cost) × 10 for cloud models, Accuracy × 10 for local models (free).
-                    {apiProviders && apiProviders.length > 0 && (
-                        <span className="ml-1">
-                            Currently tracking {apiProviders.length} live provider{apiProviders.length !== 1 ? 's' : ''}.
-                        </span>
-                    )}
-                </p>
             </div>
         </div>
     );
