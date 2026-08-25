@@ -34,7 +34,6 @@ export {
     // Swarms API
     swarms,
     // Runs API
-    runs,
     // System API
     system,
     // Types

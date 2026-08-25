@@ -92,20 +92,6 @@ export const workspaces = {
         return unwrapResponse(response);
     },
 
-    async getByPath(path: string): Promise<Workspace> {
-        const response = await apiClient.get('/api/workspaces/by-path', { params: { path } });
-        return unwrapResponse(response);
-    },
-
-    async discover(): Promise<Workspace[]> {
-        const response = await apiClient.post('/api/workspaces/discover');
-        return unwrapResponse(response) || [];
-    },
-
-    async refresh(id: string): Promise<Workspace> {
-        const response = await apiClient.post(`/api/workspaces/${encodeURIComponent(id)}/refresh`);
-        return unwrapResponse(response);
-    },
 };
 
 // Legacy function exports for backward compatibility
@@ -160,11 +146,6 @@ export const sessions = {
 
     async delete(id: string): Promise<void> {
         await apiClient.delete(`/api/sessions/${encodeURIComponent(id)}`);
-    },
-
-    async archive(id: string, archived: boolean = true): Promise<Session> {
-        const response = await apiClient.post(`/api/sessions/${encodeURIComponent(id)}/archive`, { archived });
-        return unwrapResponse(response);
     },
 
     async fork(id: string, fromMessageId?: string): Promise<Session> {
@@ -241,13 +222,6 @@ export const messages = {
         await apiClient.delete(
             `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`
         );
-    },
-
-    async regenerate(sessionId: string, messageId: string): Promise<Message> {
-        const response = await apiClient.post(
-            `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/regenerate`
-        );
-        return unwrapResponse(response);
     },
 };
 
@@ -368,25 +342,30 @@ export const swe = {
 // =============================================================================
 
 export const search = {
-    async query(q: string, types?: string[], limit?: number): Promise<SearchResult[]> {
-        const response = await apiClient.get('/api/search', {
-            params: { q, types: types?.join(','), limit },
-        });
+    /**
+     * Substring match over session titles and message content.
+     *
+     * `/api/search` takes `q` and `limit` and nothing else -- this used to pass
+     * a `types` filter the server has never read.
+     */
+    async query(q: string, limit?: number): Promise<SearchResult[]> {
+        const response = await apiClient.get('/api/search', { params: { q, limit } });
         return unwrapResponse(response) || [];
     },
 
+    /**
+     * Substring match over session titles.
+     *
+     * Served as `/api/sessions/search`, which answers `{ query, results }`.
+     * This used to request `/api/search/sessions`, which is not routed: the
+     * Search screen's only query 404'd on every keystroke.
+     */
     async sessions(q: string, limit?: number): Promise<Session[]> {
-        const response = await apiClient.get('/api/search/sessions', {
+        const response = await apiClient.get('/api/sessions/search', {
             params: { q, limit },
         });
-        return unwrapResponse(response) || [];
-    },
-
-    async messages(q: string, sessionId?: string, limit?: number): Promise<Message[]> {
-        const response = await apiClient.get('/api/search/messages', {
-            params: { q, sessionId, limit },
-        });
-        return unwrapResponse(response) || [];
+        const data = unwrapResponse<{ query: string; results: Session[] }>(response);
+        return data?.results || [];
     },
 
     async semantic(q: string, limit?: number): Promise<SearchResult[]> {
@@ -409,12 +388,6 @@ export async function searchSessions(query: string, limit = 20): Promise<Session
 export const stats = {
     async overview(): Promise<Stats> {
         const response = await apiClient.get('/api/stats/overview');
-        const raw = unwrapResponse<any>(response);
-        return transformStats(raw);
-    },
-
-    async workspace(id: string): Promise<Stats> {
-        const response = await apiClient.get(`/api/stats/workspace/${encodeURIComponent(id)}`);
         const raw = unwrapResponse<any>(response);
         return transformStats(raw);
     },
@@ -489,11 +462,6 @@ export const agents = {
     async delete(id: string): Promise<void> {
         await apiClient.delete(`/api/agents/${encodeURIComponent(id)}`);
     },
-
-    async clone(id: string): Promise<Agent> {
-        const response = await apiClient.post(`/api/agents/${encodeURIComponent(id)}/clone`);
-        return unwrapResponse(response);
-    },
 };
 
 // =============================================================================
@@ -523,44 +491,6 @@ export const swarms = {
 
     async delete(id: string): Promise<void> {
         await apiClient.delete(`/api/swarms/${encodeURIComponent(id)}`);
-    },
-
-    async start(id: string, input: string): Promise<{ runId: string }> {
-        const response = await apiClient.post(`/api/swarms/${encodeURIComponent(id)}/start`, { input });
-        return unwrapResponse(response);
-    },
-
-    async pause(id: string): Promise<void> {
-        await apiClient.post(`/api/swarms/${encodeURIComponent(id)}/pause`);
-    },
-
-    async resume(id: string): Promise<void> {
-        await apiClient.post(`/api/swarms/${encodeURIComponent(id)}/resume`);
-    },
-
-    async stop(id: string): Promise<void> {
-        await apiClient.post(`/api/swarms/${encodeURIComponent(id)}/stop`);
-    },
-};
-
-// =============================================================================
-// Runs API (matches csm-web)
-// =============================================================================
-
-export const runs = {
-    async list(): Promise<AgentRun[]> {
-        const response = await apiClient.get('/api/runs');
-        return unwrapResponse(response) || [];
-    },
-
-    async get(id: string): Promise<AgentRun> {
-        const response = await apiClient.get(`/api/runs/${encodeURIComponent(id)}`);
-        return unwrapResponse(response);
-    },
-
-    async cancel(id: string): Promise<AgentRun> {
-        const response = await apiClient.post(`/api/runs/${encodeURIComponent(id)}/cancel`);
-        return unwrapResponse(response);
     },
 };
 

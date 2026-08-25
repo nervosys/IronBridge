@@ -301,6 +301,28 @@ export const agents = {
 // Swarms API
 // =============================================================================
 
+/**
+ * What `POST /api/swarms` actually accepts.
+ *
+ * `Partial<Swarm>` used to stand in for this, and it hid a bug: `Swarm` has a
+ * `workflow`, not an `orchestration`, and every field on a Partial is optional
+ * -- so a body with neither `orchestration` nor `agents` type-checked cleanly
+ * and the server rejected it with 400 "missing field `orchestration`". Creating
+ * a swarm from the web UI had never once worked.
+ *
+ * Note `agent_id`: the request is deserialized into a Rust struct with no serde
+ * rename, so this one field is snake_case. Sending `agentId` -- which is what
+ * the shared `SwarmAgent` type declares -- is also a 400.
+ */
+export interface CreateSwarmRequest {
+    name: string;
+    description?: string;
+    /** The server's enum. Anything else is stored but nothing consumes it. */
+    orchestration: 'sequential' | 'parallel' | 'hierarchical' | 'debate';
+    agents: { agent_id: string; role: string }[];
+    max_iterations?: number;
+}
+
 export const swarms = {
     /**
      * List all swarms
@@ -319,7 +341,7 @@ export const swarms = {
     /**
      * Create a new swarm
      */
-    async create(data: Partial<Swarm>): Promise<ApiResponse<Swarm>> {
+    async create(data: CreateSwarmRequest): Promise<ApiResponse<Swarm>> {
         return post('/api/swarms', data);
     },
 

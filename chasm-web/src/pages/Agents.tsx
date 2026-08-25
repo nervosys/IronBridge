@@ -142,14 +142,21 @@ const agentRoles = [
     { id: 'custom', name: 'Custom', icon: Settings, color: '#6b7280', description: 'Custom agent configuration' },
 ];
 
-// Execution patterns for swarms
+/**
+ * The four orchestrations `POST /api/swarms` accepts.
+ *
+ * This list used to offer `collaborative` and `competitive`, which the server
+ * has no notion of, and to omit `debate`, which it does. It did not matter at
+ * the time because the select's value was never read -- see `handleCreateSwarm`.
+ */
 const executionPatterns = [
     { id: 'sequential', name: 'Sequential', description: 'One agent at a time' },
     { id: 'parallel', name: 'Parallel', description: 'All agents simultaneously' },
     { id: 'hierarchical', name: 'Hierarchical', description: 'Leader-worker structure' },
-    { id: 'collaborative', name: 'Collaborative', description: 'Peer-to-peer cooperation' },
-    { id: 'competitive', name: 'Competitive', description: 'Best result wins' },
-];
+    { id: 'debate', name: 'Debate', description: 'Agents argue to a conclusion' },
+] as const;
+
+type Orchestration = (typeof executionPatterns)[number]['id'];
 
 // Swarm Intelligence Algorithms
 const swarmAlgorithms = [
@@ -315,6 +322,7 @@ export default function Agents() {
 
     // Swarm mutation hooks
     const createSwarm = useCreateSwarm();
+    const [newSwarmOrchestration, setNewSwarmOrchestration] = useState<Orchestration>('sequential');
     const deleteSwarm = useDeleteSwarm();
     const updateSwarm = useUpdateSwarm();
 
@@ -466,14 +474,21 @@ export default function Agents() {
         // Get template data if selected
         const template = selectedTemplate ? SWARM_TEMPLATES.find(t => t.id === selectedTemplate) : null;
 
+        // `orchestration` and `agents` are required by the server and were both
+        // missing here, so this call returned 400 every time it was made. The
+        // swarm starts with no agents; a template contributes its name and
+        // description, not its roles, because there are no agent ids to bind
+        // those roles to at creation time.
         await createSwarm.mutate({
             name: newSwarmName.trim(),
             description: newSwarmDescription.trim() || template?.description || undefined,
-            status: 'idle',
+            orchestration: newSwarmOrchestration,
+            agents: [],
         });
         setShowCreateModal(false);
         setNewSwarmName('');
         setNewSwarmDescription('');
+        setNewSwarmOrchestration('sequential');
         setSelectedTemplate(null);
     };
 
@@ -805,7 +820,11 @@ export default function Agents() {
                             </div>
                             <div>
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Execution Pattern</label>
-                                <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
+                                <select
+                                    value={newSwarmOrchestration}
+                                    onChange={(e) => setNewSwarmOrchestration(e.target.value as Orchestration)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                >
                                     {executionPatterns.map(pattern => (
                                         <option key={pattern.id} value={pattern.id}>{pattern.name} - {pattern.description}</option>
                                     ))}
@@ -822,35 +841,27 @@ export default function Agents() {
                                     </Link>
                                 </div>
 
-                                <div className="mb-3">
-                                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Swarm Intelligence Algorithm</label>
-                                    <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
-                                        <option value="">None (basic orchestration)</option>
-                                        {swarmAlgorithms.map(alg => (
-                                            <option key={alg.id} value={alg.id}>{alg.name} - {alg.description}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="mb-3">
-                                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Consensus Protocol</label>
-                                    <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
-                                        <option value="">None</option>
-                                        {consensusProtocols.map(proto => (
-                                            <option key={proto.id} value={proto.id}>{proto.name} - {proto.description}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Communication Protocol</label>
-                                    <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
-                                        <option value="">Direct messaging</option>
-                                        {communicationProtocols.map(proto => (
-                                            <option key={proto.id} value={proto.id}>{proto.name} - {proto.description}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                {/* These three were <select>s with no value and no onChange:
+                                    a user could pick Particle Swarm, PBFT and Gossip, and
+                                    nothing read the choice. Nothing could have -- POST
+                                    /api/swarms accepts name, description, orchestration,
+                                    agents and max_iterations, and the server has no
+                                    implementation of any swarm-intelligence algorithm or
+                                    consensus protocol. They are listed here as reference
+                                    until there is something to configure. */}
+                                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                    Swarm-intelligence algorithms, consensus protocols and
+                                    communication protocols are not yet configurable: the server
+                                    accepts only an execution pattern. See{' '}
+                                    <Link
+                                        to="/agents/protocols"
+                                        className="text-[hsl(var(--primary))] hover:underline"
+                                        onClick={() => setShowCreateModal(false)}
+                                    >
+                                        Protocols
+                                    </Link>{' '}
+                                    for what each one is.
+                                </p>
                             </div>
                         </div>
                         <div className="flex justify-end gap-2 mt-6">

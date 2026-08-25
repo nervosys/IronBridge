@@ -21,6 +21,7 @@ import {
     mcp,
     connectWebSocket,
 } from '../api/client';
+import type { CreateSwarmRequest } from '../api/client';
 import type {
     Workspace,
     Session,
@@ -386,7 +387,7 @@ export function useSwarm(id: string | null, options?: UseQueryOptions): UseQuery
  * Create swarm mutation
  */
 export function useCreateSwarm() {
-    return useMutation((data: Partial<Swarm>) => swarms.create(data));
+    return useMutation((data: CreateSwarmRequest) => swarms.create(data));
 }
 
 /**
