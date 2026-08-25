@@ -8,115 +8,168 @@ import {
     ScrollView,
     StyleSheet,
     TouchableOpacity,
-    RefreshControl,
     Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
+interface ProtocolFeature {
+    /** Feature name as the protocol itself names it. */
+    name: string;
+    /** Whether Chasm implements it. Every `true` below cites where. */
+    implemented: boolean;
+}
+
 interface Protocol {
     id: string;
     name: string;
     fullName: string;
+    /** Protocol version Chasm targets, or the version described when unsupported. */
     version: string;
-    status: 'active' | 'beta' | 'deprecated';
     category: 'agent' | 'tool' | 'memory' | 'auth';
     description: string;
-    features: string[];
+    features: ProtocolFeature[];
     docsUrl?: string;
-    implementedFeatures: number;
-    totalFeatures: number;
 }
 
+/**
+ * What Chasm implements of each protocol.
+ *
+ * This screen used to carry an `implementedFeatures` count per protocol and a
+ * headline "coverage" percentage derived from it. The counts were not measured
+ * against anything: it claimed three of four A2A features, one of four NANDA,
+ * two of four Mem0 and three of four LangChain, and there is not a line of
+ * code for any of those four protocols anywhere in the server. MCP was listed
+ * at four of five when the server declares two capabilities and answers six
+ * methods.
+ *
+ * Each flag below was checked against the source, and the true ones say where.
+ * If you add support for something here, flip its flag in the same change.
+ */
 const protocols: Protocol[] = [
     {
         id: 'mcp',
         name: 'MCP',
         fullName: 'Model Context Protocol',
-        version: '2024-11',
-        status: 'active',
+        version: '2024-11-05',
         category: 'tool',
-        description: 'Anthropic\'s protocol for connecting AI models to external tools, data sources, and system capabilities.',
-        features: ['Tool calling', 'Resource access', 'Prompts', 'Sampling', 'Roots'],
+        description:
+            "Anthropic's protocol for connecting AI models to external tools, data sources, and system capabilities.",
+        features: [
+            // chasm-rust/src/mcp/server.rs -- `tools/list`, `tools/call`.
+            { name: 'Tool calling', implemented: true },
+            // chasm-rust/src/mcp/server.rs -- `resources/list`, `resources/read`.
+            { name: 'Resource access', implemented: true },
+            // The server declares `prompts: None` in its initialize result.
+            { name: 'Prompts', implemented: false },
+            { name: 'Sampling', implemented: false },
+            { name: 'Roots', implemented: false },
+        ],
         docsUrl: 'https://modelcontextprotocol.io',
-        implementedFeatures: 4,
-        totalFeatures: 5,
-    },
-    {
-        id: 'a2a',
-        name: 'A2A',
-        fullName: 'Agent-to-Agent Protocol',
-        version: '1.0',
-        status: 'active',
-        category: 'agent',
-        description: 'Google\'s protocol enabling AI agents to communicate, delegate tasks, and collaborate.',
-        features: ['Agent discovery', 'Task delegation', 'Message passing', 'Capability negotiation'],
-        docsUrl: 'https://github.com/google/A2A',
-        implementedFeatures: 3,
-        totalFeatures: 4,
-    },
-    {
-        id: 'nanda',
-        name: 'NANDA',
-        fullName: 'Networked Agents for Decentralized Applications',
-        version: '0.9',
-        status: 'beta',
-        category: 'agent',
-        description: 'Decentralized protocol for agent coordination and task orchestration across networks.',
-        features: ['Decentralized registry', 'Task marketplace', 'Reputation system', 'Payment rails'],
-        implementedFeatures: 1,
-        totalFeatures: 4,
     },
     {
         id: 'openai-tools',
         name: 'OpenAI Tools',
         fullName: 'OpenAI Function Calling',
         version: '1.0',
-        status: 'active',
         category: 'tool',
-        description: 'OpenAI\'s native function calling interface for GPT models.',
-        features: ['Function definitions', 'Parallel calls', 'Structured outputs', 'JSON mode'],
+        description: "OpenAI's native function calling interface for GPT models.",
+        features: [
+            // `GET /api/mcp/tools` also emits every tool as an OpenAI function
+            // definition, ready to pass straight to a chat model.
+            { name: 'Function definitions', implemented: true },
+            { name: 'Parallel calls', implemented: false },
+            // Structured outputs means a `json_schema` response format. Chasm
+            // sends `json_object`, which is JSON mode, not this.
+            { name: 'Structured outputs', implemented: false },
+            // chasm-rust/src/intelligence/model.rs.
+            { name: 'JSON mode', implemented: true },
+        ],
         docsUrl: 'https://platform.openai.com/docs/guides/function-calling',
-        implementedFeatures: 4,
-        totalFeatures: 4,
-    },
-    {
-        id: 'langchain-tools',
-        name: 'LangChain Tools',
-        fullName: 'LangChain Tool Interface',
-        version: '0.1',
-        status: 'active',
-        category: 'tool',
-        description: 'LangChain\'s standardized tool interface for building agent applications.',
-        features: ['Tool wrappers', 'Toolkits', 'Agent types', 'Memory integration'],
-        implementedFeatures: 3,
-        totalFeatures: 4,
-    },
-    {
-        id: 'mem0',
-        name: 'Mem0',
-        fullName: 'Memory Layer Protocol',
-        version: '0.1',
-        status: 'beta',
-        category: 'memory',
-        description: 'Protocol for managing persistent memory across AI agent sessions.',
-        features: ['Semantic memory', 'Episodic memory', 'Working memory', 'Memory search'],
-        implementedFeatures: 2,
-        totalFeatures: 4,
     },
     {
         id: 'oauth2',
         name: 'OAuth 2.0',
         fullName: 'Open Authorization 2.0',
         version: '2.1',
-        status: 'active',
         category: 'auth',
         description: 'Industry-standard protocol for authorization and API access.',
-        features: ['Auth code flow', 'Client credentials', 'Refresh tokens', 'PKCE'],
-        implementedFeatures: 4,
-        totalFeatures: 4,
+        features: [
+            // chasm-rust/src/api/oidc.rs.
+            { name: 'Auth code flow', implemented: true },
+            { name: 'Client credentials', implemented: false },
+            // chasm-rust/src/api/auth.rs -- issued, stored and validated.
+            { name: 'Refresh tokens', implemented: true },
+            // chasm-rust/src/api/oidc.rs -- the verifier never leaves the server.
+            { name: 'PKCE', implemented: true },
+        ],
+    },
+    {
+        id: 'a2a',
+        name: 'A2A',
+        fullName: 'Agent-to-Agent Protocol',
+        version: '1.0',
+        category: 'agent',
+        description:
+            "Google's protocol enabling AI agents to communicate, delegate tasks, and collaborate.",
+        features: [
+            { name: 'Agent discovery', implemented: false },
+            { name: 'Task delegation', implemented: false },
+            { name: 'Message passing', implemented: false },
+            { name: 'Capability negotiation', implemented: false },
+        ],
+        docsUrl: 'https://github.com/google/A2A',
+    },
+    {
+        id: 'nanda',
+        name: 'NANDA',
+        fullName: 'Networked Agents for Decentralized Applications',
+        version: '0.9',
+        category: 'agent',
+        description:
+            'Decentralized protocol for agent coordination and task orchestration across networks.',
+        features: [
+            { name: 'Decentralized registry', implemented: false },
+            { name: 'Task marketplace', implemented: false },
+            { name: 'Reputation system', implemented: false },
+            { name: 'Payment rails', implemented: false },
+        ],
+    },
+    {
+        id: 'langchain-tools',
+        name: 'LangChain Tools',
+        fullName: 'LangChain Tool Interface',
+        version: '0.1',
+        category: 'tool',
+        description: "LangChain's standardized tool interface for building agent applications.",
+        features: [
+            { name: 'Tool wrappers', implemented: false },
+            { name: 'Toolkits', implemented: false },
+            { name: 'Agent types', implemented: false },
+            { name: 'Memory integration', implemented: false },
+        ],
+    },
+    {
+        id: 'mem0',
+        name: 'Mem0',
+        fullName: 'Memory Layer Protocol',
+        version: '0.1',
+        category: 'memory',
+        description: 'Protocol for managing persistent memory across AI agent sessions.',
+        features: [
+            // Chasm stores per-project memory of its own, under /api/swe. That
+            // is not this protocol, and does not count towards it.
+            { name: 'Semantic memory', implemented: false },
+            { name: 'Episodic memory', implemented: false },
+            { name: 'Working memory', implemented: false },
+            { name: 'Memory search', implemented: false },
+        ],
     },
 ];
+
+function implementedCount(p: Protocol): number {
+    return p.features.filter((f) => f.implemented).length;
+}
 
 const categoryConfig = {
     agent: { icon: 'people-outline', color: '#8b5cf6' },
@@ -128,7 +181,6 @@ const categoryConfig = {
 export function ProtocolsScreen() {
     const { colors, isDark } = useTheme();
     const [filterCategory, setFilterCategory] = useState<string>('all');
-    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const filteredProtocols = useMemo(() => {
         if (filterCategory === 'all') return protocols;
@@ -137,31 +189,28 @@ export function ProtocolsScreen() {
 
     // Stats
     const stats = useMemo(() => {
-        const implemented = protocols.reduce((sum, p) => sum + p.implementedFeatures, 0);
-        const total = protocols.reduce((sum, p) => sum + p.totalFeatures, 0);
+        const implemented = protocols.reduce((sum, p) => sum + implementedCount(p), 0);
+        const total = protocols.reduce((sum, p) => sum + p.features.length, 0);
         return {
             total: protocols.length,
-            active: protocols.filter(p => p.status === 'active').length,
+            supported: protocols.filter((p) => implementedCount(p) > 0).length,
             implemented,
             coverage: Math.round((implemented / total) * 100),
         };
     }, []);
 
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
-    };
-
     const handleOpenDocs = (url: string) => {
         Linking.openURL(url);
     };
 
-    const getStatusStyle = (status: Protocol['status']) => {
-        switch (status) {
-            case 'active': return { bg: '#10b98120', color: '#10b981' };
-            case 'beta': return { bg: '#f59e0b20', color: '#f59e0b' };
-            case 'deprecated': return { bg: '#ef444420', color: '#ef4444' };
-        }
+    // The badge says how much of the protocol Chasm implements, which is what a
+    // reader of this screen is actually asking. It used to say how mature the
+    // protocol was upstream -- true, but not an answer to that question.
+    const getSupportStyle = (protocol: Protocol) => {
+        const done = implementedCount(protocol);
+        if (done === 0) return { bg: '#ef444420', color: '#ef4444', label: 'not implemented' };
+        if (done === protocol.features.length) return { bg: '#10b98120', color: '#10b981', label: 'full' };
+        return { bg: '#f59e0b20', color: '#f59e0b', label: 'partial' };
     };
 
     return (
@@ -173,8 +222,8 @@ export function ProtocolsScreen() {
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Protocols</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.active}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active</Text>
+                    <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.supported}</Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Supported</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.statValue, { color: colors.primary }]}>{stats.coverage}%</Text>
@@ -216,15 +265,13 @@ export function ProtocolsScreen() {
             </ScrollView>
 
             {/* Protocol List */}
-            <ScrollView
-                style={styles.list}
-                refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-                }
-            >
+            {/* No pull-to-refresh: this table is compiled into the app, so a
+                spinner here would reload nothing. */}
+            <ScrollView style={styles.list}>
                 {filteredProtocols.map((protocol) => {
                     const catConfig = categoryConfig[protocol.category];
-                    const statusStyle = getStatusStyle(protocol.status);
+                    const supportStyle = getSupportStyle(protocol);
+                    const done = implementedCount(protocol);
 
                     return (
                         <View
@@ -238,8 +285,10 @@ export function ProtocolsScreen() {
                                 <View style={styles.titleContainer}>
                                     <View style={styles.titleRow}>
                                         <Text style={[styles.protocolName, { color: colors.text }]}>{protocol.name}</Text>
-                                        <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                                            <Text style={[styles.statusText, { color: statusStyle.color }]}>{protocol.status}</Text>
+                                        <View style={[styles.statusBadge, { backgroundColor: supportStyle.bg }]}>
+                                            <Text style={[styles.statusText, { color: supportStyle.color }]}>
+                                                {supportStyle.label}
+                                            </Text>
                                         </View>
                                     </View>
                                     <Text style={[styles.fullName, { color: colors.textSecondary }]}>{protocol.fullName}</Text>
@@ -252,33 +301,35 @@ export function ProtocolsScreen() {
                             {/* Features */}
                             <View style={styles.featuresSection}>
                                 <Text style={[styles.featuresLabel, { color: colors.textSecondary }]}>
-                                    Features ({protocol.implementedFeatures}/{protocol.totalFeatures})
+                                    Implemented ({done}/{protocol.features.length})
                                 </Text>
                                 <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
                                     <View
                                         style={[styles.progressFill, {
-                                            width: `${(protocol.implementedFeatures / protocol.totalFeatures) * 100}%`,
+                                            width: `${(done / protocol.features.length) * 100}%`,
                                             backgroundColor: catConfig.color,
                                         }]}
                                     />
                                 </View>
                                 <View style={styles.featureTags}>
-                                    {protocol.features.map((feature, idx) => (
+                                    {protocol.features.map((feature) => (
                                         <View
-                                            key={feature}
+                                            key={feature.name}
                                             style={[styles.featureTag, {
-                                                backgroundColor: idx < protocol.implementedFeatures
+                                                backgroundColor: feature.implemented
                                                     ? `${catConfig.color}20`
                                                     : colors.background,
                                             }]}
                                         >
-                                            {idx < protocol.implementedFeatures && (
-                                                <Ionicons name="checkmark" size={12} color={catConfig.color} />
-                                            )}
+                                            <Ionicons
+                                                name={feature.implemented ? 'checkmark' : 'close'}
+                                                size={12}
+                                                color={feature.implemented ? catConfig.color : colors.textSecondary}
+                                            />
                                             <Text style={[styles.featureText, {
-                                                color: idx < protocol.implementedFeatures ? catConfig.color : colors.textSecondary,
+                                                color: feature.implemented ? catConfig.color : colors.textSecondary,
                                             }]}>
-                                                {feature}
+                                                {feature.name}
                                             </Text>
                                         </View>
                                     ))}
