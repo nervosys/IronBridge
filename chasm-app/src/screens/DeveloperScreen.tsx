@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
+import { serverCompletion } from '../api/completions';
 
 interface MLProject {
     id: string;
@@ -115,6 +116,15 @@ export function DeveloperScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [playgroundPrompt, setPlaygroundPrompt] = useState('');
 
+    // Playground. The model field is free text on purpose: the server proxies
+    // to one configured OpenAI-compatible endpoint and forwards whatever model
+    // string it is given, so a picker over the provider catalogue would imply
+    // routing that does not exist. Blank means the server's own default.
+    const [playgroundModel, setPlaygroundModel] = useState('');
+    const [playgroundOutput, setPlaygroundOutput] = useState<string | null>(null);
+    const [playgroundError, setPlaygroundError] = useState<string | null>(null);
+    const [isRunning, setIsRunning] = useState(false);
+
     // Stats
     const stats = useMemo(() => ({
         totalProjects: projects.length,
@@ -123,9 +133,45 @@ export function DeveloperScreen() {
         totalSize: datasets.reduce((sum, d) => sum + d.size, 0).toFixed(1),
     }), [projects, datasets]);
 
+    /**
+     * There is nothing to refresh.
+     *
+     * This used to be `setTimeout(..., 1000)` -- a spinner that ran for a
+     * second and reloaded nothing, which is indistinguishable from a fetch
+     * that succeeded and returned the same data. Projects and datasets are
+     * fixtures with no endpoint behind them, as the banner says, so the
+     * control resolves immediately rather than performing a wait.
+     */
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
+        setIsRefreshing(false);
+    };
+
+    /**
+     * Send the prompt to `/api/chat/completions`.
+     *
+     * A server with no model configured answers 503 naming the variable to
+     * set; that message is shown rather than swallowed, because "nothing
+     * happened" and "the server has no model" look the same in an empty
+     * output box.
+     */
+    const handleRunPrompt = async () => {
+        const prompt = playgroundPrompt.trim();
+        if (!prompt || isRunning) return;
+
+        setIsRunning(true);
+        setPlaygroundError(null);
+        setPlaygroundOutput(null);
+        try {
+            const completion = await serverCompletion(prompt, playgroundModel);
+            setPlaygroundOutput(completion.content || '(the model returned no content)');
+        } catch (err) {
+            setPlaygroundError(
+                err instanceof Error ? err.message : 'The server rejected the request.'
+            );
+        } finally {
+            setIsRunning(false);
+        }
     };
 
     const formatDate = (dateStr: string) => {
@@ -315,19 +361,40 @@ export function DeveloperScreen() {
                             textAlignVertical="top"
                         />
                         <View style={styles.playgroundActions}>
-                            <TouchableOpacity style={[styles.modelSelect, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                                <Text style={[styles.modelSelectText, { color: colors.text }]}>gpt-4o-mini</Text>
-                                <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.runButton, { backgroundColor: colors.primary }]}>
-                                <Ionicons name="play" size={18} color="#fff" />
-                                <Text style={styles.runButtonText}>Run</Text>
+                            <TextInput
+                                style={[styles.modelSelect, styles.modelSelectText, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                                placeholder="gpt-4o-mini (server default)"
+                                placeholderTextColor={colors.textSecondary}
+                                value={playgroundModel}
+                                onChangeText={setPlaygroundModel}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            <TouchableOpacity
+                                style={[
+                                    styles.runButton,
+                                    { backgroundColor: colors.primary },
+                                    (!playgroundPrompt.trim() || isRunning) && styles.runButtonDisabled,
+                                ]}
+                                disabled={!playgroundPrompt.trim() || isRunning}
+                                onPress={handleRunPrompt}
+                            >
+                                <Ionicons name={isRunning ? 'hourglass' : 'play'} size={18} color="#fff" />
+                                <Text style={styles.runButtonText}>{isRunning ? 'Running…' : 'Run'}</Text>
                             </TouchableOpacity>
                         </View>
                         <View style={[styles.outputArea, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <Text style={[styles.outputPlaceholder, { color: colors.textSecondary }]}>
-                                Output will appear here...
-                            </Text>
+                            {playgroundError ? (
+                                <Text style={[styles.outputText, { color: '#ef4444' }]}>{playgroundError}</Text>
+                            ) : playgroundOutput ? (
+                                <Text style={[styles.outputText, { color: colors.text }]} selectable>
+                                    {playgroundOutput}
+                                </Text>
+                            ) : (
+                                <Text style={[styles.outputPlaceholder, { color: colors.textSecondary }]}>
+                                    Output will appear here...
+                                </Text>
+                            )}
                         </View>
                     </View>
                 )}
@@ -580,6 +647,13 @@ const styles = StyleSheet.create({
     outputPlaceholder: {
         fontSize: 13,
         fontStyle: 'italic',
+    },
+    outputText: {
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    runButtonDisabled: {
+        opacity: 0.5,
     },
     fab: {
         position: 'absolute',

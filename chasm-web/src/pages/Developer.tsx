@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     Download,
     Database,
@@ -41,9 +41,7 @@ import {
     Video,
     Link,
     Upload,
-    Trash2,
     Eye,
-    Code,
     Terminal,
     FileCode,
     Sparkles,
@@ -63,7 +61,7 @@ import {
     Cloud,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useProviders, useProviderHealth } from '../hooks/useApi';
+import { useProviders, useProviderHealth, useMcpTools, useCallMcpTool } from '../hooks/useApi';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
 /*
@@ -158,108 +156,62 @@ const ragPipelines = [
     { id: 'support-bot', name: 'Support Bot', status: 'paused', vectorDb: 'Qdrant', embedding: 'bge-large-en-v1.5', chunks: '28K', queries: 890 },
 ];
 
-// Function Calling / Tool Use Data
-const toolDefinitions = [
-    {
-        id: 'web-search',
-        name: 'web_search',
-        description: 'Search the web for current information',
-        parameters: [
-            { name: 'query', type: 'string', required: true, description: 'Search query' },
-            { name: 'num_results', type: 'integer', required: false, description: 'Number of results to return' },
-        ],
-        category: 'Information',
-        usage: 2450,
-    },
-    {
-        id: 'calculator',
-        name: 'calculate',
-        description: 'Perform mathematical calculations',
-        parameters: [
-            { name: 'expression', type: 'string', required: true, description: 'Mathematical expression to evaluate' },
-        ],
-        category: 'Math',
-        usage: 1890,
-    },
-    {
-        id: 'file-read',
-        name: 'read_file',
-        description: 'Read contents of a file from the filesystem',
-        parameters: [
-            { name: 'path', type: 'string', required: true, description: 'File path' },
-            { name: 'encoding', type: 'string', required: false, description: 'File encoding (default: utf-8)' },
-        ],
-        category: 'Filesystem',
-        usage: 3200,
-    },
-    {
-        id: 'file-write',
-        name: 'write_file',
-        description: 'Write content to a file',
-        parameters: [
-            { name: 'path', type: 'string', required: true, description: 'File path' },
-            { name: 'content', type: 'string', required: true, description: 'Content to write' },
-            { name: 'mode', type: 'string', required: false, description: 'Write mode (overwrite/append)' },
-        ],
-        category: 'Filesystem',
-        usage: 1560,
-    },
-    {
-        id: 'code-exec',
-        name: 'execute_code',
-        description: 'Execute code in a sandboxed environment',
-        parameters: [
-            { name: 'language', type: 'string', required: true, description: 'Programming language' },
-            { name: 'code', type: 'string', required: true, description: 'Code to execute' },
-            { name: 'timeout', type: 'integer', required: false, description: 'Execution timeout in seconds' },
-        ],
-        category: 'Code',
-        usage: 4100,
-    },
-    {
-        id: 'api-call',
-        name: 'http_request',
-        description: 'Make HTTP requests to external APIs',
-        parameters: [
-            { name: 'url', type: 'string', required: true, description: 'Request URL' },
-            { name: 'method', type: 'string', required: true, description: 'HTTP method (GET/POST/PUT/DELETE)' },
-            { name: 'headers', type: 'object', required: false, description: 'Request headers' },
-            { name: 'body', type: 'object', required: false, description: 'Request body' },
-        ],
-        category: 'API',
-        usage: 2800,
-    },
-    {
-        id: 'db-query',
-        name: 'database_query',
-        description: 'Execute SQL queries on connected databases',
-        parameters: [
-            { name: 'connection', type: 'string', required: true, description: 'Database connection name' },
-            { name: 'query', type: 'string', required: true, description: 'SQL query to execute' },
-        ],
-        category: 'Database',
-        usage: 1200,
-    },
-    {
-        id: 'image-gen',
-        name: 'generate_image',
-        description: 'Generate images from text descriptions',
-        parameters: [
-            { name: 'prompt', type: 'string', required: true, description: 'Image description' },
-            { name: 'size', type: 'string', required: false, description: 'Image size (256x256, 512x512, 1024x1024)' },
-            { name: 'style', type: 'string', required: false, description: 'Image style' },
-        ],
-        category: 'Generation',
-        usage: 890,
-    },
-];
+// Function Calling / Tool Use
+//
+// The tool list is served, not declared here. What used to sit in this spot
+// was a fixture of six tools -- `web_search`, `calculate`, an image generator
+// -- none of which Chasm has, each with an invented monthly call count. The
+// server exposes 16 real ones over `/api/mcp/tools`, with real JSON Schema,
+// and `/api/mcp/call` runs them.
 
+/**
+ * The schema formats the server actually hands over.
+ *
+ * Both are served verbatim by `/api/mcp/tools`: it returns each tool twice,
+ * once as an OpenAI function definition and once in MCP form. Anthropic and
+ * Gemini were listed here too, but nothing in this repo produces or checks
+ * either encoding, so offering them would be claiming a conversion that does
+ * not exist.
+ */
 const toolSchemas = {
     openai: 'OpenAI Function Calling',
-    anthropic: 'Anthropic Tool Use',
-    gemini: 'Google Gemini',
     mcp: 'Model Context Protocol',
 };
+
+/** One row of the parameter table, flattened out of a tool's JSON Schema. */
+interface ToolParam {
+    name: string;
+    type: string;
+    required: boolean;
+    description: string;
+}
+
+/**
+ * Read a tool's parameters off its `inputSchema`.
+ *
+ * Returns nothing rather than guessing when the schema has no `properties` --
+ * several of these tools genuinely take no arguments, and an empty list is the
+ * right answer for them.
+ */
+function toolParams(inputSchema: Record<string, unknown> | undefined): ToolParam[] {
+    const properties = inputSchema?.properties;
+    if (!properties || typeof properties !== 'object') return [];
+
+    const required = Array.isArray(inputSchema?.required)
+        ? (inputSchema.required as unknown[]).filter((r): r is string => typeof r === 'string')
+        : [];
+
+    return Object.entries(properties as Record<string, unknown>).map(([name, raw]) => {
+        const field = (raw ?? {}) as Record<string, unknown>;
+        return {
+            name,
+            type: typeof field.type === 'string' ? field.type : 'unknown',
+            required: required.includes(name),
+            description: typeof field.description === 'string' ? field.description : '',
+        };
+    });
+}
+
 
 // Multi-Modal Models Data
 const multiModalModels = [
@@ -564,9 +516,99 @@ export default function Developer() {
     const { data: connectedProviders } = useProviders();
     const { data: providerHealth } = useProviderHealth();
 
+    // The Tool Use tab's tools are the server's, from `/api/mcp/tools`.
+    const { data: mcpData, isLoading: toolsLoading, error: toolsError } = useMcpTools();
+    const tools = useMemo(() => mcpData?.mcp_tools ?? [], [mcpData]);
+
     const [activeTab, setActiveTab] = useState<Tab>('models');
     const [modelSearch, setModelSearch] = useState('');
     const [datasetSearch, setDatasetSearch] = useState('');
+
+    // Tool testing
+    const callTool = useCallMcpTool();
+    const [testToolName, setTestToolName] = useState('');
+    const [testInput, setTestInput] = useState('{}');
+    const [testOutput, setTestOutput] = useState<{ text: string; isError: boolean } | null>(null);
+
+    // Schema export
+    const [schemaFormat, setSchemaFormat] = useState<keyof typeof toolSchemas>('openai');
+    const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
+    const [generatedSchema, setGeneratedSchema] = useState<string | null>(null);
+
+    // Default the selection to everything, once the list arrives.
+    useEffect(() => {
+        setSelectedTools(new Set(tools.map(t => t.name)));
+    }, [tools]);
+
+    // Default the test target to the first tool, once the list arrives.
+    useEffect(() => {
+        setTestToolName(current => current || (tools[0]?.name ?? ''));
+    }, [tools]);
+
+    /**
+     * Run the selected tool against the server.
+     *
+     * Both failure modes are the user's to see: input that is not JSON never
+     * reaches the server, and a tool that ran and failed comes back 200 with
+     * `isError` set. Reporting only thrown errors would render the second as a
+     * successful run.
+     */
+    const handleExecuteTool = async () => {
+        let args: Record<string, unknown>;
+        try {
+            const parsed = JSON.parse(testInput || '{}');
+            if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('Arguments must be a JSON object.');
+            }
+            args = parsed as Record<string, unknown>;
+        } catch (err) {
+            setTestOutput({
+                text: err instanceof Error ? err.message : 'Input is not valid JSON.',
+                isError: true,
+            });
+            return;
+        }
+
+        try {
+            const result = await callTool.mutate({ name: testToolName, args });
+            const text = (result?.result?.content ?? [])
+                .map(part => part.text)
+                .join('\n')
+                .trim();
+            setTestOutput({
+                text: text || '(the tool returned no content)',
+                isError: result?.result?.isError === true,
+            });
+        } catch (err) {
+            setTestOutput({
+                text: err instanceof Error ? err.message : 'The server rejected the call.',
+                isError: true,
+            });
+        }
+    };
+
+    /**
+     * Render the checked tools in the chosen format.
+     *
+     * Both formats come off the wire rather than being converted here: the
+     * server sends every tool as an OpenAI function definition and as an MCP
+     * definition in the same response.
+     */
+    const handleGenerateSchema = () => {
+        const chosen = tools.filter(t => selectedTools.has(t.name));
+        const payload =
+            schemaFormat === 'openai'
+                ? chosen.map(t => ({
+                      type: 'function',
+                      function: {
+                          name: t.name,
+                          description: t.description,
+                          parameters: t.inputSchema,
+                      },
+                  }))
+                : chosen;
+        setGeneratedSchema(JSON.stringify(payload, null, 2));
+    };
 
     // Get provider health status
     const getProviderStatus = useMemo(() => {
@@ -628,10 +670,18 @@ export default function Developer() {
 
     return (
         <div className="space-y-6">
-            <ExampleDataBanner
-                what="models, datasets, training jobs, pipelines and devices"
-                endpoint="/api/datasets or /api/training"
-            />
+            {/*
+              * Not on the Tool Use tab: that one is served now. The banner is
+              * a statement about the data on screen, so leaving it up over
+              * real, live tools would be its own small lie in the other
+              * direction.
+              */}
+            {activeTab !== 'tools' && (
+                <ExampleDataBanner
+                    what="models, datasets, training jobs, pipelines and devices"
+                    endpoint="/api/datasets or /api/training"
+                />
+            )}
 
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -1432,33 +1482,25 @@ export default function Developer() {
             {/* Tool Use Tab */}
             {activeTab === 'tools' && (
                 <div className="space-y-6">
-                    {/* Tool Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Tool Stats
+                      *
+                      * Two cards, not four. "Total Calls: 12,340 this month" and
+                      * "Most Used: execute_code, 4,100 calls" used to sit beside
+                      * these: Chasm records no tool-call counts anywhere, so
+                      * both were sums over invented fixture fields. They are
+                      * gone rather than em-dashed -- the figure is not unknown,
+                      * it is unmeasured.
+                      */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                             <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                                 <Wrench size={18} />
-                                <span className="text-sm">Defined Tools</span>
-                            </div>
-                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{toolDefinitions.length}</p>
-                            <p className="text-sm text-green-500">all active</p>
-                        </div>
-                        <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                                <Zap size={18} />
-                                <span className="text-sm">Total Calls</span>
+                                <span className="text-sm">Tools Served</span>
                             </div>
                             <p className="text-2xl font-bold text-[hsl(var(--foreground))]">
-                                {toolDefinitions.reduce((sum, t) => sum + t.usage, 0).toLocaleString()}
+                                {toolsLoading ? '…' : tools.length}
                             </p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">this month</p>
-                        </div>
-                        <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                                <Code size={18} />
-                                <span className="text-sm">Most Used</span>
-                            </div>
-                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">execute_code</p>
-                            <p className="text-sm text-blue-500">4,100 calls</p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">over MCP</p>
                         </div>
                         <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                             <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
@@ -1466,57 +1508,58 @@ export default function Developer() {
                                 <span className="text-sm">Schema Formats</span>
                             </div>
                             <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{Object.keys(toolSchemas).length}</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">supported</p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">served verbatim</p>
                         </div>
                     </div>
 
+                    {toolsError && (
+                        <div className="bg-[hsl(var(--card))] rounded-xl border border-red-500/40 p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                            Could not load tools from the server: {toolsError.message}
+                        </div>
+                    )}
+
                     {/* Tool Definitions */}
                     <div className="bg-[hsl(var(--card))] rounded-xl border">
-                        <div className="p-4 border-b flex items-center justify-between">
+                        <div className="p-4 border-b">
                             <h3 className="font-semibold text-[hsl(var(--foreground))]">Tool Definitions</h3>
-                            <button className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg text-sm hover:opacity-90">
-                                <Plus size={14} />
-                                Add Tool
-                            </button>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                Served by the running server over <code className="font-mono">/api/mcp/tools</code>. The
+                                catalogue is compiled in, so there is nothing here to add, edit or delete.
+                            </p>
                         </div>
+                        {!toolsLoading && tools.length === 0 && !toolsError && (
+                            <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                The server reports no tools.
+                            </p>
+                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-                            {toolDefinitions.map(tool => (
-                                <div key={tool.id} className="bg-[hsl(var(--muted))]/50 rounded-lg p-4">
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <code className="font-mono font-medium text-[hsl(var(--primary))]">{tool.name}</code>
-                                                <span className="text-xs px-2 py-0.5 bg-[hsl(var(--muted))] rounded">{tool.category}</span>
-                                            </div>
-                                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{tool.description}</p>
+                            {tools.map(tool => {
+                                const params = toolParams(tool.inputSchema);
+                                return (
+                                    <div key={tool.name} className="bg-[hsl(var(--muted))]/50 rounded-lg p-4">
+                                        <div className="mb-2">
+                                            <code className="font-mono font-medium text-[hsl(var(--primary))]">{tool.name}</code>
+                                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                                {tool.description || 'No description supplied.'}
+                                            </p>
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                            <button className="p-1.5 rounded hover:bg-[hsl(var(--muted))]">
-                                                <Eye size={14} className="text-[hsl(var(--muted-foreground))]" />
-                                            </button>
-                                            <button className="p-1.5 rounded hover:bg-[hsl(var(--muted))]">
-                                                <Settings size={14} className="text-[hsl(var(--muted-foreground))]" />
-                                            </button>
-                                            <button className="p-1.5 rounded hover:bg-[hsl(var(--muted))]">
-                                                <Trash2 size={14} className="text-red-500" />
-                                            </button>
+                                        <div className="space-y-1 mt-3">
+                                            {params.length === 0 ? (
+                                                <p className="text-xs text-[hsl(var(--muted-foreground))]">Takes no arguments.</p>
+                                            ) : (
+                                                params.map(param => (
+                                                    <div key={param.name} className="flex items-center gap-2 text-xs">
+                                                        <code className="font-mono text-[hsl(var(--foreground))]">{param.name}</code>
+                                                        <span className="text-purple-500">{param.type}</span>
+                                                        {param.required && <span className="text-red-500">*</span>}
+                                                        <span className="text-[hsl(var(--muted-foreground))] truncate">{param.description}</span>
+                                                    </div>
+                                                ))
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="space-y-1 mt-3">
-                                        {tool.parameters.map(param => (
-                                            <div key={param.name} className="flex items-center gap-2 text-xs">
-                                                <code className="font-mono text-[hsl(var(--foreground))]">{param.name}</code>
-                                                <span className="text-purple-500">{param.type}</span>
-                                                {param.required && <span className="text-red-500">*</span>}
-                                                <span className="text-[hsl(var(--muted-foreground))] truncate">{param.description}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-[hsl(var(--border))]">
-                                        <span className="text-xs text-[hsl(var(--muted-foreground))]">Usage: {tool.usage.toLocaleString()} calls</span>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -1527,7 +1570,11 @@ export default function Developer() {
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Schema Format</label>
-                                    <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]">
+                                    <select
+                                        className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                        value={schemaFormat}
+                                        onChange={e => setSchemaFormat(e.target.value as keyof typeof toolSchemas)}
+                                    >
                                         {Object.entries(toolSchemas).map(([key, value]) => (
                                             <option key={key} value={key}>{value}</option>
                                         ))}
@@ -1536,18 +1583,39 @@ export default function Developer() {
                                 <div>
                                     <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Select Tools</label>
                                     <div className="space-y-2 max-h-40 overflow-y-auto">
-                                        {toolDefinitions.map(tool => (
-                                            <label key={tool.id} className="flex items-center gap-2 text-sm">
-                                                <input type="checkbox" defaultChecked className="rounded" />
+                                        {tools.map(tool => (
+                                            <label key={tool.name} className="flex items-center gap-2 text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    className="rounded"
+                                                    checked={selectedTools.has(tool.name)}
+                                                    onChange={e => {
+                                                        setSelectedTools(prev => {
+                                                            const next = new Set(prev);
+                                                            if (e.target.checked) next.add(tool.name);
+                                                            else next.delete(tool.name);
+                                                            return next;
+                                                        });
+                                                    }}
+                                                />
                                                 <span className="text-[hsl(var(--foreground))]">{tool.name}</span>
                                             </label>
                                         ))}
                                     </div>
                                 </div>
-                                <button className="w-full py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 flex items-center justify-center gap-2">
+                                <button
+                                    className="w-full py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-50"
+                                    onClick={handleGenerateSchema}
+                                    disabled={selectedTools.size === 0}
+                                >
                                     <FileCode size={18} />
                                     Generate Schema
                                 </button>
+                                {generatedSchema && (
+                                    <pre className="bg-[hsl(var(--muted))] rounded-lg p-3 text-xs font-mono overflow-auto max-h-64 text-[hsl(var(--foreground))]">
+                                        {generatedSchema}
+                                    </pre>
+                                )}
                             </div>
                         </div>
 
@@ -1556,9 +1624,13 @@ export default function Developer() {
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Select Tool</label>
-                                    <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]">
-                                        {toolDefinitions.map(tool => (
-                                            <option key={tool.id} value={tool.id}>{tool.name}</option>
+                                    <select
+                                        className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                        value={testToolName}
+                                        onChange={e => setTestToolName(e.target.value)}
+                                    >
+                                        {tools.map(tool => (
+                                            <option key={tool.name} value={tool.name}>{tool.name}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -1566,13 +1638,30 @@ export default function Developer() {
                                     <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Test Input (JSON)</label>
                                     <textarea
                                         className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] font-mono text-sm h-24 resize-none"
-                                        placeholder='{"query": "test search"}'
+                                        placeholder='{"query": "deadlock"}'
+                                        value={testInput}
+                                        onChange={e => setTestInput(e.target.value)}
                                     />
                                 </div>
-                                <button className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
+                                <button
+                                    className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50"
+                                    onClick={handleExecuteTool}
+                                    disabled={!testToolName || callTool.isLoading}
+                                >
                                     <Terminal size={18} />
-                                    Execute Tool
+                                    {callTool.isLoading ? 'Running…' : 'Execute Tool'}
                                 </button>
+                                {testOutput && (
+                                    <pre
+                                        className={`rounded-lg p-3 text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap ${
+                                            testOutput.isError
+                                                ? 'bg-red-500/10 text-red-500'
+                                                : 'bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]'
+                                        }`}
+                                    >
+                                        {testOutput.text}
+                                    </pre>
+                                )}
                             </div>
                         </div>
                     </div>

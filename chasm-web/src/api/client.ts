@@ -523,6 +523,21 @@ export const mcp = {
     async systemPrompt(): Promise<ApiResponse<{ system_prompt: string }>> {
         return get('/api/mcp/system-prompt');
     },
+
+    /**
+     * Run one of those tools and return what it produced.
+     *
+     * A failed tool still answers 200: the failure is reported as
+     * `result.isError` on the payload, not as an HTTP status. Callers must
+     * check it -- treating the status alone as success is how a tool that
+     * returned "Unknown tool" would render as a successful run.
+     */
+    async callTool(
+        name: string,
+        args: Record<string, unknown>
+    ): Promise<ApiResponse<import('./types').McpToolResult>> {
+        return post('/api/mcp/call', { name, arguments: args });
+    },
 };
 
 // =============================================================================

@@ -329,6 +329,19 @@ export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_too
     return useQuery(queryFn, [], options);
 }
 
+/**
+ * Run an MCP tool.
+ *
+ * Note the result: a tool that failed still comes back on the success path
+ * with `result.isError` set, so callers check that rather than assuming a
+ * resolved promise means the tool worked.
+ */
+export function useCallMcpTool() {
+    return useMutation(({ name, args }: { name: string; args: Record<string, unknown> }) =>
+        mcp.callTool(name, args)
+    );
+}
+
 // =============================================================================
 // Agent Hooks
 // =============================================================================
