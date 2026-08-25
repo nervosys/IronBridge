@@ -20,9 +20,10 @@ import {
     chat,
     mcp,
     documents,
+    datasets,
     connectWebSocket,
 } from '../api/client';
-import type { CreateSwarmRequest, DocumentSummary } from '../api/client';
+import type { CreateSwarmRequest, DocumentSummary, Dataset, DatasetType } from '../api/client';
 import type {
     Workspace,
     Session,
@@ -328,6 +329,26 @@ export function useTestProvider() {
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
+}
+
+/**
+ * The datasets this server holds -- the ones the user uploaded, not a remote
+ * catalogue.
+ */
+export function useDatasets(options?: UseQueryOptions): UseQueryResult<Dataset[]> {
+    const queryFn = useCallback(() => datasets.list(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useCreateDataset() {
+    return useMutation(
+        (input: { name: string; type?: DatasetType; format?: string; entries: unknown[] }) =>
+            datasets.create(input)
+    );
+}
+
+export function useDeleteDataset() {
+    return useMutation((id: string) => datasets.remove(id));
 }
 
 /**

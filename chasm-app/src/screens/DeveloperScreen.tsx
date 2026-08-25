@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -11,11 +11,14 @@ import {
     RefreshControl,
     TextInput,
     Dimensions,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
 import { serverCompletion } from '../api/completions';
+import { datasets as datasetsApi, type Dataset } from '../api/datasets';
+import { sessions as sessionsApi } from '../api/sessions';
 
 interface MLProject {
     id: string;
@@ -31,15 +34,6 @@ interface MLProject {
     };
     createdAt: string;
     updatedAt: string;
-}
-
-interface Dataset {
-    id: string;
-    name: string;
-    type: 'conversations' | 'documents' | 'qa' | 'custom';
-    size: number;
-    entries: number;
-    format: string;
 }
 
 const sampleProjects: MLProject[] = [
@@ -87,12 +81,18 @@ const sampleProjects: MLProject[] = [
     },
 ];
 
-const sampleDatasets: Dataset[] = [
-    { id: '1', name: 'Chat History Export', type: 'conversations', size: 15.2, entries: 1247, format: 'JSONL' },
-    { id: '2', name: 'Technical Docs', type: 'documents', size: 45.8, entries: 324, format: 'Markdown' },
-    { id: '3', name: 'FAQ Pairs', type: 'qa', size: 2.1, entries: 892, format: 'CSV' },
-    { id: '4', name: 'Code Samples', type: 'custom', size: 8.7, entries: 1563, format: 'JSONL' },
-];
+/**
+ * Sizes shown in MB, from the server's byte count.
+ *
+ * The fixture this replaced declared its own sizes -- 15.2 MB across 1,247
+ * entries and so on -- for datasets that did not exist. What the server
+ * reports is the length of what it actually stored.
+ */
+function toMegabytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const mb = bytes / (1024 * 1024);
+    return mb < 0.1 ? `${(bytes / 1024).toFixed(1)} KB` : `${mb.toFixed(1)} MB`;
+}
 
 const typeConfig = {
     'fine-tune': { icon: 'fitness-outline', color: '#8b5cf6' },
@@ -112,7 +112,12 @@ export function DeveloperScreen() {
     const { colors } = useTheme();
     const [activeTab, setActiveTab] = useState<'projects' | 'datasets' | 'playground'>('projects');
     const [projects] = useState<MLProject[]>(sampleProjects);
-    const [datasets] = useState<Dataset[]>(sampleDatasets);
+
+    // Datasets are the server's, from /api/datasets. Projects above still are
+    // not -- there is no /api/training, which is what the banner says.
+    const [datasets, setDatasets] = useState<Dataset[]>([]);
+    const [datasetError, setDatasetError] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [playgroundPrompt, setPlaygroundPrompt] = useState('');
 
@@ -130,21 +135,106 @@ export function DeveloperScreen() {
         totalProjects: projects.length,
         running: projects.filter(p => p.status === 'running').length,
         datasets: datasets.length,
-        totalSize: datasets.reduce((sum, d) => sum + d.size, 0).toFixed(1),
+        totalSize: toMegabytes(datasets.reduce((sum, d) => sum + d.sizeBytes, 0)),
     }), [projects, datasets]);
 
     /**
-     * There is nothing to refresh.
+     * Reload the datasets.
      *
      * This used to be `setTimeout(..., 1000)` -- a spinner that ran for a
-     * second and reloaded nothing, which is indistinguishable from a fetch
-     * that succeeded and returned the same data. Projects and datasets are
-     * fixtures with no endpoint behind them, as the banner says, so the
-     * control resolves immediately rather than performing a wait.
+     * second and reloaded nothing, indistinguishable from a fetch that
+     * succeeded and returned the same data. It fetches now. Projects are
+     * still fixtures with no endpoint behind them, as the banner says.
+     *
+     * On failure the list is left alone rather than cleared: an empty store
+     * and an unreachable server look identical once the rows are gone.
      */
+    const loadDatasets = useCallback(async () => {
+        try {
+            setDatasets(await datasetsApi.list());
+            setDatasetError(null);
+        } catch (err) {
+            setDatasetError(
+                err instanceof Error ? err.message : 'Could not reach the server'
+            );
+        }
+    }, []);
+
+    useEffect(() => {
+        loadDatasets();
+    }, [loadDatasets]);
+
     const handleRefresh = async () => {
         setIsRefreshing(true);
+        await loadDatasets();
         setIsRefreshing(false);
+    };
+
+    /**
+     * Upload the sessions on this device as a dataset.
+     *
+     * The button had no handler at all. It takes what the app already holds --
+     * this is a chat session manager, and its own sessions are the obvious
+     * first dataset -- rather than opening a file picker for a format nothing
+     * here can validate.
+     *
+     * The server counts and measures what it stored; nothing is claimed here.
+     */
+    const handleUploadDataset = async () => {
+        if (isUploading) return;
+        setIsUploading(true);
+        setDatasetError(null);
+        try {
+            const sessions = await sessionsApi.list({ limit: 500 });
+            if (sessions.length === 0) {
+                Alert.alert(
+                    'Nothing to upload',
+                    'This device has no sessions yet, and an empty dataset is not worth storing.'
+                );
+                return;
+            }
+
+            const created = await datasetsApi.create({
+                name: `Sessions ${new Date().toISOString().slice(0, 10)}`,
+                type: 'conversations',
+                format: 'json',
+                entries: sessions,
+            });
+            await loadDatasets();
+            Alert.alert(
+                'Uploaded',
+                `${created.name} stored with ${created.entryCount.toLocaleString()} ` +
+                `entries (${toMegabytes(created.sizeBytes)}).`
+            );
+        } catch (err) {
+            Alert.alert(
+                'Not uploaded',
+                err instanceof Error ? err.message : 'The server rejected the dataset.'
+            );
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDeleteDataset = (dataset: Dataset) => {
+        Alert.alert('Delete dataset', `Delete "${dataset.name}" and its entries?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await datasetsApi.remove(dataset.id);
+                        await loadDatasets();
+                    } catch (err) {
+                        Alert.alert(
+                            'Not deleted',
+                            err instanceof Error ? err.message : 'The server rejected the request.'
+                        );
+                    }
+                },
+            },
+        ]);
     };
 
     /**
@@ -182,7 +272,17 @@ export function DeveloperScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <ExampleDataBanner what="ML projects and datasets" />
+            {/*
+              * Not on the datasets or playground tabs: both are served now, by
+              * /api/datasets and /api/chat/completions. The banner describes
+              * the data on screen, so leaving it over real records would be
+              * its own small lie in the other direction.
+              *
+              * Projects still have no endpoint -- there is no /api/training.
+              */}
+            {activeTab === 'projects' && (
+                <ExampleDataBanner what="ML projects" endpoint="/api/training" />
+            )}
             {/* Stats */}
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -314,10 +414,28 @@ export function DeveloperScreen() {
 
                 {activeTab === 'datasets' && (
                     <>
+                        {datasetError && (
+                            <View style={[styles.datasetCard, { backgroundColor: colors.card, borderColor: '#ef4444' }]}>
+                                <Text style={[styles.datasetMeta, { color: colors.textSecondary }]}>
+                                    Could not load datasets: {datasetError}. Pull to retry.
+                                </Text>
+                            </View>
+                        )}
+
+                        {!datasetError && datasets.length === 0 && (
+                            <View style={[styles.datasetCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.datasetMeta, { color: colors.textSecondary }]}>
+                                    No datasets stored yet.
+                                </Text>
+                            </View>
+                        )}
+
                         {datasets.map((dataset) => (
-                            <View
+                            <TouchableOpacity
                                 key={dataset.id}
                                 style={[styles.datasetCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                onLongPress={() => handleDeleteDataset(dataset)}
+                                delayLongPress={400}
                             >
                                 <View style={styles.datasetHeader}>
                                     <Ionicons name="document-text-outline" size={24} color={colors.primary} />
@@ -330,20 +448,39 @@ export function DeveloperScreen() {
                                 </View>
                                 <View style={styles.datasetStats}>
                                     <View style={styles.datasetStat}>
-                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>{dataset.entries.toLocaleString()}</Text>
+                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>
+                                            {dataset.entryCount.toLocaleString()}
+                                        </Text>
                                         <Text style={[styles.datasetStatLabel, { color: colors.textSecondary }]}>entries</Text>
                                     </View>
                                     <View style={styles.datasetStat}>
-                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>{dataset.size}</Text>
-                                        <Text style={[styles.datasetStatLabel, { color: colors.textSecondary }]}>MB</Text>
+                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>
+                                            {toMegabytes(dataset.sizeBytes)}
+                                        </Text>
+                                        <Text style={[styles.datasetStatLabel, { color: colors.textSecondary }]}>stored</Text>
                                     </View>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         ))}
-                        <TouchableOpacity style={[styles.uploadButton, { borderColor: colors.border }]}>
-                            <Ionicons name="cloud-upload-outline" size={24} color={colors.primary} />
-                            <Text style={[styles.uploadText, { color: colors.primary }]}>Upload Dataset</Text>
+
+                        <TouchableOpacity
+                            style={[styles.uploadButton, { borderColor: colors.border }, isUploading && styles.uploadButtonDisabled]}
+                            onPress={handleUploadDataset}
+                            disabled={isUploading}
+                        >
+                            <Ionicons
+                                name={isUploading ? 'hourglass-outline' : 'cloud-upload-outline'}
+                                size={24}
+                                color={colors.primary}
+                            />
+                            <Text style={[styles.uploadText, { color: colors.primary }]}>
+                                {isUploading ? 'Uploading…' : 'Upload sessions as a dataset'}
+                            </Text>
                         </TouchableOpacity>
+
+                        <Text style={[styles.datasetHint, { color: colors.textSecondary }]}>
+                            Long-press a dataset to delete it.
+                        </Text>
                     </>
                 )}
 
@@ -647,6 +784,14 @@ const styles = StyleSheet.create({
     outputPlaceholder: {
         fontSize: 13,
         fontStyle: 'italic',
+    },
+    uploadButtonDisabled: {
+        opacity: 0.5,
+    },
+    datasetHint: {
+        fontSize: 12,
+        textAlign: 'center',
+        marginTop: 8,
     },
     outputText: {
         fontSize: 13,

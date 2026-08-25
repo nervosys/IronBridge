@@ -541,6 +541,65 @@ export const mcp = {
 };
 
 // =============================================================================
+// Local dataset store API
+// =============================================================================
+//
+// Datasets the user uploads and this server holds.
+//
+// Deliberately not the same thing as the HuggingFace catalogue on the
+// Developer page, which is something you download *from*. The data flows the
+// other way, so they are separate features rather than one endpoint pretending
+// to be both.
+
+export type DatasetType = 'conversations' | 'documents' | 'qa' | 'custom';
+
+export interface Dataset {
+    id: string;
+    name: string;
+    type: DatasetType;
+    format: string;
+    /** Counted by the server from the rows it wrote, never supplied here. */
+    entryCount: number;
+    /** Summed by the server over the stored JSON, so it describes what is on disk. */
+    sizeBytes: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface DatasetEntryPage {
+    datasetId: string;
+    /** The dataset's whole record count, not this page's length. */
+    total: number;
+    limit: number;
+    offset: number;
+    entries: unknown[];
+}
+
+export const datasets = {
+    async list(): Promise<ApiResponse<Dataset[]>> {
+        return get('/api/datasets');
+    },
+
+    /** At most 50,000 entries; the server has no streaming import. */
+    async create(input: {
+        name: string;
+        type?: DatasetType;
+        format?: string;
+        entries: unknown[];
+    }): Promise<ApiResponse<Dataset>> {
+        return post('/api/datasets', input);
+    },
+
+    async entries(id: string, limit = 50, offset = 0): Promise<ApiResponse<DatasetEntryPage>> {
+        return get(`/api/datasets/${encodeURIComponent(id)}/entries?limit=${limit}&offset=${offset}`);
+    },
+
+    async remove(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+        return del(`/api/datasets/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
 // Document knowledge base API
 // =============================================================================
 
@@ -806,6 +865,7 @@ export const api = {
     settings,
     mcp,
     documents,
+    datasets,
     system,
     connectWebSocket,
     sendWebSocketMessage,

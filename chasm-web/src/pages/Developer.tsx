@@ -71,8 +71,11 @@ import {
     useIngestDocument,
     useSearchDocuments,
     useDeleteDocument,
+    useDatasets,
+    useCreateDataset,
+    useDeleteDataset,
 } from '../hooks/useApi';
-import type { DocumentSearchResults } from '../api/client';
+import type { DocumentSearchResults, DatasetType } from '../api/client';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
 /*
@@ -169,6 +172,23 @@ const toolSchemas = {
     openai: 'OpenAI Function Calling',
     mcp: 'Model Context Protocol',
 };
+
+/** The dataset types `/api/datasets` accepts. */
+const DATASET_TYPES: DatasetType[] = ['conversations', 'documents', 'qa', 'custom'];
+
+/**
+ * Render a byte count the server measured.
+ *
+ * Sizes on this page used to be fixture strings -- "12.5 GB", "1.8 GB" --
+ * beside sample counts like "4.2M" for data that did not exist. What the
+ * stored-datasets table shows is the length of what is actually on disk.
+ */
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 /**
  * The chunking strategies `/api/documents` accepts.
@@ -516,8 +536,15 @@ const robotTasks = [
 
 type Tab = 'models' | 'datasets' | 'training' | 'optimization' | 'deployment' | 'rag' | 'tools' | 'multimodal' | 'simulation' | 'robotics';
 
-/** Tabs that read from the server rather than from a fixture. */
-const SERVED_TABS = new Set<Tab>(['tools', 'rag']);
+/**
+ * Tabs the page-level example-data banner does not cover.
+ *
+ * `tools` and `rag` are served outright. `datasets` is half served -- the
+ * local store is real, the remote catalogue is not -- so it carries its own
+ * banner over just the catalogue instead, which is more accurate than one
+ * banner across both.
+ */
+const SERVED_TABS = new Set<Tab>(['tools', 'rag', 'datasets']);
 
 
 export default function Developer() {
@@ -615,6 +642,86 @@ export default function Developer() {
             await refetchDocuments();
         } catch (err) {
             setRagError(err instanceof Error ? err.message : 'The document could not be deleted.');
+        }
+    };
+
+    // The local dataset store, served by /api/datasets. Distinct from the
+    // HuggingFace catalogue further down the same tab, which is fixtures.
+    const {
+        data: storedDatasetsData,
+        isLoading: storedDatasetsLoading,
+        error: storedDatasetsError,
+        refetch: refetchDatasets,
+    } = useDatasets();
+    const storedDatasets = useMemo(() => storedDatasetsData ?? [], [storedDatasetsData]);
+
+    const createDataset = useCreateDataset();
+    const deleteDataset = useDeleteDataset();
+    const [dsName, setDsName] = useState('');
+    const [dsType, setDsType] = useState<DatasetType>('custom');
+    const [dsBody, setDsBody] = useState('');
+    const [dsMessage, setDsMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+    /**
+     * Upload a pasted JSON array as a dataset.
+     *
+     * Parsed here so a malformed paste fails with a readable message rather
+     * than as a 400 from the server. The array must be an array: a single
+     * object is a common paste mistake and would otherwise be stored as a
+     * one-record dataset without comment.
+     */
+    const handleCreateDataset = async () => {
+        setDsMessage(null);
+
+        let entries: unknown[];
+        try {
+            const parsed = JSON.parse(dsBody);
+            if (!Array.isArray(parsed)) {
+                throw new Error('Expected a JSON array of records.');
+            }
+            entries = parsed;
+        } catch (err) {
+            setDsMessage({
+                text: err instanceof Error ? err.message : 'That is not valid JSON.',
+                isError: true,
+            });
+            return;
+        }
+
+        try {
+            const created = await createDataset.mutate({
+                name: dsName,
+                type: dsType,
+                entries,
+            });
+            setDsMessage(
+                created
+                    ? {
+                          text: `Stored ${created.entryCount.toLocaleString()} entries (${formatBytes(created.sizeBytes)}).`,
+                          isError: false,
+                      }
+                    : { text: 'The server returned no result for the upload.', isError: true }
+            );
+            setDsName('');
+            setDsBody('');
+            await refetchDatasets();
+        } catch (err) {
+            setDsMessage({
+                text: err instanceof Error ? err.message : 'The server rejected the dataset.',
+                isError: true,
+            });
+        }
+    };
+
+    const handleDeleteDataset = async (id: string) => {
+        try {
+            await deleteDataset.mutate(id);
+            await refetchDatasets();
+        } catch (err) {
+            setDsMessage({
+                text: err instanceof Error ? err.message : 'The dataset could not be deleted.',
+                isError: true,
+            });
         }
     };
 
@@ -769,8 +876,8 @@ export default function Developer() {
               */}
             {!SERVED_TABS.has(activeTab) && (
                 <ExampleDataBanner
-                    what="models, datasets, training jobs and devices"
-                    endpoint="/api/datasets or /api/training"
+                    what="models, training jobs and devices"
+                    endpoint="/api/training"
                 />
             )}
 
@@ -976,83 +1083,209 @@ export default function Developer() {
                 </div>
             )}
 
+            {/* Datasets Tab
+              *
+              * Two things share this word and they are not the same feature.
+              *
+              * "Your datasets" is the local store behind /api/datasets:
+              * collections uploaded to this server. It is real.
+              *
+              * "Catalogue" below is remote HuggingFace artifacts you would
+              * download *from*. The data flows the other way, nothing here
+              * fetches it, and the rows are fixtures -- so they are kept
+              * visibly apart rather than merged into one table that would be
+              * half real.
+              */}
             {activeTab === 'datasets' && (
-                <div className="space-y-4">
-                    {/* Search */}
-                    <div className="flex items-center gap-4">
-                        <div className="relative flex-1 max-w-md">
-                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                            <input
-                                type="text"
-                                placeholder="Search datasets..."
-                                value={datasetSearch}
-                                onChange={(e) => setDatasetSearch(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
-                            />
+                <div className="space-y-8">
+                    {/* ---- Local store: real ---- */}
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Your Datasets</h3>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                Stored on this server. Entry counts and sizes are measured from what was
+                                actually written, not from what the upload claimed.
+                            </p>
                         </div>
-                        <button className="flex items-center gap-2 px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
-                            <Filter size={18} />
-                            Filters
-                        </button>
+
+                        {storedDatasetsError && (
+                            <div className="bg-[hsl(var(--card))] rounded-xl border border-red-500/40 p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                Could not load datasets: {storedDatasetsError.message}
+                            </div>
+                        )}
+
+                        <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
+                            {!storedDatasetsLoading && storedDatasets.length === 0 ? (
+                                <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                    Nothing uploaded yet.
+                                </p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b bg-[hsl(var(--muted))]/50">
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Dataset</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Type</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Entries</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Stored</th>
+                                                <th className="text-right px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {storedDatasets.map(dataset => (
+                                                <tr key={dataset.id} className="border-b last:border-b-0 hover:bg-[hsl(var(--muted))]/30">
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Database size={16} className="text-[hsl(var(--muted-foreground))]" />
+                                                            <span className="font-medium text-[hsl(var(--foreground))]">{dataset.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.type}</td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                                                        {dataset.entryCount.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                                                        {formatBytes(dataset.sizeBytes)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <button
+                                                            className="p-2 rounded hover:bg-[hsl(var(--muted))]"
+                                                            onClick={() => handleDeleteDataset(dataset.id)}
+                                                            title="Delete this dataset and its entries"
+                                                        >
+                                                            <Trash2 size={16} className="text-red-500" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Upload */}
+                        <div className="bg-[hsl(var(--card))] rounded-xl border p-6 space-y-4">
+                            <h4 className="font-semibold text-[hsl(var(--foreground))]">Upload</h4>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <input
+                                    className="flex-1 px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                    placeholder="Dataset name"
+                                    value={dsName}
+                                    onChange={e => setDsName(e.target.value)}
+                                />
+                                <select
+                                    className="px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                    value={dsType}
+                                    onChange={e => setDsType(e.target.value as DatasetType)}
+                                >
+                                    {DATASET_TYPES.map(type => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <textarea
+                                className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] font-mono text-sm h-40 resize-none"
+                                placeholder='[{"prompt": "...", "completion": "..."}]'
+                                value={dsBody}
+                                onChange={e => setDsBody(e.target.value)}
+                            />
+                            <div className="flex items-center gap-3">
+                                <button
+                                    className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 flex items-center gap-2 disabled:opacity-50"
+                                    onClick={handleCreateDataset}
+                                    disabled={!dsName.trim() || !dsBody.trim() || createDataset.isLoading}
+                                >
+                                    <Upload size={16} />
+                                    {createDataset.isLoading ? 'Uploading…' : 'Upload'}
+                                </button>
+                                {dsMessage && (
+                                    <span className={`text-sm ${dsMessage.isError ? 'text-red-500' : 'text-green-500'}`}>
+                                        {dsMessage.text}
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                                A JSON array of records, at most 50,000 per upload — the server parses the
+                                body into memory and has no streaming import.
+                            </p>
+                        </div>
                     </div>
 
-                    {/* Dataset Table */}
-                    <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b bg-[hsl(var(--muted))]/50">
-                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Dataset</th>
-                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Source</th>
-                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Size</th>
-                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Samples</th>
-                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Task</th>
-                                    <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Status</th>
-                                    <th className="text-right px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredDatasets.map(dataset => (
-                                    <tr key={dataset.id} className="border-b last:border-b-0 hover:bg-[hsl(var(--muted))]/30">
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <Database size={16} className="text-[hsl(var(--muted-foreground))]" />
-                                                <span className="font-medium text-[hsl(var(--foreground))]">{dataset.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.source}</td>
-                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.size}</td>
-                                        <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.samples}</td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-xs px-2 py-1 bg-purple-500/10 text-purple-500 rounded-full">
-                                                {dataset.tasks[0]}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {dataset.downloaded ? (
-                                                <span className="flex items-center gap-1 text-green-500 text-sm">
-                                                    <CheckCircle2 size={14} />
-                                                    Ready
-                                                </span>
-                                            ) : (
-                                                <span className="text-sm text-[hsl(var(--muted-foreground))]">Not downloaded</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            {!dataset.downloaded && (
-                                                <button
-                                                    disabled
-                                                    title="Chasm has no endpoint to download a dataset through."
-                                                    className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded text-sm cursor-not-allowed ml-auto"
-                                                >
-                                                    <FileDown size={14} />
-                                                    Download
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    {/* ---- Remote catalogue: fixtures ---- */}
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Catalogue</h3>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                Datasets you would fetch from a remote hub. A different feature from the
+                                store above — the data would flow the other way.
+                            </p>
+                        </div>
+
+                        <ExampleDataBanner
+                            what="catalogue rows"
+                            endpoint="remote-catalogue"
+                        />
+
+                        <div className="flex items-center gap-4">
+                            <div className="relative flex-1 max-w-md">
+                                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                                <input
+                                    type="text"
+                                    placeholder="Search the catalogue..."
+                                    value={datasetSearch}
+                                    onChange={(e) => setDatasetSearch(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b bg-[hsl(var(--muted))]/50">
+                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Dataset</th>
+                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Source</th>
+                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Size</th>
+                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Samples</th>
+                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Task</th>
+                                            <th className="text-right px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredDatasets.map(dataset => (
+                                            <tr key={dataset.id} className="border-b last:border-b-0 hover:bg-[hsl(var(--muted))]/30">
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Database size={16} className="text-[hsl(var(--muted-foreground))]" />
+                                                        <span className="font-medium text-[hsl(var(--foreground))]">{dataset.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.source}</td>
+                                                <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.size}</td>
+                                                <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.samples}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="text-xs px-2 py-1 bg-purple-500/10 text-purple-500 rounded-full">
+                                                        {dataset.tasks[0]}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <button
+                                                        disabled
+                                                        title="Chasm has no endpoint to download a dataset through."
+                                                        className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded text-sm cursor-not-allowed ml-auto"
+                                                    >
+                                                        <FileDown size={14} />
+                                                        Download
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

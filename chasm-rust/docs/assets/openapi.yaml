@@ -1008,6 +1008,175 @@ paths:
         "200":
           description: Account removed
 
+  /datasets:
+    get:
+      tags: [Datasets]
+      summary: List stored datasets
+      description: >
+        Newest first, without their entries: a listing carrying every record
+        would be the whole store in one response.
+
+
+        Note there are two things the clients have called a "dataset". This is
+        the local store -- collections the user uploads and this server holds.
+        A remote catalogue to download from would be a separate feature; the
+        data flows the other way and the two are not merged here.
+      operationId: listDatasets
+      responses:
+        "200":
+          description: Datasets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Dataset"
+    post:
+      tags: [Datasets]
+      summary: Upload a dataset
+      description: >
+        Stores the records verbatim as JSON, in one transaction: a dataset
+        whose entries were half written would list with a count it does not
+        have.
+
+
+        `entryCount` and `sizeBytes` are computed from what was stored and are
+        ignored if sent. A client-supplied size is a number nobody checked.
+      operationId: createDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, entries]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  description: >
+                    A closed set, because the clients switch on it for their
+                    icons and filters; an unrecognised value is a 400 rather
+                    than something that renders as nothing.
+                  enum: [conversations, documents, qa, custom]
+                  default: custom
+                format:
+                  type: string
+                  description: Free-form label for the record shape. Defaults to `json`.
+                entries:
+                  type: array
+                  description: >
+                    The records. At most 50,000 per request -- the body is
+                    parsed into memory and written in one transaction, and
+                    there is no streaming import yet.
+                  items: {}
+      responses:
+        "200":
+          description: Dataset stored
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Name or entries missing, too many entries, or an unknown type
+
+  /datasets/{id}:
+    get:
+      tags: [Datasets]
+      summary: Get one dataset's metadata
+      description: Its records come from `/datasets/{id}/entries`.
+      operationId: getDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The dataset
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Dataset"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Datasets]
+      summary: Delete a dataset and its entries
+      operationId: deleteDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /datasets/{id}/entries:
+    get:
+      tags: [Datasets]
+      summary: Read a page of a dataset's records
+      description: >
+        In upload order. Paged because a dataset may hold 50,000 records and
+        nothing renders that many at once.
+
+
+        An unknown dataset is a 404 rather than an empty page: a missing
+        dataset and a page past the end would otherwise be the same answer.
+      operationId: listDatasetEntries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: A page of records
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DatasetEntryPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /documents:
     get:
       tags: [Documents]
@@ -4374,6 +4543,56 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    Dataset:
+      type: object
+      required:
+        [id, name, type, format, entryCount, sizeBytes, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [conversations, documents, qa, custom]
+        format:
+          type: string
+        entryCount:
+          type: integer
+          description: Counted from the rows written, never taken from the request.
+        sizeBytes:
+          type: integer
+          format: int64
+          description: >
+            Summed over the stored JSON, so it describes what is on disk rather
+            than what the uploader claimed.
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    DatasetEntryPage:
+      type: object
+      required: [datasetId, total, limit, offset, entries]
+      properties:
+        datasetId:
+          type: string
+        total:
+          type: integer
+          description: >
+            The dataset's whole record count, so a short last page is
+            distinguishable from an empty dataset.
+        limit:
+          type: integer
+        offset:
+          type: integer
+        entries:
+          type: array
+          description: The records as JSON, in the order they were uploaded.
+          items: {}
 
     DocumentSummary:
       type: object

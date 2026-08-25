@@ -188,6 +188,11 @@ Writes:
 | GET    | `/api/documents/search`           | Retrieve chunks by meaning (`?q=`) |
 | GET    | `/api/documents/:id`              | One document and its chunks     |
 | DELETE | `/api/documents/:id`              | Delete a document and its chunks |
+| POST   | `/api/datasets`                   | Upload a dataset                |
+| GET    | `/api/datasets`                   | List stored datasets            |
+| GET    | `/api/datasets/:id`               | One dataset's metadata          |
+| GET    | `/api/datasets/:id/entries`       | A page of its records (`?limit=&offset=`) |
+| DELETE | `/api/datasets/:id`               | Delete a dataset and its entries |
 
 Endpoints that refuse rather than guess:
 
@@ -263,6 +268,23 @@ Indexing is a separate, explicit step — embedding a whole store costs money an
 time proportional to its size, so a query never triggers one silently. The
 response reports how many vectors it searched, so an empty index is
 distinguishable from no matches.
+
+### Datasets
+
+```bash
+curl -X POST localhost:8787/api/datasets \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"FAQ pairs","type":"qa","entries":[{"q":"...","a":"..."}]}'
+curl "localhost:8787/api/datasets"
+```
+
+Collections you upload and this server holds. `entryCount` and `sizeBytes` are
+measured from what was stored and are ignored if you send them — a
+client-supplied size is a number nobody checked.
+
+Note the word is overloaded: the Developer page also shows a *catalogue* of
+remote datasets you would download from. That is a separate feature, not
+implemented, and labelled as such on the page. The data flows the other way.
 
 ### Document knowledge base
 
