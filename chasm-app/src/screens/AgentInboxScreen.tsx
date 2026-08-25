@@ -21,14 +21,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import {
-    agentNotificationsService,
+import { inbox as inboxApi } from '../api/inbox';
+import type {
     AgentNotification,
     InboxMessage,
     PermissionRequest,
     WorkflowProgress,
-    NotificationEvent,
-} from '../services/agentNotifications';
+} from '../api/inboxTypes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -64,50 +63,44 @@ export function AgentInboxScreen() {
     const [selectedMessage, setSelectedMessage] = useState<InboxMessage | null>(null);
     const [selectedPermission, setSelectedPermission] = useState<PermissionRequest | null>(null);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadMessageCount, setUnreadMessageCount] = useState(0);
     const [pendingPermissionsCount, setPendingPermissionsCount] = useState(0);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
-    // Load data
+    /**
+     * Load the inbox from the server.
+     *
+     * One `GET /api/inbox` plus one `GET /api/inbox/counts`, rather than four
+     * separate list calls: the counts are rendered on the tabs beside the very
+     * lists they count, and four independent requests could disagree.
+     *
+     * On failure the lists are left alone and the error is shown rather than
+     * clearing them. An empty inbox and an unreachable server look identical
+     * on screen, and this screen has spent its whole life looking empty.
+     */
     const loadData = useCallback(async () => {
-        await agentNotificationsService.initialize();
-        setNotifications(agentNotificationsService.getNotifications());
-        setMessages(agentNotificationsService.getInboxMessages());
-        setPermissions(agentNotificationsService.getPendingPermissions());
-        setWorkflows(agentNotificationsService.getAllActiveWorkflows());
-        setUnreadCount(agentNotificationsService.getUnreadCount());
-        setPendingPermissionsCount(agentNotificationsService.getPendingPermissions().length);
+        try {
+            const [snapshot, counts] = await Promise.all([
+                inboxApi.snapshot(),
+                inboxApi.counts(),
+            ]);
+            setNotifications(snapshot.notifications);
+            setMessages(snapshot.messages);
+            setPermissions(snapshot.permissions);
+            setWorkflows(snapshot.workflows);
+            setUnreadCount(counts.unreadNotifications);
+            setUnreadMessageCount(counts.unreadMessages);
+            setPendingPermissionsCount(counts.pendingPermissions);
+            setLoadError(null);
+        } catch (error) {
+            setLoadError(
+                error instanceof Error ? error.message : 'Could not reach the server'
+            );
+        }
     }, []);
 
     useEffect(() => {
         loadData();
-
-        // Subscribe to events
-        const unsubscribe = agentNotificationsService.subscribe((event: NotificationEvent) => {
-            switch (event.type) {
-                case 'notification_added':
-                case 'notification_read':
-                case 'notification_dismissed':
-                    setNotifications(agentNotificationsService.getNotifications());
-                    break;
-                case 'inbox_message_added':
-                case 'inbox_message_read':
-                case 'inbox_message_responded':
-                    setMessages(agentNotificationsService.getInboxMessages());
-                    break;
-                case 'permission_requested':
-                case 'permission_responded':
-                    setPermissions(agentNotificationsService.getPendingPermissions());
-                    break;
-                case 'workflow_progress':
-                case 'workflow_completed':
-                    setWorkflows(agentNotificationsService.getAllActiveWorkflows());
-                    break;
-                case 'unread_count_changed':
-                    setUnreadCount(event.count);
-                    break;
-            }
-        });
-
-        return unsubscribe;
     }, [loadData]);
 
     const handleRefresh = async () => {
@@ -116,14 +109,22 @@ export function AgentInboxScreen() {
         setIsRefreshing(false);
     };
 
+    /**
+     * Every mutation below re-reads the inbox rather than editing local state.
+     *
+     * The server derives part of what is shown -- a permission expires on read,
+     * the unread counts are COUNT(*) over the same rows -- so guessing the new
+     * state locally would drift from what the next load returns.
+     */
     const handleMarkAllRead = async () => {
-        await agentNotificationsService.markAllNotificationsRead();
-        setNotifications(agentNotificationsService.getNotifications());
+        await inboxApi.markAllNotificationsRead();
+        await loadData();
     };
 
     const handleNotificationPress = async (notification: AgentNotification) => {
         if (!notification.read) {
-            await agentNotificationsService.markNotificationRead(notification.id);
+            await inboxApi.markNotificationRead(notification.id);
+            await loadData();
         }
         // Navigate based on notification type
         if (notification.data?.messageId) {
@@ -136,24 +137,58 @@ export function AgentInboxScreen() {
     };
 
     const handleDismissNotification = async (id: string) => {
-        await agentNotificationsService.dismissNotification(id);
+        await inboxApi.dismissNotification(id);
+        await loadData();
     };
 
     const handleMessagePress = async (message: InboxMessage) => {
         if (!message.read) {
-            await agentNotificationsService.markInboxMessageRead(message.id);
+            await inboxApi.markMessageRead(message.id);
+            await loadData();
         }
         setSelectedMessage(message);
     };
 
     const handleMessageResponse = async (messageId: string, response: string) => {
-        await agentNotificationsService.respondToMessage(messageId, response);
+        await inboxApi.respondToMessage(messageId, response);
         setSelectedMessage(null);
+        await loadData();
     };
 
+    /**
+     * Star or unstar the open message.
+     *
+     * The old button called the store and stopped there: `selectedMessage` was
+     * never updated, so the icon it draws from never changed and the tap read
+     * as a no-op. The server toggles from its own stored value, so the new
+     * state is read back rather than assumed.
+     */
+    const handleToggleStar = async (message: InboxMessage) => {
+        await inboxApi.toggleMessageStar(message.id);
+        const snapshot = await inboxApi.snapshot();
+        setMessages(snapshot.messages);
+        const updated = snapshot.messages.find(m => m.id === message.id);
+        if (updated) setSelectedMessage(updated);
+    };
+
+    /**
+     * The server refuses to approve a request that has already expired, so a
+     * failure here is a real answer -- the agent that raised it has moved on --
+     * and is reported rather than swallowed.
+     */
     const handlePermissionResponse = async (permissionId: string, approved: boolean) => {
-        await agentNotificationsService.respondToPermission(permissionId, approved);
+        try {
+            await inboxApi.respondToPermission(permissionId, approved);
+        } catch (error) {
+            Alert.alert(
+                'Not recorded',
+                error instanceof Error
+                    ? error.message
+                    : 'That request is no longer pending -- it may have expired.'
+            );
+        }
         setSelectedPermission(null);
+        await loadData();
     };
 
     // Render tabs
@@ -161,7 +196,7 @@ export function AgentInboxScreen() {
         <View style={[styles.tabsContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             {([
                 { key: 'all', label: 'All', count: unreadCount },
-                { key: 'messages', label: 'Messages', count: agentNotificationsService.getUnreadInboxCount() },
+                { key: 'messages', label: 'Messages', count: unreadMessageCount },
                 { key: 'permissions', label: 'Permissions', count: pendingPermissionsCount },
                 { key: 'workflows', label: 'Workflows', count: workflows.length },
             ] as const).map(tab => (
@@ -459,7 +494,7 @@ export function AgentInboxScreen() {
                             <Ionicons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={[styles.modalTitle, { color: colors.text }]}>Message</Text>
-                        <TouchableOpacity onPress={() => agentNotificationsService.toggleStarred(selectedMessage.id)}>
+                        <TouchableOpacity onPress={() => handleToggleStar(selectedMessage)}>
                             <Ionicons
                                 name={selectedMessage.starred ? 'star' : 'star-outline'}
                                 size={24}
@@ -609,6 +644,20 @@ export function AgentInboxScreen() {
 
             {renderTabs()}
 
+            {/*
+              * Shown instead of letting an unreachable server render as an
+              * empty inbox, which is the failure this screen is most likely to
+              * hit and the one hardest to tell from "nothing has happened yet".
+              */}
+            {loadError && (
+                <View style={[styles.loadErrorBanner, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                    <Ionicons name="cloud-offline-outline" size={16} color="#ef4444" />
+                    <Text style={[styles.loadErrorText, { color: colors.textSecondary }]}>
+                        Could not load the inbox: {loadError}. Pull to retry.
+                    </Text>
+                </View>
+            )}
+
             <ScrollView
                 style={styles.content}
                 contentContainerStyle={styles.contentContainer}
@@ -652,6 +701,18 @@ function formatDuration(ms: number): string {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    loadErrorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+    },
+    loadErrorText: {
+        flex: 1,
+        fontSize: 13,
     },
     header: {
         flexDirection: 'row',
