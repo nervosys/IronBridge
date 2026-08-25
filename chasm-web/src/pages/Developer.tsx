@@ -64,8 +64,21 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useProviders, useProviderHealth } from '../hooks/useApi';
+import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
-// Mock data for models
+/*
+ * Everything below this line is built into the bundle.
+ *
+ * There is no backend for any of it: the server routes no /datasets,
+ * /training, /rag, /simulation or /robotics path, so the training jobs shown
+ * running at 67% on an RTX 4090, the vector databases reporting 2.4M vectors
+ * and the RAG pipelines with query counts describe nothing that exists. Of the
+ * 49 buttons on this page, three have a handler.
+ *
+ * The page now says so in a banner rather than presenting all of it as the
+ * reader's own infrastructure. Wiring a section means building its endpoints
+ * first; delete the banner in the same change that does.
+ */
 const pretrainedModels = [
     { id: 'llama-3.2-3b', name: 'Llama 3.2 3B', provider: 'Meta', size: '6.4 GB', params: '3B', format: 'GGUF', downloaded: true, tasks: ['text-generation', 'chat'] },
     { id: 'llama-3.2-1b', name: 'Llama 3.2 1B', provider: 'Meta', size: '2.3 GB', params: '1B', format: 'GGUF', downloaded: true, tasks: ['text-generation', 'chat'] },
@@ -554,7 +567,6 @@ export default function Developer() {
     const [activeTab, setActiveTab] = useState<Tab>('models');
     const [modelSearch, setModelSearch] = useState('');
     const [datasetSearch, setDatasetSearch] = useState('');
-    const [downloading, setDownloading] = useState<string | null>(null);
 
     // Get provider health status
     const getProviderStatus = useMemo(() => {
@@ -580,11 +592,6 @@ export default function Developer() {
             endpoint: p.endpoint,
         }));
     }, [connectedProviders, getProviderStatus]);
-
-    const handleDownload = (id: string) => {
-        setDownloading(id);
-        setTimeout(() => setDownloading(null), 3000);
-    };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -621,6 +628,11 @@ export default function Developer() {
 
     return (
         <div className="space-y-6">
+            <ExampleDataBanner
+                what="models, datasets, training jobs, pipelines and devices"
+                endpoint="/api/datasets or /api/training"
+            />
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -793,15 +805,11 @@ export default function Developer() {
                                         </span>
                                     ) : (
                                         <button
-                                            onClick={() => handleDownload(model.id)}
-                                            disabled={downloading === model.id}
-                                            className="flex items-center gap-1 px-3 py-1.5 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg text-sm hover:opacity-90 disabled:opacity-50"
+                                            disabled
+                                            title="Chasm has no endpoint to download a model through."
+                                            className="flex items-center gap-1 px-3 py-1.5 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-lg text-sm cursor-not-allowed"
                                         >
-                                            {downloading === model.id ? (
-                                                <Loader2 size={14} className="animate-spin" />
-                                            ) : (
-                                                <Download size={14} />
-                                            )}
+                                            <Download size={14} />
                                             Download
                                         </button>
                                     )}
@@ -891,15 +899,11 @@ export default function Developer() {
                                         <td className="px-4 py-3 text-right">
                                             {!dataset.downloaded && (
                                                 <button
-                                                    onClick={() => handleDownload(dataset.id)}
-                                                    disabled={downloading === dataset.id}
-                                                    className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded text-sm hover:opacity-90 disabled:opacity-50 ml-auto"
+                                                    disabled
+                                                    title="Chasm has no endpoint to download a dataset through."
+                                                    className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded text-sm cursor-not-allowed ml-auto"
                                                 >
-                                                    {downloading === dataset.id ? (
-                                                        <Loader2 size={14} className="animate-spin" />
-                                                    ) : (
-                                                        <FileDown size={14} />
-                                                    )}
+                                                    <FileDown size={14} />
                                                     Download
                                                 </button>
                                             )}

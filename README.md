@@ -128,7 +128,12 @@ chasm harvest share <url>          # Import share link
 > Persisting it needs `PUT /api/providers/{id}`, which the server does not
 > route; the app says so when you toggle rather than implying it saved.
 >
-> This does not affect the CLI, the API, chasm-web or chasm-desktop.
+> chasm-web has the same two gaps: its Developer and Research pages have no
+> backend either, and now carry the same banner. Its Comparison page no longer
+> reports model latency, throughput or benchmark scores, because Chasm measures
+> none of them.
+>
+> This does not affect the CLI, the API or chasm-desktop.
 
 See [Implementation status](#implementation-status) for the per-area detail
 behind these labels, including which features need an API key or a

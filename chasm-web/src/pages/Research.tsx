@@ -29,8 +29,14 @@ import {
     MessageSquare,
     Download,
 } from 'lucide-react';
+import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
-// Mock trending papers data (simulating alphaXiv trends)
+/*
+ * Built into the bundle. Chasm routes no /research path and this page makes no
+ * request, so the trend scores, view counts, citation counts and leaderboard
+ * positions below are not measurements of anything -- and nothing on the page
+ * refreshes them. The banner says so.
+ */
 const trendingPapers = [
     {
         id: '2412.01234',
@@ -268,6 +274,8 @@ export default function Research() {
 
     return (
         <div className="space-y-6">
+            <ExampleDataBanner what="papers, trends and benchmark leaderboards" endpoint="/api/research" />
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
