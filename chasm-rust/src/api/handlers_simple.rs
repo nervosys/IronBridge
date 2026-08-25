@@ -2409,6 +2409,12 @@ pub async fn list_accounts(state: web::Data<AppState>) -> impl Responder {
 }
 
 /// Create a provider account
+///
+/// The credential is stored as JSON in the `credentials` column, in the clear:
+/// this database has no encryption at rest and Chasm has no key management to
+/// give it one. The column is never read back out over the API, so a
+/// credential cannot leak through this endpoint -- but anything that can read
+/// the database file can read the secret. Callers should treat it accordingly.
 pub async fn create_account(
     state: web::Data<AppState>,
     body: web::Json<CreateAccountRequest>,
@@ -2450,6 +2456,18 @@ pub async fn create_account(
 pub async fn delete_account(state: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
     let id = path.into_inner();
     let db = state.db.lock().unwrap();
+
+    // Create the table if this is the first accounts call of the install, the
+    // same as the list and create handlers do. Without it, a delete against a
+    // database that has never listed accounts fails with "no such table" --
+    // reported to the client as a database error rather than as the 404 it is.
+    if let Err(e) = init_accounts_table(&db.conn) {
+        return HttpResponse::InternalServerError().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some(format!("Database error: {}", e)),
+        });
+    }
 
     let result = db
         .conn

@@ -1,183 +1,147 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
     ScrollView,
     StyleSheet,
     TouchableOpacity,
+    TextInput,
     RefreshControl,
     Alert,
-    Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { ExampleDataBanner } from '../components/ExampleDataBanner';
+import { accounts as accountsApi, ProviderAccount } from '../api/sessions';
 
-interface Account {
-    id: string;
-    provider: string;
-    type: 'oauth' | 'api_key' | 'pat';
-    email?: string;
-    username?: string;
-    status: 'active' | 'expired' | 'revoked';
-    scopes: string[];
-    connectedAt: string;
-    expiresAt?: string;
-    icon: string;
+/**
+ * Providers offered in the "connect" picker.
+ *
+ * The server does not publish a list of connectable providers, so this list is
+ * the app's own -- but the credential it asks for is real, and saving it stores
+ * a real row. `keyLabel` names the secret so the field is not just "value".
+ */
+const CONNECTABLE = [
+    { id: 'github', name: 'GitHub', icon: 'logo-github', keyLabel: 'Personal access token' },
+    { id: 'openai', name: 'OpenAI', icon: '🤖', keyLabel: 'API key' },
+    { id: 'anthropic', name: 'Anthropic', icon: '🧠', keyLabel: 'API key' },
+    { id: 'google', name: 'Google Cloud', icon: 'logo-google', keyLabel: 'API key' },
+    { id: 'azure', name: 'Azure', icon: 'cloud-outline', keyLabel: 'API key' },
+    { id: 'huggingface', name: 'Hugging Face', icon: '🤗', keyLabel: 'Access token' },
+] as const;
+
+const PROVIDER_ICONS: Record<string, string> = {
+    github: 'logo-github',
+    google: 'logo-google',
+    googlecloud: 'logo-google',
+    azure: 'cloud-outline',
+    openai: '🤖',
+    anthropic: '🧠',
+    huggingface: '🤗',
+};
+
+function iconFor(provider: string): string {
+    return PROVIDER_ICONS[provider.toLowerCase().replace(/[^a-z]/g, '')] ?? 'key-outline';
 }
 
-const sampleAccounts: Account[] = [
-    {
-        id: '1',
-        provider: 'GitHub',
-        type: 'oauth',
-        username: 'developer',
-        status: 'active',
-        scopes: ['repo', 'read:user', 'read:org'],
-        connectedAt: '2024-10-15T10:30:00Z',
-        icon: 'logo-github',
-    },
-    {
-        id: '2',
-        provider: 'OpenAI',
-        type: 'api_key',
-        email: 'dev@example.com',
-        status: 'active',
-        scopes: ['models', 'chat', 'embeddings'],
-        connectedAt: '2024-11-01T14:00:00Z',
-        icon: '🤖',
-    },
-    {
-        id: '3',
-        provider: 'Anthropic',
-        type: 'api_key',
-        email: 'dev@example.com',
-        status: 'active',
-        scopes: ['messages', 'complete'],
-        connectedAt: '2024-11-10T09:15:00Z',
-        icon: '🧠',
-    },
-    {
-        id: '4',
-        provider: 'Google Cloud',
-        type: 'oauth',
-        email: 'developer@gmail.com',
-        status: 'active',
-        scopes: ['generativelanguage', 'aiplatform'],
-        connectedAt: '2024-09-20T16:45:00Z',
-        expiresAt: '2025-03-20T16:45:00Z',
-        icon: 'logo-google',
-    },
-    {
-        id: '5',
-        provider: 'Azure',
-        type: 'oauth',
-        email: 'dev@company.onmicrosoft.com',
-        status: 'expired',
-        scopes: ['openai.read', 'cognitive.read'],
-        connectedAt: '2024-06-01T08:00:00Z',
-        expiresAt: '2024-12-01T08:00:00Z',
-        icon: 'cloud-outline',
-    },
-    {
-        id: '6',
-        provider: 'Hugging Face',
-        type: 'pat',
-        username: 'ml_developer',
-        status: 'active',
-        scopes: ['read', 'write', 'inference'],
-        connectedAt: '2024-08-15T11:30:00Z',
-        icon: '🤗',
-    },
-];
+function isIoniconName(icon: string): boolean {
+    return icon.startsWith('logo-') || icon.includes('-outline');
+}
 
-const availableProviders = [
-    { id: 'github', name: 'GitHub', icon: 'logo-github', type: 'oauth' },
-    { id: 'google', name: 'Google Cloud', icon: 'logo-google', type: 'oauth' },
-    { id: 'azure', name: 'Azure', icon: 'cloud-outline', type: 'oauth' },
-    { id: 'openai', name: 'OpenAI', icon: '🤖', type: 'api_key' },
-    { id: 'anthropic', name: 'Anthropic', icon: '🧠', type: 'api_key' },
-    { id: 'huggingface', name: 'Hugging Face', icon: '🤗', type: 'pat' },
-];
+function formatDate(ms: number): string {
+    return new Date(ms).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
 
 export function AccountsScreen() {
     const { colors } = useTheme();
-    const [accounts, setAccounts] = useState<Account[]>(sampleAccounts);
+    const [accounts, setAccounts] = useState<ProviderAccount[]>([]);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showAddSection, setShowAddSection] = useState(false);
+    const [selectedProvider, setSelectedProvider] = useState<(typeof CONNECTABLE)[number] | null>(null);
+    const [secret, setSecret] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Stats
-    const stats = useMemo(() => ({
-        total: accounts.length,
-        active: accounts.filter(a => a.status === 'active').length,
-        oauth: accounts.filter(a => a.type === 'oauth').length,
-        apiKeys: accounts.filter(a => a.type === 'api_key' || a.type === 'pat').length,
-    }), [accounts]);
+    const load = useCallback(async () => {
+        try {
+            setAccounts(await accountsApi.list());
+            setLoadError(null);
+        } catch (err) {
+            setAccounts([]);
+            setLoadError(err instanceof Error ? err.message : 'Could not reach the Chasm server');
+        }
+    }, []);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    // Only what the server actually records. `provider_accounts` has no token
+    // type, no expiry and no scope list, so there is nothing here to count
+    // those by -- and a screen that showed them would be inventing them.
+    const stats = useMemo(
+        () => ({
+            total: accounts.length,
+            providers: new Set(accounts.map((a) => a.provider.toLowerCase())).size,
+            defaults: accounts.filter((a) => a.isDefault).length,
+        }),
+        [accounts]
+    );
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
+        await load();
+        setIsRefreshing(false);
     };
 
-    const handleRefreshToken = (account: Account) => {
-        Alert.alert('Refresh Token', `Refreshing OAuth token for ${account.provider}...`);
-        setAccounts(prev => prev.map(a =>
-            a.id === account.id ? { ...a, status: 'active' as const, expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() } : a
-        ));
-    };
-
-    const handleDisconnect = (account: Account) => {
-        Alert.alert(
-            'Disconnect Account',
-            `Are you sure you want to disconnect ${account.provider}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Disconnect',
-                    style: 'destructive',
-                    onPress: () => {
-                        setAccounts(prev => prev.filter(a => a.id !== account.id));
+    const handleDisconnect = (account: ProviderAccount) => {
+        Alert.alert('Disconnect Account', `Remove the stored ${account.provider} credential?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Disconnect',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await accountsApi.remove(account.id);
+                        await load();
+                    } catch (err) {
+                        Alert.alert(
+                            'Could not disconnect',
+                            err instanceof Error ? err.message : 'The server rejected the request.'
+                        );
                     }
                 },
-            ]
-        );
+            },
+        ]);
     };
 
-    const handleConnect = (provider: typeof availableProviders[0]) => {
-        Alert.alert('Connect Account', `Connecting to ${provider.name}...`);
-        setShowAddSection(false);
-    };
-
-    const getStatusStyle = (status: Account['status']) => {
-        switch (status) {
-            case 'active': return { bg: '#10b98120', color: '#10b981', icon: 'checkmark-circle' };
-            case 'expired': return { bg: '#f59e0b20', color: '#f59e0b', icon: 'warning' };
-            case 'revoked': return { bg: '#ef444420', color: '#ef4444', icon: 'close-circle' };
+    const handleConnect = async () => {
+        if (!selectedProvider || !secret.trim()) return;
+        setIsSaving(true);
+        try {
+            await accountsApi.create(selectedProvider.name, { apiKey: secret.trim() });
+            setSecret('');
+            setSelectedProvider(null);
+            setShowAddSection(false);
+            await load();
+        } catch (err) {
+            Alert.alert(
+                'Could not connect',
+                err instanceof Error ? err.message : 'The server rejected the request.'
+            );
+        } finally {
+            setIsSaving(false);
         }
-    };
-
-    const getTypeLabel = (type: Account['type']) => {
-        switch (type) {
-            case 'oauth': return 'OAuth';
-            case 'api_key': return 'API Key';
-            case 'pat': return 'PAT';
-        }
-    };
-
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-        });
     };
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <ExampleDataBanner what="linked accounts" endpoint="/api/accounts" />
             {/* Stats */}
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -186,28 +150,34 @@ export function AccountsScreen() {
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Accounts</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#10b981" />
-                    <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.active}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active</Text>
+                    <Ionicons name="cube-outline" size={20} color="#8b5cf6" />
+                    <Text style={[styles.statValue, { color: '#8b5cf6' }]}>{stats.providers}</Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Providers</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color="#8b5cf6" />
-                    <Text style={[styles.statValue, { color: '#8b5cf6' }]}>{stats.oauth}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>OAuth</Text>
-                </View>
-                <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="key-outline" size={20} color="#f59e0b" />
-                    <Text style={[styles.statValue, { color: '#f59e0b' }]}>{stats.apiKeys}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Keys</Text>
+                    <Ionicons name="star-outline" size={20} color="#f59e0b" />
+                    <Text style={[styles.statValue, { color: '#f59e0b' }]}>{stats.defaults}</Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Default</Text>
                 </View>
             </View>
+
+            {loadError && (
+                <View style={[styles.errorBox, { borderColor: colors.border }]}>
+                    <Ionicons name="cloud-offline-outline" size={16} color="#ef4444" />
+                    <Text style={[styles.errorText, { color: colors.textSecondary }]}>{loadError}</Text>
+                </View>
+            )}
 
             {/* Add Account Toggle */}
             <TouchableOpacity
                 style={[styles.addToggle, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => setShowAddSection(!showAddSection)}
             >
-                <Ionicons name={showAddSection ? 'chevron-up' : 'add-circle-outline'} size={20} color={colors.primary} />
+                <Ionicons
+                    name={showAddSection ? 'chevron-up' : 'add-circle-outline'}
+                    size={20}
+                    color={colors.primary}
+                />
                 <Text style={[styles.addToggleText, { color: colors.primary }]}>
                     {showAddSection ? 'Hide Options' : 'Connect New Account'}
                 </Text>
@@ -218,36 +188,89 @@ export function AccountsScreen() {
                 <View style={[styles.addSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.addSectionTitle, { color: colors.text }]}>Select Provider</Text>
                     <View style={styles.providerGrid}>
-                        {availableProviders.map((provider) => (
-                            <TouchableOpacity
-                                key={provider.id}
-                                style={[styles.providerOption, { borderColor: colors.border }]}
-                                onPress={() => handleConnect(provider)}
-                            >
-                                {provider.icon.startsWith('logo-') || provider.icon.includes('-outline') ? (
-                                    <Ionicons name={provider.icon as any} size={28} color={colors.text} />
-                                ) : (
-                                    <Text style={styles.providerEmoji}>{provider.icon}</Text>
-                                )}
-                                <Text style={[styles.providerOptionName, { color: colors.text }]}>{provider.name}</Text>
-                                <Text style={[styles.providerOptionType, { color: colors.textSecondary }]}>
-                                    {getTypeLabel(provider.type as Account['type'])}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                        {CONNECTABLE.map((provider) => {
+                            const selected = selectedProvider?.id === provider.id;
+                            return (
+                                <TouchableOpacity
+                                    key={provider.id}
+                                    style={[
+                                        styles.providerOption,
+                                        { borderColor: selected ? colors.primary : colors.border },
+                                        selected && { backgroundColor: `${colors.primary}12` },
+                                    ]}
+                                    onPress={() => setSelectedProvider(selected ? null : provider)}
+                                >
+                                    {isIoniconName(provider.icon) ? (
+                                        <Ionicons name={provider.icon as any} size={28} color={colors.text} />
+                                    ) : (
+                                        <Text style={styles.providerEmoji}>{provider.icon}</Text>
+                                    )}
+                                    <Text style={[styles.providerOptionName, { color: colors.text }]}>
+                                        {provider.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
+
+                    {selectedProvider && (
+                        <>
+                            <View style={styles.credentialRow}>
+                                <TextInput
+                                    style={[
+                                        styles.credentialInput,
+                                        {
+                                            color: colors.text,
+                                            borderColor: colors.border,
+                                            backgroundColor: colors.background,
+                                        },
+                                    ]}
+                                    placeholder={`${selectedProvider.keyLabel} for ${selectedProvider.name}`}
+                                    placeholderTextColor={colors.textSecondary}
+                                    value={secret}
+                                    onChangeText={setSecret}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    secureTextEntry
+                                />
+                                <TouchableOpacity
+                                    style={[
+                                        styles.saveButton,
+                                        { backgroundColor: colors.primary },
+                                        (!secret.trim() || isSaving) && styles.saveButtonDisabled,
+                                    ]}
+                                    disabled={!secret.trim() || isSaving}
+                                    onPress={handleConnect}
+                                >
+                                    <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save'}</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={[styles.credentialNote, { color: colors.textSecondary }]}>
+                                Stored in the local Chasm database in the clear. Chasm has no
+                                encryption at rest yet, so anything that can read the database file
+                                can read this key.
+                            </Text>
+                        </>
+                    )}
                 </View>
             )}
 
             {/* Account List */}
             <ScrollView
                 style={styles.list}
-                refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-                }
+                refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
             >
+                {accounts.length === 0 && !loadError && (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="key-outline" size={40} color={colors.textSecondary} />
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                            No provider credentials stored yet.
+                        </Text>
+                    </View>
+                )}
+
                 {accounts.map((account) => {
-                    const statusStyle = getStatusStyle(account.status);
+                    const icon = iconFor(account.provider);
 
                     return (
                         <View
@@ -256,75 +279,57 @@ export function AccountsScreen() {
                         >
                             <View style={styles.cardHeader}>
                                 <View style={styles.providerInfo}>
-                                    {account.icon.startsWith('logo-') || account.icon.includes('-outline') ? (
-                                        <View style={[styles.iconCircle, { backgroundColor: colors.background }]}>
-                                            <Ionicons name={account.icon as any} size={24} color={colors.text} />
-                                        </View>
-                                    ) : (
-                                        <View style={[styles.iconCircle, { backgroundColor: colors.background }]}>
-                                            <Text style={styles.iconEmoji}>{account.icon}</Text>
-                                        </View>
-                                    )}
+                                    <View style={[styles.iconCircle, { backgroundColor: colors.background }]}>
+                                        {isIoniconName(icon) ? (
+                                            <Ionicons name={icon as any} size={24} color={colors.text} />
+                                        ) : (
+                                            <Text style={styles.iconEmoji}>{icon}</Text>
+                                        )}
+                                    </View>
                                     <View>
-                                        <Text style={[styles.providerName, { color: colors.text }]}>{account.provider}</Text>
+                                        <Text style={[styles.providerName, { color: colors.text }]}>
+                                            {account.name}
+                                        </Text>
                                         <Text style={[styles.accountIdentifier, { color: colors.textSecondary }]}>
-                                            {account.email || account.username}
+                                            {account.provider}
                                         </Text>
                                     </View>
                                 </View>
-                                <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                                    <Ionicons name={statusStyle.icon as any} size={12} color={statusStyle.color} />
-                                    <Text style={[styles.statusText, { color: statusStyle.color }]}>{account.status}</Text>
-                                </View>
+                                {account.isDefault && (
+                                    <View style={[styles.statusBadge, { backgroundColor: '#f59e0b20' }]}>
+                                        <Ionicons name="star" size={12} color="#f59e0b" />
+                                        <Text style={[styles.statusText, { color: '#f59e0b' }]}>default</Text>
+                                    </View>
+                                )}
                             </View>
 
                             {/* Details */}
                             <View style={styles.detailsRow}>
                                 <View style={styles.detailItem}>
-                                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Type</Text>
-                                    <Text style={[styles.detailValue, { color: colors.text }]}>{getTypeLabel(account.type)}</Text>
+                                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Added</Text>
+                                    <Text style={[styles.detailValue, { color: colors.text }]}>
+                                        {formatDate(account.createdAt)}
+                                    </Text>
                                 </View>
                                 <View style={styles.detailItem}>
-                                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Connected</Text>
-                                    <Text style={[styles.detailValue, { color: colors.text }]}>{formatDate(account.connectedAt)}</Text>
-                                </View>
-                                {account.expiresAt && (
-                                    <View style={styles.detailItem}>
-                                        <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Expires</Text>
-                                        <Text style={[styles.detailValue, {
-                                            color: new Date(account.expiresAt) < new Date() ? '#ef4444' : colors.text
-                                        }]}>
-                                            {formatDate(account.expiresAt)}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-
-                            {/* Scopes */}
-                            <View style={styles.scopesSection}>
-                                <Text style={[styles.scopesLabel, { color: colors.textSecondary }]}>Scopes</Text>
-                                <View style={styles.scopeTags}>
-                                    {account.scopes.map((scope) => (
-                                        <View key={scope} style={[styles.scopeTag, { backgroundColor: colors.background }]}>
-                                            <Text style={[styles.scopeText, { color: colors.text }]}>{scope}</Text>
-                                        </View>
-                                    ))}
+                                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Updated</Text>
+                                    <Text style={[styles.detailValue, { color: colors.text }]}>
+                                        {formatDate(account.updatedAt)}
+                                    </Text>
                                 </View>
                             </View>
 
                             {/* Actions */}
                             <View style={styles.cardActions}>
-                                {account.type === 'oauth' && account.status === 'expired' && (
-                                    <TouchableOpacity
-                                        style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                                        onPress={() => handleRefreshToken(account)}
-                                    >
-                                        <Ionicons name="refresh-outline" size={16} color="#fff" />
-                                        <Text style={styles.actionButtonText}>Refresh</Text>
-                                    </TouchableOpacity>
-                                )}
                                 <TouchableOpacity
-                                    style={[styles.actionButton, { backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }]}
+                                    style={[
+                                        styles.actionButton,
+                                        {
+                                            backgroundColor: colors.background,
+                                            borderColor: colors.border,
+                                            borderWidth: 1,
+                                        },
+                                    ]}
                                     onPress={() => handleDisconnect(account)}
                                 >
                                     <Ionicons name="unlink-outline" size={16} color="#ef4444" />
@@ -363,6 +368,22 @@ const styles = StyleSheet.create({
     statLabel: {
         fontSize: 10,
         marginTop: 2,
+    },
+    errorBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        marginHorizontal: 16,
+        marginBottom: 12,
+    },
+    errorText: {
+        flex: 1,
+        fontSize: 12,
+        lineHeight: 17,
     },
     addToggle: {
         flexDirection: 'row',
@@ -410,13 +431,49 @@ const styles = StyleSheet.create({
         marginTop: 6,
         textAlign: 'center',
     },
-    providerOptionType: {
-        fontSize: 10,
-        marginTop: 2,
+    credentialRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 12,
+    },
+    credentialInput: {
+        flex: 1,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 13,
+    },
+    saveButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 11,
+        borderRadius: 8,
+    },
+    credentialNote: {
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: 8,
+    },
+    saveButtonDisabled: {
+        opacity: 0.5,
+    },
+    saveButtonText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
     },
     list: {
         flex: 1,
         padding: 16,
+    },
+    emptyState: {
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 48,
+    },
+    emptyText: {
+        fontSize: 13,
     },
     accountCard: {
         borderRadius: 12,
@@ -478,26 +535,6 @@ const styles = StyleSheet.create({
     detailValue: {
         fontSize: 12,
         fontWeight: '500',
-    },
-    scopesSection: {
-        marginBottom: 12,
-    },
-    scopesLabel: {
-        fontSize: 10,
-        marginBottom: 6,
-    },
-    scopeTags: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    scopeTag: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    scopeText: {
-        fontSize: 11,
     },
     cardActions: {
         flexDirection: 'row',

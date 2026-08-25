@@ -879,6 +879,9 @@ paths:
     get:
       tags: [Settings]
       summary: List provider accounts
+      description: >
+        Stored provider credentials, newest first. The credential itself is
+        never returned -- only the metadata around it.
       operationId: listAccounts
       responses:
         "200":
@@ -893,10 +896,13 @@ paths:
                       data:
                         type: array
                         items:
-                          type: object
+                          $ref: "#/components/schemas/ProviderAccount"
     post:
       tags: [Settings]
       summary: Add a provider account
+      description: >
+        Stores a credential for a provider. The credential is written to the
+        local database as JSON in the clear; Chasm has no encryption at rest.
       operationId: createAccount
       requestBody:
         required: true
@@ -904,9 +910,28 @@ paths:
           application/json:
             schema:
               type: object
+              required: [provider, credentials]
+              properties:
+                provider:
+                  type: string
+                  description: Provider name; also used to derive the account's display name.
+                  example: Anthropic
+                credentials:
+                  type: object
+                  description: Opaque credential blob, stored verbatim and never read back out.
+                  additionalProperties: true
       responses:
         "200":
           description: Account created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ProviderAccount"
 
   /settings/accounts/{id}:
     delete:
@@ -4085,6 +4110,35 @@ components:
           type: integer
         hasMore:
           type: boolean
+
+    ProviderAccount:
+      type: object
+      description: >
+        A stored provider credential. This is the whole of what the
+        `provider_accounts` table keeps -- there is no column for a token type,
+        an email, a scope list or an expiry, and the credential is not returned.
+      required: [id, provider, name, isDefault, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          example: Anthropic
+        name:
+          type: string
+          description: Display name, derived from the provider on creation.
+          example: Anthropic Account
+        isDefault:
+          type: boolean
+        createdAt:
+          type: integer
+          format: int64
+          description: Milliseconds since the Unix epoch.
+        updatedAt:
+          type: integer
+          format: int64
+          description: Milliseconds since the Unix epoch.
 
     Provider:
       type: object

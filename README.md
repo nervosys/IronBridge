@@ -116,13 +116,13 @@ chasm harvest share <url>          # Import share link
 | **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
 
 > **chasm-app is partly wired.** Sessions, workspaces, chat, harvest
-> statistics, providers and SWE project context all come from the API.
+> statistics, providers, SWE project context and provider accounts all come
+> from the API.
 >
-> Three screens — Accounts, Developer and Research — have no backend to call:
-> the server has no `/accounts`, `/datasets` or `/research` paths. They still
-> show built-in example records, but now say so in a banner at the top of the
-> screen rather than presenting them as yours. Wiring them means building those
-> endpoints first.
+> Two screens — Developer and Research — have no backend to call: the server
+> has no `/datasets` or `/research` paths. They still show built-in example
+> records, but now say so in a banner at the top of the screen rather than
+> presenting them as yours. Wiring them means building those endpoints first.
 >
 > On the Providers screen, the enable/disable switch is local to the session.
 > Persisting it needs `PUT /api/providers/{id}`, which the server does not

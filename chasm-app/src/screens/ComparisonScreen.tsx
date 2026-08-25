@@ -15,37 +15,50 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Provider/Model data with performance metrics
+/**
+ * A static reference table of published model attributes.
+ *
+ * This used to carry `latency`, `tokensPerSec` and `accuracy` per model, and
+ * ranked models by them. Nothing in Chasm measures any of those: no benchmark
+ * runs, no timing is recorded, and "accuracy" is not a number any of these
+ * providers publishes. They were invented figures presented as measurements,
+ * so they are gone, along with the Speed, Accuracy and Value rankings built on
+ * them.
+ *
+ * What is left is what the providers publish: list price per million tokens
+ * and context window. Those still go stale -- see the note the screen renders
+ * above the table.
+ */
 const providerModels = [
     // OpenAI
-    { provider: 'OpenAI', model: 'gpt-4o', type: 'cloud', category: 'chat', inputCost: 2.50, outputCost: 10.00, latency: 850, tokensPerSec: 85, accuracy: 94, contextWindow: 128000 },
-    { provider: 'OpenAI', model: 'gpt-4o-mini', type: 'cloud', category: 'chat', inputCost: 0.15, outputCost: 0.60, latency: 420, tokensPerSec: 130, accuracy: 87, contextWindow: 128000 },
-    { provider: 'OpenAI', model: 'o1', type: 'cloud', category: 'reasoning', inputCost: 15.00, outputCost: 60.00, latency: 12000, tokensPerSec: 25, accuracy: 97, contextWindow: 200000 },
-    { provider: 'OpenAI', model: 'o1-mini', type: 'cloud', category: 'reasoning', inputCost: 3.00, outputCost: 12.00, latency: 4500, tokensPerSec: 45, accuracy: 93, contextWindow: 128000 },
+    { provider: 'OpenAI', model: 'gpt-4o', type: 'cloud', category: 'chat', inputCost: 2.50, outputCost: 10.00, contextWindow: 128000 },
+    { provider: 'OpenAI', model: 'gpt-4o-mini', type: 'cloud', category: 'chat', inputCost: 0.15, outputCost: 0.60, contextWindow: 128000 },
+    { provider: 'OpenAI', model: 'o1', type: 'cloud', category: 'reasoning', inputCost: 15.00, outputCost: 60.00, contextWindow: 200000 },
+    { provider: 'OpenAI', model: 'o1-mini', type: 'cloud', category: 'reasoning', inputCost: 3.00, outputCost: 12.00, contextWindow: 128000 },
 
     // Anthropic
-    { provider: 'Anthropic', model: 'claude-4-opus', type: 'cloud', category: 'chat', inputCost: 15.00, outputCost: 75.00, latency: 1200, tokensPerSec: 60, accuracy: 96, contextWindow: 200000 },
-    { provider: 'Anthropic', model: 'claude-4-sonnet', type: 'cloud', category: 'chat', inputCost: 3.00, outputCost: 15.00, latency: 680, tokensPerSec: 95, accuracy: 93, contextWindow: 200000 },
-    { provider: 'Anthropic', model: 'claude-3.5-sonnet', type: 'cloud', category: 'chat', inputCost: 3.00, outputCost: 15.00, latency: 650, tokensPerSec: 100, accuracy: 92, contextWindow: 200000 },
-    { provider: 'Anthropic', model: 'claude-3.5-haiku', type: 'cloud', category: 'chat', inputCost: 0.25, outputCost: 1.25, latency: 280, tokensPerSec: 180, accuracy: 85, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-4-opus', type: 'cloud', category: 'chat', inputCost: 15.00, outputCost: 75.00, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-4-sonnet', type: 'cloud', category: 'chat', inputCost: 3.00, outputCost: 15.00, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-3.5-sonnet', type: 'cloud', category: 'chat', inputCost: 3.00, outputCost: 15.00, contextWindow: 200000 },
+    { provider: 'Anthropic', model: 'claude-3.5-haiku', type: 'cloud', category: 'chat', inputCost: 0.25, outputCost: 1.25, contextWindow: 200000 },
 
     // Google
-    { provider: 'Google', model: 'gemini-2.0-flash', type: 'cloud', category: 'chat', inputCost: 0.075, outputCost: 0.30, latency: 320, tokensPerSec: 200, accuracy: 88, contextWindow: 1000000 },
-    { provider: 'Google', model: 'gemini-2.0-pro', type: 'cloud', category: 'chat', inputCost: 1.25, outputCost: 5.00, latency: 750, tokensPerSec: 90, accuracy: 92, contextWindow: 2000000 },
+    { provider: 'Google', model: 'gemini-2.0-flash', type: 'cloud', category: 'chat', inputCost: 0.075, outputCost: 0.30, contextWindow: 1000000 },
+    { provider: 'Google', model: 'gemini-2.0-pro', type: 'cloud', category: 'chat', inputCost: 1.25, outputCost: 5.00, contextWindow: 2000000 },
 
     // DeepSeek
-    { provider: 'DeepSeek', model: 'deepseek-chat', type: 'cloud', category: 'chat', inputCost: 0.14, outputCost: 0.28, latency: 450, tokensPerSec: 120, accuracy: 89, contextWindow: 64000 },
-    { provider: 'DeepSeek', model: 'deepseek-reasoner', type: 'cloud', category: 'reasoning', inputCost: 0.55, outputCost: 2.19, latency: 8000, tokensPerSec: 35, accuracy: 94, contextWindow: 64000 },
+    { provider: 'DeepSeek', model: 'deepseek-chat', type: 'cloud', category: 'chat', inputCost: 0.14, outputCost: 0.28, contextWindow: 64000 },
+    { provider: 'DeepSeek', model: 'deepseek-reasoner', type: 'cloud', category: 'reasoning', inputCost: 0.55, outputCost: 2.19, contextWindow: 64000 },
 
     // Qwen
-    { provider: 'Qwen', model: 'qwen-max', type: 'cloud', category: 'chat', inputCost: 1.60, outputCost: 6.40, latency: 600, tokensPerSec: 95, accuracy: 91, contextWindow: 32000 },
+    { provider: 'Qwen', model: 'qwen-max', type: 'cloud', category: 'chat', inputCost: 1.60, outputCost: 6.40, contextWindow: 32000 },
 
     // Local providers
-    { provider: 'Ollama', model: 'llama3.3-70b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 1200, tokensPerSec: 35, accuracy: 88, contextWindow: 128000 },
-    { provider: 'Ollama', model: 'qwen2.5-coder-32b', type: 'local', category: 'code', inputCost: 0, outputCost: 0, latency: 800, tokensPerSec: 45, accuracy: 87, contextWindow: 32768 },
-    { provider: 'Ollama', model: 'mistral-7b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 180, tokensPerSec: 120, accuracy: 78, contextWindow: 32768 },
+    { provider: 'Ollama', model: 'llama3.3-70b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 128000 },
+    { provider: 'Ollama', model: 'qwen2.5-coder-32b', type: 'local', category: 'code', inputCost: 0, outputCost: 0, contextWindow: 32768 },
+    { provider: 'Ollama', model: 'mistral-7b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 32768 },
 
-    { provider: 'LM Studio', model: 'phi-4-14b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, latency: 350, tokensPerSec: 80, accuracy: 85, contextWindow: 16384 },
+    { provider: 'LM Studio', model: 'phi-4-14b', type: 'local', category: 'chat', inputCost: 0, outputCost: 0, contextWindow: 16384 },
 ];
 
 // Colors for providers
@@ -59,13 +72,13 @@ const providerColors: Record<string, string> = {
     'LM Studio': '#a855f7',
 };
 
-type CompareMetric = 'cost' | 'speed' | 'accuracy' | 'value';
+type CompareMetric = 'cost' | 'context';
 type ModelCategory = 'all' | 'chat' | 'reasoning' | 'code';
 type ProviderType = 'all' | 'cloud' | 'local';
 
 export function ComparisonScreen() {
     const { colors, isDark } = useTheme();
-    const [selectedMetric, setSelectedMetric] = useState<CompareMetric>('value');
+    const [selectedMetric, setSelectedMetric] = useState<CompareMetric>('cost');
     const [selectedCategory, setSelectedCategory] = useState<ModelCategory>('all');
     const [providerType, setProviderType] = useState<ProviderType>('all');
 
@@ -88,19 +101,8 @@ export function ComparisonScreen() {
             case 'cost':
                 models.sort((a, b) => (a.inputCost + a.outputCost) - (b.inputCost + b.outputCost));
                 break;
-            case 'speed':
-                models.sort((a, b) => b.tokensPerSec - a.tokensPerSec);
-                break;
-            case 'accuracy':
-                models.sort((a, b) => b.accuracy - a.accuracy);
-                break;
-            case 'value':
-                // Value = accuracy / (cost + 0.01 to avoid division by zero)
-                models.sort((a, b) => {
-                    const valueA = a.accuracy / (a.inputCost + a.outputCost + 0.01);
-                    const valueB = b.accuracy / (b.inputCost + b.outputCost + 0.01);
-                    return valueB - valueA;
-                });
+            case 'context':
+                models.sort((a, b) => b.contextWindow - a.contextWindow);
                 break;
         }
 
@@ -123,13 +125,8 @@ export function ComparisonScreen() {
         switch (selectedMetric) {
             case 'cost':
                 return formatCost(model.inputCost + model.outputCost);
-            case 'speed':
-                return `${model.tokensPerSec} tok/s`;
-            case 'accuracy':
-                return `${model.accuracy}%`;
-            case 'value':
-                const value = model.accuracy / (model.inputCost + model.outputCost + 0.01);
-                return value.toFixed(1);
+            case 'context':
+                return formatContext(model.contextWindow);
         }
     };
 
@@ -140,24 +137,28 @@ export function ComparisonScreen() {
                 const maxCost = Math.max(...filteredModels.map(m => m.inputCost + m.outputCost));
                 if (maxCost === 0) return maxWidth;
                 return maxWidth * (1 - (model.inputCost + model.outputCost) / maxCost);
-            case 'speed':
-                const maxSpeed = Math.max(...filteredModels.map(m => m.tokensPerSec));
-                return maxWidth * (model.tokensPerSec / maxSpeed);
-            case 'accuracy':
-                return maxWidth * (model.accuracy / 100);
-            case 'value':
-                const values = filteredModels.map(m => m.accuracy / (m.inputCost + m.outputCost + 0.01));
-                const maxValue = Math.max(...values);
-                return maxWidth * ((model.accuracy / (model.inputCost + model.outputCost + 0.01)) / maxValue);
+            case 'context':
+                const maxContext = Math.max(...filteredModels.map(m => m.contextWindow));
+                return maxWidth * (model.contextWindow / maxContext);
         }
     };
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <View style={[styles.referenceNote, { borderColor: colors.border }]}>
+                <Ionicons name="book-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.referenceNoteText, { color: colors.textSecondary }]}>
+                    <Text style={{ fontWeight: '600', color: colors.text }}>Reference table. </Text>
+                    Published list prices and context windows, built into the app. Chasm does not
+                    benchmark models and does not measure these — check the provider's own pricing
+                    page before relying on a figure.
+                </Text>
+            </View>
+
             {/* Metric Selector */}
             <View style={styles.filterRow}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {(['cost', 'speed', 'accuracy', 'value'] as CompareMetric[]).map((metric) => (
+                    {(['cost', 'context'] as CompareMetric[]).map((metric) => (
                         <TouchableOpacity
                             key={metric}
                             style={[
@@ -170,12 +171,7 @@ export function ComparisonScreen() {
                             onPress={() => setSelectedMetric(metric)}
                         >
                             <Ionicons
-                                name={
-                                    metric === 'cost' ? 'cash-outline' :
-                                        metric === 'speed' ? 'flash-outline' :
-                                            metric === 'accuracy' ? 'checkmark-circle-outline' :
-                                                'trophy-outline'
-                                }
+                                name={metric === 'cost' ? 'cash-outline' : 'expand-outline'}
                                 size={16}
                                 color={selectedMetric === metric ? '#fff' : colors.text}
                             />
@@ -296,12 +292,6 @@ export function ComparisonScreen() {
                                 </Text>
                             </View>
                             <View style={styles.detailItem}>
-                                <Ionicons name="flash-outline" size={12} color={colors.textSecondary} />
-                                <Text style={[styles.detailText, { color: colors.textSecondary }]}>
-                                    {model.tokensPerSec} tok/s
-                                </Text>
-                            </View>
-                            <View style={styles.detailItem}>
                                 <Ionicons name="expand-outline" size={12} color={colors.textSecondary} />
                                 <Text style={[styles.detailText, { color: colors.textSecondary }]}>
                                     {formatContext(model.contextWindow)}
@@ -323,6 +313,22 @@ export function ComparisonScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    referenceNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        marginHorizontal: 16,
+        marginTop: 12,
+    },
+    referenceNoteText: {
+        flex: 1,
+        fontSize: 12,
+        lineHeight: 17,
     },
     filterRow: {
         paddingHorizontal: 16,

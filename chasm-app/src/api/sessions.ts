@@ -565,6 +565,45 @@ export const runs = {
 };
 
 // =============================================================================
+// Provider accounts API
+// =============================================================================
+
+/**
+ * A stored provider credential.
+ *
+ * This is the whole of what the server keeps: `provider_accounts` has an id, a
+ * provider, a display name, a default flag and two timestamps. The credential
+ * itself is stored but never read back out over the API, and there is no
+ * column for a token type, an email, a scope list or an expiry -- so a screen
+ * cannot show those without inventing them.
+ */
+export interface ProviderAccount {
+    id: string;
+    provider: string;
+    name: string;
+    isDefault: boolean;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export const accounts = {
+    /** Served as `/api/settings/accounts`; there is no `/api/accounts`. */
+    async list(): Promise<ProviderAccount[]> {
+        const response = await apiClient.get('/api/settings/accounts');
+        return unwrapResponse(response) || [];
+    },
+
+    async create(provider: string, credentials: Record<string, unknown>): Promise<ProviderAccount> {
+        const response = await apiClient.post('/api/settings/accounts', { provider, credentials });
+        return unwrapResponse(response);
+    },
+
+    async remove(id: string): Promise<void> {
+        await apiClient.delete(`/api/settings/accounts/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
 // System API (matches csm-web)
 // =============================================================================
 
