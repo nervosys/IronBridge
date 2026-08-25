@@ -193,6 +193,8 @@ Writes:
 | GET    | `/api/datasets/:id`               | One dataset's metadata          |
 | GET    | `/api/datasets/:id/entries`       | A page of its records (`?limit=&offset=`) |
 | DELETE | `/api/datasets/:id`               | Delete a dataset and its entries |
+| GET    | `/api/catalog/models`             | Search models on the Hugging Face Hub (`?q=`) |
+| GET    | `/api/catalog/datasets`           | Search datasets on the Hub (`?q=`) |
 
 Endpoints that refuse rather than guess:
 
@@ -207,6 +209,10 @@ Endpoints that refuse rather than guess:
 - `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
   credential it is given. Without one it returns `400` naming the variable,
   rather than writing the secret to the database in the clear.
+- `GET /api/catalog/*` answers `502` when the Hub is unreachable or has
+  rate-limited the server, never an empty list. "The Hub is down" and
+  "nothing matched" are different answers and an empty table cannot tell
+  them apart.
 - `POST /api/documents` and `GET /api/documents/search` need an embedding
   model, the same `OPENAI_API_KEY` as semantic search. Without one both
   return `503` naming the variable: ingestion will not store a document it
@@ -285,6 +291,25 @@ client-supplied size is a number nobody checked.
 Note the word is overloaded: the Developer page also shows a *catalogue* of
 remote datasets you would download from. That is a separate feature, not
 implemented, and labelled as such on the page. The data flows the other way.
+
+### Catalogue
+
+```bash
+curl "localhost:8787/api/catalog/models?q=llama&limit=5"
+curl "localhost:8787/api/catalog/datasets?q=orca"
+```
+
+A read-only proxy to the Hugging Face Hub's public search. The host is
+compiled in and only the query is caller-controlled, so it cannot be pointed
+at an arbitrary URL. No credential is needed; `HUGGINGFACE_TOKEN` only raises
+the Hub's anonymous rate limit.
+
+It searches and does not download — nothing here writes a file, and the
+Download buttons in the clients stay disabled and say so.
+
+Rows carry no size, sample count, parameter count or format: the Hub's search
+API reports none of them, and the tables this replaced showed all four as
+measurements.
 
 ### Document knowledge base
 

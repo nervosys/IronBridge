@@ -1008,6 +1008,94 @@ paths:
         "200":
           description: Account removed
 
+  /catalog/models:
+    get:
+      tags: [Catalog]
+      summary: Search models on the Hugging Face Hub
+      description: >
+        A read-only proxy to the Hub's public search. The host is compiled in;
+        only the query is caller-controlled, so this cannot be pointed at an
+        arbitrary URL.
+
+
+        It searches and does not download: nothing here writes a file. Fetching
+        an artifact needs a destination, a free-space guard and a background
+        job with progress, none of which exist.
+
+
+        No credential is required. Setting `HUGGINGFACE_TOKEN` on the server
+        only raises the Hub's anonymous rate limit.
+
+
+        An unreachable Hub is a 502, never an empty list -- "the Hub is down"
+        and "nothing matched" are different answers and an empty table cannot
+        tell them apart.
+      operationId: searchCatalogModels
+      parameters:
+        - name: q
+          in: query
+          description: Free-text search. Omitted or blank lists what the Hub returns by default.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Matching models
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CatalogResults"
+        "502":
+          description: The Hub was unreachable, rate-limited, or returned something unusable
+
+  /catalog/datasets:
+    get:
+      tags: [Catalog]
+      summary: Search datasets on the Hugging Face Hub
+      description: >
+        As `searchCatalogModels`, for datasets.
+
+
+        Note this is the *catalogue* -- artifacts published elsewhere. The
+        local store of datasets uploaded to this server is `/datasets`, and the
+        two are deliberately separate: the data flows in opposite directions.
+      operationId: searchCatalogDatasets
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Matching datasets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CatalogResults"
+        "502":
+          description: The Hub was unreachable, rate-limited, or returned something unusable
+
   /datasets:
     get:
       tags: [Datasets]
@@ -4543,6 +4631,75 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    CatalogResults:
+      type: object
+      required: [query, source, results]
+      properties:
+        query:
+          type: string
+        source:
+          type: string
+          enum: [huggingface]
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogEntry"
+
+    CatalogEntry:
+      type: object
+      description: >
+        One row as the Hub publishes it.
+
+
+        There is deliberately no `size`, `samples`, `params`, `format` or
+        `downloaded` field. The Hub's search API reports none of them, and the
+        tables this replaced rendered all five as measurements -- "12.5 GB",
+        "4.2M samples", "GGUF" -- for artifacts nothing had measured.
+      required: [id, name, downloads, likes, tags, url, gated]
+      properties:
+        id:
+          type: string
+          description: Full Hub id.
+          example: meta-llama/Llama-3.1-8B-Instruct
+        author:
+          type: string
+          description: Absent for canonical, unnamespaced ids such as `gpt2`.
+        name:
+          type: string
+        downloads:
+          type: integer
+          format: int64
+        likes:
+          type: integer
+          format: int64
+        task:
+          type: string
+          description: Models only, e.g. `text-generation`.
+        library:
+          type: string
+          description: Models only, e.g. `transformers`.
+        description:
+          type: string
+          description: Datasets only, and often long.
+        tags:
+          type: array
+          description: >
+            Trimmed to what a reader can use; the Hub's bookkeeping tags
+            (`region:`, `arxiv:`, `base_model:`, and similar) are dropped.
+          items:
+            type: string
+        updatedAt:
+          type: string
+          description: >
+            ISO-8601, straight from the Hub. Absent rather than defaulted when
+            the row carries no date.
+        url:
+          type: string
+          description: Canonical Hub page, so clients link out rather than build the URL.
+        gated:
+          type: boolean
+          description: Whether the Hub requires accepting terms before the files are readable.
 
     Dataset:
       type: object

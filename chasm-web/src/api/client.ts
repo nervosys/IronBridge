@@ -541,6 +541,61 @@ export const mcp = {
 };
 
 // =============================================================================
+// Remote catalogue API
+// =============================================================================
+//
+// Models and datasets published on the Hugging Face Hub.
+//
+// The other half of the word "dataset": this is the catalogue you would fetch
+// *from*, `datasets` below is the local store you upload *to*.
+//
+// Note what a CatalogEntry does not have: no size, no sample count, no
+// parameter count, no format, no `downloaded` flag. The Hub's search API
+// reports none of them, and the tables this replaced rendered all five as
+// measurements of artifacts nothing had measured.
+
+export interface CatalogEntry {
+    id: string;
+    author?: string;
+    name: string;
+    downloads: number;
+    likes: number;
+    /** Models only, e.g. `text-generation`. */
+    task?: string;
+    /** Models only, e.g. `transformers`. */
+    library?: string;
+    /** Datasets only, and often long. */
+    description?: string;
+    tags: string[];
+    updatedAt?: string;
+    /** Canonical Hub page. Link to it rather than rebuilding the URL. */
+    url: string;
+    gated: boolean;
+}
+
+export interface CatalogResults {
+    query: string;
+    source: 'huggingface';
+    results: CatalogEntry[];
+}
+
+export const catalog = {
+    /**
+     * Search the Hub.
+     *
+     * An unreachable or rate-limited Hub is a 502, never an empty list, so a
+     * thrown error here is a real answer and worth showing.
+     */
+    async models(q: string, limit = 20): Promise<ApiResponse<CatalogResults>> {
+        return get(`/api/catalog/models?q=${encodeURIComponent(q)}&limit=${limit}`);
+    },
+
+    async datasets(q: string, limit = 20): Promise<ApiResponse<CatalogResults>> {
+        return get(`/api/catalog/datasets?q=${encodeURIComponent(q)}&limit=${limit}`);
+    },
+};
+
+// =============================================================================
 // Local dataset store API
 // =============================================================================
 //
@@ -866,6 +921,7 @@ export const api = {
     mcp,
     documents,
     datasets,
+    catalog,
     system,
     connectWebSocket,
     sendWebSocketMessage,

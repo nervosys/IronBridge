@@ -26,6 +26,7 @@
 mod audit;
 mod auth;
 pub mod caching;
+pub mod catalog;
 pub mod datasets;
 mod docs;
 pub mod documents;
@@ -54,6 +55,7 @@ pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
 };
 pub use auth::configure_auth_routes;
+pub use catalog::configure_catalog_routes;
 pub use datasets::configure_dataset_routes;
 pub use docs::configure_docs_routes;
 pub use documents::configure_document_routes;
@@ -436,6 +438,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             // first and answer 404.
             .configure(configure_document_routes)
             .configure(configure_dataset_routes)
+            .configure(configure_catalog_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

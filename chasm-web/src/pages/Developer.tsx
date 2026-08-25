@@ -12,7 +12,6 @@ import {
     Scissors,
     Rocket,
     Search,
-    Filter,
     Play,
     Pause,
     CheckCircle2,
@@ -20,7 +19,6 @@ import {
     AlertCircle,
     ChevronRight,
     ExternalLink,
-    HardDrive,
     Microchip,
     Server,
     Smartphone,
@@ -74,8 +72,9 @@ import {
     useDatasets,
     useCreateDataset,
     useDeleteDataset,
+    useCatalogSearch,
 } from '../hooks/useApi';
-import type { DocumentSearchResults, DatasetType } from '../api/client';
+import type { DocumentSearchResults, DatasetType, CatalogEntry } from '../api/client';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
 /*
@@ -91,25 +90,13 @@ import { ExampleDataBanner } from '../components/ExampleDataBanner';
  * reader's own infrastructure. Wiring a section means building its endpoints
  * first; delete the banner in the same change that does.
  */
-const pretrainedModels = [
-    { id: 'llama-3.2-3b', name: 'Llama 3.2 3B', provider: 'Meta', size: '6.4 GB', params: '3B', format: 'GGUF', downloaded: true, tasks: ['text-generation', 'chat'] },
-    { id: 'llama-3.2-1b', name: 'Llama 3.2 1B', provider: 'Meta', size: '2.3 GB', params: '1B', format: 'GGUF', downloaded: true, tasks: ['text-generation', 'chat'] },
-    { id: 'phi-3-mini', name: 'Phi-3 Mini', provider: 'Microsoft', size: '2.4 GB', params: '3.8B', format: 'GGUF', downloaded: false, tasks: ['text-generation', 'reasoning'] },
-    { id: 'qwen2.5-3b', name: 'Qwen 2.5 3B', provider: 'Alibaba', size: '6.1 GB', params: '3B', format: 'GGUF', downloaded: false, tasks: ['text-generation', 'code'] },
-    { id: 'gemma-2-2b', name: 'Gemma 2 2B', provider: 'Google', size: '5.0 GB', params: '2B', format: 'GGUF', downloaded: true, tasks: ['text-generation', 'chat'] },
-    { id: 'mistral-7b', name: 'Mistral 7B', provider: 'Mistral AI', size: '4.1 GB', params: '7B', format: 'GGUF', downloaded: false, tasks: ['text-generation', 'instruct'] },
-    { id: 'deepseek-r1-7b', name: 'DeepSeek R1 7B', provider: 'DeepSeek', size: '4.7 GB', params: '7B', format: 'GGUF', downloaded: false, tasks: ['reasoning', 'code'] },
-    { id: 'codellama-7b', name: 'Code Llama 7B', provider: 'Meta', size: '3.8 GB', params: '7B', format: 'GGUF', downloaded: true, tasks: ['code-generation', 'code-completion'] },
-];
-
-const datasets = [
-    { id: 'openorca', name: 'OpenOrca', source: 'HuggingFace', size: '12.5 GB', samples: '4.2M', format: 'Parquet', downloaded: false, tasks: ['instruction-tuning'] },
-    { id: 'slimorca', name: 'SlimOrca', source: 'HuggingFace', size: '1.8 GB', samples: '518K', format: 'JSON', downloaded: true, tasks: ['instruction-tuning'] },
-    { id: 'dolly-15k', name: 'Dolly 15K', source: 'Databricks', size: '45 MB', samples: '15K', format: 'JSON', downloaded: true, tasks: ['instruction-tuning'] },
-    { id: 'code-alpaca', name: 'Code Alpaca', source: 'HuggingFace', size: '28 MB', samples: '20K', format: 'JSON', downloaded: false, tasks: ['code-generation'] },
-    { id: 'gsm8k', name: 'GSM8K', source: 'OpenAI', size: '12 MB', samples: '8.5K', format: 'JSON', downloaded: true, tasks: ['math-reasoning'] },
-    { id: 'squad-v2', name: 'SQuAD v2.0', source: 'Stanford', size: '44 MB', samples: '150K', format: 'JSON', downloaded: false, tasks: ['question-answering'] },
-];
+// The model and dataset catalogues are served, not declared here.
+//
+// Eight models and six datasets used to sit in this spot, each with a size,
+// a parameter or sample count, a format and a `downloaded` flag -- "6.4 GB",
+// "3B", "GGUF", "4.2M samples". The Hugging Face Hub's search API reports
+// none of those, so they were invented. `/api/catalog` serves what the Hub
+// actually publishes.
 
 const trainingJobs = [
     { id: 'job-001', name: 'Llama 3.2 Fine-tune', model: 'llama-3.2-3b', type: 'fine-tune', status: 'running', progress: 67, eta: '2h 15m', gpu: 'RTX 4090' },
@@ -172,6 +159,19 @@ const toolSchemas = {
     openai: 'OpenAI Function Calling',
     mcp: 'Model Context Protocol',
 };
+
+/**
+ * Compact a download count.
+ *
+ * The Hub reports these exactly (6,423,491) and a table column cannot hold
+ * that many digits. Rounding a real measurement for display is fine; the
+ * numbers this page used to show were not measurements at all.
+ */
+function compactCount(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return `${n}`;
+}
 
 /** The dataset types `/api/datasets` accepts. */
 const DATASET_TYPES: DatasetType[] = ['conversations', 'documents', 'qa', 'custom'];
@@ -539,12 +539,14 @@ type Tab = 'models' | 'datasets' | 'training' | 'optimization' | 'deployment' | 
 /**
  * Tabs the page-level example-data banner does not cover.
  *
- * `tools` and `rag` are served outright. `datasets` is half served -- the
- * local store is real, the remote catalogue is not -- so it carries its own
- * banner over just the catalogue instead, which is more accurate than one
- * banner across both.
+ * `tools`, `rag`, `models` and `datasets` all read from the server now --
+ * `datasets` from two endpoints at once, the local store and the catalogue.
+ *
+ * What is left under the banner is training, optimization, deployment,
+ * multi-modal, simulation and robotics: no endpoint routes any of them.
+ * Delete the banner outright when that list empties.
  */
-const SERVED_TABS = new Set<Tab>(['tools', 'rag', 'datasets']);
+const SERVED_TABS = new Set<Tab>(['tools', 'rag', 'datasets', 'models']);
 
 
 export default function Developer() {
@@ -642,6 +644,38 @@ export default function Developer() {
             await refetchDocuments();
         } catch (err) {
             setRagError(err instanceof Error ? err.message : 'The document could not be deleted.');
+        }
+    };
+
+    // The remote catalogue, served by /api/catalog over the Hugging Face Hub.
+    // Searched on demand rather than on load: the Hub rate-limits anonymous
+    // callers, and a page that queried it on mount would spend that budget on
+    // people who never opened this tab.
+    const modelCatalog = useCatalogSearch('models');
+    const datasetCatalog = useCatalogSearch('datasets');
+    const [modelResults, setModelResults] = useState<CatalogEntry[] | null>(null);
+    const [datasetResults, setDatasetResults] = useState<CatalogEntry[] | null>(null);
+    const [modelCatalogError, setModelCatalogError] = useState<string | null>(null);
+    const [datasetCatalogError, setDatasetCatalogError] = useState<string | null>(null);
+
+    const runCatalogSearch = async (kind: 'models' | 'datasets') => {
+        const setResults = kind === 'models' ? setModelResults : setDatasetResults;
+        const setError = kind === 'models' ? setModelCatalogError : setDatasetCatalogError;
+        const search = kind === 'models' ? modelCatalog : datasetCatalog;
+        const q = kind === 'models' ? modelSearch : datasetSearch;
+
+        setError(null);
+        try {
+            const answer = await search.mutate({ q, limit: 25 });
+            // A resolved call with no payload is not an empty result set --
+            // the difference matters, so it is not rendered as "no matches".
+            if (!answer) {
+                setError('The server returned no result for the search.');
+                return;
+            }
+            setResults(answer.results);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'The search failed.');
         }
     };
 
@@ -840,16 +874,6 @@ export default function Developer() {
         }
     };
 
-    const filteredModels = pretrainedModels.filter(m =>
-        m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
-        m.provider.toLowerCase().includes(modelSearch.toLowerCase())
-    );
-
-    const filteredDatasets = datasets.filter(d =>
-        d.name.toLowerCase().includes(datasetSearch.toLowerCase()) ||
-        d.source.toLowerCase().includes(datasetSearch.toLowerCase())
-    );
-
     const tabs = [
         { id: 'models' as Tab, label: 'Models', icon: Box },
         { id: 'datasets' as Tab, label: 'Datasets', icon: Database },
@@ -876,7 +900,7 @@ export default function Developer() {
               */}
             {!SERVED_TABS.has(activeTab) && (
                 <ExampleDataBanner
-                    what="models, training jobs and devices"
+                    what="training jobs, pipelines and devices"
                     endpoint="/api/training"
                 />
             )}
@@ -897,8 +921,23 @@ export default function Developer() {
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            {/* Stats Cards
+              *
+              * Three, where there were six. The three that went:
+              *
+              *   Models      counted a fixture list of eight, and reported how
+              *               many of them were "downloaded" -- a flag on a
+              *               literal. The catalogue is a search now and has no
+              *               standing count to show.
+              *   Storage     read "24.8 GB of 500 GB". Chasm measures neither
+              *               number and has no notion of a quota.
+              *   GPU         read "87%" on an "RTX 4090". Chasm does not look
+              *               at the GPU, and there may not be one.
+              *
+              * Training Jobs went with them: it counted `trainingJobs`, which
+              * is still a fixture, and a count of fictional jobs is fiction.
+              */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                         <Cloud size={18} />
@@ -911,43 +950,23 @@ export default function Developer() {
                 </div>
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <Box size={18} />
-                        <span className="text-sm">Models</span>
-                    </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{pretrainedModels.length}</p>
-                    <p className="text-sm text-green-500">{pretrainedModels.filter(m => m.downloaded).length} downloaded</p>
-                </div>
-                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                         <Database size={18} />
                         <span className="text-sm">Datasets</span>
                     </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{datasets.length}</p>
-                    <p className="text-sm text-green-500">{datasets.filter(d => d.downloaded).length} downloaded</p>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{storedDatasets.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                        {formatBytes(storedDatasets.reduce((sum, d) => sum + d.sizeBytes, 0))} stored
+                    </p>
                 </div>
                 <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                     <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <Zap size={18} />
-                        <span className="text-sm">Training Jobs</span>
+                        <BookOpen size={18} />
+                        <span className="text-sm">Documents</span>
                     </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{trainingJobs.filter(j => j.status === 'running').length}</p>
-                    <p className="text-sm text-blue-500">active</p>
-                </div>
-                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <HardDrive size={18} />
-                        <span className="text-sm">Storage Used</span>
-                    </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">24.8 GB</p>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">of 500 GB</p>
-                </div>
-                <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                        <Cpu size={18} />
-                        <span className="text-sm">GPU Utilization</span>
-                    </div>
-                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">87%</p>
-                    <p className="text-sm text-orange-500">RTX 4090</p>
+                    <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{docs.length}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                        {docs.reduce((sum, d) => sum + d.chunkCount, 0).toLocaleString()} chunks indexed
+                    </p>
                 </div>
             </div>
 
@@ -1007,65 +1026,114 @@ export default function Developer() {
             </div>
 
             {/* Tab Content */}
+            {/* Models Tab
+              *
+              * Served by /api/catalog/models, which proxies the Hugging Face
+              * Hub's public search.
+              *
+              * The eight models listed here before were fixtures, each with a
+              * size ("6.4 GB"), a parameter count ("3B"), a format ("GGUF")
+              * and a `downloaded` flag. The Hub's search API reports none of
+              * those four, so they are gone rather than derived from the name
+              * or guessed from the tags. What is shown is what the Hub
+              * publishes.
+              *
+              * Download stays disabled: nothing writes a file, and a button
+              * that looked like it started one would be the defect this page
+              * has been audited for.
+              */}
             {activeTab === 'models' && (
                 <div className="space-y-4">
-                    {/* Search */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         <div className="relative flex-1 max-w-md">
                             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
                             <input
                                 type="text"
-                                placeholder="Search models..."
+                                placeholder="Search the Hugging Face Hub..."
                                 value={modelSearch}
                                 onChange={(e) => setModelSearch(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') runCatalogSearch('models'); }}
                                 className="w-full pl-10 pr-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
                             />
                         </div>
-                        <button className="flex items-center gap-2 px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
-                            <Filter size={18} />
-                            Filters
+                        <button
+                            className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 disabled:opacity-50"
+                            onClick={() => runCatalogSearch('models')}
+                            disabled={modelCatalog.isLoading}
+                        >
+                            {modelCatalog.isLoading ? 'Searching…' : 'Search'}
                         </button>
                     </div>
 
-                    {/* Model Grid */}
+                    {modelCatalogError && (
+                        <div className="bg-[hsl(var(--card))] rounded-xl border border-red-500/40 p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                            {modelCatalogError}
+                        </div>
+                    )}
+
+                    {modelResults === null && !modelCatalogError && (
+                        <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                            Search the Hub to list models. Nothing is queried until you ask — the Hub
+                            rate-limits anonymous callers.
+                        </p>
+                    )}
+
+                    {modelResults !== null && modelResults.length === 0 && (
+                        <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                            The Hub returned no models for that search.
+                        </p>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {filteredModels.map(model => (
+                        {(modelResults ?? []).map(model => (
                             <div key={model.id} className="bg-[hsl(var(--card))] rounded-xl border p-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3 min-w-0">
+                                        <div className="w-12 h-12 shrink-0 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
                                             {model.name.substring(0, 2).toUpperCase()}
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-[hsl(var(--foreground))]">{model.name}</h3>
-                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">{model.provider}</p>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-xs px-2 py-0.5 bg-[hsl(var(--muted))] rounded">{model.params}</span>
-                                                <span className="text-xs px-2 py-0.5 bg-[hsl(var(--muted))] rounded">{model.format}</span>
-                                                <span className="text-xs text-[hsl(var(--muted-foreground))]">{model.size}</span>
+                                        <div className="min-w-0">
+                                            <a
+                                                href={model.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="font-semibold text-[hsl(var(--foreground))] hover:underline break-words"
+                                            >
+                                                {model.name}
+                                            </a>
+                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                                {model.author ?? 'Hugging Face'}
+                                            </p>
+                                            <div className="flex items-center gap-3 mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                                                <span>{compactCount(model.downloads)} downloads</span>
+                                                <span>{compactCount(model.likes)} likes</span>
+                                                {model.library && <span>{model.library}</span>}
                                             </div>
                                         </div>
                                     </div>
-                                    {model.downloaded ? (
-                                        <span className="flex items-center gap-1 text-green-500 text-sm">
-                                            <CheckCircle2 size={16} />
-                                            Downloaded
-                                        </span>
-                                    ) : (
-                                        <button
-                                            disabled
-                                            title="Chasm has no endpoint to download a model through."
-                                            className="flex items-center gap-1 px-3 py-1.5 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-lg text-sm cursor-not-allowed"
-                                        >
-                                            <Download size={14} />
-                                            Download
-                                        </button>
-                                    )}
+                                    <button
+                                        disabled
+                                        title="Chasm has no endpoint to download a model through."
+                                        className="flex items-center gap-1 px-3 py-1.5 shrink-0 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-lg text-sm cursor-not-allowed"
+                                    >
+                                        <Download size={14} />
+                                        Download
+                                    </button>
                                 </div>
-                                <div className="flex items-center gap-2 mt-3">
-                                    {model.tasks.map(task => (
-                                        <span key={task} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-500 rounded-full">
-                                            {task}
+                                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                                    {model.task && (
+                                        <span className="text-xs px-2 py-1 bg-blue-500/10 text-blue-500 rounded-full">
+                                            {model.task}
+                                        </span>
+                                    )}
+                                    {model.gated && (
+                                        <span className="text-xs px-2 py-1 bg-amber-500/10 text-amber-500 rounded-full">
+                                            gated
+                                        </span>
+                                    )}
+                                    {model.tags.slice(0, 4).map(tag => (
+                                        <span key={tag} className="text-xs px-2 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-full">
+                                            {tag}
                                         </span>
                                     ))}
                                 </div>
@@ -1073,12 +1141,16 @@ export default function Developer() {
                         ))}
                     </div>
 
-                    {/* Browse More */}
                     <div className="flex justify-center">
-                        <button className="flex items-center gap-2 px-4 py-2 text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] rounded-lg transition-colors">
-                            Browse HuggingFace Hub
+                        <a
+                            href="https://huggingface.co/models"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 px-4 py-2 text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] rounded-lg transition-colors"
+                        >
+                            Browse the Hugging Face Hub
                             <ExternalLink size={16} />
-                        </button>
+                        </a>
                     </div>
                 </div>
             )}
@@ -1212,80 +1284,124 @@ export default function Developer() {
                         </div>
                     </div>
 
-                    {/* ---- Remote catalogue: fixtures ---- */}
+                    {/* ---- Remote catalogue: served by /api/catalog ---- */}
                     <div className="space-y-4">
                         <div>
                             <h3 className="font-semibold text-[hsl(var(--foreground))]">Catalogue</h3>
                             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-                                Datasets you would fetch from a remote hub. A different feature from the
-                                store above — the data would flow the other way.
+                                Datasets published on the Hugging Face Hub. A different feature from the
+                                store above — these live elsewhere and the data would flow the other way.
                             </p>
                         </div>
 
-                        <ExampleDataBanner
-                            what="catalogue rows"
-                            endpoint="remote-catalogue"
-                        />
-
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3">
                             <div className="relative flex-1 max-w-md">
                                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
                                 <input
                                     type="text"
-                                    placeholder="Search the catalogue..."
+                                    placeholder="Search the Hugging Face Hub..."
                                     value={datasetSearch}
                                     onChange={(e) => setDatasetSearch(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') runCatalogSearch('datasets'); }}
                                     className="w-full pl-10 pr-4 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
                                 />
                             </div>
+                            <button
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 disabled:opacity-50"
+                                onClick={() => runCatalogSearch('datasets')}
+                                disabled={datasetCatalog.isLoading}
+                            >
+                                {datasetCatalog.isLoading ? 'Searching…' : 'Search'}
+                            </button>
                         </div>
 
-                        <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b bg-[hsl(var(--muted))]/50">
-                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Dataset</th>
-                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Source</th>
-                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Size</th>
-                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Samples</th>
-                                            <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Task</th>
-                                            <th className="text-right px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredDatasets.map(dataset => (
-                                            <tr key={dataset.id} className="border-b last:border-b-0 hover:bg-[hsl(var(--muted))]/30">
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <Database size={16} className="text-[hsl(var(--muted-foreground))]" />
-                                                        <span className="font-medium text-[hsl(var(--foreground))]">{dataset.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.source}</td>
-                                                <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.size}</td>
-                                                <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">{dataset.samples}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className="text-xs px-2 py-1 bg-purple-500/10 text-purple-500 rounded-full">
-                                                        {dataset.tasks[0]}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    <button
-                                                        disabled
-                                                        title="Chasm has no endpoint to download a dataset through."
-                                                        className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded text-sm cursor-not-allowed ml-auto"
-                                                    >
-                                                        <FileDown size={14} />
-                                                        Download
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                        {datasetCatalogError && (
+                            <div className="bg-[hsl(var(--card))] rounded-xl border border-red-500/40 p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                {datasetCatalogError}
                             </div>
-                        </div>
+                        )}
+
+                        {datasetResults === null && !datasetCatalogError && (
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                Search the Hub to list datasets. Nothing is queried until you ask.
+                            </p>
+                        )}
+
+                        {datasetResults !== null && datasetResults.length === 0 && (
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                The Hub returned no datasets for that search.
+                            </p>
+                        )}
+
+                        {datasetResults !== null && datasetResults.length > 0 && (
+                            <div className="bg-[hsl(var(--card))] rounded-xl border overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b bg-[hsl(var(--muted))]/50">
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Dataset</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Author</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Downloads</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Likes</th>
+                                                <th className="text-left px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Updated</th>
+                                                <th className="text-right px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))]">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {datasetResults.map(entry => (
+                                                <tr key={entry.id} className="border-b last:border-b-0 hover:bg-[hsl(var(--muted))]/30">
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Database size={16} className="text-[hsl(var(--muted-foreground))] shrink-0" />
+                                                            <a
+                                                                href={entry.url}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="font-medium text-[hsl(var(--foreground))] hover:underline"
+                                                            >
+                                                                {entry.name}
+                                                            </a>
+                                                            {entry.gated && (
+                                                                <span className="text-xs px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-full">
+                                                                    gated
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                                                        {entry.author ?? '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                                                        {compactCount(entry.downloads)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                                                        {compactCount(entry.likes)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                                                        {entry.updatedAt ? entry.updatedAt.slice(0, 10) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <button
+                                                            disabled
+                                                            title="Chasm has no endpoint to download a dataset through."
+                                                            className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded text-sm cursor-not-allowed ml-auto"
+                                                        >
+                                                            <FileDown size={14} />
+                                                            Download
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                            Size, sample count and format are not shown because the Hub&apos;s search API
+                            does not report them. Download is disabled: nothing here writes a file.
+                        </p>
                     </div>
                 </div>
             )}

@@ -21,6 +21,7 @@ import {
     mcp,
     documents,
     datasets,
+    catalog,
     connectWebSocket,
 } from '../api/client';
 import type { CreateSwarmRequest, DocumentSummary, Dataset, DatasetType } from '../api/client';
@@ -329,6 +330,18 @@ export function useTestProvider() {
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
+}
+
+/**
+ * Search the Hugging Face Hub.
+ *
+ * Debounced by the caller, not here: the Hub rate-limits anonymous callers and
+ * a request per keystroke reaches that limit quickly.
+ */
+export function useCatalogSearch(kind: 'models' | 'datasets') {
+    return useMutation(({ q, limit }: { q: string; limit?: number }) =>
+        kind === 'models' ? catalog.models(q, limit) : catalog.datasets(q, limit)
+    );
 }
 
 /**
