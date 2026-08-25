@@ -221,7 +221,7 @@ mod tests {
     /// then 404'd on every call to them.
     #[tokio::test]
     async fn every_documented_path_is_actually_routed() {
-        use crate::api::{configure_inbox_routes, AppState};
+        use crate::api::{configure_document_routes, configure_inbox_routes, AppState};
         use crate::ChatDatabase;
         use actix_web::web::Data;
 
@@ -249,6 +249,7 @@ mod tests {
                 .app_data(sync_state)
                 .app_data(recording_state)
                 .configure(configure_inbox_routes)
+                .configure(configure_document_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -444,7 +445,7 @@ mod tests {
     /// checked; this catches wholesale drift, not every detail.
     #[tokio::test]
     async fn documented_response_bodies_match_what_the_server_sends() {
-        use crate::api::{configure_inbox_routes, AppState};
+        use crate::api::{configure_document_routes, configure_inbox_routes, AppState};
         use crate::ChatDatabase;
         use actix_web::web::Data;
 
@@ -480,6 +481,7 @@ mod tests {
                 .app_data(sync_state)
                 .app_data(recording_state)
                 .configure(configure_inbox_routes)
+                .configure(configure_document_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)

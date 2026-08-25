@@ -19,9 +19,10 @@ import {
     transfer,
     chat,
     mcp,
+    documents,
     connectWebSocket,
 } from '../api/client';
-import type { CreateSwarmRequest } from '../api/client';
+import type { CreateSwarmRequest, DocumentSummary } from '../api/client';
 import type {
     Workspace,
     Session,
@@ -327,6 +328,28 @@ export function useTestProvider() {
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
+}
+
+/**
+ * The documents in the server's knowledge base.
+ */
+export function useDocuments(options?: UseQueryOptions): UseQueryResult<DocumentSummary[]> {
+    const queryFn = useCallback(() => documents.list(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useIngestDocument() {
+    return useMutation((input: { title: string; content: string; source?: string; strategy?: string }) =>
+        documents.ingest(input)
+    );
+}
+
+export function useSearchDocuments() {
+    return useMutation(({ q, limit }: { q: string; limit?: number }) => documents.search(q, limit));
+}
+
+export function useDeleteDocument() {
+    return useMutation((id: string) => documents.remove(id));
 }
 
 /**

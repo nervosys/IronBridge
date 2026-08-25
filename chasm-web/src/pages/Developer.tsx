@@ -43,6 +43,7 @@ import {
     Upload,
     Eye,
     Terminal,
+    Trash2,
     FileCode,
     Sparkles,
     Camera,
@@ -61,7 +62,17 @@ import {
     Cloud,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useProviders, useProviderHealth, useMcpTools, useCallMcpTool } from '../hooks/useApi';
+import {
+    useProviders,
+    useProviderHealth,
+    useMcpTools,
+    useCallMcpTool,
+    useDocuments,
+    useIngestDocument,
+    useSearchDocuments,
+    useDeleteDocument,
+} from '../hooks/useApi';
+import type { DocumentSearchResults } from '../api/client';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
 /*
@@ -130,31 +141,12 @@ const trainingMetrics = [
     { epoch: 6, loss: 0.7, val_loss: 0.85, lr: 0.00002 },
 ];
 
-// RAG Components Data
-const vectorDatabases = [
-    { id: 'chroma', name: 'ChromaDB', type: 'Local', status: 'connected', collections: 12, vectors: '2.4M', size: '1.8 GB' },
-    { id: 'pinecone', name: 'Pinecone', type: 'Cloud', status: 'connected', collections: 8, vectors: '5.1M', size: '3.2 GB' },
-    { id: 'weaviate', name: 'Weaviate', type: 'Local', status: 'disconnected', collections: 0, vectors: '0', size: '0 MB' },
-    { id: 'qdrant', name: 'Qdrant', type: 'Cloud', status: 'connected', collections: 5, vectors: '1.2M', size: '890 MB' },
-    { id: 'milvus', name: 'Milvus', type: 'Local', status: 'connected', collections: 3, vectors: '800K', size: '650 MB' },
-];
-
-const embeddingModels = [
-    { id: 'openai-ada', name: 'text-embedding-ada-002', provider: 'OpenAI', dimensions: 1536, maxTokens: 8191, speed: 'Fast' },
-    { id: 'openai-3-small', name: 'text-embedding-3-small', provider: 'OpenAI', dimensions: 1536, maxTokens: 8191, speed: 'Fast' },
-    { id: 'openai-3-large', name: 'text-embedding-3-large', provider: 'OpenAI', dimensions: 3072, maxTokens: 8191, speed: 'Medium' },
-    { id: 'cohere-v3', name: 'embed-v3', provider: 'Cohere', dimensions: 1024, maxTokens: 512, speed: 'Fast' },
-    { id: 'voyage-2', name: 'voyage-2', provider: 'Voyage AI', dimensions: 1024, maxTokens: 4000, speed: 'Fast' },
-    { id: 'bge-large', name: 'bge-large-en-v1.5', provider: 'BAAI', dimensions: 1024, maxTokens: 512, speed: 'Medium' },
-    { id: 'e5-large', name: 'e5-large-v2', provider: 'Microsoft', dimensions: 1024, maxTokens: 512, speed: 'Medium' },
-    { id: 'nomic', name: 'nomic-embed-text-v1.5', provider: 'Nomic', dimensions: 768, maxTokens: 8192, speed: 'Fast' },
-];
-
-const ragPipelines = [
-    { id: 'doc-search', name: 'Document Search', status: 'active', vectorDb: 'ChromaDB', embedding: 'text-embedding-3-small', chunks: '45K', queries: 1250 },
-    { id: 'code-assist', name: 'Code Assistant', status: 'active', vectorDb: 'Pinecone', embedding: 'voyage-2', chunks: '120K', queries: 3400 },
-    { id: 'support-bot', name: 'Support Bot', status: 'paused', vectorDb: 'Qdrant', embedding: 'bge-large-en-v1.5', chunks: '28K', queries: 890 },
-];
+// RAG data is served, not declared here.
+//
+// Five vector databases holding 9.5M vectors, eight embedding models and
+// three RAG pipelines with query counts used to sit in this spot, on an
+// install that had never indexed anything. The knowledge base is one store
+// behind `/api/documents`, and the RAG tab reads it.
 
 // Function Calling / Tool Use
 //
@@ -177,6 +169,19 @@ const toolSchemas = {
     openai: 'OpenAI Function Calling',
     mcp: 'Model Context Protocol',
 };
+
+/**
+ * The chunking strategies `/api/documents` accepts.
+ *
+ * Names match the server's `parse_strategy` exactly; anything else is a 400.
+ */
+const CHUNKING_STRATEGIES = [
+    { value: 'semantic', label: 'Semantic (respects structure)' },
+    { value: 'paragraph', label: 'Paragraph' },
+    { value: 'sentence', label: 'Sentence' },
+    { value: 'fixed_size', label: 'Fixed size' },
+    { value: 'code', label: 'Code-aware' },
+];
 
 /** One row of the parameter table, flattened out of a tool's JSON Schema. */
 interface ToolParam {
@@ -511,6 +516,10 @@ const robotTasks = [
 
 type Tab = 'models' | 'datasets' | 'training' | 'optimization' | 'deployment' | 'rag' | 'tools' | 'multimodal' | 'simulation' | 'robotics';
 
+/** Tabs that read from the server rather than from a fixture. */
+const SERVED_TABS = new Set<Tab>(['tools', 'rag']);
+
+
 export default function Developer() {
     // API Data - Connected providers for inference
     const { data: connectedProviders } = useProviders();
@@ -529,6 +538,85 @@ export default function Developer() {
     const [testToolName, setTestToolName] = useState('');
     const [testInput, setTestInput] = useState('{}');
     const [testOutput, setTestOutput] = useState<{ text: string; isError: boolean } | null>(null);
+
+    // Knowledge base, served by /api/documents.
+    const {
+        data: documentsData,
+        isLoading: documentsLoading,
+        error: documentsError,
+        refetch: refetchDocuments,
+    } = useDocuments();
+    const docs = useMemo(() => documentsData ?? [], [documentsData]);
+
+    const ingestDocument = useIngestDocument();
+    const [ingestTitle, setIngestTitle] = useState('');
+    const [ingestContent, setIngestContent] = useState('');
+    const [ingestStrategy, setIngestStrategy] = useState('semantic');
+    const [ingestMessage, setIngestMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+    const searchDocuments = useSearchDocuments();
+    const deleteDocument = useDeleteDocument();
+    const [ragQuery, setRagQuery] = useState('');
+    const [ragResults, setRagResults] = useState<DocumentSearchResults | null>(null);
+    const [ragError, setRagError] = useState<string | null>(null);
+
+    /**
+     * Ingest, then re-read the list.
+     *
+     * The chunk count comes back from the server rather than being guessed
+     * here -- how a document splits depends on the strategy and on the text,
+     * and this side does neither.
+     */
+    const handleIngest = async () => {
+        setIngestMessage(null);
+        try {
+            const summary = await ingestDocument.mutate({
+                title: ingestTitle,
+                content: ingestContent,
+                strategy: ingestStrategy,
+            });
+            setIngestMessage(
+                summary
+                    ? {
+                          text: `Ingested as ${summary.chunkCount} chunk${summary.chunkCount === 1 ? '' : 's'}.`,
+                          isError: false,
+                      }
+                    // A resolved call with no payload is not a success worth
+                    // reporting as one: the document's fate is unknown here.
+                    : { text: 'The server returned no result for the ingest.', isError: true }
+            );
+            setIngestTitle('');
+            setIngestContent('');
+            await refetchDocuments();
+        } catch (err) {
+            setIngestMessage({
+                text: err instanceof Error ? err.message : 'The server rejected the document.',
+                isError: true,
+            });
+        }
+    };
+
+    const handleRagSearch = async () => {
+        if (!ragQuery.trim()) return;
+        setRagError(null);
+        setRagResults(null);
+        try {
+            setRagResults(await searchDocuments.mutate({ q: ragQuery }));
+        } catch (err) {
+            setRagError(err instanceof Error ? err.message : 'The search failed.');
+        }
+    };
+
+    const handleDeleteDocument = async (id: string) => {
+        try {
+            await deleteDocument.mutate(id);
+            // Results can reference the document that just went away.
+            setRagResults(null);
+            await refetchDocuments();
+        } catch (err) {
+            setRagError(err instanceof Error ? err.message : 'The document could not be deleted.');
+        }
+    };
 
     // Schema export
     const [schemaFormat, setSchemaFormat] = useState<keyof typeof toolSchemas>('openai');
@@ -671,14 +759,17 @@ export default function Developer() {
     return (
         <div className="space-y-6">
             {/*
-              * Not on the Tool Use tab: that one is served now. The banner is
-              * a statement about the data on screen, so leaving it up over
-              * real, live tools would be its own small lie in the other
-              * direction.
+              * Not on Tool Use or RAG: both are served now, by /api/mcp/tools
+              * and /api/documents. The banner is a statement about the data on
+              * screen, so leaving it up over real, live data would be its own
+              * small lie in the other direction.
+              *
+              * Extend this list as the other tabs get endpoints, and delete the
+              * banner outright when none are left.
               */}
-            {activeTab !== 'tools' && (
+            {!SERVED_TABS.has(activeTab) && (
                 <ExampleDataBanner
-                    what="models, datasets, training jobs, pipelines and devices"
+                    what="models, datasets, training jobs and devices"
                     endpoint="/api/datasets or /api/training"
                 />
             )}
@@ -1300,181 +1391,196 @@ export default function Developer() {
                 </div>
             )}
 
-            {/* RAG Tab */}
+            {/* RAG Tab
+              *
+              * Served by `/api/documents`: the server chunks what is ingested,
+              * embeds the chunks and retrieves them by meaning.
+              *
+              * What was here before described five vector databases holding
+              * 9.5M vectors across four RAG pipelines answering 5,540 queries
+              * a day, on an install that had never indexed anything. None of
+              * those numbers came from anywhere, and none of the buttons had a
+              * handler -- including the ingestion dropzone, which had no drop
+              * handler either.
+              *
+              * The knowledge base is one store, not five: the counts below are
+              * over that store, and there is nothing to invent.
+              */}
             {activeTab === 'rag' && (
                 <div className="space-y-6">
-                    {/* RAG Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                             <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                                <Database size={18} />
-                                <span className="text-sm">Vector DBs</span>
+                                <BookOpen size={18} />
+                                <span className="text-sm">Documents</span>
                             </div>
-                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{vectorDatabases.filter(v => v.status === 'connected').length}</p>
-                            <p className="text-sm text-green-500">connected</p>
+                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">
+                                {documentsLoading ? '…' : docs.length}
+                            </p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">ingested</p>
                         </div>
                         <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                             <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
                                 <Layers size={18} />
-                                <span className="text-sm">Total Vectors</span>
+                                <span className="text-sm">Chunks Indexed</span>
                             </div>
-                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">9.5M</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">indexed</p>
+                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">
+                                {documentsLoading ? '…' : docs.reduce((sum, d) => sum + d.chunkCount, 0).toLocaleString()}
+                            </p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">embedded and searchable</p>
                         </div>
                         <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
                             <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                                <BookOpen size={18} />
-                                <span className="text-sm">Active Pipelines</span>
+                                <Database size={18} />
+                                <span className="text-sm">Embedding Model</span>
                             </div>
-                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">{ragPipelines.filter(p => p.status === 'active').length}</p>
-                            <p className="text-sm text-blue-500">running</p>
-                        </div>
-                        <div className="bg-[hsl(var(--card))] rounded-xl p-4 border">
-                            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] mb-2">
-                                <Search size={18} />
-                                <span className="text-sm">Queries Today</span>
-                            </div>
-                            <p className="text-2xl font-bold text-[hsl(var(--foreground))]">5,540</p>
-                            <p className="text-sm text-green-500">+12% from yesterday</p>
+                            <p className="text-lg font-bold text-[hsl(var(--foreground))] truncate">
+                                {docs[0]?.embeddingModel ?? '—'}
+                            </p>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                {docs.length === 0 ? 'nothing ingested yet' : 'as configured on the server'}
+                            </p>
                         </div>
                     </div>
 
-                    {/* Vector Databases */}
-                    <div className="bg-[hsl(var(--card))] rounded-xl border">
-                        <div className="p-4 border-b flex items-center justify-between">
-                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Vector Databases</h3>
-                            <button className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg text-sm hover:opacity-90">
-                                <Plus size={14} />
-                                Add Database
+                    {documentsError && (
+                        <div className="bg-[hsl(var(--card))] rounded-xl border border-red-500/40 p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                            Could not load documents: {documentsError.message}
+                        </div>
+                    )}
+
+                    {/* Ingest */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border p-6 space-y-4">
+                        <div>
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Ingest a Document</h3>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                Chunked, embedded and stored server-side. Needs an embedding model configured
+                                on the server; without one the server refuses rather than storing something
+                                that could never be retrieved.
+                            </p>
+                        </div>
+                        <input
+                            className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                            placeholder="Title"
+                            value={ingestTitle}
+                            onChange={e => setIngestTitle(e.target.value)}
+                        />
+                        <textarea
+                            className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))] font-mono text-sm h-40 resize-none"
+                            placeholder="Paste the document text here"
+                            value={ingestContent}
+                            onChange={e => setIngestContent(e.target.value)}
+                        />
+                        <div className="flex items-center gap-3">
+                            <select
+                                className="px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                value={ingestStrategy}
+                                onChange={e => setIngestStrategy(e.target.value)}
+                            >
+                                {CHUNKING_STRATEGIES.map(strategy => (
+                                    <option key={strategy.value} value={strategy.value}>{strategy.label}</option>
+                                ))}
+                            </select>
+                            <button
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 flex items-center gap-2 disabled:opacity-50"
+                                onClick={handleIngest}
+                                disabled={!ingestTitle.trim() || !ingestContent.trim() || ingestDocument.isLoading}
+                            >
+                                <Upload size={16} />
+                                {ingestDocument.isLoading ? 'Ingesting…' : 'Ingest'}
+                            </button>
+                            {ingestMessage && (
+                                <span className={`text-sm ${ingestMessage.isError ? 'text-red-500' : 'text-green-500'}`}>
+                                    {ingestMessage.text}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Retrieve */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border p-6 space-y-4">
+                        <div>
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Retrieve</h3>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                Ranked by meaning, never by substring. The server reports how many chunks it
+                                compared, so an empty knowledge base is distinguishable from a query that
+                                matched nothing.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input
+                                className="flex-1 px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                placeholder="What are you looking for?"
+                                value={ragQuery}
+                                onChange={e => setRagQuery(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleRagSearch(); }}
+                            />
+                            <button
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 flex items-center gap-2 disabled:opacity-50"
+                                onClick={handleRagSearch}
+                                disabled={!ragQuery.trim() || searchDocuments.isLoading}
+                            >
+                                <Search size={16} />
+                                {searchDocuments.isLoading ? 'Searching…' : 'Search'}
                             </button>
                         </div>
-                        <div className="divide-y">
-                            {vectorDatabases.map(db => (
-                                <div key={db.id} className="p-4 flex items-center justify-between hover:bg-[hsl(var(--muted))]/30">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${db.status === 'connected' ? 'bg-green-500/10' : 'bg-gray-500/10'}`}>
-                                            <Database size={20} className={db.status === 'connected' ? 'text-green-500' : 'text-gray-500'} />
+
+                        {ragError && <p className="text-sm text-red-500">{ragError}</p>}
+
+                        {ragResults && (
+                            <div className="space-y-3">
+                                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                    {ragResults.results.length} match{ragResults.results.length === 1 ? '' : 'es'} across{' '}
+                                    {ragResults.searched.toLocaleString()} chunk{ragResults.searched === 1 ? '' : 's'} compared.
+                                    {ragResults.searched === 0 && ' Nothing has been ingested under the current embedding model.'}
+                                </p>
+                                {ragResults.results.map(match => (
+                                    <div key={`${match.documentId}-${match.chunkIndex}`} className="bg-[hsl(var(--muted))]/50 rounded-lg p-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="font-medium text-[hsl(var(--foreground))]">{match.documentTitle}</span>
+                                            <span className="text-xs font-mono text-[hsl(var(--muted-foreground))]">
+                                                chunk {match.chunkIndex} · {match.score.toFixed(3)}
+                                            </span>
                                         </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-[hsl(var(--foreground))]">{db.name}</span>
-                                                <span className="text-xs px-2 py-0.5 bg-[hsl(var(--muted))] rounded">{db.type}</span>
-                                            </div>
-                                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                                                {db.collections} collections • {db.vectors} vectors • {db.size}
+                                        <p className="text-sm text-[hsl(var(--muted-foreground))] whitespace-pre-wrap">{match.content}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Stored documents */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border">
+                        <div className="p-4 border-b">
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Stored Documents</h3>
+                        </div>
+                        {!documentsLoading && docs.length === 0 ? (
+                            <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                Nothing ingested yet.
+                            </p>
+                        ) : (
+                            <div className="divide-y divide-[hsl(var(--border))]">
+                                {docs.map(doc => (
+                                    <div key={doc.id} className="flex items-center justify-between p-4">
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-[hsl(var(--foreground))] truncate">{doc.title}</p>
+                                            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                                                {doc.chunkCount} chunk{doc.chunkCount === 1 ? '' : 's'} ·{' '}
+                                                {doc.chunkingStrategy} · {doc.source} · {doc.embeddingModel}
                                             </p>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className={`flex items-center gap-1 text-sm ${db.status === 'connected' ? 'text-green-500' : 'text-gray-500'}`}>
-                                            {db.status === 'connected' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                                            {db.status}
-                                        </span>
-                                        <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))]">
-                                            <Settings size={16} className="text-[hsl(var(--muted-foreground))]" />
+                                        <button
+                                            className="p-2 rounded hover:bg-[hsl(var(--muted))] shrink-0"
+                                            onClick={() => handleDeleteDocument(doc.id)}
+                                            title="Delete this document and its chunks"
+                                        >
+                                            <Trash2 size={16} className="text-red-500" />
                                         </button>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Embedding Models & RAG Pipelines */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Embedding Models */}
-                        <div className="bg-[hsl(var(--card))] rounded-xl border">
-                            <div className="p-4 border-b">
-                                <h3 className="font-semibold text-[hsl(var(--foreground))]">Embedding Models</h3>
-                            </div>
-                            <div className="max-h-[400px] overflow-y-auto divide-y">
-                                {embeddingModels.map(model => (
-                                    <div key={model.id} className="p-4 hover:bg-[hsl(var(--muted))]/30">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="font-medium text-[hsl(var(--foreground))]">{model.name}</span>
-                                            <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded">{model.speed}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
-                                            <span>{model.provider}</span>
-                                            <span>{model.dimensions}d</span>
-                                            <span>{model.maxTokens} tokens</span>
-                                        </div>
-                                    </div>
                                 ))}
                             </div>
-                        </div>
-
-                        {/* RAG Pipelines */}
-                        <div className="bg-[hsl(var(--card))] rounded-xl border">
-                            <div className="p-4 border-b flex items-center justify-between">
-                                <h3 className="font-semibold text-[hsl(var(--foreground))]">RAG Pipelines</h3>
-                                <button className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg text-sm hover:opacity-90">
-                                    <Plus size={14} />
-                                    New Pipeline
-                                </button>
-                            </div>
-                            <div className="divide-y">
-                                {ragPipelines.map(pipeline => (
-                                    <div key={pipeline.id} className="p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-[hsl(var(--foreground))]">{pipeline.name}</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded ${pipeline.status === 'active' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
-                                                    {pipeline.status}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {pipeline.status === 'active' ? (
-                                                    <button className="p-1.5 rounded hover:bg-[hsl(var(--muted))]">
-                                                        <Pause size={14} className="text-[hsl(var(--muted-foreground))]" />
-                                                    </button>
-                                                ) : (
-                                                    <button className="p-1.5 rounded hover:bg-[hsl(var(--muted))]">
-                                                        <Play size={14} className="text-[hsl(var(--muted-foreground))]" />
-                                                    </button>
-                                                )}
-                                                <button className="p-1.5 rounded hover:bg-[hsl(var(--muted))]">
-                                                    <Settings size={14} className="text-[hsl(var(--muted-foreground))]" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2 text-sm">
-                                            <div className="text-[hsl(var(--muted-foreground))]">
-                                                Vector DB: <span className="text-[hsl(var(--foreground))]">{pipeline.vectorDb}</span>
-                                            </div>
-                                            <div className="text-[hsl(var(--muted-foreground))]">
-                                                Chunks: <span className="text-[hsl(var(--foreground))]">{pipeline.chunks}</span>
-                                            </div>
-                                            <div className="text-[hsl(var(--muted-foreground))]">
-                                                Embedding: <span className="text-[hsl(var(--foreground))]">{pipeline.embedding}</span>
-                                            </div>
-                                            <div className="text-[hsl(var(--muted-foreground))]">
-                                                Queries: <span className="text-[hsl(var(--foreground))]">{pipeline.queries}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Document Ingestion */}
-                    <div className="bg-[hsl(var(--card))] rounded-xl border p-6">
-                        <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">Document Ingestion</h3>
-                        <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-lg p-8 text-center">
-                            <Upload size={40} className="mx-auto text-[hsl(var(--muted-foreground))] mb-4" />
-                            <p className="text-[hsl(var(--foreground))] font-medium mb-1">Drop files here or click to upload</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                                Supports PDF, DOCX, TXT, MD, HTML, and code files
-                            </p>
-                            <div className="flex items-center justify-center gap-4 mt-4">
-                                <button className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90">
-                                    Browse Files
-                                </button>
-                                <button className="px-4 py-2 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--muted))]/80">
-                                    Import from URL
-                                </button>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             )}

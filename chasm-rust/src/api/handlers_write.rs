@@ -1734,17 +1734,17 @@ fn ensure_embeddings_table(conn: &Connection) -> rusqlite::Result<()> {
     )
 }
 
-fn embedding_model() -> String {
+pub(crate) fn embedding_model() -> String {
     std::env::var("CHASM_EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".to_string())
 }
 
 /// Little-endian f32 blob. SQLite has no vector type; this keeps the encoding
 /// in one place so the reader cannot disagree with the writer.
-fn encode_vector(v: &[f32]) -> Vec<u8> {
+pub(crate) fn encode_vector(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
-fn decode_vector(bytes: &[u8]) -> Vec<f32> {
+pub(crate) fn decode_vector(bytes: &[u8]) -> Vec<f32> {
     bytes
         .chunks_exact(4)
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
@@ -1753,7 +1753,7 @@ fn decode_vector(bytes: &[u8]) -> Vec<f32> {
 
 /// Cosine similarity. Returns 0.0 for a zero-magnitude vector rather than
 /// NaN, so one degenerate row cannot poison a whole ranking.
-fn cosine(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn cosine(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return 0.0;
     }
@@ -1769,7 +1769,7 @@ fn cosine(a: &[f32], b: &[f32]) -> f32 {
     dot / (na.sqrt() * nb.sqrt())
 }
 
-struct Embedder {
+pub(crate) struct Embedder {
     client: reqwest::Client,
     api_key: String,
     base_url: String,
@@ -1779,7 +1779,7 @@ struct Embedder {
 impl Embedder {
     /// `None` when no key is configured -- the caller turns that into a 503
     /// rather than proceeding with something that cannot work.
-    fn from_env() -> Option<Self> {
+    pub(crate) fn from_env() -> Option<Self> {
         let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
         if api_key.trim().is_empty() {
             return None;
@@ -1804,7 +1804,7 @@ impl Embedder {
     /// nothing guarantees the array arrives sorted. Trusting position silently
     /// attaches every embedding to the wrong text, which looks like a working
     /// index that returns nonsense.
-    async fn embed(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, String> {
+    pub(crate) async fn embed(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, String> {
         #[derive(serde::Deserialize)]
         struct Item {
             embedding: Vec<f32>,

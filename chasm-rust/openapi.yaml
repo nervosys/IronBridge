@@ -1008,6 +1008,181 @@ paths:
         "200":
           description: Account removed
 
+  /documents:
+    get:
+      tags: [Documents]
+      summary: List ingested documents
+      description: >
+        Newest first, without their content: a listing carrying every
+        document's full text would grow without bound and none of it is shown
+        in a list.
+      operationId: listDocuments
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentSummary"
+    post:
+      tags: [Documents]
+      summary: Ingest a document
+      description: >
+        Splits the content, embeds each piece and stores both, so the document
+        can afterwards be retrieved by meaning.
+
+
+        The whole ingestion is one transaction: a document whose chunks were
+        half written would list with a chunk count it does not have and return
+        partial answers to searches.
+
+
+        Needs an embedding model. With none configured this answers 503 naming
+        the variable rather than storing the document unindexed.
+      operationId: ingestDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                source:
+                  type: string
+                  description: Where the document came from. Defaults to `upload`.
+                docType:
+                  type: string
+                  description: Free-form type label. Defaults to `text`.
+                strategy:
+                  type: string
+                  description: >
+                    How to split the content. Prose splits well on paragraphs
+                    and source does not, so the choice is the caller's.
+                  enum: [semantic, paragraph, sentence, fixed_size, code]
+                  default: semantic
+      responses:
+        "200":
+          description: Document ingested
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DocumentSummary"
+        "400":
+          description: Title or content missing, content produced no chunks, or an unknown strategy
+        "502":
+          description: The embedding endpoint was unreachable or errored
+        "503":
+          description: No embedding model configured on the server
+
+  /documents/search:
+    get:
+      tags: [Documents]
+      summary: Rank stored chunks by meaning
+      description: >
+        Cosine similarity against the ingested chunks. Reports `searched`, the
+        number of chunks compared, so an empty knowledge base is
+        distinguishable from a query that matched nothing.
+
+
+        Chunks embedded under a different model are skipped rather than
+        compared: vectors from two models do not share a space, so the
+        similarity between them is a meaningless number that would still rank.
+
+
+        Never falls back to substring matching.
+      operationId: searchDocuments
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked chunks
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DocumentSearchResults"
+        "400":
+          description: q is missing or empty
+        "502":
+          description: The embedding endpoint was unreachable or errored
+        "503":
+          description: No embedding model configured on the server
+
+  /documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get one document and its chunks
+      description: >
+        The vectors are not returned: they are large, unreadable, and nothing
+        on the other side has a use for them.
+      operationId: getDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The document
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DocumentDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Documents]
+      summary: Delete a document and its chunks
+      operationId: deleteDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /mcp/tools:
     get:
       tags: [MCP]
@@ -4199,6 +4374,94 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    DocumentSummary:
+      type: object
+      required:
+        [
+          id,
+          title,
+          source,
+          docType,
+          chunkCount,
+          tokenCount,
+          embeddingModel,
+          chunkingStrategy,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        source:
+          type: string
+        docType:
+          type: string
+        chunkCount:
+          type: integer
+        tokenCount:
+          type: integer
+          description: Estimated, summed over the document's chunks.
+        embeddingModel:
+          type: string
+          description: >
+            The model the chunks were embedded with. Search compares only
+            against chunks embedded under the model currently configured.
+        chunkingStrategy:
+          type: string
+          enum: [semantic, paragraph, sentence, fixed_size, code]
+        createdAt:
+          type: integer
+          format: int64
+
+    DocumentDetail:
+      allOf:
+        - $ref: "#/components/schemas/DocumentSummary"
+        - type: object
+          properties:
+            content:
+              type: string
+            chunks:
+              type: array
+              items:
+                type: object
+                properties:
+                  index:
+                    type: integer
+                  content:
+                    type: string
+                  tokenCount:
+                    type: integer
+
+    DocumentSearchResults:
+      type: object
+      required: [query, searched, results]
+      properties:
+        query:
+          type: string
+        searched:
+          type: integer
+          description: >
+            How many chunks were compared. Zero means nothing has been
+            ingested under the current embedding model, which is a different
+            answer from no matches.
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              documentId:
+                type: string
+              documentTitle:
+                type: string
+              chunkIndex:
+                type: integer
+              content:
+                type: string
+              score:
+                type: number
+                format: float
 
     Provider:
       type: object

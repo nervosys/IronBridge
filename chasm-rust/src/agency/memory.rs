@@ -727,12 +727,26 @@ impl KnowledgeBase {
         })
     }
 
-    /// Add a document
-    pub fn add_document(&mut self, mut document: Document) -> Result<String, MemoryError> {
+    /// Add a document, indexing any chunks that arrive already embedded.
+    ///
+    /// Returns the document id and the number of chunks that reached the
+    /// vector store.
+    ///
+    /// That count matters, because it is usually zero. This method chunks the
+    /// document itself, and `chunk_document` produces chunks with
+    /// `embedding: None` -- nothing here calls an embedding model. The loop
+    /// below then skips every one of them, so a document added through this
+    /// path is stored in `documents` and is not searchable. It used to return
+    /// only the id, which made that indistinguishable from success.
+    ///
+    /// To index a document, embed its chunks first and pass them in, or use
+    /// `/api/documents`, which owns that flow.
+    pub fn add_document(&mut self, mut document: Document) -> Result<(String, usize), MemoryError> {
         // Chunk the document
         document.chunks = self.chunk_document(&document.content);
 
         let doc_id = document.id.clone();
+        let mut indexed = 0usize;
 
         // Add chunks to vector store
         for chunk in &document.chunks {
@@ -749,15 +763,31 @@ impl KnowledgeBase {
                 .with_tag(format!("doc:{}", doc_id));
 
                 self.vector_store.add(entry)?;
+                indexed += 1;
             }
         }
 
         self.documents.insert(doc_id.clone(), document);
-        Ok(doc_id)
+        Ok((doc_id, indexed))
     }
 
-    /// Chunk a document
-    fn chunk_document(&self, content: &str) -> Vec<DocumentChunk> {
+    /// Replace the chunking configuration.
+    ///
+    /// The strategy is the caller's choice: prose splits well on paragraphs,
+    /// source does not, and the right answer is not knowable from here.
+    pub fn set_chunking_config(&mut self, config: ChunkingConfig) {
+        self.chunking_config = config;
+    }
+
+    /// Chunk a document.
+    ///
+    /// Public because chunking is useful on its own: `/api/documents` embeds
+    /// and stores the chunks itself rather than going through
+    /// `add_document`, which cannot index them (see the note there).
+    ///
+    /// Every chunk comes back with `embedding: None` -- this is a pure text
+    /// split and does not call an embedding model.
+    pub fn chunk_document(&self, content: &str) -> Vec<DocumentChunk> {
         match self.chunking_config.strategy {
             ChunkingStrategy::Semantic => self.semantic_chunk(content),
             ChunkingStrategy::Paragraph => self.paragraph_chunk(content),
@@ -1300,7 +1330,7 @@ impl MemoryManager {
     }
 
     /// Add document to knowledge base
-    pub fn add_document(&mut self, document: Document) -> Result<String, MemoryError> {
+    pub fn add_document(&mut self, document: Document) -> Result<(String, usize), MemoryError> {
         self.knowledge_base.add_document(document)
     }
 

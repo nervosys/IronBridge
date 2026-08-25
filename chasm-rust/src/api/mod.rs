@@ -27,6 +27,7 @@ mod audit;
 mod auth;
 pub mod caching;
 mod docs;
+pub mod documents;
 #[cfg(feature = "enterprise")]
 mod enterprise_store;
 mod graphql;
@@ -53,6 +54,7 @@ pub use audit::{
 };
 pub use auth::configure_auth_routes;
 pub use docs::configure_docs_routes;
+pub use documents::configure_document_routes;
 #[cfg(feature = "enterprise")]
 pub use enterprise_store::SqliteEnterpriseStore;
 pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
@@ -427,6 +429,10 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             // otherwise match `/api/inbox/...` first and return 404 -- actix
             // resolves scopes in registration order, not by specificity.
             .configure(configure_inbox_routes)
+            // Same reason as the inbox above: registered before the broad
+            // `/api` scope, which would otherwise match `/api/documents/...`
+            // first and answer 404.
+            .configure(configure_document_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

@@ -182,6 +182,12 @@ Writes:
 | POST   | `/api/providers/:id/test`         | Test provider connectivity      |
 | POST   | `/api/chat/completions`           | Proxy a completion              |
 | POST   | `/api/harvest`                    | Run an incremental harvest      |
+| PUT    | `/api/providers/:id`              | Switch a provider on or off     |
+| POST   | `/api/documents`                  | Ingest a document into the knowledge base |
+| GET    | `/api/documents`                  | List ingested documents         |
+| GET    | `/api/documents/search`           | Retrieve chunks by meaning (`?q=`) |
+| GET    | `/api/documents/:id`              | One document and its chunks     |
+| DELETE | `/api/documents/:id`              | Delete a document and its chunks |
 
 Endpoints that refuse rather than guess:
 
@@ -196,6 +202,11 @@ Endpoints that refuse rather than guess:
 - `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
   credential it is given. Without one it returns `400` naming the variable,
   rather than writing the secret to the database in the clear.
+- `POST /api/documents` and `GET /api/documents/search` need an embedding
+  model, the same `OPENAI_API_KEY` as semantic search. Without one both
+  return `503` naming the variable: ingestion will not store a document it
+  could never retrieve, and search will not fall back to substring matching
+  and present the result as semantic.
 
 Deleting a workspace **detaches** its sessions rather than deleting them.
 Merging leaves its sources intact. A fork is an independent copy, not an alias.
@@ -252,6 +263,28 @@ Indexing is a separate, explicit step — embedding a whole store costs money an
 time proportional to its size, so a query never triggers one silently. The
 response reports how many vectors it searched, so an empty index is
 distinguishable from no matches.
+
+### Document knowledge base
+
+```bash
+export OPENAI_API_KEY=...                       # or a local endpoint
+curl -X POST localhost:8787/api/documents \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Runbook","content":"...","strategy":"paragraph"}'
+curl "localhost:8787/api/documents/search?q=how+do+we+roll+back"
+```
+
+Separate from semantic search, which indexes your own sessions: this stores
+documents you give it. Ingestion splits the text, embeds each piece and writes
+both in one transaction — a half-written document would list with a chunk count
+it does not have.
+
+Five splitting strategies are available (`semantic`, `paragraph`, `sentence`,
+`fixed_size`, `code`); prose and source do not split the same way and the
+choice is yours. Retrieval reports `searched`, the number of chunks compared,
+and skips chunks embedded under a different model rather than comparing them —
+vectors from two models do not share a space, so the similarity between them is
+a meaningless number that would still rank.
 
 There is no lexical fallback: without a key both routes return `503`. An
 endpoint called "semantic" quietly returning substring matches would be

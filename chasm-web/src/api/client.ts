@@ -541,6 +541,71 @@ export const mcp = {
 };
 
 // =============================================================================
+// Document knowledge base API
+// =============================================================================
+
+export interface DocumentSummary {
+    id: string;
+    title: string;
+    source: string;
+    docType: string;
+    chunkCount: number;
+    tokenCount: number;
+    embeddingModel: string;
+    chunkingStrategy: string;
+    createdAt: number;
+}
+
+export interface DocumentChunkMatch {
+    documentId: string;
+    documentTitle: string;
+    chunkIndex: number;
+    content: string;
+    score: number;
+}
+
+export interface DocumentSearchResults {
+    query: string;
+    /**
+     * How many chunks were compared.
+     *
+     * Zero means nothing has been ingested under the embedding model the
+     * server is currently configured with -- a different answer from "no
+     * matches", and the reason this field is rendered rather than dropped.
+     */
+    searched: number;
+    results: DocumentChunkMatch[];
+}
+
+export const documents = {
+    async list(): Promise<ApiResponse<DocumentSummary[]>> {
+        return get('/api/documents');
+    },
+
+    /**
+     * Ingest a document: the server chunks it, embeds the chunks and stores
+     * both. Answers 503 when no embedding model is configured, rather than
+     * storing something that could never be found again.
+     */
+    async ingest(input: {
+        title: string;
+        content: string;
+        source?: string;
+        strategy?: string;
+    }): Promise<ApiResponse<DocumentSummary>> {
+        return post('/api/documents', input);
+    },
+
+    async search(q: string, limit = 10): Promise<ApiResponse<DocumentSearchResults>> {
+        return get(`/api/documents/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+    },
+
+    async remove(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+        return del(`/api/documents/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
 // Health & System API
 // =============================================================================
 
@@ -740,6 +805,7 @@ export const api = {
     transfer,
     settings,
     mcp,
+    documents,
     system,
     connectWebSocket,
     sendWebSocketMessage,
