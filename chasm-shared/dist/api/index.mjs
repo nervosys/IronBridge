@@ -75,13 +75,10 @@ function createApiClient(config = DEFAULT_CONFIG) {
     },
     async get(id) {
       return get(`/api/workspaces/${encodeURIComponent(id)}`);
-    },
-    async getByPath(path) {
-      return get("/api/workspaces/by-path", { path });
-    },
-    async refresh(id) {
-      return post(`/api/workspaces/${encodeURIComponent(id)}/refresh`);
     }
+    // No getByPath or refresh: `/api/workspaces/by-path` and
+    // `/api/workspaces/{id}/refresh` are not routed, both answered 404,
+    // and neither had a caller.
   };
   const sessions = {
     async list(filter) {
@@ -102,9 +99,6 @@ function createApiClient(config = DEFAULT_CONFIG) {
     async delete(id) {
       return del(`/api/sessions/${encodeURIComponent(id)}`);
     },
-    async archive(id, archived = true) {
-      return post(`/api/sessions/${encodeURIComponent(id)}/archive`, { archived });
-    },
     async fork(id, fromMessageId) {
       return post(`/api/sessions/${encodeURIComponent(id)}/fork`, { fromMessageId });
     },
@@ -117,7 +111,7 @@ function createApiClient(config = DEFAULT_CONFIG) {
       return get("/api/search", { q, limit });
     },
     async sessions(q, filter) {
-      return get("/api/search/sessions", { q, ...filter });
+      return get("/api/sessions/search", { q, ...filter });
     }
   };
   const stats = {
@@ -125,7 +119,7 @@ function createApiClient(config = DEFAULT_CONFIG) {
       return get("/api/stats");
     },
     async byProvider() {
-      return get("/api/stats/by-provider");
+      return get("/api/stats/providers");
     }
   };
   const mcp = {

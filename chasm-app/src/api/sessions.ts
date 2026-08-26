@@ -198,31 +198,11 @@ export const messages = {
         return unwrapResponse(response) || [];
     },
 
-    async get(sessionId: string, messageId: string): Promise<Message> {
-        const response = await apiClient.get(
-            `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`
-        );
-        return unwrapResponse(response);
-    },
+    // No get, update or delete for a single message.
+    //
+    // `/api/sessions/{id}/messages` is POST-only -- the server routes nothing
+    // for one message by id, so all three answered 404. None had a caller.
 
-    async create(sessionId: string, data: Partial<Message>): Promise<Message> {
-        const response = await apiClient.post(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, data);
-        return unwrapResponse(response);
-    },
-
-    async update(sessionId: string, messageId: string, data: Partial<Message>): Promise<Message> {
-        const response = await apiClient.put(
-            `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`,
-            data
-        );
-        return unwrapResponse(response);
-    },
-
-    async delete(sessionId: string, messageId: string): Promise<void> {
-        await apiClient.delete(
-            `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`
-        );
-    },
 };
 
 // =============================================================================

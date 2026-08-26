@@ -1035,13 +1035,10 @@ function createApiClient(config = DEFAULT_CONFIG) {
     },
     async get(id) {
       return get(`/api/workspaces/${encodeURIComponent(id)}`);
-    },
-    async getByPath(path) {
-      return get("/api/workspaces/by-path", { path });
-    },
-    async refresh(id) {
-      return post(`/api/workspaces/${encodeURIComponent(id)}/refresh`);
     }
+    // No getByPath or refresh: `/api/workspaces/by-path` and
+    // `/api/workspaces/{id}/refresh` are not routed, both answered 404,
+    // and neither had a caller.
   };
   const sessions = {
     async list(filter) {
@@ -1062,9 +1059,6 @@ function createApiClient(config = DEFAULT_CONFIG) {
     async delete(id) {
       return del(`/api/sessions/${encodeURIComponent(id)}`);
     },
-    async archive(id, archived = true) {
-      return post(`/api/sessions/${encodeURIComponent(id)}/archive`, { archived });
-    },
     async fork(id, fromMessageId) {
       return post(`/api/sessions/${encodeURIComponent(id)}/fork`, { fromMessageId });
     },
@@ -1077,7 +1071,7 @@ function createApiClient(config = DEFAULT_CONFIG) {
       return get("/api/search", { q, limit });
     },
     async sessions(q, filter) {
-      return get("/api/search/sessions", { q, ...filter });
+      return get("/api/sessions/search", { q, ...filter });
     }
   };
   const stats = {
@@ -1085,7 +1079,7 @@ function createApiClient(config = DEFAULT_CONFIG) {
       return get("/api/stats");
     },
     async byProvider() {
-      return get("/api/stats/by-provider");
+      return get("/api/stats/providers");
     }
   };
   const mcp = {
@@ -2532,22 +2526,6 @@ var API_CONFIG = {
   defaultTimeout: 3e4,
   version: "v1"
 };
-var API_ENDPOINTS = {
-  health: "/api/health",
-  stats: "/api/v1/stats",
-  workspaces: "/api/v1/workspaces",
-  sessions: "/api/v1/sessions",
-  messages: "/api/v1/messages",
-  providers: "/api/v1/providers",
-  agents: "/api/v1/agents",
-  swarms: "/api/v1/swarms",
-  runs: "/api/v1/runs",
-  chat: "/api/v1/chat",
-  search: "/api/v1/search",
-  mcp: "/api/v1/mcp",
-  export: "/api/v1/export",
-  import: "/api/v1/import"
-};
 var SESSION_FORMAT = {
   version: 3,
   maxMessages: 1e3,
@@ -3533,7 +3511,6 @@ var HOOK_ACTIONS = {
 exports.AGENT_ROLES = AGENT_ROLES;
 exports.AGENT_STATUSES = AGENT_STATUSES;
 exports.API_CONFIG = API_CONFIG;
-exports.API_ENDPOINTS = API_ENDPOINTS;
 exports.BUILTIN_TEMPLATES = BUILTIN_TEMPLATES;
 exports.BUILT_IN_TEMPLATES = BUILT_IN_TEMPLATES;
 exports.CHUNKING_DEFAULTS = CHUNKING_DEFAULTS;

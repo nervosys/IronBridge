@@ -929,22 +929,18 @@ export const API_CONFIG = {
     version: 'v1',
 } as const;
 
-export const API_ENDPOINTS = {
-    health: '/api/health',
-    stats: '/api/v1/stats',
-    workspaces: '/api/v1/workspaces',
-    sessions: '/api/v1/sessions',
-    messages: '/api/v1/messages',
-    providers: '/api/v1/providers',
-    agents: '/api/v1/agents',
-    swarms: '/api/v1/swarms',
-    runs: '/api/v1/runs',
-    chat: '/api/v1/chat',
-    search: '/api/v1/search',
-    mcp: '/api/v1/mcp',
-    export: '/api/v1/export',
-    import: '/api/v1/import',
-} as const;
+/*
+ * The API_ENDPOINTS table that used to sit here is gone.
+ *
+ * Nothing imported it, and every path in it carried a `/v1` segment the
+ * server has never routed -- `chasm-rust` mounts everything under `/api` and
+ * `grep -r 'scope("/api/v1"' finds nothing. It was a routing table nobody
+ * read, which is a routing table that can only drift, and the VS Code
+ * extension shipped a byte-identical copy that made every one of its requests
+ * 404.
+ *
+ * The clients build their own paths next to the code that sends them.
+ */
 
 // =============================================================================
 // Session Format

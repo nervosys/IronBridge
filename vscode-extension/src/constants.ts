@@ -345,31 +345,16 @@ export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
  */
 export const EXPORT_FORMATS = ['json', 'markdown', 'html', 'csv'] as const;
 
-/**
- * API endpoints
+/*
+ * The endpoint list and default API config that used to sit here are gone.
+ *
+ * Nothing imported either of them, and both had drifted: every path carried a
+ * `/v1` segment the server has never routed, and the default base URL pointed
+ * at port 3000, which nothing in this repository listens on. A second copy of
+ * the routing table that no one reads is a copy that can only be wrong --
+ * `apiClient.ts` is the one that makes the requests, so it is the one that
+ * gets to hold the paths.
  */
-export const API_ENDPOINTS = {
-    health: '/api/health',
-    stats: '/api/v1/stats',
-    workspaces: '/api/v1/workspaces',
-    sessions: '/api/v1/sessions',
-    messages: '/api/v1/messages',
-    providers: '/api/v1/providers',
-    agents: '/api/v1/agents',
-    swarms: '/api/v1/swarms',
-    runs: '/api/v1/runs',
-    chat: '/api/v1/chat/completions',
-    search: '/api/v1/search',
-    mcp: '/api/v1/mcp',
-} as const;
-
-/**
- * Default API configuration
- */
-export const DEFAULT_API_CONFIG = {
-    baseUrl: 'http://localhost:3000',
-    timeout: 30000,
-} as const;
 
 /**
  * Session format version

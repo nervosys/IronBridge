@@ -144,13 +144,9 @@ export function createApiClient(config: ApiClientConfig = DEFAULT_CONFIG) {
             return get(`/api/workspaces/${encodeURIComponent(id)}`);
         },
 
-        async getByPath(path: string): Promise<ApiResponse<Workspace>> {
-            return get('/api/workspaces/by-path', { path });
-        },
-
-        async refresh(id: string): Promise<ApiResponse<Workspace>> {
-            return post(`/api/workspaces/${encodeURIComponent(id)}/refresh`);
-        },
+        // No getByPath or refresh: `/api/workspaces/by-path` and
+        // `/api/workspaces/{id}/refresh` are not routed, both answered 404,
+        // and neither had a caller.
     };
 
     // =============================================================================
@@ -182,10 +178,6 @@ export function createApiClient(config: ApiClientConfig = DEFAULT_CONFIG) {
             return del(`/api/sessions/${encodeURIComponent(id)}`);
         },
 
-        async archive(id: string, archived: boolean = true): Promise<ApiResponse<Session>> {
-            return post(`/api/sessions/${encodeURIComponent(id)}/archive`, { archived });
-        },
-
         async fork(id: string, fromMessageId?: string): Promise<ApiResponse<Session>> {
             return post(`/api/sessions/${encodeURIComponent(id)}/fork`, { fromMessageId });
         },
@@ -205,7 +197,11 @@ export function createApiClient(config: ApiClientConfig = DEFAULT_CONFIG) {
         },
 
         async sessions(q: string, filter?: SessionFilter): Promise<ApiResponse<Session[]>> {
-            return get('/api/search/sessions', { q, ...filter } as Record<string, string | number | boolean | undefined>);
+            // Served as `/api/sessions/search`; there is no
+            // `/api/search/sessions`. The same inversion was in chasm-app,
+            // where it made every keystroke in the search box 404 and the
+            // screen render an empty result set.
+            return get('/api/sessions/search', { q, ...filter } as Record<string, string | number | boolean | undefined>);
         },
     };
 
@@ -219,7 +215,9 @@ export function createApiClient(config: ApiClientConfig = DEFAULT_CONFIG) {
         },
 
         async byProvider(): Promise<ApiResponse<Record<string, number>>> {
-            return get('/api/stats/by-provider');
+            // Served as `/api/stats/providers`; there is no
+            // `/api/stats/by-provider`.
+            return get('/api/stats/providers');
         },
     };
 

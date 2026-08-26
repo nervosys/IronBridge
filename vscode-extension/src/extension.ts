@@ -917,7 +917,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize real-time session recorder
     const recordingEnabled = vscode.workspace.getConfiguration('chasm').get<boolean>('recording.enabled', false);
-    const apiBaseUrl = vscode.workspace.getConfiguration('chasm').get<string>('api.baseUrl', 'http://localhost:3000');
+    const apiBaseUrl = vscode.workspace.getConfiguration('chasm').get<string>('api.baseUrl', 'http://localhost:8787');
 
     if (recordingEnabled) {
         const apiClient = createApiClient({ baseUrl: apiBaseUrl }, outputChannel);
@@ -1873,13 +1873,27 @@ export function activate(context: vscode.ExtensionContext) {
             } else {
                 // Start recording
                 await config.update('recording.enabled', true, vscode.ConfigurationTarget.Global);
-                const apiBaseUrl = config.get<string>('api.baseUrl', 'http://localhost:3000');
+                const apiBaseUrl = config.get<string>('api.baseUrl', 'http://localhost:8787');
                 const apiClient = createApiClient({ baseUrl: apiBaseUrl }, outputChannel);
                 sessionRecorder = new SessionRecorder(apiClient, outputChannel);
                 try {
                     await sessionRecorder.start();
                     outputChannel.appendLine('Session recording started');
-                    vscode.window.showInformationMessage('Session recording enabled');
+
+                    // `start()` does not throw when the backend is
+                    // unreachable -- it marks itself disconnected and buffers.
+                    // Reporting "enabled" on that basis told the user their
+                    // session was being recorded while every event sat in a
+                    // buffer that would never drain.
+                    if (sessionRecorder.isConnected) {
+                        vscode.window.showInformationMessage('Session recording enabled');
+                    } else {
+                        vscode.window.showWarningMessage(
+                            `Recording is on, but ${apiBaseUrl} did not answer. ` +
+                            'Events are buffered and nothing is stored until it does. ' +
+                            'Start the server with `chasm api serve`, or set chasm.api.baseUrl.'
+                        );
+                    }
                 } catch (err) {
                     vscode.window.showErrorMessage(`Failed to start recording: ${(err as Error).message}`);
                 }
