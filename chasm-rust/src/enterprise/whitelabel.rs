@@ -251,7 +251,8 @@ pub struct TypographyConfig {
 impl Default for TypographyConfig {
     fn default() -> Self {
         Self {
-            font_family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif".to_string(),
+            font_family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                .to_string(),
             heading_font_family: None,
             mono_font_family: "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace".to_string(),
             base_font_size: "16px".to_string(),
@@ -357,7 +358,9 @@ impl EmailTemplate {
     fn default_password_reset() -> Self {
         Self {
             subject: "Reset your {{brand_name}} password".to_string(),
-            body_html: r#"<h1>Password Reset</h1><p>Click the link below to reset your password.</p>"#.to_string(),
+            body_html:
+                r#"<h1>Password Reset</h1><p>Click the link below to reset your password.</p>"#
+                    .to_string(),
             body_text: "Password Reset\n\nClick the link below to reset your password.".to_string(),
             from_name: None,
             reply_to: None,
@@ -621,7 +624,7 @@ impl BrandingManager {
     /// Set custom domain
     pub fn set_custom_domain(&mut self, tenant_id: Uuid, domain: &str) -> Option<CustomDomain> {
         let config = self.configs.get_mut(&tenant_id)?;
-        
+
         let custom_domain = CustomDomain {
             domain: domain.to_string(),
             ssl_status: SslStatus::Pending,
@@ -666,7 +669,7 @@ mod tests {
     fn test_theme_css_variables() {
         let theme = ThemeConfig::default();
         let css = theme.to_css_variables();
-        
+
         assert!(css.contains("--color-primary"));
         assert!(css.contains("#2563eb"));
     }

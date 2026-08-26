@@ -4,7 +4,7 @@
 //!
 //! SOC2, HIPAA, and other compliance framework support.
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -293,9 +293,17 @@ impl DataClassification {
             DataClassification::Public => vec![],
             DataClassification::Internal => vec!["authenticated_users"],
             DataClassification::Confidential => vec!["role_based_access"],
-            DataClassification::Restricted => vec!["explicit_grant", "mfa_required", "audit_all_access"],
-            DataClassification::Phi => vec!["hipaa_authorized", "audit_all_access", "encryption_required"],
-            DataClassification::Pii => vec!["gdpr_consent", "data_minimization", "encryption_required"],
+            DataClassification::Restricted => {
+                vec!["explicit_grant", "mfa_required", "audit_all_access"]
+            }
+            DataClassification::Phi => vec![
+                "hipaa_authorized",
+                "audit_all_access",
+                "encryption_required",
+            ],
+            DataClassification::Pii => {
+                vec!["gdpr_consent", "data_minimization", "encryption_required"]
+            }
         }
     }
 }
@@ -501,7 +509,8 @@ impl ComplianceManager {
 
     /// Query audit log
     pub fn query_audit_log(&self, query: &AuditQuery) -> Vec<&AuditEvent> {
-        self.audit_log.iter()
+        self.audit_log
+            .iter()
             .filter(|e| {
                 // Filter by tenant
                 if let Some(tenant_id) = query.tenant_id {
@@ -550,8 +559,10 @@ impl ComplianceManager {
 
     /// Enable compliance framework for tenant
     pub fn enable_framework(&mut self, tenant_id: Uuid, framework: ComplianceFramework) {
-        let status = self.compliance_statuses.entry(tenant_id).or_insert_with(|| {
-            ComplianceStatus {
+        let status = self
+            .compliance_statuses
+            .entry(tenant_id)
+            .or_insert_with(|| ComplianceStatus {
                 tenant_id,
                 enabled_frameworks: vec![],
                 control_statuses: HashMap::new(),
@@ -560,21 +571,23 @@ impl ComplianceManager {
                 next_assessment_due: None,
                 issues: vec![],
                 certifications: vec![],
-            }
-        });
+            });
 
         if !status.enabled_frameworks.contains(&framework) {
             status.enabled_frameworks.push(framework);
 
             // Initialize control statuses
             for control in framework.required_controls() {
-                status.control_statuses.entry(control).or_insert(ControlStatus {
-                    control,
-                    status: ControlStatusType::NotImplemented,
-                    evidence_count: 0,
-                    last_verified: None,
-                    notes: None,
-                });
+                status
+                    .control_statuses
+                    .entry(control)
+                    .or_insert(ControlStatus {
+                        control,
+                        status: ControlStatusType::NotImplemented,
+                        evidence_count: 0,
+                        last_verified: None,
+                        notes: None,
+                    });
             }
         }
     }
@@ -595,10 +608,10 @@ impl ComplianceManager {
             if let Some(control_status) = compliance.control_statuses.get_mut(&control) {
                 control_status.status = status;
                 control_status.last_verified = Some(Utc::now());
-                
+
                 // Recalculate compliance score
                 self.recalculate_score(tenant_id);
-                
+
                 return true;
             }
         }
@@ -614,8 +627,15 @@ impl ComplianceManager {
                 return;
             }
 
-            let compliant = status.control_statuses.values()
-                .filter(|s| matches!(s.status, ControlStatusType::Implemented | ControlStatusType::Verified))
+            let compliant = status
+                .control_statuses
+                .values()
+                .filter(|s| {
+                    matches!(
+                        s.status,
+                        ControlStatusType::Implemented | ControlStatusType::Verified
+                    )
+                })
                 .count();
 
             status.compliance_score = ((compliant as f64 / total as f64) * 100.0) as u8;
@@ -629,8 +649,17 @@ impl ComplianceManager {
         id
     }
 
-    /// Get data requiring deletion
-    pub fn get_data_for_deletion(&self, tenant_id: Uuid) -> Vec<DataDeletionTask> {
+    /// Get data requiring deletion.
+    ///
+    /// Manager-wide, not per-tenant. This took a `tenant_id` and ignored it:
+    /// `RetentionPolicy` carries no tenant, so there is nothing to filter on
+    /// and the parameter promised a scoping the data model cannot deliver.
+    /// `generate_report` below is genuinely tenant-scoped, which made the
+    /// difference easy to miss.
+    ///
+    /// Giving retention policies a tenant is a data-model decision, not a
+    /// rename, so the parameter is dropped rather than honoured.
+    pub fn get_data_for_deletion(&self) -> Vec<DataDeletionTask> {
         let mut tasks = vec![];
 
         for policy in self.retention_policies.values() {
@@ -654,7 +683,11 @@ impl ComplianceManager {
     }
 
     /// Generate compliance report
-    pub fn generate_report(&self, tenant_id: Uuid, framework: ComplianceFramework) -> Option<ComplianceReport> {
+    pub fn generate_report(
+        &self,
+        tenant_id: Uuid,
+        framework: ComplianceFramework,
+    ) -> Option<ComplianceReport> {
         let status = self.compliance_statuses.get(&tenant_id)?;
 
         if !status.enabled_frameworks.contains(&framework) {
@@ -662,20 +695,29 @@ impl ComplianceManager {
         }
 
         let required_controls = framework.required_controls();
-        let control_details: Vec<_> = required_controls.iter()
+        let control_details: Vec<_> = required_controls
+            .iter()
             .map(|c| {
                 let status_info = status.control_statuses.get(c);
                 ControlReportItem {
                     control: *c,
-                    status: status_info.map(|s| s.status).unwrap_or(ControlStatusType::NotImplemented),
+                    status: status_info
+                        .map(|s| s.status)
+                        .unwrap_or(ControlStatusType::NotImplemented),
                     evidence_count: status_info.map(|s| s.evidence_count).unwrap_or(0),
                     last_verified: status_info.and_then(|s| s.last_verified),
                 }
             })
             .collect();
 
-        let compliant_count = control_details.iter()
-            .filter(|c| matches!(c.status, ControlStatusType::Implemented | ControlStatusType::Verified))
+        let compliant_count = control_details
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.status,
+                    ControlStatusType::Implemented | ControlStatusType::Verified
+                )
+            })
             .count();
 
         Some(ComplianceReport {
@@ -686,10 +728,14 @@ impl ComplianceManager {
             total_controls: required_controls.len(),
             compliant_controls: compliant_count,
             control_details,
-            open_issues: status.issues.iter()
+            open_issues: status
+                .issues
+                .iter()
                 .filter(|i| i.framework == framework && i.status == IssueStatus::Open)
                 .count(),
-            certifications: status.certifications.iter()
+            certifications: status
+                .certifications
+                .iter()
                 .filter(|c| c.framework == framework)
                 .cloned()
                 .collect(),
@@ -872,7 +918,9 @@ mod tests {
         manager.enable_framework(tenant_id, ComplianceFramework::Soc2);
 
         let status = manager.get_compliance_status(tenant_id).unwrap();
-        assert!(status.enabled_frameworks.contains(&ComplianceFramework::Soc2));
+        assert!(status
+            .enabled_frameworks
+            .contains(&ComplianceFramework::Soc2));
         assert!(!status.control_statuses.is_empty());
     }
 }
