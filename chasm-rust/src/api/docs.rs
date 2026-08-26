@@ -223,7 +223,7 @@ mod tests {
     async fn every_documented_path_is_actually_routed() {
         use crate::api::{
             configure_catalog_routes, configure_dataset_routes, configure_document_routes,
-            configure_inbox_routes, AppState,
+            configure_download_routes, configure_inbox_routes, AppState,
         };
         use crate::ChatDatabase;
         use actix_web::web::Data;
@@ -255,6 +255,7 @@ mod tests {
                 .configure(configure_document_routes)
                 .configure(configure_dataset_routes)
                 .configure(configure_catalog_routes)
+                .configure(configure_download_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -452,7 +453,7 @@ mod tests {
     async fn documented_response_bodies_match_what_the_server_sends() {
         use crate::api::{
             configure_catalog_routes, configure_dataset_routes, configure_document_routes,
-            configure_inbox_routes, AppState,
+            configure_download_routes, configure_inbox_routes, AppState,
         };
         use crate::ChatDatabase;
         use actix_web::web::Data;
@@ -492,6 +493,7 @@ mod tests {
                 .configure(configure_document_routes)
                 .configure(configure_dataset_routes)
                 .configure(configure_catalog_routes)
+                .configure(configure_download_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -551,6 +553,19 @@ mod tests {
             if resp.status() == StatusCode::SERVICE_UNAVAILABLE
                 && op.pointer("/responses/503").is_some()
             {
+                continue;
+            }
+            // Some endpoints answer only by calling a third party. Probing
+            // them would make this suite pass or fail on whether
+            // huggingface.co is reachable from wherever it happens to run,
+            // which is not a property of this repository. Their response
+            // shapes are covered by unit tests over captured payloads
+            // instead -- see `api::catalog::tests`.
+            //
+            // Unlike the marker below, nothing is asserted about the status:
+            // there is no answer that is correct in both the online and
+            // offline cases.
+            if op.get("x-chasm-probe").and_then(|v| v.as_str()) == Some("needs-network") {
                 continue;
             }
             // Some endpoints cannot reach 200 from a cold probe at all: the

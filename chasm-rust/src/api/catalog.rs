@@ -41,13 +41,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 /// The only host this module will talk to.
-const HUB: &str = "https://huggingface.co";
+pub(crate) const HUB: &str = "https://huggingface.co";
 
 /// Optional, and only to raise the Hub's anonymous rate limit.
 ///
 /// Public search needs no credential, so its absence is not an error and is
 /// not reported as one.
-const TOKEN_ENV: &str = "HUGGINGFACE_TOKEN";
+pub(crate) const TOKEN_ENV: &str = "HUGGINGFACE_TOKEN";
 
 const DEFAULT_LIMIT: usize = 20;
 const MAX_LIMIT: usize = 100;
@@ -189,12 +189,25 @@ fn to_entry(raw: &serde_json::Value, kind: Kind) -> Option<CatalogEntry> {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Kind {
+pub(crate) enum Kind {
     Models,
     Datasets,
 }
 
 impl Kind {
+    /// Parse the `kind` a caller supplied.
+    ///
+    /// A closed set: these two map onto the Hub's two repository types and
+    /// nothing else does, so an unrecognised value is rejected rather than
+    /// silently treated as one of them.
+    pub(crate) fn parse(name: &str) -> Option<Self> {
+        match name {
+            "models" => Some(Kind::Models),
+            "datasets" => Some(Kind::Datasets),
+            _ => None,
+        }
+    }
+
     fn api_path(self) -> &'static str {
         match self {
             Kind::Models => "/api/models",
@@ -210,7 +223,7 @@ impl Kind {
         }
     }
 
-    fn noun(self) -> &'static str {
+    pub(crate) fn noun(self) -> &'static str {
         match self {
             Kind::Models => "models",
             Kind::Datasets => "datasets",
@@ -316,6 +329,129 @@ fn interpret(status: u16, body: &str, kind: Kind) -> Result<Vec<CatalogEntry>, S
     Ok(rows.iter().filter_map(|r| to_entry(r, kind)).collect())
 }
 
+/// One file in a Hub repository.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoFile {
+    /// Path within the repository. May contain `/`.
+    pub path: String,
+    /// Size in bytes, as the Hub reports it -- real for LFS files too.
+    pub size: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FilesQuery {
+    pub kind: Option<String>,
+    pub id: Option<String>,
+}
+
+/// Read a repository's file list, with sizes.
+///
+/// Sizes are what makes a download decidable: without them a client cannot
+/// warn about a 5 GB file and the server cannot check the disk before
+/// starting. The Hub reports the real size for LFS files here, not the
+/// pointer size.
+///
+/// Directories are dropped -- there is nothing to download about one, and
+/// keeping them would put rows in the list that no action applies to.
+pub(crate) async fn fetch_repo_files(kind: Kind, id: &str) -> Result<Vec<RepoFile>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    // `id` goes into the path, so it is checked before it gets there: a `..`
+    // segment would otherwise walk up and out of the repository namespace.
+    if !is_plausible_repo_id(id) {
+        return Err(format!(
+            "`{id}` is not a repository id. Expected `name` or `author/name`."
+        ));
+    }
+
+    let mut request = client.get(format!("{HUB}{}/{id}/tree/main", kind.api_path()));
+    if let Ok(token) = std::env::var(TOKEN_ENV) {
+        if !token.trim().is_empty() {
+            request = request.bearer_auth(token.trim());
+        }
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the Hugging Face Hub: {e}"))?;
+
+    let status = response.status().as_u16();
+    let body = response.text().await.unwrap_or_default();
+    if !(200..300).contains(&status) {
+        return Err(format!(
+            "The Hugging Face Hub returned {status} for {} `{id}`.",
+            kind.noun()
+        ));
+    }
+
+    let parsed: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| format!("The Hugging Face Hub returned unparseable JSON: {e}"))?;
+    let rows = parsed
+        .as_array()
+        .ok_or("The Hugging Face Hub returned something other than a list")?;
+
+    Ok(rows
+        .iter()
+        .filter(|r| r.get("type").and_then(|t| t.as_str()) == Some("file"))
+        .filter_map(|r| {
+            Some(RepoFile {
+                path: r.get("path")?.as_str()?.to_string(),
+                size: r.get("size").and_then(|v| v.as_i64()).unwrap_or(0),
+            })
+        })
+        .collect())
+}
+
+/// Reject anything that is not `name` or `author/name`.
+///
+/// This value is interpolated into a URL path. `..` segments, backslashes and
+/// leading slashes are all ways to leave the namespace the caller was supposed
+/// to be addressing, so the shape is checked rather than trusted.
+pub(crate) fn is_plausible_repo_id(id: &str) -> bool {
+    if id.is_empty() || id.len() > 200 {
+        return false;
+    }
+    let segments: Vec<&str> = id.split('/').collect();
+    if segments.len() > 2 {
+        return false;
+    }
+    segments.iter().all(|s| {
+        !s.is_empty()
+            && *s != "."
+            && *s != ".."
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    })
+}
+
+pub async fn list_repo_files(query: web::Query<FilesQuery>) -> HttpResponse {
+    let Some(kind) = query.kind.as_deref().and_then(Kind::parse) else {
+        return fail(
+            actix_web::http::StatusCode::BAD_REQUEST,
+            "kind is required and must be `models` or `datasets`",
+        );
+    };
+    let Some(id) = query.id.as_deref().filter(|i| !i.trim().is_empty()) else {
+        return fail(
+            actix_web::http::StatusCode::BAD_REQUEST,
+            "id is required, e.g. `openai-community/gpt2`",
+        );
+    };
+
+    match fetch_repo_files(kind, id.trim()).await {
+        Ok(files) => ok(json!({ "kind": kind.noun(), "id": id.trim(), "files": files })),
+        Err(message) if message.contains("not a repository id") => {
+            fail(actix_web::http::StatusCode::BAD_REQUEST, message)
+        }
+        Err(message) => fail(actix_web::http::StatusCode::BAD_GATEWAY, message),
+    }
+}
+
 pub async fn search_models(query: web::Query<CatalogQuery>) -> HttpResponse {
     search(Kind::Models, query.into_inner()).await
 }
@@ -328,7 +464,8 @@ pub fn configure_catalog_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/catalog")
             .route("/models", web::get().to(search_models))
-            .route("/datasets", web::get().to(search_datasets)),
+            .route("/datasets", web::get().to(search_datasets))
+            .route("/files", web::get().to(list_repo_files)),
     );
 }
 
@@ -544,6 +681,51 @@ mod tests {
     #[test]
     fn an_empty_list_is_success_with_no_rows() {
         assert_eq!(interpret(200, "[]", Kind::Datasets).expect("ok").len(), 0);
+    }
+
+    /// The repository id is interpolated into a URL path, so its shape is
+    /// checked rather than trusted.
+    ///
+    /// Every rejected case below is a way to address something other than the
+    /// repository the caller named.
+    #[test]
+    fn only_plausible_repository_ids_are_accepted() {
+        for good in [
+            "gpt2",
+            "openai-community/gpt2",
+            "meta-llama/Llama-3.1-8B-Instruct",
+            "Open-Orca/OpenOrca",
+            "some_org/model.v2",
+        ] {
+            assert!(is_plausible_repo_id(good), "rejected `{good}`");
+        }
+
+        for bad in [
+            "",
+            "..",
+            "../etc/passwd",
+            "a/../../b",
+            "a/b/c",
+            "/absolute",
+            "trailing/",
+            "back\\slash",
+            "has space",
+            "query?x=1",
+            "frag#ment",
+            "colon:port",
+            "percent%2e%2e",
+        ] {
+            assert!(!is_plausible_repo_id(bad), "accepted `{bad}`");
+        }
+    }
+
+    #[test]
+    fn the_kind_is_a_closed_set() {
+        assert_eq!(Kind::parse("models"), Some(Kind::Models));
+        assert_eq!(Kind::parse("datasets"), Some(Kind::Datasets));
+        for bad in ["", "Models", "spaces", "model", "datasets/../x"] {
+            assert_eq!(Kind::parse(bad), None, "accepted `{bad}`");
+        }
     }
 
     #[test]

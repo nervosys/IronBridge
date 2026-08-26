@@ -22,9 +22,16 @@ import {
     documents,
     datasets,
     catalog,
+    downloads,
     connectWebSocket,
 } from '../api/client';
-import type { CreateSwarmRequest, DocumentSummary, Dataset, DatasetType } from '../api/client';
+import type {
+    CreateSwarmRequest,
+    DocumentSummary,
+    Dataset,
+    DatasetType,
+    DownloadJob,
+} from '../api/client';
 import type {
     Workspace,
     Session,
@@ -330,6 +337,34 @@ export function useTestProvider() {
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
+}
+
+/**
+ * The download jobs on the server.
+ *
+ * Polled while anything is running: progress is written by the transfer, so
+ * the only way to see it advance is to ask again. The interval is chosen by
+ * the caller, which stops polling once nothing is running.
+ */
+export function useDownloads(options?: UseQueryOptions): UseQueryResult<DownloadJob[]> {
+    const queryFn = useCallback(() => downloads.list(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useStartDownload() {
+    return useMutation((input: { kind: 'models' | 'datasets'; repoId: string; filePath: string }) =>
+        downloads.start(input)
+    );
+}
+
+export function useCancelDownload() {
+    return useMutation((id: string) => downloads.cancel(id));
+}
+
+export function useRepoFiles() {
+    return useMutation(({ kind, id }: { kind: 'models' | 'datasets'; id: string }) =>
+        catalog.files(kind, id)
+    );
 }
 
 /**

@@ -30,6 +30,7 @@ pub mod catalog;
 pub mod datasets;
 mod docs;
 pub mod documents;
+pub mod downloads;
 #[cfg(feature = "enterprise")]
 mod enterprise_store;
 mod graphql;
@@ -59,6 +60,7 @@ pub use catalog::configure_catalog_routes;
 pub use datasets::configure_dataset_routes;
 pub use docs::configure_docs_routes;
 pub use documents::configure_document_routes;
+pub use downloads::configure_download_routes;
 #[cfg(feature = "enterprise")]
 pub use enterprise_store::SqliteEnterpriseStore;
 pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
@@ -439,6 +441,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(configure_document_routes)
             .configure(configure_dataset_routes)
             .configure(configure_catalog_routes)
+            .configure(configure_download_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

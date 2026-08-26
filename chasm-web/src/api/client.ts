@@ -593,6 +593,83 @@ export const catalog = {
     async datasets(q: string, limit = 20): Promise<ApiResponse<CatalogResults>> {
         return get(`/api/catalog/datasets?q=${encodeURIComponent(q)}&limit=${limit}`);
     },
+
+    /**
+     * A repository's files, with sizes.
+     *
+     * Sizes are what makes a download decidable: they are why a 5 GB file can
+     * be flagged before anyone clicks, and why the server can check the disk.
+     */
+    async files(kind: 'models' | 'datasets', id: string): Promise<ApiResponse<RepoFileList>> {
+        return get(`/api/catalog/files?kind=${kind}&id=${encodeURIComponent(id)}`);
+    },
+};
+
+export interface RepoFile {
+    path: string;
+    size: number;
+}
+
+export interface RepoFileList {
+    kind: string;
+    id: string;
+    files: RepoFile[];
+}
+
+// =============================================================================
+// Downloads API
+// =============================================================================
+
+export interface DownloadJob {
+    id: string;
+    kind: 'models' | 'datasets';
+    repoId: string;
+    filePath: string;
+    /** Absolute path on the server, so a user can find the file. */
+    destPath: string;
+    totalBytes: number;
+    /**
+     * Written periodically by the running transfer, so it lags the true
+     * figure by at most a few megabytes.
+     */
+    downloadedBytes: number;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    error?: string;
+    startedAt: number;
+    updatedAt: number;
+    completedAt?: number;
+}
+
+export const downloads = {
+    async list(): Promise<ApiResponse<DownloadJob[]>> {
+        return get('/api/downloads');
+    },
+
+    /**
+     * Start one. Returns immediately with a job to poll -- these files are
+     * large enough that waiting for the transfer would time out the request.
+     */
+    async start(input: {
+        kind: 'models' | 'datasets';
+        repoId: string;
+        filePath: string;
+    }): Promise<ApiResponse<DownloadJob>> {
+        return post('/api/downloads', input);
+    },
+
+    async get(id: string): Promise<ApiResponse<DownloadJob>> {
+        return get(`/api/downloads/${encodeURIComponent(id)}`);
+    },
+
+    /**
+     * Cancel a running job, or forget a finished one.
+     *
+     * Never deletes the downloaded file: dropping the record is a request to
+     * stop tracking it, not to lose the artifact.
+     */
+    async cancel(id: string): Promise<ApiResponse<unknown>> {
+        return del(`/api/downloads/${encodeURIComponent(id)}`);
+    },
 };
 
 // =============================================================================
@@ -922,6 +999,7 @@ export const api = {
     documents,
     datasets,
     catalog,
+    downloads,
     system,
     connectWebSocket,
     sendWebSocketMessage,

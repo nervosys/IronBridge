@@ -1031,6 +1031,7 @@ paths:
         and "nothing matched" are different answers and an empty table cannot
         tell them apart.
       operationId: searchCatalogModels
+      x-chasm-probe: needs-network
       parameters:
         - name: q
           in: query
@@ -1058,6 +1059,62 @@ paths:
         "502":
           description: The Hub was unreachable, rate-limited, or returned something unusable
 
+  /catalog/files:
+    get:
+      tags: [Catalog]
+      summary: List a Hub repository's files, with sizes
+      description: >
+        Sizes are what makes a download decidable: without them a client
+        cannot warn about a 5 GB file and the server cannot check the disk
+        before starting. The Hub reports the real size for LFS files here, not
+        the pointer size.
+
+
+        Directories are omitted — there is nothing to download about one.
+      operationId: listRepoFiles
+      x-chasm-probe: needs-network
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [models, datasets]
+        - name: id
+          in: query
+          required: true
+          description: >
+            `author/name`, or a bare name for the canonical repositories. The
+            shape is validated before it reaches a URL path.
+          schema:
+            type: string
+          example: openai-community/gpt2
+      responses:
+        "200":
+          description: The repository's files
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          kind:
+                            type: string
+                          id:
+                            type: string
+                          files:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/RepoFile"
+        "400":
+          description: kind or id missing, or an id that is not a repository id
+        "502":
+          description: The Hub was unreachable, or has no such repository
+
   /catalog/datasets:
     get:
       tags: [Catalog]
@@ -1070,6 +1127,7 @@ paths:
         local store of datasets uploaded to this server is `/datasets`, and the
         two are deliberately separate: the data flows in opposite directions.
       operationId: searchCatalogDatasets
+      x-chasm-probe: needs-network
       parameters:
         - name: q
           in: query
@@ -1262,6 +1320,143 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/DatasetEntryPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /downloads:
+    get:
+      tags: [Downloads]
+      summary: List download jobs
+      description: >
+        Newest first.
+
+
+        A job left `running` by a server that stopped is reported as failed
+        rather than left running: nothing will ever advance it, and a progress
+        bar that never moves is indistinguishable from a slow download.
+      operationId: listDownloads
+      responses:
+        "200":
+          description: Download jobs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DownloadJob"
+    post:
+      tags: [Downloads]
+      summary: Start downloading one file from a Hub repository
+      description: >
+        Returns immediately with a job to poll. The files are large enough that
+        a handler which downloaded before answering would time out every client
+        in front of it and report no progress on the way.
+
+
+        Files land under `CHASM_DOWNLOAD_DIR`, or a `downloads` directory
+        beside the database, as `<kind>/<repo id>/<path>`.
+
+
+        Refused before a job exists when: the repository does not publish that
+        path; the path could escape the download directory; the file exceeds
+        `CHASM_MAX_DOWNLOAD_BYTES`; the destination already exists; or the file
+        would not fit on the volume with 2 GB left spare. Filling the volume
+        would take the database with it.
+
+
+        The URL is built server-side from the validated repository and path
+        against a compiled-in host — it is never supplied by the caller.
+      operationId: startDownload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, repoId, filePath]
+              properties:
+                kind:
+                  type: string
+                  enum: [models, datasets]
+                repoId:
+                  type: string
+                  example: openai-community/gpt2
+                filePath:
+                  type: string
+                  description: As `listRepoFiles` reports it. Must exist in that repository.
+                  example: config.json
+      responses:
+        "200":
+          description: The job, already running
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DownloadJob"
+        "400":
+          description: >
+            Unknown kind, unusable repository id or path, a file the repository
+            does not have, a destination that already exists, a file over the
+            size cap, or not enough free space
+        "502":
+          description: The Hub was unreachable while checking the file
+
+  /downloads/{id}:
+    get:
+      tags: [Downloads]
+      summary: Poll one download
+      operationId: getDownload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DownloadJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Downloads]
+      summary: Cancel a running download, or forget a finished one
+      description: >
+        A running job is asked to stop and reports `cancelling`; the task
+        notices between chunks, deletes its partial file and records the
+        outcome itself. A finished job's record is deleted.
+
+
+        The downloaded file is never removed. Deleting a job record is a
+        request to stop tracking it, not to lose a file that finished an hour
+        ago.
+      operationId: cancelDownload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelling, or the record was removed
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -4631,6 +4826,72 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    RepoFile:
+      type: object
+      required: [path, size]
+      properties:
+        path:
+          type: string
+          description: Path within the repository. May contain `/`.
+        size:
+          type: integer
+          format: int64
+          description: Bytes, as the Hub reports them — the real size for LFS files.
+
+    DownloadJob:
+      type: object
+      required:
+        [
+          id,
+          kind,
+          repoId,
+          filePath,
+          destPath,
+          totalBytes,
+          downloadedBytes,
+          status,
+          startedAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [models, datasets]
+        repoId:
+          type: string
+        filePath:
+          type: string
+        destPath:
+          type: string
+          description: Absolute path on the server, so a user can find the file.
+        totalBytes:
+          type: integer
+          format: int64
+          description: From the Hub's file listing, read before the transfer started.
+        downloadedBytes:
+          type: integer
+          format: int64
+          description: >
+            Written periodically by the running transfer, so it lags the true
+            figure by at most a few megabytes.
+        status:
+          type: string
+          enum: [running, completed, failed, cancelled]
+        error:
+          type: string
+          description: Present on `failed`.
+        startedAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        completedAt:
+          type: integer
+          format: int64
 
     CatalogResults:
       type: object

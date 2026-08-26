@@ -42,6 +42,7 @@ import {
     Eye,
     Terminal,
     Trash2,
+    XCircle,
     FileCode,
     Sparkles,
     Camera,
@@ -73,6 +74,10 @@ import {
     useCreateDataset,
     useDeleteDataset,
     useCatalogSearch,
+    useDownloads,
+    useStartDownload,
+    useCancelDownload,
+    useRepoFiles,
 } from '../hooks/useApi';
 import type { DocumentSearchResults, DatasetType, CatalogEntry } from '../api/client';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
@@ -647,6 +652,82 @@ export default function Developer() {
         }
     };
 
+    // Downloads, served by /api/downloads.
+    //
+    // Polled only while something is running: progress is written by the
+    // transfer, so it advances between requests -- but a page that kept
+    // polling an idle server would do so forever for nothing.
+    const [pollMs, setPollMs] = useState<number | undefined>(undefined);
+    const {
+        data: downloadData,
+        refetch: refetchDownloads,
+    } = useDownloads({ refetchInterval: pollMs });
+    const downloadJobs = useMemo(() => downloadData ?? [], [downloadData]);
+
+    const startDownload = useStartDownload();
+    const cancelDownload = useCancelDownload();
+    const repoFiles = useRepoFiles();
+
+    const [filePicker, setFilePicker] = useState<{
+        kind: 'models' | 'datasets';
+        id: string;
+        files: { path: string; size: number }[];
+    } | null>(null);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const running = downloadJobs.some(j => j.status === 'running');
+        setPollMs(running ? 1500 : undefined);
+    }, [downloadJobs]);
+
+    /**
+     * Open the file picker for a repository.
+     *
+     * A repository is many files -- weights, configs, tokenizers, several
+     * quantisations -- and "download this model" is not a single action. The
+     * list, with sizes, is what makes the choice possible.
+     */
+    const openFilePicker = async (kind: 'models' | 'datasets', id: string) => {
+        setDownloadError(null);
+        try {
+            const listing = await repoFiles.mutate({ kind, id });
+            if (!listing) {
+                setDownloadError('The server returned no file list for that repository.');
+                return;
+            }
+            setFilePicker({ kind, id, files: listing.files });
+        } catch (err) {
+            setDownloadError(err instanceof Error ? err.message : 'Could not list that repository.');
+        }
+    };
+
+    const beginDownload = async (filePath: string) => {
+        if (!filePicker) return;
+        setDownloadError(null);
+        try {
+            await startDownload.mutate({ kind: filePicker.kind, repoId: filePicker.id, filePath });
+            setFilePicker(null);
+            await refetchDownloads();
+            // Start polling straight away rather than waiting for the effect
+            // to notice on the next render.
+            setPollMs(1500);
+        } catch (err) {
+            // The server refuses for reasons a user can act on -- too big, no
+            // room, already there -- so its message is shown rather than a
+            // generic failure.
+            setDownloadError(err instanceof Error ? err.message : 'The server refused the download.');
+        }
+    };
+
+    const stopDownload = async (id: string) => {
+        try {
+            await cancelDownload.mutate(id);
+            await refetchDownloads();
+        } catch (err) {
+            setDownloadError(err instanceof Error ? err.message : 'Could not cancel that download.');
+        }
+    };
+
     // The remote catalogue, served by /api/catalog over the Hugging Face Hub.
     // Searched on demand rather than on load: the Hub rate-limits anonymous
     // callers, and a page that queried it on mount would spend that budget on
@@ -970,6 +1051,143 @@ export default function Developer() {
                 </div>
             </div>
 
+            {downloadError && (
+                <div className="bg-[hsl(var(--card))] rounded-xl border border-red-500/40 p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                    {downloadError}
+                </div>
+            )}
+
+            {/* Downloads
+              *
+              * Shown on every tab, because a transfer started from Models is
+              * still running when the user walks over to Datasets, and a
+              * progress bar that vanishes when you navigate away is the same
+              * as no progress bar.
+              *
+              * Only rendered when there is something to say -- an empty panel
+              * on every tab would be noise.
+              */}
+            {downloadJobs.length > 0 && (
+                <div className="bg-[hsl(var(--card))] rounded-xl border">
+                    <div className="p-4 border-b">
+                        <h3 className="font-semibold text-[hsl(var(--foreground))]">Downloads</h3>
+                    </div>
+                    <div className="divide-y divide-[hsl(var(--border))]">
+                        {downloadJobs.map(job => {
+                            const pct = job.totalBytes > 0
+                                ? Math.min(100, Math.round((job.downloadedBytes / job.totalBytes) * 100))
+                                : 0;
+                            return (
+                                <div key={job.id} className="p-4 space-y-2">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-[hsl(var(--foreground))] break-words">
+                                                {job.repoId} · {job.filePath}
+                                            </p>
+                                            <p className="text-xs text-[hsl(var(--muted-foreground))] break-all">
+                                                {job.destPath}
+                                            </p>
+                                        </div>
+                                        <button
+                                            className="p-2 rounded hover:bg-[hsl(var(--muted))] shrink-0"
+                                            onClick={() => stopDownload(job.id)}
+                                            title={job.status === 'running' ? 'Cancel this download' : 'Remove this record (the file is kept)'}
+                                        >
+                                            {job.status === 'running'
+                                                ? <XCircle size={16} className="text-[hsl(var(--muted-foreground))]" />
+                                                : <Trash2 size={16} className="text-red-500" />}
+                                        </button>
+                                    </div>
+
+                                    {job.status === 'running' && (
+                                        <div className="space-y-1">
+                                            <div className="h-2 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-[hsl(var(--primary))] transition-all"
+                                                    style={{ width: `${pct}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                                                {formatBytes(job.downloadedBytes)} of {formatBytes(job.totalBytes)} · {pct}%
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {job.status === 'completed' && (
+                                        <p className="text-xs text-green-500">
+                                            Complete · {formatBytes(job.totalBytes)}
+                                        </p>
+                                    )}
+                                    {job.status === 'cancelled' && (
+                                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                                            Cancelled after {formatBytes(job.downloadedBytes)}. The partial file was removed.
+                                        </p>
+                                    )}
+                                    {job.status === 'failed' && (
+                                        <p className="text-xs text-red-500">{job.error ?? 'Failed.'}</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* File picker
+              *
+              * A repository is many files -- weights, configs, tokenizers,
+              * several quantisations of the same model -- so "download this
+              * model" is not one action. Sizes come from the Hub and are shown
+              * before anything starts, because the difference between a 665-byte
+              * config and a 5 GB weight file is the whole decision.
+              */}
+            {filePicker && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-[hsl(var(--card))] rounded-xl border w-full max-w-2xl max-h-[80vh] flex flex-col">
+                        <div className="p-4 border-b flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <h3 className="font-semibold text-[hsl(var(--foreground))] break-words">
+                                    {filePicker.id}
+                                </h3>
+                                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                    {filePicker.files.length} file{filePicker.files.length === 1 ? '' : 's'}
+                                </p>
+                            </div>
+                            <button
+                                className="p-2 rounded hover:bg-[hsl(var(--muted))]"
+                                onClick={() => setFilePicker(null)}
+                            >
+                                <XCircle size={18} className="text-[hsl(var(--muted-foreground))]" />
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto divide-y divide-[hsl(var(--border))]">
+                            {filePicker.files.map(file => (
+                                <div key={file.path} className="flex items-center justify-between gap-3 p-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm text-[hsl(var(--foreground))] break-all">{file.path}</p>
+                                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                                            {formatBytes(file.size)}
+                                        </p>
+                                    </div>
+                                    <button
+                                        className="px-3 py-1.5 shrink-0 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg text-sm hover:opacity-90 disabled:opacity-50"
+                                        onClick={() => beginDownload(file.path)}
+                                        disabled={startDownload.isLoading}
+                                    >
+                                        Download
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="p-3 text-xs text-[hsl(var(--muted-foreground))] border-t">
+                            Files are written on the server, beside its database unless
+                            CHASM_DOWNLOAD_DIR says otherwise. A file that would not leave 2 GB free
+                            is refused rather than filling the volume.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Connected Inference Providers */}
             {inferenceEndpoints.length > 0 && (
                 <div className="bg-[hsl(var(--card))] rounded-xl border p-4">
@@ -1112,12 +1330,13 @@ export default function Developer() {
                                         </div>
                                     </div>
                                     <button
-                                        disabled
-                                        title="Chasm has no endpoint to download a model through."
-                                        className="flex items-center gap-1 px-3 py-1.5 shrink-0 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-lg text-sm cursor-not-allowed"
+                                        onClick={() => openFilePicker('models', model.id)}
+                                        disabled={repoFiles.isLoading}
+                                        title="Choose a file from this repository to download"
+                                        className="flex items-center gap-1 px-3 py-1.5 shrink-0 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg text-sm hover:bg-[hsl(var(--muted))]/70 disabled:opacity-50"
                                     >
                                         <Download size={14} />
-                                        Download
+                                        Files
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -1382,12 +1601,13 @@ export default function Developer() {
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
                                                         <button
-                                                            disabled
-                                                            title="Chasm has no endpoint to download a dataset through."
-                                                            className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded text-sm cursor-not-allowed ml-auto"
+                                                            onClick={() => openFilePicker('datasets', entry.id)}
+                                                            disabled={repoFiles.isLoading}
+                                                            title="Choose a file from this repository to download"
+                                                            className="flex items-center gap-1 px-3 py-1 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded text-sm hover:bg-[hsl(var(--muted))]/70 disabled:opacity-50 ml-auto"
                                                         >
                                                             <FileDown size={14} />
-                                                            Download
+                                                            Files
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -1400,7 +1620,8 @@ export default function Developer() {
 
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">
                             Size, sample count and format are not shown because the Hub&apos;s search API
-                            does not report them. Download is disabled: nothing here writes a file.
+                            does not report them. Files lists what a repository holds, with the sizes
+                            the Hub does report, so a download can be chosen knowingly.
                         </p>
                     </div>
                 </div>

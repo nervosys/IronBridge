@@ -195,6 +195,11 @@ Writes:
 | DELETE | `/api/datasets/:id`               | Delete a dataset and its entries |
 | GET    | `/api/catalog/models`             | Search models on the Hugging Face Hub (`?q=`) |
 | GET    | `/api/catalog/datasets`           | Search datasets on the Hub (`?q=`) |
+| GET    | `/api/catalog/files`              | A Hub repository's files, with sizes |
+| POST   | `/api/downloads`                  | Start downloading one file      |
+| GET    | `/api/downloads`                  | List download jobs              |
+| GET    | `/api/downloads/:id`              | Poll one download               |
+| DELETE | `/api/downloads/:id`              | Cancel one, or forget a finished one |
 
 Endpoints that refuse rather than guess:
 
@@ -209,6 +214,11 @@ Endpoints that refuse rather than guess:
 - `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
   credential it is given. Without one it returns `400` naming the variable,
   rather than writing the secret to the database in the clear.
+- `POST /api/downloads` refuses before a job exists when the file is not in
+  that repository, the path could escape the download directory, the file is
+  over `CHASM_MAX_DOWNLOAD_BYTES`, the destination already exists, or it
+  would not leave 2 GB free on the volume. Filling that volume would take the
+  database with it.
 - `GET /api/catalog/*` answers `502` when the Hub is unreachable or has
   rate-limited the server, never an empty list. "The Hub is down" and
   "nothing matched" are different answers and an empty table cannot tell
@@ -304,12 +314,38 @@ compiled in and only the query is caller-controlled, so it cannot be pointed
 at an arbitrary URL. No credential is needed; `HUGGINGFACE_TOKEN` only raises
 the Hub's anonymous rate limit.
 
-It searches and does not download — nothing here writes a file, and the
-Download buttons in the clients stay disabled and say so.
-
 Rows carry no size, sample count, parameter count or format: the Hub's search
 API reports none of them, and the tables this replaced showed all four as
-measurements.
+measurements. `/api/catalog/files` does report real sizes, per file, which is
+what makes a download decidable.
+
+### Downloads
+
+```bash
+curl "localhost:8787/api/catalog/files?kind=models&id=openai-community/gpt2"
+curl -X POST localhost:8787/api/downloads \
+  -H 'Content-Type: application/json' \
+  -d '{"kind":"models","repoId":"openai-community/gpt2","filePath":"config.json"}'
+curl "localhost:8787/api/downloads"
+```
+
+Fetches one file from a Hub repository in the background. The POST returns a
+job immediately and reports `downloadedBytes` against `totalBytes` as it runs —
+these files are large enough that waiting for the transfer would time out the
+request and show no progress on the way.
+
+Files land under `CHASM_DOWNLOAD_DIR`, or a `downloads` directory beside the
+database, as `<kind>/<repo id>/<path>`. They are written to a `.part` file and
+renamed on success, so a file present under its real name is complete.
+
+The URL is built server-side against a compiled-in host from a repository and
+path that were both validated first — it is never supplied by the caller. The
+requested path must appear in that repository's own file listing, and is then
+re-checked to reject absolute paths, drive letters, UNC prefixes and `..`
+segments.
+
+Cancelling stops the transfer and removes the partial file. Deleting a
+finished job removes the record and keeps the file.
 
 ### Document knowledge base
 
