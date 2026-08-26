@@ -15,71 +15,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { ExampleDataBanner } from '../components/ExampleDataBanner';
 import { serverCompletion } from '../api/completions';
 import { datasets as datasetsApi, type Dataset } from '../api/datasets';
+import { training as trainingApi, type TrainingJob } from '../api/training';
 import { sessions as sessionsApi } from '../api/sessions';
 
-interface MLProject {
-    id: string;
-    name: string;
-    type: 'fine-tune' | 'embedding' | 'rag' | 'agent';
-    status: 'running' | 'completed' | 'failed' | 'queued';
-    baseModel: string;
-    progress: number;
-    metrics?: {
-        loss?: number;
-        accuracy?: number;
-        f1?: number;
-    };
-    createdAt: string;
-    updatedAt: string;
-}
+// Fine-tuning jobs are served by /api/training, not declared here.
+//
+// Four `MLProject` fixtures used to sit here, each with a `progress`
+// percentage and `metrics` carrying accuracy and F1. A fine-tuning API
+// reports a status, and once finished a token count and the resulting model's
+// name -- no percentage, no accuracy, no F1. So the progress bar and the
+// metrics row are gone rather than fed from something invented.
 
-const sampleProjects: MLProject[] = [
-    {
-        id: '1',
-        name: 'Code Assistant Fine-tune',
-        type: 'fine-tune',
-        status: 'running',
-        baseModel: 'llama-3.2-3b',
-        progress: 67,
-        metrics: { loss: 0.234, accuracy: 0.891 },
-        createdAt: '2024-12-10T10:00:00Z',
-        updatedAt: '2024-12-12T15:30:00Z',
-    },
-    {
-        id: '2',
-        name: 'Document Embeddings',
-        type: 'embedding',
-        status: 'completed',
-        baseModel: 'bge-large-en-v1.5',
-        progress: 100,
-        createdAt: '2024-12-08T09:00:00Z',
-        updatedAt: '2024-12-08T12:00:00Z',
-    },
-    {
-        id: '3',
-        name: 'Support RAG Pipeline',
-        type: 'rag',
-        status: 'completed',
-        baseModel: 'gpt-4o-mini',
-        progress: 100,
-        metrics: { f1: 0.923 },
-        createdAt: '2024-12-05T14:00:00Z',
-        updatedAt: '2024-12-06T08:00:00Z',
-    },
-    {
-        id: '4',
-        name: 'Research Agent',
-        type: 'agent',
-        status: 'queued',
-        baseModel: 'claude-3-haiku',
-        progress: 0,
-        createdAt: '2024-12-12T16:00:00Z',
-        updatedAt: '2024-12-12T16:00:00Z',
-    },
-];
 
 /**
  * Sizes shown in MB, from the server's byte count.
@@ -94,15 +42,13 @@ function toMegabytes(bytes: number): string {
     return mb < 0.1 ? `${(bytes / 1024).toFixed(1)} KB` : `${mb.toFixed(1)} MB`;
 }
 
-const typeConfig = {
-    'fine-tune': { icon: 'fitness-outline', color: '#8b5cf6' },
-    'embedding': { icon: 'cube-outline', color: '#3b82f6' },
-    'rag': { icon: 'git-network-outline', color: '#10b981' },
-    'agent': { icon: 'person-outline', color: '#f59e0b' },
-};
-
 const statusConfig = {
     running: { bg: '#3b82f620', color: '#3b82f6', icon: 'play-circle' },
+    // The provider's own vocabulary, so a status can be rendered without
+    // being translated into something it did not say.
+    validating_files: { bg: '#3b82f620', color: '#3b82f6', icon: 'search-circle' },
+    succeeded: { bg: '#10b98120', color: '#10b981', icon: 'checkmark-circle' },
+    cancelled: { bg: '#64748b20', color: '#64748b', icon: 'stop-circle' },
     completed: { bg: '#10b98120', color: '#10b981', icon: 'checkmark-circle' },
     failed: { bg: '#ef444420', color: '#ef4444', icon: 'close-circle' },
     queued: { bg: '#64748b20', color: '#64748b', icon: 'time' },
@@ -111,7 +57,7 @@ const statusConfig = {
 export function DeveloperScreen() {
     const { colors } = useTheme();
     const [activeTab, setActiveTab] = useState<'projects' | 'datasets' | 'playground'>('projects');
-    const [projects] = useState<MLProject[]>(sampleProjects);
+    const [projects, setProjects] = useState<TrainingJob[]>([]);
 
     // Datasets are the server's, from /api/datasets. Projects above still are
     // not -- there is no /api/training, which is what the banner says.
@@ -133,7 +79,7 @@ export function DeveloperScreen() {
     // Stats
     const stats = useMemo(() => ({
         totalProjects: projects.length,
-        running: projects.filter(p => p.status === 'running').length,
+        running: projects.filter(p => !['succeeded', 'failed', 'cancelled'].includes(p.status)).length,
         datasets: datasets.length,
         totalSize: toMegabytes(datasets.reduce((sum, d) => sum + d.sizeBytes, 0)),
     }), [projects, datasets]);
@@ -160,13 +106,29 @@ export function DeveloperScreen() {
         }
     }, []);
 
+    /**
+     * Load the fine-tuning jobs.
+     *
+     * Every unfinished job is refreshed from the provider by the server on
+     * this call, so pulling to refresh is what advances a status.
+     */
+    const loadProjects = useCallback(async () => {
+        try {
+            setProjects(await trainingApi.jobs());
+        } catch {
+            // The datasets error banner already covers an unreachable server;
+            // a second one saying the same thing is noise.
+        }
+    }, []);
+
     useEffect(() => {
         loadDatasets();
-    }, [loadDatasets]);
+        loadProjects();
+    }, [loadDatasets, loadProjects]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await loadDatasets();
+        await Promise.all([loadDatasets(), loadProjects()]);
         setIsRefreshing(false);
     };
 
@@ -264,25 +226,13 @@ export function DeveloperScreen() {
         }
     };
 
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
-    };
-
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/*
-              * Not on the datasets or playground tabs: both are served now, by
-              * /api/datasets and /api/chat/completions. The banner describes
-              * the data on screen, so leaving it over real records would be
-              * its own small lie in the other direction.
-              *
-              * Projects still have no endpoint -- there is no /api/training.
+              * No example-data banner on this screen any more. All three tabs
+              * read from the server: /api/training, /api/datasets and
+              * /api/chat/completions.
               */}
-            {activeTab === 'projects' && (
-                <ExampleDataBanner what="ML projects" endpoint="/api/training" />
-            )}
             {/* Stats */}
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -341,9 +291,16 @@ export function DeveloperScreen() {
             >
                 {activeTab === 'projects' && (
                     <>
+                        {projects.length === 0 && (
+                            <View style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.projectMeta, { color: colors.textSecondary }]}>
+                                    No fine-tuning jobs. Start one from the web app&apos;s Training tab.
+                                </Text>
+                            </View>
+                        )}
+
                         {projects.map((project) => {
-                            const typeStyle = typeConfig[project.type];
-                            const status = statusConfig[project.status];
+                            const status = statusConfig[project.status] ?? statusConfig.queued;
 
                             return (
                                 <View
@@ -351,13 +308,15 @@ export function DeveloperScreen() {
                                     style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                                 >
                                     <View style={styles.projectHeader}>
-                                        <View style={[styles.typeIcon, { backgroundColor: `${typeStyle.color}20` }]}>
-                                            <Ionicons name={typeStyle.icon as any} size={20} color={typeStyle.color} />
+                                        <View style={[styles.typeIcon, { backgroundColor: `${status.color}20` }]}>
+                                            <Ionicons name="fitness-outline" size={20} color={status.color} />
                                         </View>
                                         <View style={styles.projectInfo}>
-                                            <Text style={[styles.projectName, { color: colors.text }]}>{project.name}</Text>
+                                            <Text style={[styles.projectName, { color: colors.text }]}>
+                                                {project.datasetName}
+                                            </Text>
                                             <Text style={[styles.projectMeta, { color: colors.textSecondary }]}>
-                                                {project.type} • {project.baseModel}
+                                                {project.baseModel}
                                             </Text>
                                         </View>
                                         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
@@ -366,45 +325,39 @@ export function DeveloperScreen() {
                                         </View>
                                     </View>
 
-                                    {/* Progress */}
-                                    {project.status === 'running' && (
-                                        <View style={styles.progressSection}>
-                                            <View style={styles.progressHeader}>
-                                                <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>Progress</Text>
-                                                <Text style={[styles.progressValue, { color: colors.text }]}>{project.progress}%</Text>
-                                            </View>
-                                            <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
-                                                <View style={[styles.progressFill, { width: `${project.progress}%`, backgroundColor: typeStyle.color }]} />
-                                            </View>
-                                        </View>
+                                    {/*
+                                      * No progress bar and no metrics row.
+                                      *
+                                      * Both used to be here, drawn from a
+                                      * `progress` percentage and an `accuracy`
+                                      * and `f1` on a literal. A fine-tuning API
+                                      * reports a status, and once finished a
+                                      * token count and the model's name. There
+                                      * is no fraction to draw a bar from.
+                                      */}
+                                    {project.fineTunedModel && (
+                                        <Text style={[styles.projectMeta, { color: colors.text }]} selectable>
+                                            {project.fineTunedModel}
+                                            {project.trainedTokens !== undefined
+                                                ? ` · ${project.trainedTokens.toLocaleString()} tokens trained`
+                                                : ''}
+                                        </Text>
                                     )}
 
-                                    {/* Metrics */}
-                                    {project.metrics && (
-                                        <View style={styles.metricsRow}>
-                                            {project.metrics.loss !== undefined && (
-                                                <View style={styles.metricItem}>
-                                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Loss</Text>
-                                                    <Text style={[styles.metricValue, { color: colors.text }]}>{project.metrics.loss.toFixed(3)}</Text>
-                                                </View>
-                                            )}
-                                            {project.metrics.accuracy !== undefined && (
-                                                <View style={styles.metricItem}>
-                                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Accuracy</Text>
-                                                    <Text style={[styles.metricValue, { color: colors.text }]}>{(project.metrics.accuracy * 100).toFixed(1)}%</Text>
-                                                </View>
-                                            )}
-                                            {project.metrics.f1 !== undefined && (
-                                                <View style={styles.metricItem}>
-                                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>F1 Score</Text>
-                                                    <Text style={[styles.metricValue, { color: colors.text }]}>{(project.metrics.f1 * 100).toFixed(1)}%</Text>
-                                                </View>
-                                            )}
-                                        </View>
+                                    {project.error && (
+                                        <Text style={[styles.projectMeta, { color: '#ef4444' }]}>
+                                            {project.error}
+                                        </Text>
+                                    )}
+
+                                    {project.refreshError && (
+                                        <Text style={[styles.projectMeta, { color: '#f59e0b' }]}>
+                                            Last known status — the provider could not be reached.
+                                        </Text>
                                     )}
 
                                     <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                                        Updated {formatDate(project.updatedAt)}
+                                        Updated {new Date(project.updatedAt).toLocaleString()}
                                     </Text>
                                 </View>
                             );

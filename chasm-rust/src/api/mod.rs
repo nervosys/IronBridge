@@ -48,6 +48,7 @@ pub mod sdk;
 mod sso;
 mod state;
 mod sync;
+pub mod training;
 mod webhooks;
 mod websocket;
 
@@ -74,6 +75,7 @@ pub use retention::{configure_retention_routes, RetentionPolicy, RetentionServic
 pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
+pub use training::configure_training_routes;
 pub use webhooks::{configure_webhook_routes, WebhookState};
 pub use websocket::{configure_websocket_routes, WebSocketState};
 
@@ -442,6 +444,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(configure_dataset_routes)
             .configure(configure_catalog_routes)
             .configure(configure_download_routes)
+            .configure(configure_training_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

@@ -541,6 +541,84 @@ export const mcp = {
 };
 
 // =============================================================================
+// Fine-tuning API
+// =============================================================================
+//
+// Chasm does not train anything. It hands a dataset to the provider configured
+// on the server and reads that provider's status back.
+//
+// Note what a TrainingJob does not have: no progress, no ETA, no GPU, no
+// accuracy, no F1. A fine-tuning API reports none of them, and the table this
+// replaced showed all five -- including jobs 67% through work that had never
+// started.
+
+export interface DatasetProblem {
+    /** Which entry is at fault. Absent for a whole-dataset problem. */
+    entryIndex?: number;
+    message: string;
+}
+
+export interface DatasetValidation {
+    datasetId: string;
+    datasetName: string;
+    entryCount: number;
+    usable: boolean;
+    problems: DatasetProblem[];
+}
+
+export interface TrainingJob {
+    id: string;
+    /** The provider's own id, so the job can be found in their dashboard. */
+    providerJobId: string;
+    datasetId: string;
+    datasetName: string;
+    baseModel: string;
+    /** The provider's status verbatim. */
+    status: 'validating_files' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+    fineTunedModel?: string;
+    trainedTokens?: number;
+    error?: string;
+    createdAt: number;
+    updatedAt: number;
+    finishedAt?: number;
+    /**
+     * Present when the provider could not be reached on this request, so
+     * `status` is the last one read rather than the current one. Render it:
+     * a stale status is otherwise indistinguishable from a fresh one.
+     */
+    refreshError?: string;
+}
+
+export const training = {
+    /**
+     * Check a dataset before spending anything.
+     *
+     * Local and free. The alternative is finding out at the provider, after
+     * an upload that has already been paid for.
+     */
+    async validate(datasetId: string): Promise<ApiResponse<DatasetValidation>> {
+        return get(`/api/training/validate?datasetId=${encodeURIComponent(datasetId)}`);
+    },
+
+    async jobs(): Promise<ApiResponse<TrainingJob[]>> {
+        return get('/api/training/jobs');
+    },
+
+    async start(input: {
+        datasetId: string;
+        baseModel: string;
+        suffix?: string;
+    }): Promise<ApiResponse<TrainingJob>> {
+        return post('/api/training/jobs', input);
+    },
+
+    /** Cancels a running job at the provider, or forgets a finished one. */
+    async cancel(id: string): Promise<ApiResponse<unknown>> {
+        return del(`/api/training/jobs/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
 // Remote catalogue API
 // =============================================================================
 //
@@ -1000,6 +1078,7 @@ export const api = {
     datasets,
     catalog,
     downloads,
+    training,
     system,
     connectWebSocket,
     sendWebSocketMessage,

@@ -55,6 +55,10 @@ const MAX_PAGE: usize = 500;
 /// Called by every handler, for the reason `delete_account` did not and should
 /// have: a handler that assumes another ran first fails with "no such table"
 /// on exactly the installs that never used the feature.
+pub(crate) fn init_dataset_tables_for(conn: &Connection) -> rusqlite::Result<()> {
+    init_dataset_tables(conn)
+}
+
 fn init_dataset_tables(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS datasets (

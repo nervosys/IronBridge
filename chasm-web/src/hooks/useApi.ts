@@ -23,6 +23,7 @@ import {
     datasets,
     catalog,
     downloads,
+    training,
     connectWebSocket,
 } from '../api/client';
 import type {
@@ -31,6 +32,7 @@ import type {
     Dataset,
     DatasetType,
     DownloadJob,
+    TrainingJob,
 } from '../api/client';
 import type {
     Workspace,
@@ -337,6 +339,32 @@ export function useTestProvider() {
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
+}
+
+/**
+ * Fine-tuning jobs.
+ *
+ * Every unfinished job is refreshed from the provider on each request, so
+ * polling is what makes a status current -- and the caller stops polling once
+ * nothing is unfinished.
+ */
+export function useTrainingJobs(options?: UseQueryOptions): UseQueryResult<TrainingJob[]> {
+    const queryFn = useCallback(() => training.jobs(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useValidateDataset() {
+    return useMutation((datasetId: string) => training.validate(datasetId));
+}
+
+export function useStartTraining() {
+    return useMutation((input: { datasetId: string; baseModel: string; suffix?: string }) =>
+        training.start(input)
+    );
+}
+
+export function useCancelTraining() {
+    return useMutation((id: string) => training.cancel(id));
 }
 
 /**

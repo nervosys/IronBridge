@@ -200,6 +200,11 @@ Writes:
 | GET    | `/api/downloads`                  | List download jobs              |
 | GET    | `/api/downloads/:id`              | Poll one download               |
 | DELETE | `/api/downloads/:id`              | Cancel one, or forget a finished one |
+| GET    | `/api/training/validate`          | Check a dataset before paying for it |
+| POST   | `/api/training/jobs`              | Submit a dataset for fine-tuning |
+| GET    | `/api/training/jobs`              | List fine-tuning jobs           |
+| GET    | `/api/training/jobs/:id`          | Poll one job                    |
+| DELETE | `/api/training/jobs/:id`          | Cancel one, or forget a finished one |
 
 Endpoints that refuse rather than guess:
 
@@ -214,6 +219,10 @@ Endpoints that refuse rather than guess:
 - `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
   credential it is given. Without one it returns `400` naming the variable,
   rather than writing the secret to the database in the clear.
+- `POST /api/training/jobs` needs a provider and answers `503` naming the
+  variable without one. Chasm does not train models itself. It also refuses,
+  without uploading anything, a dataset that would not pass the provider's
+  own rules — the upload is the part that costs.
 - `POST /api/downloads` refuses before a job exists when the file is not in
   that repository, the path could escape the download directory, the file is
   over `CHASM_MAX_DOWNLOAD_BYTES`, the destination already exists, or it
@@ -346,6 +355,31 @@ segments.
 
 Cancelling stops the transfer and removes the partial file. Deleting a
 finished job removes the record and keeps the file.
+
+### Fine-tuning
+
+```bash
+curl "localhost:8787/api/training/validate?datasetId=<id>"
+curl -X POST localhost:8787/api/training/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"datasetId":"<id>","baseModel":"gpt-4o-mini-2024-07-18"}'
+curl "localhost:8787/api/training/jobs"
+```
+
+Chasm does not train anything. It converts one of your datasets to JSONL,
+uploads it to the provider configured with `OPENAI_API_KEY`, starts a
+fine-tuning job there, and reports that provider's status back. Every status
+shown came from the provider on the request that displayed it.
+
+`validate` is local, free and offline. Run it first: a bad dataset otherwise
+fails at the provider *after* an upload you have already paid for. It reports
+every problem at once, pinned to the entry at fault.
+
+There is no progress percentage anywhere in the response, and no ETA, GPU,
+accuracy or F1. A fine-tuning API reports a status, and once finished a
+trained-token count and the resulting model's name — so that is what is
+stored and shown. When a job cannot be refreshed, it carries a `refreshError`
+rather than presenting a stale status as a current one.
 
 ### Document knowledge base
 

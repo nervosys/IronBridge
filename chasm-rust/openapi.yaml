@@ -1323,6 +1323,184 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /training/validate:
+    get:
+      tags: [Training]
+      summary: Check a dataset against a provider's fine-tuning rules
+      description: >
+        Local, free and offline — no provider is contacted. That is the point:
+        a bad dataset otherwise fails at the provider *after* the upload, which
+        has already been paid for.
+
+
+        Reports every problem it finds rather than the first, so a caller can
+        fix them in one pass. Capped at 20, because a systematically broken
+        dataset has one problem per row.
+      operationId: validateTrainingDataset
+      # A dataset has to exist before there is anything to validate, and
+      # this suite deliberately does not build fixtures. The 404 it answers
+      # to a cold probe is documented below and checked against that.
+      x-chasm-probe: needs-prior-state
+      parameters:
+        - name: datasetId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The verdict, with any problems
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DatasetValidation"
+        "400":
+          description: datasetId missing
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /training/jobs:
+    get:
+      tags: [Training]
+      summary: List fine-tuning jobs
+      description: >
+        Newest first. Every unfinished job is refreshed from the provider on
+        this request, so the status shown is the provider's current one.
+
+
+        With no provider configured, or when a refresh fails, the stored
+        status is returned with `refreshError` set rather than the whole list
+        failing. That field is how a stale status is told apart from a current
+        one.
+      operationId: listTrainingJobs
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/TrainingJob"
+    post:
+      tags: [Training]
+      summary: Submit a dataset for fine-tuning
+      description: >
+        Chasm does not train anything. It converts the dataset to JSONL,
+        uploads it to the provider configured with `OPENAI_API_KEY`, creates a
+        fine-tuning job there, and records the provider's job id.
+
+
+        The dataset is validated locally first and the request is refused
+        without uploading if it would not pass — the upload is the part that
+        costs.
+
+
+        Note there is no progress figure anywhere in the response. A
+        fine-tuning API reports a status, and once finished a trained-token
+        count and the resulting model name. It reports no percentage, no ETA
+        and no GPU, so none are invented here.
+      operationId: startTraining
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datasetId, baseModel]
+              properties:
+                datasetId:
+                  type: string
+                  description: A dataset from `/datasets`.
+                baseModel:
+                  type: string
+                  description: The provider's identifier for the model to fine-tune.
+                  example: gpt-4o-mini-2024-07-18
+                suffix:
+                  type: string
+                  description: Optional label the provider appends to the resulting model's name.
+      responses:
+        "200":
+          description: The job, as the provider created it
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TrainingJob"
+        "400":
+          description: >
+            datasetId or baseModel missing, or a dataset that would not pass
+            the provider's rules. The response carries a `problems` array.
+        "404":
+          description: No dataset with that id
+        "502":
+          description: The provider refused the upload or the job
+        "503":
+          description: No provider configured
+
+  /training/jobs/{id}:
+    get:
+      tags: [Training]
+      summary: Read one fine-tuning job
+      description: Refreshed from the provider unless it has already finished.
+      operationId: getTrainingJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TrainingJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Training]
+      summary: Cancel a running job, or forget a finished one
+      description: >
+        A running job is cancelled at the provider and the refreshed job is
+        returned. A finished job's record is deleted, which needs no provider.
+      operationId: cancelTrainingJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelled, or the record was removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: The provider refused the cancellation
+        "503":
+          description: No provider configured, and the job has not finished
+
   /downloads:
     get:
       tags: [Downloads]
@@ -4838,6 +5016,87 @@ components:
           type: integer
           format: int64
           description: Bytes, as the Hub reports them — the real size for LFS files.
+
+    DatasetProblem:
+      type: object
+      required: [message]
+      properties:
+        entryIndex:
+          type: integer
+          description: Which entry is at fault. Absent for a whole-dataset problem.
+        message:
+          type: string
+
+    DatasetValidation:
+      type: object
+      required: [datasetId, datasetName, entryCount, usable, problems]
+      properties:
+        datasetId:
+          type: string
+        datasetName:
+          type: string
+        entryCount:
+          type: integer
+        usable:
+          type: boolean
+          description: True when `problems` is empty.
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetProblem"
+
+    TrainingJob:
+      type: object
+      description: >
+        A fine-tuning job at a provider.
+
+
+        There is deliberately no `progress`, `eta`, `gpu`, `accuracy` or `f1`.
+        A fine-tuning API reports none of them, and the tables this replaced
+        showed all five — including jobs 67% through work that had never
+        started.
+      required:
+        [id, providerJobId, datasetId, datasetName, baseModel, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        providerJobId:
+          type: string
+          description: The provider's own id, so the job can be found in their dashboard.
+        datasetId:
+          type: string
+        datasetName:
+          type: string
+        baseModel:
+          type: string
+        status:
+          type: string
+          description: The provider's status verbatim — never derived or simulated.
+          enum: [validating_files, queued, running, succeeded, failed, cancelled]
+        fineTunedModel:
+          type: string
+          description: The resulting model's name, once the provider reports one.
+        trainedTokens:
+          type: integer
+          format: int64
+        error:
+          type: string
+          description: The provider's failure message.
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        finishedAt:
+          type: integer
+          format: int64
+        refreshError:
+          type: string
+          description: >
+            Present when the provider could not be reached on this request,
+            meaning `status` is the last one successfully read rather than the
+            current one.
 
     DownloadJob:
       type: object

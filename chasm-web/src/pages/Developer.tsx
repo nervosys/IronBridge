@@ -60,7 +60,6 @@ import {
     Activity,
     Cloud,
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     useProviders,
     useProviderHealth,
@@ -78,8 +77,17 @@ import {
     useStartDownload,
     useCancelDownload,
     useRepoFiles,
+    useTrainingJobs,
+    useValidateDataset,
+    useStartTraining,
+    useCancelTraining,
 } from '../hooks/useApi';
-import type { DocumentSearchResults, DatasetType, CatalogEntry } from '../api/client';
+import type {
+    DocumentSearchResults,
+    DatasetType,
+    CatalogEntry,
+    DatasetValidation,
+} from '../api/client';
 import { ExampleDataBanner } from '../components/ExampleDataBanner';
 
 /*
@@ -103,12 +111,11 @@ import { ExampleDataBanner } from '../components/ExampleDataBanner';
 // none of those, so they were invented. `/api/catalog` serves what the Hub
 // actually publishes.
 
-const trainingJobs = [
-    { id: 'job-001', name: 'Llama 3.2 Fine-tune', model: 'llama-3.2-3b', type: 'fine-tune', status: 'running', progress: 67, eta: '2h 15m', gpu: 'RTX 4090' },
-    { id: 'job-002', name: 'Code Assistant LoRA', model: 'codellama-7b', type: 'lora', status: 'running', progress: 34, eta: '4h 30m', gpu: 'RTX 4090' },
-    { id: 'job-003', name: 'Phi-3 Distillation', model: 'phi-3-mini', type: 'distillation', status: 'queued', progress: 0, eta: '--', gpu: 'Pending' },
-    { id: 'job-004', name: 'Gemma Quantization', model: 'gemma-2-2b', type: 'quantization', status: 'completed', progress: 100, eta: '--', gpu: 'RTX 4090' },
-];
+// Training jobs are served, not declared here.
+//
+// Four sat in this spot at 67% and 34% complete, with ETAs and an "RTX 4090",
+// on an install that had never trained anything. A fine-tuning API reports a
+// status and nothing resembling a percentage, so /api/training shows a status.
 
 const deploymentTargets = [
     { id: 'mcu', name: 'MCU', icon: Microchip, description: 'ARM Cortex-M, ESP32, STM32', formats: ['TFLite Micro', 'ONNX Micro'], color: '#f59e0b' },
@@ -127,14 +134,9 @@ const compressionMethods = [
     { id: 'low-rank', name: 'Low-Rank Factorization', reduction: '30-60%', speedup: '1.5-3x', quality: '< 2% loss', supported: ['CPU', 'GPU'] },
 ];
 
-const trainingMetrics = [
-    { epoch: 1, loss: 2.4, val_loss: 2.5, lr: 0.0001 },
-    { epoch: 2, loss: 1.8, val_loss: 1.9, lr: 0.0001 },
-    { epoch: 3, loss: 1.4, val_loss: 1.5, lr: 0.00008 },
-    { epoch: 4, loss: 1.1, val_loss: 1.2, lr: 0.00006 },
-    { epoch: 5, loss: 0.9, val_loss: 1.0, lr: 0.00004 },
-    { epoch: 6, loss: 0.7, val_loss: 0.85, lr: 0.00002 },
-];
+// The loss curve went with them: six hand-written epochs of loss and
+// validation loss for a run that never happened. Nothing measures these.
+
 
 // RAG data is served, not declared here.
 //
@@ -544,14 +546,18 @@ type Tab = 'models' | 'datasets' | 'training' | 'optimization' | 'deployment' | 
 /**
  * Tabs the page-level example-data banner does not cover.
  *
- * `tools`, `rag`, `models` and `datasets` all read from the server now --
- * `datasets` from two endpoints at once, the local store and the catalogue.
+ * `tools`, `rag`, `models`, `datasets` and `training` all read from the
+ * server now -- `datasets` from two endpoints at once, the local store and
+ * the catalogue.
  *
- * What is left under the banner is training, optimization, deployment,
- * multi-modal, simulation and robotics: no endpoint routes any of them.
- * Delete the banner outright when that list empties.
+ * What is left under the banner is optimization, deployment, multi-modal,
+ * simulation and robotics. Those are not missing endpoints; they describe
+ * work Chasm does not do -- quantising weights, flashing an MCU, driving a
+ * robot -- so a route for any of them would have to invent the subsystem
+ * underneath. Delete the banner outright when that list empties, one way or
+ * the other.
  */
-const SERVED_TABS = new Set<Tab>(['tools', 'rag', 'datasets', 'models']);
+const SERVED_TABS = new Set<Tab>(['tools', 'rag', 'datasets', 'models', 'training']);
 
 
 export default function Developer() {
@@ -649,6 +655,93 @@ export default function Developer() {
             await refetchDocuments();
         } catch (err) {
             setRagError(err instanceof Error ? err.message : 'The document could not be deleted.');
+        }
+    };
+
+    // Fine-tuning, served by /api/training.
+    //
+    // Polled while a job is unfinished: every read refreshes it from the
+    // provider, so asking again is the only way a status advances.
+    const [trainingPollMs, setTrainingPollMs] = useState<number | undefined>(undefined);
+    const {
+        data: trainingData,
+        error: trainingListError,
+        refetch: refetchTraining,
+    } = useTrainingJobs({ refetchInterval: trainingPollMs });
+    const trainingJobs = useMemo(() => trainingData ?? [], [trainingData]);
+
+    const validateDataset = useValidateDataset();
+    const startTraining = useStartTraining();
+    const cancelTraining = useCancelTraining();
+
+    const [trainDatasetId, setTrainDatasetId] = useState('');
+    const [trainBaseModel, setTrainBaseModel] = useState('gpt-4o-mini-2024-07-18');
+    const [trainSuffix, setTrainSuffix] = useState('');
+    const [validation, setValidation] = useState<DatasetValidation | null>(null);
+    const [trainMessage, setTrainMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+    useEffect(() => {
+        const unfinished = trainingJobs.some(
+            j => !['succeeded', 'failed', 'cancelled'].includes(j.status)
+        );
+        setTrainingPollMs(unfinished ? 5000 : undefined);
+    }, [trainingJobs]);
+
+    // Clear a stale verdict when the dataset changes: a green tick belonging
+    // to a different dataset is worse than no tick.
+    useEffect(() => {
+        setValidation(null);
+        setTrainMessage(null);
+    }, [trainDatasetId]);
+
+    const runValidation = async () => {
+        if (!trainDatasetId) return;
+        setTrainMessage(null);
+        try {
+            setValidation(await validateDataset.mutate(trainDatasetId));
+        } catch (err) {
+            setTrainMessage({
+                text: err instanceof Error ? err.message : 'Could not validate that dataset.',
+                isError: true,
+            });
+        }
+    };
+
+    const submitTraining = async () => {
+        if (!trainDatasetId || !trainBaseModel.trim()) return;
+        setTrainMessage(null);
+        try {
+            const job = await startTraining.mutate({
+                datasetId: trainDatasetId,
+                baseModel: trainBaseModel.trim(),
+                suffix: trainSuffix.trim() || undefined,
+            });
+            setTrainMessage(
+                job
+                    ? { text: `Submitted as ${job.providerJobId}.`, isError: false }
+                    : { text: 'The server returned no job for the submission.', isError: true }
+            );
+            await refetchTraining();
+            setTrainingPollMs(5000);
+        } catch (err) {
+            // The server's message is the useful one -- it carries the
+            // provider's own refusal, or the count of dataset problems.
+            setTrainMessage({
+                text: err instanceof Error ? err.message : 'The submission was refused.',
+                isError: true,
+            });
+        }
+    };
+
+    const stopTraining = async (id: string) => {
+        try {
+            await cancelTraining.mutate(id);
+            await refetchTraining();
+        } catch (err) {
+            setTrainMessage({
+                text: err instanceof Error ? err.message : 'Could not cancel that job.',
+                isError: true,
+            });
         }
     };
 
@@ -981,8 +1074,7 @@ export default function Developer() {
               */}
             {!SERVED_TABS.has(activeTab) && (
                 <ExampleDataBanner
-                    what="training jobs, pipelines and devices"
-                    endpoint="/api/training"
+                    what="compression methods, deployment targets and devices"
                 />
             )}
 
@@ -1627,114 +1719,195 @@ export default function Developer() {
                 </div>
             )}
 
+            {/* Training Tab
+              *
+              * Served by /api/training, which submits a stored dataset to the
+              * provider configured on the server. Chasm does not train
+              * anything and does not claim to.
+              *
+              * There is no progress bar. The four jobs listed here before were
+              * fixtures showing 67% and 34% complete with ETAs and an
+              * "RTX 4090" -- a fine-tuning API reports a status, and once
+              * finished a token count and the resulting model's name. It
+              * reports no percentage, no ETA, no GPU and no accuracy, so none
+              * are shown. A bar needs a fraction, and the only way to draw one
+              * here would be to make it up.
+              *
+              * The loss chart went with them: it plotted `trainingMetrics`,
+              * six hand-written epochs of loss and validation loss for a run
+              * that never happened.
+              */}
             {activeTab === 'training' && (
                 <div className="space-y-6">
-                    {/* Active Jobs */}
-                    <div className="bg-[hsl(var(--card))] rounded-xl border">
-                        <div className="p-4 border-b flex items-center justify-between">
-                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Training Jobs</h3>
-                            <button className="flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
-                                <RefreshCw size={14} />
-                                Refresh
+                    {/* Submit */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border p-6 space-y-4">
+                        <div>
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Fine-tune a Model</h3>
+                            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                                Chasm hands one of your datasets to the provider configured on the server
+                                and reports what that provider says. It does not train anything itself.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <select
+                                className="flex-1 px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                value={trainDatasetId}
+                                onChange={e => setTrainDatasetId(e.target.value)}
+                            >
+                                <option value="">Choose a dataset…</option>
+                                {storedDatasets.map(d => (
+                                    <option key={d.id} value={d.id}>
+                                        {d.name} ({d.entryCount.toLocaleString()} entries)
+                                    </option>
+                                ))}
+                            </select>
+                            <input
+                                className="flex-1 px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                placeholder="Base model"
+                                value={trainBaseModel}
+                                onChange={e => setTrainBaseModel(e.target.value)}
+                            />
+                            <input
+                                className="sm:w-40 px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
+                                placeholder="Suffix (optional)"
+                                value={trainSuffix}
+                                onChange={e => setTrainSuffix(e.target.value)}
+                            />
+                        </div>
+
+                        {storedDatasets.length === 0 && (
+                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                                No datasets yet — upload one on the Datasets tab first.
+                            </p>
+                        )}
+
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <button
+                                className="px-4 py-2 bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] rounded-lg hover:bg-[hsl(var(--muted))]/70 disabled:opacity-50"
+                                onClick={runValidation}
+                                disabled={!trainDatasetId || validateDataset.isLoading}
+                            >
+                                {validateDataset.isLoading ? 'Checking…' : 'Check dataset'}
                             </button>
+                            <button
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90 disabled:opacity-50"
+                                onClick={submitTraining}
+                                disabled={!trainDatasetId || !trainBaseModel.trim() || startTraining.isLoading}
+                            >
+                                {startTraining.isLoading ? 'Submitting…' : 'Start fine-tune'}
+                            </button>
+                            {trainMessage && (
+                                <span className={`text-sm ${trainMessage.isError ? 'text-red-500' : 'text-green-500'}`}>
+                                    {trainMessage.text}
+                                </span>
+                            )}
                         </div>
-                        <div className="divide-y">
-                            {trainingJobs.map(job => (
-                                <div key={job.id} className="p-4 flex items-center gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            {getStatusIcon(job.status)}
-                                            <span className="font-medium text-[hsl(var(--foreground))]">{job.name}</span>
-                                            <span className="text-xs px-2 py-0.5 bg-[hsl(var(--muted))] rounded capitalize">{job.type}</span>
-                                        </div>
-                                        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-                                            Model: {job.model} • GPU: {job.gpu} • ETA: {job.eta}
-                                        </p>
-                                    </div>
-                                    <div className="w-48">
-                                        <div className="flex items-center justify-between text-sm mb-1">
-                                            <span className="text-[hsl(var(--muted-foreground))]">Progress</span>
-                                            <span className="font-medium text-[hsl(var(--foreground))]">{job.progress}%</span>
-                                        </div>
-                                        <div className="h-2 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full transition-all ${job.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'}`}
-                                                style={{ width: `${job.progress}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {job.status === 'running' && (
-                                            <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
-                                                <Pause size={18} />
-                                            </button>
-                                        )}
-                                        {job.status === 'queued' && (
-                                            <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
-                                                <Play size={18} />
-                                            </button>
-                                        )}
-                                        <button className="p-2 rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
-                                            <Settings size={18} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                            Checking is free and runs here. Submitting uploads the dataset to your provider
+                            and starts a job you will be billed for — so the same checks run first, and a
+                            dataset that would fail is refused before anything is uploaded.
+                        </p>
+
+                        {validation && (
+                            <div className={`rounded-lg border p-4 text-sm ${validation.usable ? 'border-green-500/40' : 'border-amber-500/40'}`}>
+                                <p className={validation.usable ? 'text-green-500' : 'text-amber-500'}>
+                                    {validation.usable
+                                        ? `${validation.datasetName} is ready: ${validation.entryCount.toLocaleString()} examples, no problems found.`
+                                        : `${validation.datasetName} has ${validation.problems.length} problem${validation.problems.length === 1 ? '' : 's'}.`}
+                                </p>
+                                {validation.problems.length > 0 && (
+                                    <ul className="mt-2 space-y-1 text-[hsl(var(--muted-foreground))]">
+                                        {validation.problems.map((problem, i) => (
+                                            <li key={i}>
+                                                {problem.entryIndex !== undefined && (
+                                                    <span className="font-mono text-xs mr-2">entry {problem.entryIndex}</span>
+                                                )}
+                                                {problem.message}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Training Metrics Chart */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-[hsl(var(--card))] rounded-xl border p-6">
-                            <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">Training Loss</h3>
-                            <ResponsiveContainer width="100%" height={250}>
-                                <AreaChart data={trainingMetrics}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                    <XAxis dataKey="epoch" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: 'hsl(var(--card))',
-                                            border: '1px solid hsl(var(--border))',
-                                            borderRadius: '8px',
-                                        }}
-                                    />
-                                    <Area type="monotone" dataKey="loss" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} name="Train Loss" />
-                                    <Area type="monotone" dataKey="val_loss" stroke="#10b981" fill="#10b981" fillOpacity={0.2} name="Val Loss" />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                    {/* Jobs */}
+                    <div className="bg-[hsl(var(--card))] rounded-xl border">
+                        <div className="p-4 border-b">
+                            <h3 className="font-semibold text-[hsl(var(--foreground))]">Jobs</h3>
                         </div>
 
-                        <div className="bg-[hsl(var(--card))] rounded-xl border p-6">
-                            <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">Training Configuration</h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Training Type</label>
-                                    <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]">
-                                        <option>Full Fine-tuning</option>
-                                        <option>LoRA</option>
-                                        <option>QLoRA</option>
-                                        <option>Prefix Tuning</option>
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Epochs</label>
-                                        <input type="number" defaultValue={10} className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]" />
+                        {trainingListError && (
+                            <p className="p-4 text-sm text-red-500">{trainingListError.message}</p>
+                        )}
+
+                        {!trainingListError && trainingJobs.length === 0 && (
+                            <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">
+                                No fine-tuning jobs yet.
+                            </p>
+                        )}
+
+                        <div className="divide-y divide-[hsl(var(--border))]">
+                            {trainingJobs.map(job => (
+                                <div key={job.id} className="p-4 space-y-2">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-[hsl(var(--foreground))] break-words">
+                                                {job.datasetName} → {job.baseModel}
+                                            </p>
+                                            <p className="text-xs font-mono text-[hsl(var(--muted-foreground))] break-all">
+                                                {job.providerJobId}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className={`text-xs px-2 py-1 rounded-full ${
+                                                job.status === 'succeeded' ? 'bg-green-500/10 text-green-500'
+                                                : job.status === 'failed' ? 'bg-red-500/10 text-red-500'
+                                                : job.status === 'cancelled' ? 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
+                                                : 'bg-blue-500/10 text-blue-500'
+                                            }`}>
+                                                {job.status}
+                                            </span>
+                                            <button
+                                                className="p-2 rounded hover:bg-[hsl(var(--muted))]"
+                                                onClick={() => stopTraining(job.id)}
+                                                title={
+                                                    ['succeeded', 'failed', 'cancelled'].includes(job.status)
+                                                        ? 'Remove this record'
+                                                        : 'Cancel this job at the provider'
+                                                }
+                                            >
+                                                {['succeeded', 'failed', 'cancelled'].includes(job.status)
+                                                    ? <Trash2 size={16} className="text-red-500" />
+                                                    : <XCircle size={16} className="text-[hsl(var(--muted-foreground))]" />}
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Batch Size</label>
-                                        <input type="number" defaultValue={8} className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]" />
-                                    </div>
+
+                                    {job.fineTunedModel && (
+                                        <p className="text-sm text-[hsl(var(--foreground))]">
+                                            <span className="text-[hsl(var(--muted-foreground))]">Model: </span>
+                                            <code className="font-mono text-xs">{job.fineTunedModel}</code>
+                                            {job.trainedTokens !== undefined && (
+                                                <span className="text-[hsl(var(--muted-foreground))]">
+                                                    {' '}· {job.trainedTokens.toLocaleString()} tokens trained
+                                                </span>
+                                            )}
+                                        </p>
+                                    )}
+
+                                    {job.error && <p className="text-sm text-red-500">{job.error}</p>}
+
+                                    {/* Shown because a stale status looks exactly like a current one. */}
+                                    {job.refreshError && (
+                                        <p className="text-xs text-amber-500">
+                                            Last known status — could not reach the provider: {job.refreshError}
+                                        </p>
+                                    )}
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Learning Rate</label>
-                                    <input type="text" defaultValue="1e-4" className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]" />
-                                </div>
-                                <button className="w-full py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-lg hover:opacity-90">
-                                    Start Training
-                                </button>
-                            </div>
+                            ))}
                         </div>
                     </div>
                 </div>
