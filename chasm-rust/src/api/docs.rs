@@ -223,7 +223,8 @@ mod tests {
     async fn every_documented_path_is_actually_routed() {
         use crate::api::{
             configure_catalog_routes, configure_dataset_routes, configure_document_routes,
-            configure_download_routes, configure_inbox_routes, configure_training_routes, AppState,
+            configure_download_routes, configure_inbox_routes, configure_research_routes,
+            configure_training_routes, AppState,
         };
         use crate::ChatDatabase;
         use actix_web::web::Data;
@@ -257,6 +258,7 @@ mod tests {
                 .configure(configure_catalog_routes)
                 .configure(configure_download_routes)
                 .configure(configure_training_routes)
+                .configure(configure_research_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -454,7 +456,8 @@ mod tests {
     async fn documented_response_bodies_match_what_the_server_sends() {
         use crate::api::{
             configure_catalog_routes, configure_dataset_routes, configure_document_routes,
-            configure_download_routes, configure_inbox_routes, configure_training_routes, AppState,
+            configure_download_routes, configure_inbox_routes, configure_research_routes,
+            configure_training_routes, AppState,
         };
         use crate::ChatDatabase;
         use actix_web::web::Data;
@@ -496,6 +499,7 @@ mod tests {
                 .configure(configure_catalog_routes)
                 .configure(configure_download_routes)
                 .configure(configure_training_routes)
+                .configure(configure_research_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)

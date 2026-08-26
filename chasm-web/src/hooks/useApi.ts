@@ -24,6 +24,7 @@ import {
     catalog,
     downloads,
     training,
+    research,
     connectWebSocket,
 } from '../api/client';
 import type {
@@ -33,6 +34,7 @@ import type {
     DatasetType,
     DownloadJob,
     TrainingJob,
+    Paper,
 } from '../api/client';
 import type {
     Workspace,
@@ -339,6 +341,34 @@ export function useTestProvider() {
 export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_tools: McpTool[] }> {
     const queryFn = useCallback(() => mcp.listTools(), []);
     return useQuery(queryFn, [], options);
+}
+
+/**
+ * The papers saved on this server.
+ */
+export function useSavedPapers(options?: UseQueryOptions): UseQueryResult<Paper[]> {
+    const queryFn = useCallback(() => research.saved(), []);
+    return useQuery(queryFn, [], options);
+}
+
+/**
+ * Search arXiv.
+ *
+ * A mutation rather than a query: arXiv asks that clients not hammer the
+ * endpoint, so nothing is fetched until someone asks for it.
+ */
+export function useSearchPapers() {
+    return useMutation(({ q, limit }: { q: string; limit?: number }) =>
+        research.search(q, limit)
+    );
+}
+
+export function useSavePaper() {
+    return useMutation((paper: Paper) => research.save(paper));
+}
+
+export function useUnsavePaper() {
+    return useMutation((arxivId: string) => research.unsave(arxivId));
 }
 
 /**

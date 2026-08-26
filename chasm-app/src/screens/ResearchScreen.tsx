@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -14,178 +14,166 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { ExampleDataBanner } from '../components/ExampleDataBanner';
+import { research as researchApi, type Paper } from '../api/research';
 
-interface Paper {
-    id: string;
-    title: string;
-    authors: string[];
-    abstract: string;
-    categories: string[];
-    published: string;
-    arxivId: string;
-    citations?: number;
-    saved: boolean;
-}
-
-interface Trend {
-    topic: string;
-    papers: number;
-    growth: number; // percentage
-    keywords: string[];
-}
-
-const samplePapers: Paper[] = [
-    {
-        id: '1',
-        title: 'Constitutional AI: Harmlessness from AI Feedback',
-        authors: ['Yuntao Bai', 'et al.'],
-        abstract: 'We introduce Constitutional AI (CAI), a method for training AI assistants to be helpful, harmless, and honest using a set of principles (a "constitution") to self-improve...',
-        categories: ['cs.AI', 'cs.CL'],
-        published: '2024-12-10',
-        arxivId: '2212.08073',
-        citations: 1245,
-        saved: true,
-    },
-    {
-        id: '2',
-        title: 'Agent-Computer Interface: Designing Effective Human-AI Interaction',
-        authors: ['Research Team'],
-        abstract: 'We present a comprehensive study on designing effective interfaces between autonomous AI agents and human operators, focusing on transparency and control...',
-        categories: ['cs.HC', 'cs.AI'],
-        published: '2024-12-08',
-        arxivId: '2412.04567',
-        citations: 89,
-        saved: false,
-    },
-    {
-        id: '3',
-        title: 'Retrieval-Augmented Generation for Knowledge-Intensive Tasks',
-        authors: ['Patrick Lewis', 'et al.'],
-        abstract: 'We explore the use of retrieval-augmented generation models that combine pre-trained parametric and non-parametric memory for language generation...',
-        categories: ['cs.CL', 'cs.IR'],
-        published: '2024-12-05',
-        arxivId: '2005.11401',
-        citations: 3421,
-        saved: true,
-    },
-    {
-        id: '4',
-        title: 'Multi-Agent Collaboration: A Survey',
-        authors: ['Survey Authors'],
-        abstract: 'This survey provides a comprehensive overview of multi-agent collaboration techniques in the era of large language models, covering cooperation, competition...',
-        categories: ['cs.MA', 'cs.AI'],
-        published: '2024-12-01',
-        arxivId: '2412.00123',
-        citations: 156,
-        saved: false,
-    },
-];
-
-const sampleTrends: Trend[] = [
-    { topic: 'Multi-Agent Systems', papers: 234, growth: 45, keywords: ['collaboration', 'orchestration', 'MAS'] },
-    { topic: 'RAG & Retrieval', papers: 189, growth: 32, keywords: ['vector search', 'embeddings', 'context'] },
-    { topic: 'AI Safety', papers: 167, growth: 28, keywords: ['alignment', 'harmlessness', 'RLHF'] },
-    { topic: 'Tool Use', papers: 145, growth: 52, keywords: ['function calling', 'MCP', 'agents'] },
-    { topic: 'Code Generation', papers: 128, growth: 18, keywords: ['copilot', 'codex', 'agentic coding'] },
-];
+// Papers come from /api/research, which proxies arXiv.
+//
+// Two fixtures used to sit here. `samplePapers` carried a `citations` count
+// and a `saved` flag; `sampleTrends` carried topics with paper counts and
+// month-over-month growth percentages. arXiv reports no citation count and
+// nothing resembling a trend, so both are gone rather than fed from something
+// invented -- and the Trends tab with them.
 
 export function ResearchScreen() {
     const { colors } = useTheme();
-    const [activeTab, setActiveTab] = useState<'papers' | 'trends' | 'saved'>('papers');
-    const [papers, setPapers] = useState<Paper[]>(samplePapers);
+    const [activeTab, setActiveTab] = useState<'papers' | 'saved'>('papers');
+    const [results, setResults] = useState<Paper[] | null>(null);
+    const [totalResults, setTotalResults] = useState(0);
+    const [saved, setSaved] = useState<Paper[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const filteredPapers = useMemo(() => {
-        let result = papers;
-        if (activeTab === 'saved') {
-            result = papers.filter(p => p.saved);
+    const savedIds = useMemo(() => new Set(saved.map(p => p.arxivId)), [saved]);
+    const papers = activeTab === 'saved' ? saved : results ?? [];
+
+    const loadSaved = useCallback(async () => {
+        try {
+            setSaved(await researchApi.saved());
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not reach the server.');
         }
-        if (searchQuery) {
-            result = result.filter(p =>
-                p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.abstract.toLowerCase().includes(searchQuery.toLowerCase())
-            );
+    }, []);
+
+    useEffect(() => {
+        loadSaved();
+    }, [loadSaved]);
+
+    /**
+     * Search arXiv.
+     *
+     * On demand rather than as you type: arXiv asks that clients not poll it,
+     * and a request per keystroke is exactly that.
+     */
+    const runSearch = async () => {
+        if (!searchQuery.trim() || isSearching) return;
+        setIsSearching(true);
+        setError(null);
+        setResults(null);
+        try {
+            const answer = await researchApi.search(searchQuery, 25);
+            setResults(answer.results);
+            setTotalResults(answer.totalResults);
+        } catch (err) {
+            // An unreachable arXiv and a query with no hits are different
+            // answers, so a failure is shown rather than drawn as no results.
+            setError(err instanceof Error ? err.message : 'The search failed.');
+        } finally {
+            setIsSearching(false);
         }
-        return result;
-    }, [papers, activeTab, searchQuery]);
+    };
 
-    const stats = useMemo(() => ({
-        total: papers.length,
-        saved: papers.filter(p => p.saved).length,
-        categories: Array.from(new Set(papers.flatMap(p => p.categories))).length,
-        thisWeek: papers.filter(p => {
-            const pubDate = new Date(p.published);
-            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            return pubDate > weekAgo;
-        }).length,
-    }), [papers]);
-
+    /**
+     * Pull to refresh re-reads the saved list.
+     *
+     * It used to be `setTimeout(..., 1000)`: a spinner that ran for a second
+     * and reloaded nothing. Searches are not re-run -- that would be a request
+     * to arXiv the user did not ask for.
+     */
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
+        await loadSaved();
+        setIsRefreshing(false);
     };
 
-    const handleToggleSave = (id: string) => {
-        setPapers(prev => prev.map(p =>
-            p.id === id ? { ...p, saved: !p.saved } : p
-        ));
+    /**
+     * Save or unsave, on the server.
+     *
+     * This used to flip a field in component state, which was discarded on
+     * unmount -- the bookmark filled in, and nothing was saved.
+     */
+    const handleToggleSave = async (paper: Paper) => {
+        setError(null);
+        try {
+            if (savedIds.has(paper.arxivId)) {
+                await researchApi.unsave(paper.arxivId);
+            } else {
+                await researchApi.save(paper);
+            }
+            await loadSaved();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not update your saved papers.');
+        }
     };
 
-    const handleOpenPaper = (arxivId: string) => {
-        Linking.openURL(`https://arxiv.org/abs/${arxivId}`);
+    const handleOpenPaper = (paper: Paper) => {
+        Linking.openURL(paper.url);
     };
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <ExampleDataBanner what="papers and trends" />
-            {/* Stats */}
+            {/* Stats
+              *
+              * Two, where there were four. "Topics" counted distinct
+              * categories across a fixture list, and "This Week" counted its
+              * publication dates -- both were statistics about eight built-in
+              * papers, not about anything of the user's. What is left is the
+              * result count arXiv reports and the number of papers actually
+              * saved on the server.
+              */}
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Ionicons name="library-outline" size={18} color={colors.primary} />
-                    <Text style={[styles.statValue, { color: colors.text }]}>{stats.total}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Papers</Text>
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                        {results === null ? '—' : totalResults.toLocaleString()}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Matches</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Ionicons name="bookmark-outline" size={18} color="#f59e0b" />
-                    <Text style={[styles.statValue, { color: '#f59e0b' }]}>{stats.saved}</Text>
+                    <Text style={[styles.statValue, { color: '#f59e0b' }]}>{saved.length}</Text>
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Saved</Text>
                 </View>
-                <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="pricetag-outline" size={18} color="#10b981" />
-                    <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.categories}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Topics</Text>
-                </View>
-                <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="calendar-outline" size={18} color="#8b5cf6" />
-                    <Text style={[styles.statValue, { color: '#8b5cf6' }]}>{stats.thisWeek}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>This Week</Text>
-                </View>
             </View>
+
+            {error && (
+                <View style={[styles.paperCard, { backgroundColor: colors.card, borderColor: '#ef4444' }]}>
+                    <Text style={[styles.paperAuthors, { color: colors.textSecondary }]}>{error}</Text>
+                </View>
+            )}
 
             {/* Search */}
             <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
                 <TextInput
                     style={[styles.searchInput, { color: colors.text }]}
-                    placeholder="Search papers..."
+                    placeholder="Search arXiv..."
                     placeholderTextColor={colors.textSecondary}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
+                    onSubmitEditing={runSearch}
+                    returnKeyType="search"
                 />
+                <TouchableOpacity onPress={runSearch} disabled={!searchQuery.trim() || isSearching}>
+                    <Ionicons
+                        name={isSearching ? 'hourglass-outline' : 'arrow-forward-circle'}
+                        size={22}
+                        color={searchQuery.trim() ? colors.primary : colors.textSecondary}
+                    />
+                </TouchableOpacity>
             </View>
 
             {/* Tabs */}
             <View style={styles.tabBar}>
-                {(['papers', 'trends', 'saved'] as const).map((tab) => (
+                {(['papers', 'saved'] as const).map((tab) => (
                     <TouchableOpacity
                         key={tab}
                         style={[styles.tab, { borderBottomColor: activeTab === tab ? colors.primary : 'transparent' }]}
                         onPress={() => setActiveTab(tab)}
                     >
                         <Ionicons
-                            name={tab === 'papers' ? 'document-text-outline' : tab === 'trends' ? 'trending-up-outline' : 'bookmark-outline'}
+                            name={tab === 'papers' ? 'document-text-outline' : 'bookmark-outline'}
                             size={18}
                             color={activeTab === tab ? colors.primary : colors.textSecondary}
                         />
@@ -203,110 +191,71 @@ export function ResearchScreen() {
                     <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
                 }
             >
-                {(activeTab === 'papers' || activeTab === 'saved') && (
-                    <>
-                        {filteredPapers.map((paper) => (
-                            <TouchableOpacity
-                                key={paper.id}
-                                style={[styles.paperCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                                onPress={() => handleOpenPaper(paper.arxivId)}
-                            >
-                                <View style={styles.paperHeader}>
-                                    <View style={styles.paperTitleRow}>
-                                        <Text style={[styles.paperTitle, { color: colors.text }]} numberOfLines={2}>
-                                            {paper.title}
-                                        </Text>
-                                        <TouchableOpacity onPress={() => handleToggleSave(paper.id)}>
-                                            <Ionicons
-                                                name={paper.saved ? 'bookmark' : 'bookmark-outline'}
-                                                size={22}
-                                                color={paper.saved ? '#f59e0b' : colors.textSecondary}
-                                            />
-                                        </TouchableOpacity>
-                                    </View>
-                                    <Text style={[styles.paperAuthors, { color: colors.textSecondary }]}>
-                                        {paper.authors.join(', ')}
+                <>
+                    {papers.map((paper) => (
+                        <TouchableOpacity
+                            key={paper.arxivId}
+                            style={[styles.paperCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            onPress={() => handleOpenPaper(paper)}
+                        >
+                            <View style={styles.paperHeader}>
+                                <View style={styles.paperTitleRow}>
+                                    <Text style={[styles.paperTitle, { color: colors.text }]} numberOfLines={2}>
+                                        {paper.title}
                                     </Text>
+                                    <TouchableOpacity onPress={() => handleToggleSave(paper)}>
+                                        <Ionicons
+                                            name={savedIds.has(paper.arxivId) ? 'bookmark' : 'bookmark-outline'}
+                                            size={22}
+                                            color={savedIds.has(paper.arxivId) ? '#f59e0b' : colors.textSecondary}
+                                        />
+                                    </TouchableOpacity>
                                 </View>
-
-                                <Text style={[styles.paperAbstract, { color: colors.text }]} numberOfLines={3}>
-                                    {paper.abstract}
-                                </Text>
-
-                                <View style={styles.paperMeta}>
-                                    <View style={styles.categoryTags}>
-                                        {paper.categories.map((cat) => (
-                                            <View key={cat} style={[styles.categoryTag, { backgroundColor: colors.background }]}>
-                                                <Text style={[styles.categoryText, { color: colors.primary }]}>{cat}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                    <View style={styles.paperStats}>
-                                        {paper.citations && (
-                                            <View style={styles.paperStat}>
-                                                <Ionicons name="chatbubble-outline" size={12} color={colors.textSecondary} />
-                                                <Text style={[styles.paperStatText, { color: colors.textSecondary }]}>
-                                                    {paper.citations}
-                                                </Text>
-                                            </View>
-                                        )}
-                                        <Text style={[styles.paperDate, { color: colors.textSecondary }]}>{paper.published}</Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-
-                        {filteredPapers.length === 0 && (
-                            <View style={styles.emptyState}>
-                                <Ionicons name="document-outline" size={48} color={colors.textSecondary} />
-                                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                                    {activeTab === 'saved' ? 'No saved papers yet' : 'No papers found'}
+                                <Text style={[styles.paperAuthors, { color: colors.textSecondary }]}>
+                                    {paper.authors.length > 3
+                                        ? `${paper.authors.slice(0, 3).join(', ')} +${paper.authors.length - 3}`
+                                        : paper.authors.join(', ')}
                                 </Text>
                             </View>
-                        )}
-                    </>
-                )}
 
-                {activeTab === 'trends' && (
-                    <>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Trending Topics</Text>
-                        {sampleTrends.map((trend, idx) => (
-                            <View
-                                key={trend.topic}
-                                style={[styles.trendCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                            >
-                                <View style={styles.trendHeader}>
-                                    <View style={styles.trendRank}>
-                                        <Text style={[styles.rankNumber, { color: colors.primary }]}>#{idx + 1}</Text>
-                                    </View>
-                                    <View style={styles.trendInfo}>
-                                        <Text style={[styles.trendTopic, { color: colors.text }]}>{trend.topic}</Text>
-                                        <Text style={[styles.trendPapers, { color: colors.textSecondary }]}>
-                                            {trend.papers} papers this month
-                                        </Text>
-                                    </View>
-                                    <View style={[styles.growthBadge, {
-                                        backgroundColor: trend.growth > 30 ? '#10b98120' : '#3b82f620'
-                                    }]}>
-                                        <Ionicons name="trending-up" size={14} color={trend.growth > 30 ? '#10b981' : '#3b82f6'} />
-                                        <Text style={[styles.growthText, {
-                                            color: trend.growth > 30 ? '#10b981' : '#3b82f6'
-                                        }]}>
-                                            +{trend.growth}%
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={styles.keywordTags}>
-                                    {trend.keywords.map((kw) => (
-                                        <View key={kw} style={[styles.keywordTag, { backgroundColor: colors.background }]}>
-                                            <Text style={[styles.keywordText, { color: colors.text }]}>{kw}</Text>
+                            <Text style={[styles.paperAbstract, { color: colors.text }]} numberOfLines={3}>
+                                {paper.summary}
+                            </Text>
+
+                            <View style={styles.paperMeta}>
+                                <View style={styles.categoryTags}>
+                                    {paper.categories.slice(0, 3).map((cat) => (
+                                        <View key={cat} style={[styles.categoryTag, { backgroundColor: colors.background }]}>
+                                            <Text style={[styles.categoryText, { color: colors.primary }]}>{cat}</Text>
                                         </View>
                                     ))}
                                 </View>
+                                {/*
+                                  * No citation count. arXiv does not report
+                                  * one, and the number that used to sit here
+                                  * came from a literal.
+                                  */}
+                                <Text style={[styles.paperDate, { color: colors.textSecondary }]}>
+                                    {paper.published.slice(0, 10)}
+                                </Text>
                             </View>
-                        ))}
-                    </>
-                )}
+                        </TouchableOpacity>
+                    ))}
+
+                    {papers.length === 0 && (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="document-outline" size={48} color={colors.textSecondary} />
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                                {activeTab === 'saved'
+                                    ? 'No saved papers yet'
+                                    : results === null
+                                        ? 'Search arXiv to see papers'
+                                        : 'arXiv returned no papers for that search'}
+                            </Text>
+                        </View>
+                    )}
+                </>
+
             </ScrollView>
         </View>
     );
@@ -450,66 +399,6 @@ const styles = StyleSheet.create({
     emptyText: {
         marginTop: 12,
         fontSize: 14,
-    },
-    trendCard: {
-        borderRadius: 12,
-        borderWidth: 1,
-        padding: 16,
-        marginBottom: 12,
-    },
-    trendHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 12,
-    },
-    trendRank: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    rankNumber: {
-        fontSize: 14,
-        fontWeight: '700',
-    },
-    trendInfo: {
-        flex: 1,
-    },
-    trendTopic: {
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    trendPapers: {
-        fontSize: 12,
-        marginTop: 2,
-    },
-    growthBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    growthText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    keywordTags: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    keywordTag: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    keywordText: {
-        fontSize: 11,
     },
 });
 

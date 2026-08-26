@@ -41,6 +41,7 @@ pub mod inbox;
 #[cfg(feature = "enterprise")]
 mod oidc;
 mod recording;
+pub mod research;
 #[cfg(feature = "enterprise")]
 mod retention;
 pub mod sdk;
@@ -69,6 +70,7 @@ pub use inbox::{configure_inbox_routes, init_inbox_tables, InboxEmitter};
 #[cfg(feature = "enterprise")]
 pub use oidc::{configure_oidc_routes, OidcProviderConfig, OidcService};
 pub use recording::{configure_recording_routes, create_recording_state};
+pub use research::configure_research_routes;
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
 #[cfg(feature = "enterprise")]
@@ -445,6 +447,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(configure_catalog_routes)
             .configure(configure_download_routes)
             .configure(configure_training_routes)
+            .configure(configure_research_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

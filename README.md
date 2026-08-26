@@ -205,6 +205,10 @@ Writes:
 | GET    | `/api/training/jobs`              | List fine-tuning jobs           |
 | GET    | `/api/training/jobs/:id`          | Poll one job                    |
 | DELETE | `/api/training/jobs/:id`          | Cancel one, or forget a finished one |
+| GET    | `/api/research/papers`            | Search arXiv (`?q=`)            |
+| GET    | `/api/research/saved`             | List saved papers               |
+| POST   | `/api/research/saved`             | Save a paper                    |
+| DELETE | `/api/research/saved/:id`         | Unsave a paper                  |
 
 Endpoints that refuse rather than guess:
 
@@ -232,6 +236,7 @@ Endpoints that refuse rather than guess:
   rate-limited the server, never an empty list. "The Hub is down" and
   "nothing matched" are different answers and an empty table cannot tell
   them apart.
+- `GET /api/research/papers` does the same for arXiv, for the same reason.
 - `POST /api/documents` and `GET /api/documents/search` need an embedding
   model, the same `OPENAI_API_KEY` as semantic search. Without one both
   return `503` naming the variable: ingestion will not store a document it
@@ -355,6 +360,24 @@ segments.
 
 Cancelling stops the transfer and removes the partial file. Deleting a
 finished job removes the record and keeps the file.
+
+### Research
+
+```bash
+curl "localhost:8787/api/research/papers?q=retrieval+augmented+generation&limit=5"
+curl "localhost:8787/api/research/saved"
+```
+
+A read-only proxy to arXiv's public API, plus a saved-papers list this server
+keeps. The host is compiled in, a descriptive User-Agent is sent and the page
+size is capped, as arXiv asks of automated clients.
+
+`totalResults` is arXiv's own count for the query, so a page of 25 out of
+995,199 is distinguishable from 25 and no more.
+
+Papers carry no citation, view, comment or star count and no trend score.
+arXiv reports none of them, and the pages this replaced showed all five and
+ranked a leaderboard by them.
 
 ### Fine-tuning
 

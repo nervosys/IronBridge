@@ -947,6 +947,7 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest",
+ "roxmltree",
  "rsa",
  "rusqlite",
  "semver",

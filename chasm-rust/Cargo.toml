@@ -128,6 +128,10 @@ futures-util = { version = "0.3", features = ["sink"] }
 # Base64 encoding for API requests
 base64 = "0.21"
 
+# Atom parsing for the arXiv proxy. Same version chasm-sso already uses for
+# SAML, so this adds nothing new to the lock file.
+roxmltree = "0.20"
+
 # AES decryption for browser cookies
 aes-gcm = "0.10"
 

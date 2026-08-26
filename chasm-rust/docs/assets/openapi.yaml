@@ -789,6 +789,121 @@ paths:
                       data:
                         $ref: "#/components/schemas/HarvestResult"
 
+  /research/papers:
+    get:
+      tags: [Research]
+      summary: Search arXiv
+      description: >
+        A read-only proxy to arXiv's public API. The host is compiled in and
+        only the query is caller-controlled, so it cannot be pointed at an
+        arbitrary URL. A descriptive User-Agent is sent and the page size is
+        capped, as arXiv asks.
+
+
+        `totalResults` is arXiv's own count for the query, so a page of 20 out
+        of 176,736 is distinguishable from 20 and no more.
+
+
+        An unreachable arXiv is a 502, never an empty list.
+      operationId: searchPapers
+      x-chasm-probe: needs-network
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          example: retrieval augmented generation
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+        - name: start
+          in: query
+          description: Offset into the result set, for paging.
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Matching papers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaperResults"
+        "400":
+          description: q is missing or empty
+        "502":
+          description: arXiv was unreachable or returned something unusable
+
+  /research/saved:
+    get:
+      tags: [Research]
+      summary: List saved papers
+      description: Most recently saved first. Held by this server, not by arXiv.
+      operationId: listSavedPapers
+      responses:
+        "200":
+          description: Saved papers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Paper"
+    post:
+      tags: [Research]
+      summary: Save a paper
+      description: >
+        Idempotent — saving the same paper twice is what an unsure client does
+        and is not an error.
+      operationId: savePaper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paper]
+              properties:
+                paper:
+                  $ref: "#/components/schemas/Paper"
+      responses:
+        "200":
+          description: Saved
+        "400":
+          description: paper.arxivId is missing
+
+  /research/saved/{id}:
+    delete:
+      tags: [Research]
+      summary: Unsave a paper
+      operationId: unsavePaper
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The arXiv id.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /settings:
     get:
       tags: [Settings]
@@ -5004,6 +5119,67 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    Paper:
+      type: object
+      description: >
+        One arXiv entry.
+
+
+        There is deliberately no `citations`, `views`, `comments`, `stars` or
+        `trendScore`. arXiv's API reports none of them, and the pages this
+        replaced showed all five and ranked a leaderboard by them.
+      required: [arxivId, title, authors, summary, categories, published, url]
+      properties:
+        arxivId:
+          type: string
+          example: 2201.00978v1
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+          description: The abstract, unwrapped — arXiv hard-wraps it at the source.
+        categories:
+          type: array
+          items:
+            type: string
+          example: [cs.CV, cs.LG]
+        published:
+          type: string
+        updated:
+          type: string
+        url:
+          type: string
+          description: The abstract page.
+        pdfUrl:
+          type: string
+          description: Absent when the entry links no PDF.
+        comment:
+          type: string
+          description: The authors' own note, e.g. a venue. Often absent.
+
+    PaperResults:
+      type: object
+      required: [query, source, totalResults, start, results]
+      properties:
+        query:
+          type: string
+        source:
+          type: string
+          enum: [arxiv]
+        totalResults:
+          type: integer
+          description: arXiv's own count for the query, not this page's length.
+        start:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Paper"
 
     RepoFile:
       type: object

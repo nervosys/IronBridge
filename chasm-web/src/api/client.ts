@@ -541,6 +541,62 @@ export const mcp = {
 };
 
 // =============================================================================
+// Research API
+// =============================================================================
+//
+// arXiv search, plus the papers this server has saved.
+//
+// Note what a Paper does not carry: no citations, views, comments, stars or
+// trend score. arXiv's API reports none of them, and the page this replaced
+// showed all five and ranked a leaderboard by them.
+
+export interface Paper {
+    arxivId: string;
+    title: string;
+    authors: string[];
+    /** The abstract, unwrapped -- arXiv hard-wraps it at the source. */
+    summary: string;
+    categories: string[];
+    published: string;
+    updated?: string;
+    /** The abstract page. */
+    url: string;
+    pdfUrl?: string;
+    /** The authors' own note, e.g. a venue. Often absent. */
+    comment?: string;
+}
+
+export interface PaperResults {
+    query: string;
+    source: 'arxiv';
+    /** arXiv's own count for the query, not this page's length. */
+    totalResults: number;
+    start: number;
+    results: Paper[];
+}
+
+export const research = {
+    async search(q: string, limit = 20, start = 0): Promise<ApiResponse<PaperResults>> {
+        return get(
+            `/api/research/papers?q=${encodeURIComponent(q)}&limit=${limit}&start=${start}`
+        );
+    },
+
+    async saved(): Promise<ApiResponse<Paper[]>> {
+        return get('/api/research/saved');
+    },
+
+    /** Idempotent: saving the same paper twice is not an error. */
+    async save(paper: Paper): Promise<ApiResponse<unknown>> {
+        return post('/api/research/saved', { paper });
+    },
+
+    async unsave(arxivId: string): Promise<ApiResponse<unknown>> {
+        return del(`/api/research/saved/${encodeURIComponent(arxivId)}`);
+    },
+};
+
+// =============================================================================
 // Fine-tuning API
 // =============================================================================
 //
@@ -1079,6 +1135,7 @@ export const api = {
     catalog,
     downloads,
     training,
+    research,
     system,
     connectWebSocket,
     sendWebSocketMessage,
