@@ -57,16 +57,24 @@ interface ProviderCardProps {
     provider: ApiProvider;
     health?: ProviderHealth;
     sessionCount: number;
-    onRefresh: () => void;
+    /** Awaited, so the spinner can track the refetch rather than a timer. */
+    onRefresh: () => void | Promise<unknown>;
 }
 
 function ProviderCard({ provider, health, sessionCount, onRefresh }: ProviderCardProps) {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const handleRefresh = () => {
+    const handleRefresh = async () => {
         setIsRefreshing(true);
-        onRefresh();
-        setTimeout(() => setIsRefreshing(false), 1000);
+        try {
+            // Awaited. This used to fire the refetch and clear the spinner on a
+            // one-second timer, so the indicator described the timer rather
+            // than the request -- it stopped at a second whether the refetch
+            // had finished, was still running, or had failed.
+            await onRefresh();
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const status = health?.status || provider.status || 'unknown';

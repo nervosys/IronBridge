@@ -277,14 +277,17 @@ export const agents = {
     /**
      * Create a new agent
      */
-    async create(data: Partial<Agent>): Promise<ApiResponse<Agent>> {
+    async create(data: CreateAgentRequest): Promise<ApiResponse<Agent>> {
         return post('/api/agents', data);
     },
 
     /**
      * Update an agent
+     *
+     * Every field optional here, and on the server too -- `UpdateAgentRequest`
+     * is all `Option<T>`, so a partial update is genuinely what it accepts.
      */
-    async update(id: string, data: Partial<Agent>): Promise<ApiResponse<Agent>> {
+    async update(id: string, data: UpdateAgentRequest): Promise<ApiResponse<Agent>> {
         return put(`/api/agents/${encodeURIComponent(id)}`, data);
     },
 
@@ -296,6 +299,38 @@ export const agents = {
     },
 
 };
+
+/**
+ * What `POST /api/agents` actually accepts.
+ *
+ * `Partial<Agent>` used to stand in for this, and it hid the same bug the
+ * swarm request had: the server requires an `instruction`, and the shared
+ * `Agent` type has no such field -- it declares `systemPrompt`. So a body of
+ * `{ name, description, role }` type-checked cleanly and the server answered
+ * 400 "missing field `instruction`". Creating an agent from the web UI had
+ * never once worked.
+ *
+ * The snake_case fields are not a slip: the request deserializes into a Rust
+ * struct with no serde rename, so `max_tokens` and `sub_agents` are spelled
+ * as the server spells them. `maxTokens` is silently ignored.
+ */
+export interface CreateAgentRequest {
+    name: string;
+    /** What the agent is told to do. Required.  */
+    instruction: string;
+    description?: string;
+    role?: string;
+    model?: string;
+    provider?: string;
+    temperature?: number;
+    max_tokens?: number;
+    tools?: string[];
+    sub_agents?: string[];
+    metadata?: string;
+}
+
+/** What `PUT /api/agents/{id}` accepts -- every field optional, server-side too. */
+export type UpdateAgentRequest = Partial<CreateAgentRequest>;
 
 // =============================================================================
 // Swarms API

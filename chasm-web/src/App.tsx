@@ -17,7 +17,6 @@ import Accounts from './pages/Accounts';
 import Developer from './pages/Developer';
 import Research from './pages/Research';
 import SWE from './pages/SWE';
-import Admin from './pages/Admin';
 import { ApiProvider } from './context';
 import { config } from './config';
 
@@ -75,7 +74,6 @@ function App() {
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/developer" element={<Developer />} />
             <Route path="/research" element={<Research />} />
-            <Route path="/admin" element={<Admin />} />
           </Routes>
         </Layout>
       </BrowserRouter>

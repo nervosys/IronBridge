@@ -29,6 +29,8 @@ import {
 } from '../api/client';
 import type {
     CreateSwarmRequest,
+    CreateAgentRequest,
+    UpdateAgentRequest,
     DocumentSummary,
     Dataset,
     DatasetType,
@@ -516,14 +518,14 @@ export function useAgent(id: string | null, options?: UseQueryOptions): UseQuery
  * Create agent mutation
  */
 export function useCreateAgent() {
-    return useMutation((data: Partial<Agent>) => agents.create(data));
+    return useMutation((data: CreateAgentRequest) => agents.create(data));
 }
 
 /**
  * Update agent mutation
  */
 export function useUpdateAgent() {
-    return useMutation(({ id, data }: { id: string; data: Partial<Agent> }) => agents.update(id, data));
+    return useMutation(({ id, data }: { id: string; data: UpdateAgentRequest }) => agents.update(id, data));
 }
 
 /**

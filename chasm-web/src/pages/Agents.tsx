@@ -221,15 +221,21 @@ const SWARM_TEMPLATES = [
 ];
 
 // Agent Templates - roles use valid AgentRole values: coordinator, researcher, coder, reviewer, executor, writer, tester, household, business, custom
+/*
+ * `instruction` is what the server requires and what the agent is actually
+ * told to do. A template fills it in so choosing one produces a working
+ * agent; the field stays editable because a default directive is a starting
+ * point, not an answer.
+ */
 const AGENT_TEMPLATES = [
-    { id: 'coordinator', name: 'Coordinator', role: 'coordinator', description: 'Orchestrates tasks and manages agents', icon: Brain },
-    { id: 'researcher', name: 'Researcher', role: 'researcher', description: 'Gathers and analyzes information', icon: Search },
-    { id: 'coder', name: 'Coder', role: 'coder', description: 'Writes, reviews, and debugs code', icon: Code },
-    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', description: 'Reviews code and provides feedback', icon: FileText },
-    { id: 'executor', name: 'Executor', role: 'executor', description: 'Executes tools and commands', icon: Zap },
-    { id: 'writer', name: 'Writer', role: 'writer', description: 'Creates and edits documentation', icon: Lightbulb },
-    { id: 'tester', name: 'Tester', role: 'tester', description: 'Creates and runs tests', icon: FlaskConical },
-    { id: 'custom', name: 'Custom', role: 'custom', description: 'Custom agent configuration', icon: Settings },
+    { id: 'coordinator', name: 'Coordinator', role: 'coordinator', description: 'Orchestrates tasks and manages agents', instruction: 'Break the task into steps, delegate them to the other agents, and assemble their results.', icon: Brain },
+    { id: 'researcher', name: 'Researcher', role: 'researcher', description: 'Gathers and analyzes information', instruction: 'Gather relevant information, weigh the sources, and report what is supported and what is not.', icon: Search },
+    { id: 'coder', name: 'Coder', role: 'coder', description: 'Writes, reviews, and debugs code', instruction: 'Write and fix code that matches the surrounding style. Explain what you changed and why.', icon: Code },
+    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', description: 'Reviews code and provides feedback', instruction: 'Review the change for correctness first, then for clarity. Say plainly what is wrong and what would fix it.', icon: FileText },
+    { id: 'executor', name: 'Executor', role: 'executor', description: 'Executes tools and commands', instruction: 'Run the tools needed to complete the task and report exactly what each one returned.', icon: Zap },
+    { id: 'writer', name: 'Writer', role: 'writer', description: 'Creates and edits documentation', instruction: 'Write documentation that matches what the code does, not what it was meant to do.', icon: Lightbulb },
+    { id: 'tester', name: 'Tester', role: 'tester', description: 'Creates and runs tests', instruction: 'Write tests that would fail if the behaviour regressed, and run them.', icon: FlaskConical },
+    { id: 'custom', name: 'Custom', role: 'custom', description: 'Custom agent configuration', instruction: '', icon: Settings },
 ];
 
 // ==================== HELPERS ====================
@@ -370,6 +376,9 @@ export default function Agents() {
     const [newAgentName, setNewAgentName] = useState('');
     const [newAgentDescription, setNewAgentDescription] = useState('');
     const [newAgentRole, setNewAgentRole] = useState<import('@csm/shared').AgentRole>('custom');
+    // Required by the server; there was no field for it, which is why
+    // creating an agent from this page always answered 400.
+    const [newAgentInstruction, setNewAgentInstruction] = useState('');
     const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<string | null>(null);
 
     // ==================== AGENTS DATA ====================
@@ -508,14 +517,17 @@ export default function Agents() {
 
     // Create Agent handlers
     const handleCreateAgent = async () => {
+        // Both are required by `POST /api/agents`, so both are required
+        // here -- the alternative is a 400 the user cannot act on.
         if (!newAgentName.trim()) return;
 
         const template = selectedAgentTemplate ? AGENT_TEMPLATES.find(t => t.id === selectedAgentTemplate) : null;
 
         await createAgent.mutate({
             name: newAgentName.trim(),
+            instruction: newAgentInstruction.trim() || template?.instruction || '',
             description: newAgentDescription.trim() || template?.description || undefined,
-            role: (template?.role || newAgentRole) as import('@csm/shared').AgentRole,
+            role: template?.role || newAgentRole,
         });
 
         setShowCreateAgentModal(false);
@@ -988,6 +1000,26 @@ export default function Agents() {
                                     rows={3}
                                     placeholder="What will this agent do?"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">
+                                    Instruction
+                                </label>
+                                <textarea
+                                    value={newAgentInstruction}
+                                    onChange={(e) => setNewAgentInstruction(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] resize-none"
+                                    rows={3}
+                                    placeholder={
+                                        selectedAgentTemplate
+                                            ? AGENT_TEMPLATES.find(t => t.id === selectedAgentTemplate)?.instruction
+                                            : 'What should this agent do?'
+                                    }
+                                />
+                                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                                    What the agent is told to do. Required — a template fills it in if you leave it blank.
+                                </p>
                             </div>
 
                             <div>
