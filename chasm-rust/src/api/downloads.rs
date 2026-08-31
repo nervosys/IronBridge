@@ -798,11 +798,15 @@ mod tests {
         serde_json::from_slice(&test::read_body(resp).await).expect("json body")
     }
 
-    /// The security-critical function, and the reason it exists.
+    /// Paths that escape the root on every platform this builds for.
     ///
     /// Everything rejected here is a way to write outside the download root.
     /// A miss lets a repository -- or anyone who can name a path -- put a file
     /// anywhere this process can write.
+    ///
+    /// Windows-shaped paths are *not* in this list. See the two tests below:
+    /// whether `C:\Windows` is a path or a filename is a question only the
+    /// platform can answer, and it answers differently.
     #[test]
     fn no_path_that_could_escape_the_root_is_accepted() {
         for bad in [
@@ -813,10 +817,6 @@ mod tests {
             "../../etc/passwd",
             "a/../../b",
             "/absolute/path",
-            "\\\\windows\\\\absolute",
-            "C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\hosts",
-            "C:/Windows/System32",
-            "\\\\\\\\server\\\\share\\\\file",
             ".",
             "./",
             "a/./../..",
@@ -827,6 +827,62 @@ mod tests {
                 "accepted an escaping path: {bad:?}"
             );
         }
+    }
+
+    /// Strings that are absolute or UNC paths *on Windows*.
+    ///
+    /// `std::path` parses per platform. Here a drive letter is a `Prefix` and
+    /// a backslash is a separator, so each of these is genuinely absolute and
+    /// the guard must refuse it.
+    #[cfg(windows)]
+    #[test]
+    fn windows_absolute_and_unc_paths_are_rejected() {
+        for bad in [
+            "\\windows\\absolute",
+            "C:\\Windows\\System32\\drivers\\etc\\hosts",
+            "C:/Windows/System32",
+            "\\\\server\\share\\file",
+        ] {
+            assert!(
+                safe_relative_path(bad).is_none(),
+                "accepted an absolute Windows path: {bad:?}"
+            );
+        }
+    }
+
+    /// The same strings on Unix, where they are filenames, not paths.
+    ///
+    /// `\` is an ordinary character in a Unix filename and there are no path
+    /// prefixes, so `C:\Windows\System32` names one file in the current
+    /// directory. Accepting it is correct, and this test asserts the thing
+    /// that actually matters: the join still lands under the root.
+    ///
+    /// This is why the list above no longer holds them. Asserting rejection
+    /// unconditionally would have failed on Linux and macOS while proving
+    /// nothing about safety on either.
+    #[cfg(unix)]
+    #[test]
+    fn a_windows_shaped_path_is_an_ordinary_filename_on_unix() {
+        let root = Path::new("/downloads/models/org/repo");
+        for raw in [
+            "\\windows\\absolute",
+            "C:\\Windows\\System32\\drivers\\etc\\hosts",
+            "\\\\server\\share\\file",
+        ] {
+            let safe = safe_relative_path(raw)
+                .unwrap_or_else(|| panic!("{raw:?} is a legal Unix filename"));
+            let joined = root.join(&safe);
+            assert!(
+                joined.starts_with(root),
+                "{raw:?} escaped the root as {}",
+                joined.display()
+            );
+        }
+
+        // `C:/Windows/System32` splits on `/` here, into three ordinary
+        // components. Still under the root.
+        let joined = root.join(safe_relative_path("C:/Windows/System32").expect("relative"));
+        assert!(joined.starts_with(root));
     }
 
     /// Ordinary repository paths, including nested ones, survive intact.
@@ -851,12 +907,25 @@ mod tests {
     #[test]
     fn a_safe_path_always_stays_under_its_root() {
         let root = Path::new("/downloads/models/org/repo");
+
+        // Ordinary paths, plus the platform-shaped ones. Whatever the platform
+        // decides those are -- a rejected absolute path or an accepted
+        // filename -- anything that comes back must land under the root. That
+        // is the guarantee, and unlike the rejection lists it is the same
+        // sentence on every platform.
         for raw in [
             "a.bin",
             "sub/dir/b.bin",
             "deep/deeper/deepest/c.safetensors",
+            "\\windows\\absolute",
+            "C:\\Windows\\System32",
+            "C:/Windows/System32",
+            "\\\\server\\share\\file",
         ] {
-            let joined = root.join(safe_relative_path(raw).expect("safe"));
+            let Some(safe) = safe_relative_path(raw) else {
+                continue; // Refused outright, which is also safe.
+            };
+            let joined = root.join(&safe);
             assert!(
                 joined.starts_with(root),
                 "{raw} escaped: {}",
