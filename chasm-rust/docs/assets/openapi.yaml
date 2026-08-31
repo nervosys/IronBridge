@@ -103,6 +103,22 @@ tags:
     description: Data retention policies (enterprise build only)
   - name: SSO
     description: SAML single sign-on (enterprise build only)
+  - name: OIDC
+    description: OpenID Connect single sign-on (enterprise build only)
+  - name: Documents
+    description: The knowledge base -- documents, their chunks and semantic search
+  - name: Datasets
+    description: Locally uploaded datasets
+  - name: Catalog
+    description: A read-only proxy to the Hugging Face Hub
+  - name: Downloads
+    description: Model and dataset downloads to local disk
+  - name: Training
+    description: Fine-tuning jobs, submitted to a provider
+  - name: Research
+    description: arXiv search, and the papers the user saved
+  - name: Notes
+    description: Clippings saved from a page by the browser extension
 
 paths:
   /health:
@@ -896,6 +912,135 @@ paths:
           in: path
           required: true
           description: The arXiv id.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notes:
+    get:
+      tags: [Notes]
+      summary: List clippings
+      description: >
+        Most recently saved first, ordered by `createdAt` — this server's
+        clock, not the client's.
+
+
+        `q` is a substring match over the content, source and url. Note that
+        `%` and `_` in `q` are SQL LIKE wildcards; a search for `%` matches
+        everything.
+      operationId: listNotes
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: q
+          in: query
+          description: Substring match over content, source and url.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved clippings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Note"
+    post:
+      tags: [Notes]
+      summary: Save a clipping
+      description: >
+        The body the browser extension's "Save Selection to Chasm" context
+        menu already sends. It also sends `"type": "note"`, a constant, which
+        is ignored — a column whose every value is the same word records
+        nothing.
+
+
+        Not idempotent: the same sentence selected twice is two clippings, and
+        there is no key on which the second could be recognised as the first.
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  description: The selected text, as it was selected.
+                source:
+                  type: string
+                  example: arxiv.org
+                url:
+                  type: string
+                timestamp:
+                  type: string
+                  description: >
+                    The client's own clock. Stored verbatim as `capturedAt`
+                    and never parsed; ordering uses the server's `createdAt`.
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Note"
+        "400":
+          description: content is empty or longer than 100,000 characters
+
+  /notes/{id}:
+    get:
+      tags: [Notes]
+      summary: Get one clipping
+      operationId: getNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The clipping
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Note"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Notes]
+      summary: Delete a clipping
+      operationId: deleteNote
+      parameters:
+        - name: id
+          in: path
+          required: true
           schema:
             type: string
       responses:
@@ -5119,6 +5264,35 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    Note:
+      type: object
+      description: >
+        One clipping: text selected in a page and saved by the browser
+        extension.
+      required: [id, content, createdAt]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+          description: The selected text, as it was selected.
+        source:
+          type: string
+          description: The hostname of the page. Absent when the client sent none.
+          example: arxiv.org
+        url:
+          type: string
+          description: Absent when the client sent none.
+        capturedAt:
+          type: string
+          description: >
+            The client's clock when it captured the selection, verbatim. Not
+            parsed and not authoritative; absent when the client sent none.
+        createdAt:
+          type: integer
+          format: int64
+          description: When this server wrote the row, in milliseconds since the epoch.
 
     Paper:
       type: object

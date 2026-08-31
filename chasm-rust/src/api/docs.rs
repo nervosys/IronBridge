@@ -214,6 +214,46 @@ mod tests {
         }
     }
 
+    /// Every tag an operation uses must be declared in the top-level `tags`
+    /// list.
+    ///
+    /// The list is what a reader takes as the map of the API, so a tag missing
+    /// from it is a group of endpoints the documentation does not admit to
+    /// having. Seven were missing when this was written -- Catalog, Datasets,
+    /// Documents, Downloads, OIDC, Research and Training -- every one of them
+    /// a group whose paths the spec described in full a few hundred lines
+    /// below. A one-time tidy would drift again by the next endpoint, so this
+    /// is a test rather than a correction.
+    #[test]
+    fn every_tag_an_operation_uses_is_declared() {
+        let spec = spec();
+
+        let declared: std::collections::BTreeSet<String> = spec["tags"]
+            .as_array()
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(|t| t["name"].as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(!declared.is_empty(), "expected the spec to declare tags");
+
+        let mut used = std::collections::BTreeSet::new();
+        for (_, item) in spec["paths"].as_object().expect("paths") {
+            for (_, operation) in item.as_object().expect("path item") {
+                if let Some(tags) = operation.get("tags").and_then(|t| t.as_array()) {
+                    used.extend(tags.iter().filter_map(|t| t.as_str().map(str::to_string)));
+                }
+            }
+        }
+
+        let undeclared: Vec<_> = used.difference(&declared).cloned().collect();
+        assert!(
+            undeclared.is_empty(),
+            "these tags are used by operations but not declared in the top-level              `tags` list of openapi.yaml: {undeclared:?}"
+        );
+    }
+
     /// Every path in the spec must resolve to a real route.
     ///
     /// This is the guard that was missing: `openapi.yaml` accumulated twenty
@@ -223,8 +263,8 @@ mod tests {
     async fn every_documented_path_is_actually_routed() {
         use crate::api::{
             configure_catalog_routes, configure_dataset_routes, configure_document_routes,
-            configure_download_routes, configure_inbox_routes, configure_research_routes,
-            configure_training_routes, AppState,
+            configure_download_routes, configure_inbox_routes, configure_notes_routes,
+            configure_research_routes, configure_training_routes, AppState,
         };
         use crate::ChatDatabase;
         use actix_web::web::Data;
@@ -259,6 +299,7 @@ mod tests {
                 .configure(configure_download_routes)
                 .configure(configure_training_routes)
                 .configure(configure_research_routes)
+                .configure(configure_notes_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -456,8 +497,8 @@ mod tests {
     async fn documented_response_bodies_match_what_the_server_sends() {
         use crate::api::{
             configure_catalog_routes, configure_dataset_routes, configure_document_routes,
-            configure_download_routes, configure_inbox_routes, configure_research_routes,
-            configure_training_routes, AppState,
+            configure_download_routes, configure_inbox_routes, configure_notes_routes,
+            configure_research_routes, configure_training_routes, AppState,
         };
         use crate::ChatDatabase;
         use actix_web::web::Data;
@@ -500,6 +541,7 @@ mod tests {
                 .configure(configure_download_routes)
                 .configure(configure_training_routes)
                 .configure(configure_research_routes)
+                .configure(configure_notes_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)

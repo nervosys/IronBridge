@@ -38,6 +38,7 @@ mod handlers_simple;
 mod handlers_swe;
 mod handlers_write;
 pub mod inbox;
+pub mod notes;
 #[cfg(feature = "enterprise")]
 mod oidc;
 mod recording;
@@ -67,6 +68,7 @@ pub use downloads::configure_download_routes;
 pub use enterprise_store::SqliteEnterpriseStore;
 pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
 pub use inbox::{configure_inbox_routes, init_inbox_tables, InboxEmitter};
+pub use notes::{configure_notes_routes, init_notes_tables};
 #[cfg(feature = "enterprise")]
 pub use oidc::{configure_oidc_routes, OidcProviderConfig, OidcService};
 pub use recording::{configure_recording_routes, create_recording_state};
@@ -448,6 +450,7 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .configure(configure_download_routes)
             .configure(configure_training_routes)
             .configure(configure_research_routes)
+            .configure(configure_notes_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

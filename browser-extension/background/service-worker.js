@@ -87,6 +87,24 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 });
 
+// What the server said went wrong, or the status if it did not say.
+//
+// Every endpoint here answers `{ success, data, error }`, so on a failure the
+// `error` field is a sentence written for a person. Falling back to the status
+// line keeps this honest when the body is not JSON at all -- a proxy's error
+// page, say -- rather than inventing a reason.
+async function serverReason(response) {
+    try {
+        const body = await response.json();
+        if (body && typeof body.error === 'string' && body.error.trim()) {
+            return body.error;
+        }
+    } catch (error) {
+        // Not JSON. Fall through to the status.
+    }
+    return 'Chasm answered ' + response.status + ' ' + response.statusText;
+}
+
 // Handle export session
 async function handleExportSession(tab) {
     try {
@@ -100,7 +118,7 @@ async function handleExportSession(tab) {
             if (apiResponse.ok) {
                 showNotification('Session Exported', 'Session saved to Chasm successfully');
             } else {
-                showNotification('Export Failed', 'Failed to save session to Chasm');
+                showNotification('Export Failed', await serverReason(apiResponse));
             }
         }
     } catch (error) {
@@ -127,7 +145,11 @@ async function handleExportSelection(info, tab) {
         if (apiResponse.ok) {
             showNotification('Note Saved', 'Selection saved to Chasm');
         } else {
-            showNotification('Save Failed', 'Failed to save selection');
+            // The server says why -- "content is required", or that the
+            // selection is past the length cap. Repeating its words is more
+            // use than "Failed to save selection", which says only that
+            // something did not happen.
+            showNotification('Save Failed', await serverReason(apiResponse));
         }
     } catch (error) {
         showNotification('Save Failed', error.message);
