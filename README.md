@@ -570,12 +570,15 @@ AI agent integration via Model Context Protocol:
 ```json
 {
   "mcpServers": {
-    "chasm": { "command": "chasm-mcp" }
+    "chasm": { "command": "csm-mcp" }
   }
 }
 ```
 
-Tools: `chasm_list_workspaces`, `chasm_list_sessions`, `chasm_show_session`, `chasm_search`, `chasm_detect`, `chasm_register_all`
+The binary is `csm-mcp` and the tools are prefixed `csm_`, not `chasm_`:
+`csm_list_workspaces`, `csm_list_sessions`, `csm_show_session`, `csm_search`,
+`csm_detect`, `csm_register_all`, and ten more — see
+[MCP Server](docs/api/mcp.md) for all sixteen and their parameters.
 
 ## TUI
 

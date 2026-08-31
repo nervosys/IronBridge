@@ -32,7 +32,13 @@ pub fn list_resources() -> Vec<Resource> {
         Resource {
             uri: "csm://providers".to_string(),
             name: "Providers".to_string(),
-            description: Some("Available LLM providers".to_string()),
+            // "Available" read as "installed here", which this is not: it is
+            // a static catalogue of the provider kinds Chasm can harvest.
+            // `csm_detect` is the tool that answers what is actually present.
+            description: Some(
+                "Provider kinds Chasm can harvest from (a static catalogue, not a scan of this machine)"
+                    .to_string(),
+            ),
             mime_type: Some("application/json".to_string()),
         },
         // CSM Database resources (csm-web)

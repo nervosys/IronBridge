@@ -15,6 +15,9 @@ const OPENAPI_YAML: &str = include_str!("../../openapi.yaml");
 #[cfg(test)]
 const OPENAPI_YAML_DOCS_COPY: &str = include_str!("../../docs/assets/openapi.yaml");
 
+/// The MCP reference page, checked against the tool registry below.
+const MCP_DOC: &str = include_str!("../../../docs/api/mcp.md");
+
 /// Get OpenAPI specification (YAML)
 pub async fn openapi_yaml() -> impl Responder {
     HttpResponse::Ok()
@@ -211,6 +214,69 @@ mod tests {
             }
             serde_json::Value::Array(items) => items.iter().for_each(|v| collect_refs(v, out)),
             _ => {}
+        }
+    }
+
+    /// `docs/api/mcp.md` must document exactly the tools the server registers.
+    ///
+    /// This is the same guarantee `every_documented_path_is_actually_routed`
+    /// gives the REST API, for the surface that had drifted furthest. Before
+    /// this test, that page documented `chasm_list_workspaces`,
+    /// `chasm_get_session`, `chasm_search_sessions` and `chasm_get_stats`, and
+    /// told the reader to run `chasm mcp serve`. Not one of those names has
+    /// ever existed: the prefix is `csm_`, two of the four have no counterpart
+    /// under any prefix, and `chasm` has no `mcp` subcommand. An agent
+    /// following the documentation failed at the first call, and nothing in
+    /// the build could notice.
+    #[test]
+    fn the_mcp_reference_documents_exactly_the_tools_that_exist() {
+        let registered: std::collections::BTreeSet<String> = crate::mcp::tools::list_tools()
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+        assert!(
+            !registered.is_empty(),
+            "expected the server to register tools"
+        );
+
+        // Headings of the form: #### `csm_something`
+        let documented: std::collections::BTreeSet<String> = MCP_DOC
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("#### `"))
+            .filter_map(|rest| rest.strip_suffix("`"))
+            .map(str::to_string)
+            .collect();
+
+        let undocumented: Vec<_> = registered.difference(&documented).cloned().collect();
+        let invented: Vec<_> = documented.difference(&registered).cloned().collect();
+
+        assert!(
+            undocumented.is_empty() && invented.is_empty(),
+            "docs/api/mcp.md and the tool registry disagree.\n  \
+             registered but undocumented: {undocumented:?}\n  \
+             documented but not registered: {invented:?}"
+        );
+    }
+
+    /// The page must not tell the reader to run a command that does not exist.
+    ///
+    /// `chasm mcp serve` was the documented way to start the server for as
+    /// long as the page existed. The binary is `csm-mcp`.
+    #[test]
+    fn the_mcp_reference_names_the_binary_that_exists() {
+        assert!(
+            MCP_DOC.contains("csm-mcp"),
+            "docs/api/mcp.md should name the csm-mcp binary"
+        );
+        for line in MCP_DOC.lines() {
+            let trimmed = line.trim();
+            // Allow the paragraph that explains the old, wrong invocation.
+            if trimmed.contains("chasm mcp") && !trimmed.contains("There is no") {
+                assert!(
+                    trimmed.contains("no `chasm mcp`") || trimmed.contains("`chasm mcp serve`"),
+                    "docs/api/mcp.md still instructs `chasm mcp`, which is not a subcommand: {trimmed}"
+                );
+            }
         }
     }
 
