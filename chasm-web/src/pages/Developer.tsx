@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Download,
     Database,
@@ -50,6 +50,8 @@ import type {
     DatasetType,
     CatalogEntry,
     DatasetValidation,
+    TrainingJob,
+    DownloadJob,
 } from '../api/client';
 
 /*
@@ -266,7 +268,17 @@ export default function Developer() {
     //
     // Polled while a job is unfinished: every read refreshes it from the
     // provider, so asking again is the only way a status advances.
-    const [trainingPollMs, setTrainingPollMs] = useState<number | undefined>(undefined);
+    /**
+     * Poll only while a job is unfinished.
+     *
+     * A function of the data rather than an effect writing state: the answer
+     * is already in the jobs the query returned, so storing it would mean a
+     * second render on every poll for a value that was never new information.
+     */
+    const trainingPollMs = (jobs: TrainingJob[] | null) =>
+        jobs?.some(j => !['succeeded', 'failed', 'cancelled'].includes(j.status))
+            ? 5000
+            : undefined;
     const {
         data: trainingData,
         error: trainingListError,
@@ -281,59 +293,70 @@ export default function Developer() {
     const [trainDatasetId, setTrainDatasetId] = useState('');
     const [trainBaseModel, setTrainBaseModel] = useState('gpt-4o-mini-2024-07-18');
     const [trainSuffix, setTrainSuffix] = useState('');
-    const [validation, setValidation] = useState<DatasetValidation | null>(null);
-    const [trainMessage, setTrainMessage] = useState<{ text: string; isError: boolean } | null>(null);
+    /*
+     * Both of these carry the dataset they belong to.
+     *
+     * They used to be cleared by an effect watching `trainDatasetId`. Tagging
+     * them instead means a verdict for another dataset is simply not the
+     * current one -- there is no window, however brief, in which a green tick
+     * from the previous dataset is on screen next to the new one.
+     */
+    const [validationFor, setValidationFor] = useState<{
+        datasetId: string;
+        result: DatasetValidation;
+    } | null>(null);
+    const [trainMessageFor, setTrainMessageFor] = useState<{
+        datasetId: string;
+        text: string;
+        isError: boolean;
+    } | null>(null);
 
-    useEffect(() => {
-        const unfinished = trainingJobs.some(
-            j => !['succeeded', 'failed', 'cancelled'].includes(j.status)
-        );
-        setTrainingPollMs(unfinished ? 5000 : undefined);
-    }, [trainingJobs]);
+    const validation = validationFor?.datasetId === trainDatasetId ? validationFor.result : null;
+    const trainMessage =
+        trainMessageFor?.datasetId === trainDatasetId ? trainMessageFor : null;
 
-    // Clear a stale verdict when the dataset changes: a green tick belonging
-    // to a different dataset is worse than no tick.
-    useEffect(() => {
-        setValidation(null);
-        setTrainMessage(null);
-    }, [trainDatasetId]);
+    /** Tag a message with the dataset it is about, so a stale one cannot show. */
+    const say = (datasetId: string, text: string, isError: boolean) =>
+        setTrainMessageFor({ datasetId, text, isError });
 
     const runValidation = async () => {
         if (!trainDatasetId) return;
-        setTrainMessage(null);
+        const datasetId = trainDatasetId;
+        setTrainMessageFor(null);
         try {
-            setValidation(await validateDataset.mutate(trainDatasetId));
+            const result = await validateDataset.mutate(datasetId);
+            if (result) setValidationFor({ datasetId, result });
         } catch (err) {
-            setTrainMessage({
-                text: err instanceof Error ? err.message : 'Could not validate that dataset.',
-                isError: true,
-            });
+            say(
+                datasetId,
+                err instanceof Error ? err.message : 'Could not validate that dataset.',
+                true
+            );
         }
     };
 
     const submitTraining = async () => {
         if (!trainDatasetId || !trainBaseModel.trim()) return;
-        setTrainMessage(null);
+        const datasetId = trainDatasetId;
+        setTrainMessageFor(null);
         try {
             const job = await startTraining.mutate({
-                datasetId: trainDatasetId,
+                datasetId,
                 baseModel: trainBaseModel.trim(),
                 suffix: trainSuffix.trim() || undefined,
             });
-            setTrainMessage(
-                job
-                    ? { text: `Submitted as ${job.providerJobId}.`, isError: false }
-                    : { text: 'The server returned no job for the submission.', isError: true }
-            );
+            if (job) {
+                say(datasetId, `Submitted as ${job.providerJobId}.`, false);
+            } else {
+                say(datasetId, 'The server returned no job for the submission.', true);
+            }
+            // The refetch brings back a job that is not yet finished, which is
+            // what `trainingPollMs` reads, so polling resumes on this render.
             await refetchTraining();
-            setTrainingPollMs(5000);
         } catch (err) {
             // The server's message is the useful one -- it carries the
             // provider's own refusal, or the count of dataset problems.
-            setTrainMessage({
-                text: err instanceof Error ? err.message : 'The submission was refused.',
-                isError: true,
-            });
+            say(datasetId, err instanceof Error ? err.message : 'The submission was refused.', true);
         }
     };
 
@@ -342,10 +365,13 @@ export default function Developer() {
             await cancelTraining.mutate(id);
             await refetchTraining();
         } catch (err) {
-            setTrainMessage({
-                text: err instanceof Error ? err.message : 'Could not cancel that job.',
-                isError: true,
-            });
+            if (trainDatasetId) {
+                say(
+                    trainDatasetId,
+                    err instanceof Error ? err.message : 'Could not cancel that job.',
+                    true
+                );
+            }
         }
     };
 
@@ -354,7 +380,9 @@ export default function Developer() {
     // Polled only while something is running: progress is written by the
     // transfer, so it advances between requests -- but a page that kept
     // polling an idle server would do so forever for nothing.
-    const [pollMs, setPollMs] = useState<number | undefined>(undefined);
+    /** Poll only while a download is running. See `trainingPollMs`. */
+    const pollMs = (jobs: DownloadJob[] | null) =>
+        jobs?.some(j => j.status === 'running') ? 1500 : undefined;
     const {
         data: downloadData,
         refetch: refetchDownloads,
@@ -371,11 +399,6 @@ export default function Developer() {
         files: { path: string; size: number }[];
     } | null>(null);
     const [downloadError, setDownloadError] = useState<string | null>(null);
-
-    useEffect(() => {
-        const running = downloadJobs.some(j => j.status === 'running');
-        setPollMs(running ? 1500 : undefined);
-    }, [downloadJobs]);
 
     /**
      * Open the file picker for a repository.
@@ -404,10 +427,10 @@ export default function Developer() {
         try {
             await startDownload.mutate({ kind: filePicker.kind, repoId: filePicker.id, filePath });
             setFilePicker(null);
+            // The refetch brings back a job with status `running`, which is
+            // what `pollMs` reads, so polling starts on this render. Nothing
+            // needs to be set.
             await refetchDownloads();
-            // Start polling straight away rather than waiting for the effect
-            // to notice on the next render.
-            setPollMs(1500);
         } catch (err) {
             // The server refuses for reasons a user can act on -- too big, no
             // room, already there -- so its message is shown rather than a
@@ -539,18 +562,20 @@ export default function Developer() {
 
     // Schema export
     const [schemaFormat, setSchemaFormat] = useState<keyof typeof toolSchemas>('openai');
-    const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
+    /*
+     * `null` means "the user has not chosen", not "nothing is selected".
+     *
+     * Both of these used to be defaulted by an effect that fired when the tool
+     * list arrived, which is a render spent restating what the list already
+     * says. Holding the un-chosen state explicitly lets the default be derived
+     * instead, and removes the moment after load where the checkboxes were all
+     * unticked before the effect ran.
+     */
+    const [chosenTools, setChosenTools] = useState<Set<string> | null>(null);
     const [generatedSchema, setGeneratedSchema] = useState<string | null>(null);
 
-    // Default the selection to everything, once the list arrives.
-    useEffect(() => {
-        setSelectedTools(new Set(tools.map(t => t.name)));
-    }, [tools]);
-
-    // Default the test target to the first tool, once the list arrives.
-    useEffect(() => {
-        setTestToolName(current => current || (tools[0]?.name ?? ''));
-    }, [tools]);
+    const selectedTools = chosenTools ?? new Set(tools.map(t => t.name));
+    const testTool = testToolName || (tools[0]?.name ?? '');
 
     /**
      * Run the selected tool against the server.
@@ -577,7 +602,7 @@ export default function Developer() {
         }
 
         try {
-            const result = await callTool.mutate({ name: testToolName, args });
+            const result = await callTool.mutate({ name: testTool, args });
             const text = (result?.result?.content ?? [])
                 .map(part => part.text)
                 .join('\n')
@@ -1779,8 +1804,10 @@ export default function Developer() {
                                                     className="rounded"
                                                     checked={selectedTools.has(tool.name)}
                                                     onChange={e => {
-                                                        setSelectedTools(prev => {
-                                                            const next = new Set(prev);
+                                                        setChosenTools(prev => {
+                                                            const next = new Set(
+                                                                prev ?? tools.map(t => t.name)
+                                                            );
                                                             if (e.target.checked) next.add(tool.name);
                                                             else next.delete(tool.name);
                                                             return next;
@@ -1815,7 +1842,7 @@ export default function Developer() {
                                     <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">Select Tool</label>
                                     <select
                                         className="w-full px-3 py-2 bg-[hsl(var(--muted))] border rounded-lg text-[hsl(var(--foreground))]"
-                                        value={testToolName}
+                                        value={testTool}
                                         onChange={e => setTestToolName(e.target.value)}
                                     >
                                         {tools.map(tool => (
@@ -1835,7 +1862,7 @@ export default function Developer() {
                                 <button
                                     className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50"
                                     onClick={handleExecuteTool}
-                                    disabled={!testToolName || callTool.isLoading}
+                                    disabled={!testTool || callTool.isLoading}
                                 >
                                     <Terminal size={18} />
                                     {callTool.isLoading ? 'Running…' : 'Execute Tool'}

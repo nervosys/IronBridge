@@ -219,28 +219,30 @@ export default function SWE() {
             }
         }
         setIsLoadingProjects(false);
-    }, []);
+        // `run` is stable (useCallback with no deps), so listing it costs a
+        // reference and buys the guarantee that it stays stable.
+    }, [run]);
 
     const fetchMemories = useCallback(async (projectId: string) => {
         const data = await run<SweMemory[]>(`/swe/projects/${projectId}/memory`);
         if (data) {
             setMemories(data);
         }
-    }, []);
+    }, [run]);
 
     const fetchRules = useCallback(async (projectId: string) => {
         const data = await run<SweRule[]>(`/swe/projects/${projectId}/rules`);
         if (data) {
             setRules(data);
         }
-    }, []);
+    }, [run]);
 
     const fetchContext = useCallback(async (projectId: string) => {
         const data = await run<SweContextInjection>(`/swe/projects/${projectId}/context`);
         if (data) {
             setContextInjection(data);
         }
-    }, []);
+    }, [run]);
 
     // Fetch projects on mount
     useEffect(() => {

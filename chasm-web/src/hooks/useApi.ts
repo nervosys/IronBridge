@@ -67,9 +67,22 @@ import type {
 // Types
 // =============================================================================
 
-interface UseQueryOptions {
+interface UseQueryOptions<T = unknown> {
     enabled?: boolean;
-    refetchInterval?: number;
+    /**
+     * How often to refetch, or a function of the data that decides.
+     *
+     * The function form exists so a caller can poll only while there is
+     * something to poll for -- a training job still running, a download not
+     * yet finished -- without holding the answer in state. Deriving it here,
+     * where the data already lives, avoids the alternative: an effect in the
+     * caller that watches the query result and pushes an interval back into
+     * state, which is a second render on every poll and the cascade that
+     * `react-hooks/set-state-in-effect` exists to catch.
+     *
+     * Return `undefined` to stop polling.
+     */
+    refetchInterval?: number | ((data: T | null) => number | undefined);
     refetchOnWindowFocus?: boolean;
 }
 
@@ -99,7 +112,7 @@ interface UseMutationResult<TData, TVariables> {
 function useQuery<T>(
     queryFn: () => Promise<ApiResponse<T>>,
     deps: unknown[] = [],
-    options: UseQueryOptions = {}
+    options: UseQueryOptions<T> = {}
 ): UseQueryResult<T> {
     const { enabled = true, refetchInterval, refetchOnWindowFocus = false } = options;
     const [data, setData] = useState<T | null>(null);
@@ -159,12 +172,18 @@ function useQuery<T>(
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [...deps, enabled, fetchData]);
 
-    // Refetch interval
+    // Refetch interval.
+    //
+    // Resolved during render, so a data-dependent interval re-evaluates when
+    // the data changes and the effect simply follows it. Nothing is stored.
+    const resolvedInterval =
+        typeof refetchInterval === 'function' ? refetchInterval(data) : refetchInterval;
+
     useEffect(() => {
-        if (!refetchInterval || !enabled) return;
-        const interval = setInterval(() => fetchData(true), refetchInterval);
+        if (!resolvedInterval || !enabled) return;
+        const interval = setInterval(() => fetchData(true), resolvedInterval);
         return () => clearInterval(interval);
-    }, [refetchInterval, enabled, fetchData]);
+    }, [resolvedInterval, enabled, fetchData]);
 
     // Refetch on window focus
     useEffect(() => {
@@ -381,7 +400,9 @@ export function useUnsavePaper() {
  * polling is what makes a status current -- and the caller stops polling once
  * nothing is unfinished.
  */
-export function useTrainingJobs(options?: UseQueryOptions): UseQueryResult<TrainingJob[]> {
+export function useTrainingJobs(
+    options?: UseQueryOptions<TrainingJob[]>
+): UseQueryResult<TrainingJob[]> {
     const queryFn = useCallback(() => training.jobs(), []);
     return useQuery(queryFn, [], options);
 }
@@ -407,7 +428,9 @@ export function useCancelTraining() {
  * the only way to see it advance is to ask again. The interval is chosen by
  * the caller, which stops polling once nothing is running.
  */
-export function useDownloads(options?: UseQueryOptions): UseQueryResult<DownloadJob[]> {
+export function useDownloads(
+    options?: UseQueryOptions<DownloadJob[]>
+): UseQueryResult<DownloadJob[]> {
     const queryFn = useCallback(() => downloads.list(), []);
     return useQuery(queryFn, [], options);
 }
