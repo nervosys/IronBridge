@@ -65,7 +65,13 @@ import type { Agent, Swarm, SwarmStatus } from '../api/types';
 import type { SweProject, SweMemory, SweRule, SweMemoryCategory } from '@csm/shared';
 
 // SWE Memory API base URL
-const SWE_API_BASE = 'http://localhost:8787/api/v1';
+/*
+ * `/api`, not `/api/v1`: the server has never routed a `/v1` segment, so all
+ * three requests below answered 404 and each `catch` turned that into an
+ * empty list. Probed against a running server -- `/api/v1/swe/projects` 404,
+ * `/api/swe/projects` 200.
+ */
+const SWE_API_BASE = 'http://localhost:8787/api';
 
 // SWE Memory categories
 const MEMORY_CATEGORIES: { value: SweMemoryCategory; label: string; icon: typeof Brain; color: string }[] = [

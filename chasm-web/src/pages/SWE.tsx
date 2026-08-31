@@ -38,8 +38,17 @@ import type {
 
 import { config } from '../config';
 
-// API base URL from environment config
-const API_BASE = `${config.apiBaseUrl}/api/v1`;
+/*
+ * The server mounts everything under `/api`. There is no `/api/v1` and there
+ * never was -- `grep -r 'scope("/api/v1"' finds nothing -- so every request
+ * this page made answered 404, and `fetchApi` turned each one into an empty
+ * list. The page has therefore always looked like a working SWE workspace
+ * with no projects in it.
+ *
+ * Probed against a running server: `/api/v1/swe/projects` 404,
+ * `/api/swe/projects` 200.
+ */
+const API_BASE = `${config.apiBaseUrl}/api`;
 
 // Memory category display info
 const MEMORY_CATEGORIES: { value: SweMemoryCategory; label: string; icon: typeof Brain; color: string }[] = [
@@ -80,26 +89,40 @@ interface ApiResponse<T> {
     error?: string;
 }
 
-// API helper functions
+/**
+ * Throws on failure with what the server said, or the status line when it said
+ * nothing usable.
+ *
+ * This used to catch everything, log to the console and return `null`, which
+ * every caller then read as "no data". A 404, a dead server and an empty
+ * project list were indistinguishable on screen -- and for as long as the base
+ * URL carried `/v1`, the first of those was what was really happening.
+ */
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T | null> {
+    const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...options?.headers,
+        },
+    });
+
+    let result: ApiResponse<T> | null = null;
     try {
-        const response = await fetch(`${API_BASE}${path}`, {
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options?.headers,
-            },
-        });
-        const result: ApiResponse<T> = await response.json();
-        if (result.success && result.data !== undefined) {
-            return result.data;
-        }
-        console.error('API error:', result.error);
-        return null;
-    } catch (error) {
-        console.error('Fetch error:', error);
-        return null;
+        result = await response.json();
+    } catch {
+        // Not JSON -- a proxy's error page, say. The status is all we have.
+        result = null;
     }
+
+    if (!response.ok || !result?.success) {
+        throw new Error(
+            result?.error?.trim() ||
+                `Chasm answered ${response.status} ${response.statusText || ''}`.trim()
+        );
+    }
+
+    return result.data ?? null;
 }
 
 // Helper functions to format context injection data
@@ -165,9 +188,29 @@ export default function SWE() {
     const [activeTab, setActiveTab] = useState<'memory' | 'rules' | 'context'>('memory');
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
+    /** What went wrong, if anything did. Cleared by the next call that works. */
+    const [apiError, setApiError] = useState<string | null>(null);
+
+    /**
+     * `fetchApi`, with the failure kept rather than dropped.
+     *
+     * Callers still get `null` and still render nothing, but the reason now
+     * reaches the screen instead of the console.
+     */
+    const run = useCallback(async <T,>(path: string, options?: RequestInit): Promise<T | null> => {
+        try {
+            const data = await fetchApi<T>(path, options);
+            setApiError(null);
+            return data;
+        } catch (error) {
+            setApiError(error instanceof Error ? error.message : String(error));
+            return null;
+        }
+    }, []);
+
     const fetchProjects = useCallback(async () => {
         setIsLoadingProjects(true);
-        const data = await fetchApi<SweProject[]>('/swe/projects');
+        const data = await run<SweProject[]>('/swe/projects');
         if (data) {
             setProjects(data);
             // Auto-select first project
@@ -179,21 +222,21 @@ export default function SWE() {
     }, []);
 
     const fetchMemories = useCallback(async (projectId: string) => {
-        const data = await fetchApi<SweMemory[]>(`/swe/projects/${projectId}/memory`);
+        const data = await run<SweMemory[]>(`/swe/projects/${projectId}/memory`);
         if (data) {
             setMemories(data);
         }
     }, []);
 
     const fetchRules = useCallback(async (projectId: string) => {
-        const data = await fetchApi<SweRule[]>(`/swe/projects/${projectId}/rules`);
+        const data = await run<SweRule[]>(`/swe/projects/${projectId}/rules`);
         if (data) {
             setRules(data);
         }
     }, []);
 
     const fetchContext = useCallback(async (projectId: string) => {
-        const data = await fetchApi<SweContextInjection>(`/swe/projects/${projectId}/context`);
+        const data = await run<SweContextInjection>(`/swe/projects/${projectId}/context`);
         if (data) {
             setContextInjection(data);
         }
@@ -226,7 +269,7 @@ export default function SWE() {
     const createProject = async () => {
         if (!newProjectPath) return;
 
-        const data = await fetchApi<SweProject>('/swe/projects', {
+        const data = await run<SweProject>('/swe/projects', {
             method: 'POST',
             body: JSON.stringify({
                 path: newProjectPath,
@@ -249,7 +292,7 @@ export default function SWE() {
         const confirmed = window.confirm('Delete this project and all its data?');
         if (!confirmed) return;
 
-        await fetchApi(`/swe/projects/${id}`, { method: 'DELETE' });
+        await run(`/swe/projects/${id}`, { method: 'DELETE' });
         setProjects(prev => prev.filter(p => p.id !== id));
         if (selectedProject?.id === id) {
             setSelectedProject(projects.find(p => p.id !== id) || null);
@@ -261,7 +304,7 @@ export default function SWE() {
 
         if (editingMemory) {
             // Update
-            const data = await fetchApi<SweMemory>(`/swe/projects/${selectedProject.id}/memory/${editingMemory.id}`, {
+            const data = await run<SweMemory>(`/swe/projects/${selectedProject.id}/memory/${editingMemory.id}`, {
                 method: 'PUT',
                 body: JSON.stringify(memoryForm),
             });
@@ -270,7 +313,7 @@ export default function SWE() {
             }
         } else {
             // Create
-            const data = await fetchApi<SweMemory>(`/swe/projects/${selectedProject.id}/memory`, {
+            const data = await run<SweMemory>(`/swe/projects/${selectedProject.id}/memory`, {
                 method: 'POST',
                 body: JSON.stringify(memoryForm),
             });
@@ -289,7 +332,7 @@ export default function SWE() {
     const deleteMemory = async (id: string) => {
         if (!selectedProject) return;
 
-        await fetchApi(`/swe/projects/${selectedProject.id}/memory/${id}`, { method: 'DELETE' });
+        await run(`/swe/projects/${selectedProject.id}/memory/${id}`, { method: 'DELETE' });
         setMemories(prev => prev.filter(m => m.id !== id));
         fetchContext(selectedProject.id);
     };
@@ -299,7 +342,7 @@ export default function SWE() {
 
         if (editingRule) {
             // Update
-            const data = await fetchApi<SweRule>(`/swe/projects/${selectedProject.id}/rules/${editingRule.id}`, {
+            const data = await run<SweRule>(`/swe/projects/${selectedProject.id}/rules/${editingRule.id}`, {
                 method: 'PUT',
                 body: JSON.stringify(ruleForm),
             });
@@ -308,7 +351,7 @@ export default function SWE() {
             }
         } else {
             // Create
-            const data = await fetchApi<SweRule>(`/swe/projects/${selectedProject.id}/rules`, {
+            const data = await run<SweRule>(`/swe/projects/${selectedProject.id}/rules`, {
                 method: 'POST',
                 body: JSON.stringify(ruleForm),
             });
@@ -327,7 +370,7 @@ export default function SWE() {
     const deleteRule = async (id: string) => {
         if (!selectedProject) return;
 
-        await fetchApi(`/swe/projects/${selectedProject.id}/rules/${id}`, { method: 'DELETE' });
+        await run(`/swe/projects/${selectedProject.id}/rules/${id}`, { method: 'DELETE' });
         setRules(prev => prev.filter(r => r.id !== id));
         fetchContext(selectedProject.id);
     };
@@ -335,7 +378,7 @@ export default function SWE() {
     const toggleRuleEnabled = async (rule: SweRule) => {
         if (!selectedProject) return;
 
-        const data = await fetchApi<SweRule>(`/swe/projects/${selectedProject.id}/rules/${rule.id}`, {
+        const data = await run<SweRule>(`/swe/projects/${selectedProject.id}/rules/${rule.id}`, {
             method: 'PUT',
             body: JSON.stringify({ ...rule, enabled: !rule.enabled }),
         });
@@ -391,7 +434,24 @@ export default function SWE() {
     };
 
     return (
-        <div className="h-[calc(100vh-4rem)] flex">
+        <div className="h-[calc(100vh-4rem)] flex relative">
+            {apiError && (
+                <div
+                    role="alert"
+                    className="absolute top-0 left-0 right-0 z-20 flex items-start gap-2 px-4 py-2 bg-red-500/10 border-b border-red-500/40 text-sm text-red-300"
+                >
+                    <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                    <span className="flex-1">{apiError}</span>
+                    <button
+                        onClick={() => setApiError(null)}
+                        className="text-red-300/70 hover:text-red-200"
+                        title="Dismiss"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            )}
+
             {/* Left Sidebar - Projects */}
             <div className="w-72 border-r border-border bg-card flex flex-col">
                 <div className="p-4 border-b border-border">
