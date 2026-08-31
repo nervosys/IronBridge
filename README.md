@@ -621,11 +621,19 @@ rest of the crate does — no `libxmlsec1`, no OpenSSL, no `clang`.
   document so wrapped forgeries cannot reach the session.
 - **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
 - **Data Retention**: policy model, scheduling, and expiry actions.
-- **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS —
-  reporting scaffolding, not certification.
-- **Multi-tenancy**: Subscription tiers, tenant isolation, white-labeling.
+- **Multi-tenancy** and **white-labelling**: subscription tiers, tenant
+  isolation and custom branding. Compiled under `--features enterprise` and
+  tested, but *not routed* — no endpoint, table or caller reaches them. A
+  design in source form, not behaviour you can invoke.
 
-All three services persist through `api::audit::DatabaseOps`. The crate ships
+There is no compliance-framework reporting. A `src/enterprise/compliance.rs`
+once listed SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP and PCI DSS, but it was
+a second, unrouted implementation of the audit and retention models above, and
+had already drifted from them — two `RetentionPolicy` types keyed on different
+id types, two `AuditEvent`s under one name. It was deleted rather than
+reconciled; the routed implementation is the one that serves traffic.
+
+All of these services persist through `api::audit::DatabaseOps`. The crate ships
 `SqliteEnterpriseStore`, which implements all 35 methods against the same SQLite
 database as the rest of Chasm; an embedder can substitute its own implementor.
 
