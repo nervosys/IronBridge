@@ -186,6 +186,11 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
             .route("/swarms", web::post().to(create_swarm))
             .route("/swarms/{id}", web::get().to(get_swarm))
             .route("/swarms/{id}", web::delete().to(delete_swarm))
+            .route("/swarms/{id}/agents", web::post().to(add_swarm_agent))
+            .route(
+                "/swarms/{id}/agents/{agent_id}",
+                web::delete().to(remove_swarm_agent),
+            )
             // Settings routes
             .route("/settings", web::get().to(get_settings))
             .route("/settings", web::put().to(update_settings))

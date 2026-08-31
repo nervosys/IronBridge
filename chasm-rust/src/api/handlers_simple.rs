@@ -2362,6 +2362,176 @@ pub async fn delete_swarm(state: web::Data<AppState>, path: web::Path<String>) -
     }
 }
 
+/// Add an agent to an existing swarm.
+///
+/// The web UI has had an "Add Agent to Swarm" dialog since it was written,
+/// with a select for the agent and a select for the role. Neither was bound to
+/// anything, and its confirm button only closed the dialog -- nothing could
+/// have been sent, because no route existed to send it to. `POST /api/swarms`
+/// takes a membership list at creation and there was no way to change it
+/// afterwards.
+///
+/// Membership lives in the `agents` column as `{agent_id, role}` records, so
+/// this reads the list, edits it and writes it back.
+///
+/// Adding an agent that is already a member updates its role rather than
+/// duplicating it: a swarm cannot hold one agent in two roles, and refusing
+/// would make the obvious way to change a role an error.
+pub async fn add_swarm_agent(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: web::Json<SwarmAgent>,
+) -> impl Responder {
+    let swarm_id = path.into_inner();
+    let member = body.into_inner();
+
+    if member.agent_id.trim().is_empty() {
+        return HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("agent_id is required".to_string()),
+        });
+    }
+    if member.role.trim().is_empty() {
+        return HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("role is required".to_string()),
+        });
+    }
+
+    let db = state.db.lock().unwrap();
+    if let Err(e) = init_swarms_table(&db.conn) {
+        return ApiResponse::<()>::error(&format!("Database error: {}", e));
+    }
+
+    // A membership pointing at an agent that does not exist is a dangling
+    // reference that later reads as data. Note that `create_swarm` does not
+    // check this -- an asymmetry worth closing, but not by loosening the
+    // check that is here.
+    let agent_exists: Result<i64, _> = db.conn.query_row(
+        "SELECT COUNT(*) FROM agents WHERE id = ?1",
+        params![member.agent_id.trim()],
+        |row| row.get(0),
+    );
+    match agent_exists {
+        Ok(0) => {
+            return HttpResponse::NotFound().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some(format!("No agent with id {}", member.agent_id.trim())),
+            })
+        }
+        Err(e) => return ApiResponse::<()>::error(&format!("Database error: {}", e)),
+        Ok(_) => {}
+    }
+
+    let current: Result<String, _> = db.conn.query_row(
+        "SELECT agents FROM swarms WHERE id = ?1",
+        params![swarm_id],
+        |row| row.get(0),
+    );
+    let current = match current {
+        Ok(json) => json,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return HttpResponse::NotFound().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Swarm not found".to_string()),
+            })
+        }
+        Err(e) => return ApiResponse::<()>::error(&format!("Database error: {}", e)),
+    };
+
+    let mut members: Vec<SwarmAgent> = serde_json::from_str(&current).unwrap_or_default();
+    let agent_id = member.agent_id.trim().to_string();
+    let role = member.role.trim().to_string();
+    match members.iter_mut().find(|m| m.agent_id == agent_id) {
+        Some(existing) => existing.role = role,
+        None => members.push(SwarmAgent { agent_id, role }),
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let encoded = serde_json::to_string(&members).unwrap_or_else(|_| "[]".to_string());
+
+    match db.conn.execute(
+        "UPDATE swarms SET agents = ?1, updated_at = ?2 WHERE id = ?3",
+        params![encoded, now, swarm_id],
+    ) {
+        Ok(_) => ApiResponse::success(serde_json::json!({
+            "id": swarm_id,
+            "agents": members,
+            "updatedAt": now,
+        })),
+        Err(e) => ApiResponse::<()>::error(&format!("Database error: {}", e)),
+    }
+}
+
+/// Remove an agent from a swarm.
+///
+/// A 404 when it was not a member: reporting a removal that removed nothing is
+/// the failure this whole audit is about.
+pub async fn remove_swarm_agent(
+    state: web::Data<AppState>,
+    path: web::Path<(String, String)>,
+) -> impl Responder {
+    let (swarm_id, agent_id) = path.into_inner();
+
+    let db = state.db.lock().unwrap();
+    if let Err(e) = init_swarms_table(&db.conn) {
+        return ApiResponse::<()>::error(&format!("Database error: {}", e));
+    }
+
+    let current: Result<String, _> = db.conn.query_row(
+        "SELECT agents FROM swarms WHERE id = ?1",
+        params![swarm_id],
+        |row| row.get(0),
+    );
+    let current = match current {
+        Ok(json) => json,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return HttpResponse::NotFound().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Swarm not found".to_string()),
+            })
+        }
+        Err(e) => return ApiResponse::<()>::error(&format!("Database error: {}", e)),
+    };
+
+    let mut members: Vec<SwarmAgent> = serde_json::from_str(&current).unwrap_or_default();
+    let before = members.len();
+    members.retain(|m| m.agent_id != agent_id);
+    if members.len() == before {
+        return HttpResponse::NotFound().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("That agent is not in this swarm".to_string()),
+        });
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let encoded = serde_json::to_string(&members).unwrap_or_else(|_| "[]".to_string());
+
+    match db.conn.execute(
+        "UPDATE swarms SET agents = ?1, updated_at = ?2 WHERE id = ?3",
+        params![encoded, now, swarm_id],
+    ) {
+        Ok(_) => ApiResponse::success(serde_json::json!({
+            "id": swarm_id,
+            "agents": members,
+            "updatedAt": now,
+        })),
+        Err(e) => ApiResponse::<()>::error(&format!("Database error: {}", e)),
+    }
+}
+
 // =============================================================================
 // Settings Endpoints
 // =============================================================================
@@ -3571,5 +3741,223 @@ mod credential_encryption_tests {
         let raw = String::from_utf8(test::read_body(resp).await.to_vec()).expect("utf8");
         assert!(!raw.contains("credential"), "listing leaked a field: {raw}");
         assert!(!raw.contains("sk-do-not-store-me"));
+    }
+}
+
+#[cfg(test)]
+mod swarm_membership_tests {
+    use super::*;
+    use crate::ChatDatabase;
+    use actix_web::{test, App};
+
+    /// A swarm, an agent that really exists, and an app that routes both.
+    async fn fixture() -> (tempfile::TempDir, web::Data<AppState>, String, String) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("swarm-membership.db");
+        crate::commands::create_harvest_database(&db_path).expect("schema");
+        let db = ChatDatabase::open(&db_path).expect("open");
+        let state = web::Data::new(AppState::new(db, db_path));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(crate::api::configure_routes),
+        )
+        .await;
+
+        let created = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/agents")
+                .set_json(serde_json::json!({
+                    "name": "a member",
+                    "instruction": "do the thing"
+                }))
+                .to_request(),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(created).await;
+        let agent_id = body["data"]["id"].as_str().expect("agent id").to_string();
+
+        let created = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/swarms")
+                .set_json(serde_json::json!({
+                    "name": "a swarm",
+                    "orchestration": "sequential",
+                    "agents": []
+                }))
+                .to_request(),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(created).await;
+        let swarm_id = body["data"]["id"].as_str().expect("swarm id").to_string();
+
+        (dir, state, swarm_id, agent_id)
+    }
+
+    /// Read membership back through the swarm rather than trusting the
+    /// response body: a handler echoing its own input proves no persistence.
+    async fn members_of(state: &web::Data<AppState>, swarm_id: &str) -> Vec<serde_json::Value> {
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(crate::api::configure_routes),
+        )
+        .await;
+        let swarm = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/swarms/{swarm_id}"))
+                .to_request(),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(swarm).await;
+        body["data"]["agents"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    async fn post_member(
+        state: &web::Data<AppState>,
+        swarm_id: &str,
+        body: serde_json::Value,
+    ) -> u16 {
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(crate::api::configure_routes),
+        )
+        .await;
+        let response = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/swarms/{swarm_id}/agents"))
+                .set_json(body)
+                .to_request(),
+        )
+        .await;
+        response.status().as_u16()
+    }
+
+    #[tokio::test]
+    async fn an_agent_can_be_added_and_is_still_there_afterwards() {
+        let (_dir, state, swarm_id, agent_id) = fixture().await;
+
+        let status = post_member(
+            &state,
+            &swarm_id,
+            serde_json::json!({ "agent_id": agent_id, "role": "coordinator" }),
+        )
+        .await;
+        assert_eq!(status, 200);
+
+        let members = members_of(&state, &swarm_id).await;
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0]["agent_id"], agent_id.as_str());
+        assert_eq!(members[0]["role"], "coordinator");
+    }
+
+    /// A swarm cannot hold one agent in two roles, so adding again re-roles it
+    /// rather than duplicating it or refusing.
+    #[tokio::test]
+    async fn adding_the_same_agent_again_changes_its_role() {
+        let (_dir, state, swarm_id, agent_id) = fixture().await;
+
+        for role in ["coordinator", "reviewer"] {
+            let status = post_member(
+                &state,
+                &swarm_id,
+                serde_json::json!({ "agent_id": agent_id, "role": role }),
+            )
+            .await;
+            assert_eq!(status, 200);
+        }
+
+        let members = members_of(&state, &swarm_id).await;
+        assert_eq!(members.len(), 1, "the agent was duplicated");
+        assert_eq!(members[0]["role"], "reviewer");
+    }
+
+    /// A membership pointing at no agent is a dangling reference that later
+    /// reads as data.
+    #[tokio::test]
+    async fn an_agent_that_does_not_exist_is_refused_and_stores_nothing() {
+        let (_dir, state, swarm_id, _agent_id) = fixture().await;
+
+        let status = post_member(
+            &state,
+            &swarm_id,
+            serde_json::json!({ "agent_id": "no-such-agent", "role": "coder" }),
+        )
+        .await;
+        assert_eq!(status, 404);
+        assert!(members_of(&state, &swarm_id).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_swarm_that_does_not_exist_is_a_404() {
+        let (_dir, state, _swarm_id, agent_id) = fixture().await;
+
+        let status = post_member(
+            &state,
+            "no-such-swarm",
+            serde_json::json!({ "agent_id": agent_id, "role": "coder" }),
+        )
+        .await;
+        assert_eq!(status, 404);
+    }
+
+    #[tokio::test]
+    async fn a_blank_agent_id_or_role_is_a_400() {
+        let (_dir, state, swarm_id, agent_id) = fixture().await;
+
+        for body in [
+            serde_json::json!({ "agent_id": "  ", "role": "coder" }),
+            serde_json::json!({ "agent_id": agent_id, "role": "" }),
+        ] {
+            assert_eq!(post_member(&state, &swarm_id, body).await, 400);
+        }
+    }
+
+    #[tokio::test]
+    async fn removing_takes_it_out_and_removing_again_is_404() {
+        let (_dir, state, swarm_id, agent_id) = fixture().await;
+
+        post_member(
+            &state,
+            &swarm_id,
+            serde_json::json!({ "agent_id": agent_id, "role": "coder" }),
+        )
+        .await;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(crate::api::configure_routes),
+        )
+        .await;
+
+        let removed = test::call_service(
+            &app,
+            test::TestRequest::delete()
+                .uri(&format!("/api/swarms/{swarm_id}/agents/{agent_id}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(removed.status(), 200);
+        assert!(members_of(&state, &swarm_id).await.is_empty());
+
+        // A removal that removed nothing must not report success.
+        let again = test::call_service(
+            &app,
+            test::TestRequest::delete()
+                .uri(&format!("/api/swarms/{swarm_id}/agents/{agent_id}"))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(again.status(), 404);
     }
 }

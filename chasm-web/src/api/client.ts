@@ -358,6 +358,19 @@ export interface CreateSwarmRequest {
     max_iterations?: number;
 }
 
+/** One agent's membership of a swarm, spelled as the server spells it. */
+export interface SwarmMember {
+    agent_id: string;
+    role: string;
+}
+
+/** What the membership endpoints return: the swarm's list after the change. */
+export interface SwarmMembership {
+    id: string;
+    agents: SwarmMember[];
+    updatedAt: number;
+}
+
 export const swarms = {
     /**
      * List all swarms
@@ -392,6 +405,23 @@ export const swarms = {
      */
     async delete(id: string): Promise<ApiResponse<void>> {
         return del(`/api/swarms/${encodeURIComponent(id)}`);
+    },
+
+    /**
+     * Add an agent to a swarm, or change the role it already holds.
+     *
+     * `agent_id` is snake_case because that is how the server spells it: the
+     * body deserializes into a Rust struct with no serde rename.
+     */
+    async addAgent(id: string, member: SwarmMember): Promise<ApiResponse<SwarmMembership>> {
+        return post(`/api/swarms/${encodeURIComponent(id)}/agents`, member);
+    },
+
+    /**
+     * Remove an agent from a swarm. A 404 means it was not a member.
+     */
+    async removeAgent(id: string, agentId: string): Promise<ApiResponse<SwarmMembership>> {
+        return del(`/api/swarms/${encodeURIComponent(id)}/agents/${encodeURIComponent(agentId)}`);
     },
 
 };

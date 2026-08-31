@@ -658,6 +658,98 @@ paths:
         "200":
           description: Swarm created
 
+  /swarms/{id}/agents:
+    post:
+      tags: [Swarms]
+      summary: Add an agent to a swarm
+      description: >
+        Membership is stored on the swarm as `{agent_id, role}` records, so
+        this reads the list, edits it and writes it back.
+
+
+        Adding an agent that is already a member updates its role rather than
+        duplicating it — a swarm cannot hold one agent in two roles, and
+        refusing would make the obvious way to change a role an error.
+
+
+        The agent must exist. A membership pointing at no agent is a dangling
+        reference that later reads as data. Note the asymmetry: `POST /swarms`
+        does not currently check the ids in its `agents` list.
+      operationId: addSwarmAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, role]
+              properties:
+                agent_id:
+                  type: string
+                  description: >
+                    snake_case, as the server spells it — this body
+                    deserializes into a Rust struct with no serde rename.
+                role:
+                  type: string
+                  example: coordinator
+      responses:
+        "200":
+          description: The swarm's membership after the change
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          agents:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/SwarmAgent"
+                          updatedAt:
+                            type: integer
+                            format: int64
+        "400":
+          description: agent_id or role is blank
+        "404":
+          description: No such swarm, or no such agent
+
+  /swarms/{id}/agents/{agent_id}:
+    delete:
+      tags: [Swarms]
+      summary: Remove an agent from a swarm
+      description: >
+        A 404 when that agent was not a member — reporting a removal that
+        removed nothing is exactly the failure this API tries not to have.
+      operationId: removeSwarmAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The swarm's membership after the removal
+        "404":
+          description: No such swarm, or that agent was not a member
+
   /swarms/{id}:
     get:
       tags: [Swarms]
@@ -5264,6 +5356,19 @@ components:
           type: integer
           format: int64
           description: Milliseconds since the Unix epoch.
+
+    SwarmAgent:
+      type: object
+      description: >
+        One agent's membership of a swarm. The field is `agent_id`, not
+        `agentId`: the struct carries no serde rename.
+      required: [agent_id, role]
+      properties:
+        agent_id:
+          type: string
+        role:
+          type: string
+          example: coordinator
 
     Note:
       type: object

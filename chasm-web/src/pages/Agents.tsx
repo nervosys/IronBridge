@@ -58,7 +58,7 @@ import {
     Area,
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
-import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../hooks/useApi';
+import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm, useAddSwarmAgent, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../hooks/useApi';
 import { formatRelativeTime, formatTime, AGENT_ROLES } from '@csm/shared';
 import { AgentInbox } from '../components/AgentInbox';
 import type { Agent, Swarm, SwarmStatus } from '../api/types';
@@ -337,6 +337,7 @@ export default function Agents() {
     const [newSwarmOrchestration, setNewSwarmOrchestration] = useState<Orchestration>('sequential');
     const deleteSwarm = useDeleteSwarm();
     const updateSwarm = useUpdateSwarm();
+    const addSwarmAgent = useAddSwarmAgent();
 
     // Agent mutation hooks
     const createAgent = useCreateAgent();
@@ -373,6 +374,12 @@ export default function Agents() {
     const [selectedSwarm, setSelectedSwarm] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showAddAgentModal, setShowAddAgentModal] = useState(false);
+    // The two selects in that modal had no value and no onChange, and its
+    // confirm button only closed the dialog. Nothing could have been sent:
+    // until now there was no route to send it to.
+    const [newMemberAgentId, setNewMemberAgentId] = useState('');
+    const [newMemberRole, setNewMemberRole] = useState(agentRoles[0]?.id ?? '');
+    const [addMemberError, setAddMemberError] = useState<string | null>(null);
     const [newSwarmName, setNewSwarmName] = useState('');
     const [newSwarmDescription, setNewSwarmDescription] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
@@ -522,6 +529,26 @@ export default function Agents() {
     };
 
     // Create Agent handlers
+    // `selectedSwarm` is the id, not the swarm.
+    const handleAddAgentToSwarm = async () => {
+        if (!selectedSwarm || !newMemberAgentId || !newMemberRole) return;
+        setAddMemberError(null);
+        try {
+            await addSwarmAgent.mutate({
+                id: selectedSwarm,
+                member: { agent_id: newMemberAgentId, role: newMemberRole },
+            });
+            refetchSwarms();
+            setShowAddAgentModal(false);
+            setNewMemberAgentId('');
+        } catch (error) {
+            // The server says why -- no such agent, no such swarm, a blank
+            // role. Closing the dialog on a failure would report an addition
+            // that did not happen.
+            setAddMemberError(error instanceof Error ? error.message : String(error));
+        }
+    };
+
     const handleCreateAgent = async () => {
         // Both are required by `POST /api/agents`, so both are required
         // here -- the alternative is a 400 the user cannot act on.
@@ -909,37 +936,55 @@ export default function Agents() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Select Agent</label>
-                                <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
+                                <select
+                                    value={newMemberAgentId}
+                                    onChange={(e) => setNewMemberAgentId(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                >
                                     {agents.length === 0 ? (
-                                        <option disabled>No agents available</option>
+                                        <option value="" disabled>No agents available</option>
                                     ) : (
-                                        agents.map(agent => (
-                                            <option key={agent.id} value={agent.id}>{agent.name} ({agent.providerId || 'N/A'})</option>
-                                        ))
+                                        <>
+                                            <option value="" disabled>Choose an agent</option>
+                                            {agents.map(agent => (
+                                                <option key={agent.id} value={agent.id}>{agent.name} ({agent.providerId || 'N/A'})</option>
+                                            ))}
+                                        </>
                                     )}
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Role in Swarm</label>
-                                <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
+                                <select
+                                    value={newMemberRole}
+                                    onChange={(e) => setNewMemberRole(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                >
                                     {agentRoles.map(role => (
                                         <option key={role.id} value={role.id}>{role.name} - {role.description}</option>
                                     ))}
                                 </select>
                             </div>
                         </div>
+                        {addMemberError && (
+                            <p className="mt-4 text-sm text-red-500">{addMemberError}</p>
+                        )}
                         <div className="flex justify-end gap-2 mt-6">
                             <button
-                                onClick={() => setShowAddAgentModal(false)}
+                                onClick={() => {
+                                    setShowAddAgentModal(false);
+                                    setAddMemberError(null);
+                                }}
                                 className="px-4 py-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                onClick={() => setShowAddAgentModal(false)}
-                                className="px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                                onClick={handleAddAgentToSwarm}
+                                disabled={addSwarmAgent.isLoading || !newMemberAgentId || !newMemberRole}
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors disabled:opacity-50"
                             >
-                                Add Agent
+                                {addSwarmAgent.isLoading ? 'Adding...' : 'Add Agent'}
                             </button>
                         </div>
                     </div>

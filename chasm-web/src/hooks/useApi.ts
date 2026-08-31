@@ -29,6 +29,7 @@ import {
 } from '../api/client';
 import type {
     CreateSwarmRequest,
+    SwarmMember,
     CreateAgentRequest,
     UpdateAgentRequest,
     DocumentSummary,
@@ -567,6 +568,24 @@ export function useUpdateSwarm() {
  */
 export function useDeleteSwarm() {
     return useMutation((id: string) => swarms.delete(id));
+}
+
+/**
+ * Add an agent to a swarm, or change the role it already holds.
+ */
+export function useAddSwarmAgent() {
+    return useMutation(({ id, member }: { id: string; member: SwarmMember }) =>
+        swarms.addAgent(id, member)
+    );
+}
+
+/**
+ * Remove an agent from a swarm.
+ */
+export function useRemoveSwarmAgent() {
+    return useMutation(({ id, agentId }: { id: string; agentId: string }) =>
+        swarms.removeAgent(id, agentId)
+    );
 }
 
 export function useSearch(query: string, types?: string[], options?: UseQueryOptions): UseQueryResult<SearchResult[]> {
