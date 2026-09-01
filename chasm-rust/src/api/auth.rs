@@ -1173,10 +1173,11 @@ pub async fn refresh_token(
     app_state: web::Data<crate::api::state::AppState>,
     body: web::Json<RefreshTokenRequest>,
 ) -> HttpResponse {
-    // Validate refresh token
-    let auth_user = match validate_refresh_token(&body.refresh_token) {
-        Some(u) => u,
-        None => {
+    // Validate refresh token: signature, expiry, and that it is a refresh
+    // token (not an access token replayed here).
+    let claims = match validate_token_claims(&body.refresh_token) {
+        Some(c) if c.token_type == "refresh" => c,
+        _ => {
             return HttpResponse::Unauthorized().json(serde_json::json!({
                 "success": false,
                 "error": "Invalid or expired refresh token"
@@ -1185,6 +1186,22 @@ pub async fn refresh_token(
     };
 
     let db = app_state.db.lock().unwrap();
+
+    // Revocation applies to refresh tokens too, or it does not apply at all: a
+    // refresh token minted before a password change would otherwise let its
+    // holder keep issuing fresh access tokens indefinitely, defeating the point
+    // of changing the password.
+    if !token_not_revoked(&db.conn, &claims.sub, claims.iat) {
+        return HttpResponse::Unauthorized().json(serde_json::json!({
+            "success": false,
+            "error": "Invalid or expired refresh token"
+        }));
+    }
+    let auth_user = AuthenticatedUser {
+        user_id: claims.sub,
+        email: claims.email,
+        tier: SubscriptionTier::from_str(&claims.tier).unwrap_or_default(),
+    };
 
     // Get current user data
     let user_result: rusqlite::Result<(
