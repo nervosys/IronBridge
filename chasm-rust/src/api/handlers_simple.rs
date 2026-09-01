@@ -13,7 +13,7 @@ use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use super::state::AppState;
-use crate::encryption::EncryptionManager;
+use crate::encryption::{EncryptionManager, KDF_ITERATIONS_CURRENT, KDF_ITERATIONS_LEGACY};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 
 /// Check if a string is an empty code block marker (just ``` with no content)
@@ -2658,6 +2658,17 @@ fn init_accounts_table(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             [],
         )?;
     }
+
+    // The PBKDF2 iteration count each encrypted credential was written under.
+    // NULL on a row means it predates this column and was written at the legacy
+    // count -- `read_credential` derives its key at that count so the row still
+    // decrypts. New encrypted writes record the current count here.
+    if !column_exists(conn, "provider_accounts", "credentials_iterations")? {
+        conn.execute(
+            "ALTER TABLE provider_accounts ADD COLUMN credentials_iterations INTEGER",
+            [],
+        )?;
+    }
     Ok(())
 }
 
@@ -2730,14 +2741,17 @@ fn credential_salt(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<u8>> {
 /// instead. Writing a secret to disk unprotected because a variable was unset
 /// is exactly the kind of quiet substitution this codebase is being audited
 /// for.
-fn credential_cipher(conn: &rusqlite::Connection) -> rusqlite::Result<Option<EncryptionManager>> {
+fn credential_cipher(
+    conn: &rusqlite::Connection,
+    iterations: u32,
+) -> rusqlite::Result<Option<EncryptionManager>> {
     let key = match std::env::var(MASTER_KEY_ENV) {
         Ok(k) if !k.trim().is_empty() => k,
         _ => return Ok(None),
     };
 
     let salt = credential_salt(conn)?;
-    match EncryptionManager::new(&key, &salt) {
+    match EncryptionManager::new_with_iterations(&key, &salt, iterations) {
         Ok(manager) => Ok(Some(manager)),
         // A key that cannot derive is a misconfiguration, not a reason to
         // fall back to plaintext.
@@ -2760,15 +2774,16 @@ fn read_credential(
     conn: &rusqlite::Connection,
     id: &str,
 ) -> rusqlite::Result<Option<Result<String, String>>> {
-    let row: Option<(String, String)> = conn
+    let row: Option<(String, String, Option<i64>)> = conn
         .query_row(
-            "SELECT credentials, credentials_format FROM provider_accounts WHERE id = ?1",
+            "SELECT credentials, credentials_format, credentials_iterations
+             FROM provider_accounts WHERE id = ?1",
             params![id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?;
 
-    let Some((stored, format)) = row else {
+    let Some((stored, format, iterations)) = row else {
         return Ok(None);
     };
 
@@ -2776,7 +2791,12 @@ fn read_credential(
         return Ok(Some(Ok(stored)));
     }
 
-    let Some(cipher) = credential_cipher(conn)? else {
+    // A NULL count is a row written before this column existed: legacy 100k.
+    let iterations = iterations
+        .map(|i| i as u32)
+        .unwrap_or(KDF_ITERATIONS_LEGACY);
+
+    let Some(cipher) = credential_cipher(conn, iterations)? else {
         return Ok(Some(Err(format!(
             "credential is encrypted but {MASTER_KEY_ENV} is not set"
         ))));
@@ -2854,7 +2874,9 @@ pub async fn create_account(
         return ApiResponse::<()>::error(&format!("Database error: {}", e));
     }
 
-    let cipher = match credential_cipher(&db.conn) {
+    // New writes derive at the current count and record it, so a later read
+    // knows what to derive under even after the constant moves again.
+    let cipher = match credential_cipher(&db.conn, KDF_ITERATIONS_CURRENT) {
         Ok(c) => c,
         Err(e) => return ApiResponse::<()>::error(&format!("Database error: {e}")),
     };
@@ -2884,9 +2906,9 @@ pub async fn create_account(
     };
 
     let result = db.conn.execute(
-        "INSERT INTO provider_accounts (id, provider, name, credentials, credentials_format, is_default, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)",
-        params![id, body.provider, name, stored, FORMAT_ENCRYPTED, now, now],
+        "INSERT INTO provider_accounts (id, provider, name, credentials, credentials_format, credentials_iterations, is_default, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8)",
+        params![id, body.provider, name, stored, FORMAT_ENCRYPTED, KDF_ITERATIONS_CURRENT, now, now],
     );
 
     match result {
@@ -3741,6 +3763,106 @@ mod credential_encryption_tests {
         let raw = String::from_utf8(test::read_body(resp).await.to_vec()).expect("utf8");
         assert!(!raw.contains("credential"), "listing leaked a field: {raw}");
         assert!(!raw.contains("sk-do-not-store-me"));
+    }
+
+    /// A new credential records the current iteration count, not the legacy one.
+    #[tokio::test]
+    async fn a_new_credential_is_written_at_the_current_iteration_count() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("kdf-current");
+
+        assert_eq!(post_account(&state, "openai").await.status(), 200);
+
+        let db = state.db.lock().unwrap();
+        let iterations: Option<i64> = db
+            .conn
+            .query_row(
+                "SELECT credentials_iterations FROM provider_accounts",
+                [],
+                |r| r.get(0),
+            )
+            .expect("row");
+        assert_eq!(iterations, Some(KDF_ITERATIONS_CURRENT as i64));
+    }
+
+    /// A credential written under the legacy count still decrypts.
+    ///
+    /// This is the guarantee the whole migration exists for: raising the count
+    /// for new writes must not strand credentials written before it. The row is
+    /// forged exactly as the old code would have left it -- encrypted at 100k,
+    /// `credentials_iterations` NULL -- and must still come back in the clear.
+    #[tokio::test]
+    async fn a_legacy_count_credential_still_decrypts() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("kdf-legacy");
+
+        let secret = r#"{"apiKey":"sk-encrypted-at-100k"}"#;
+        {
+            let db = state.db.lock().unwrap();
+            init_accounts_table(&db.conn).expect("table");
+            let salt = credential_salt(&db.conn).expect("salt");
+            // Encrypt with the legacy count, exactly as the pre-migration code did.
+            let legacy = crate::encryption::EncryptionManager::new_with_iterations(
+                "correct horse battery staple",
+                &salt,
+                KDF_ITERATIONS_LEGACY,
+            )
+            .expect("cipher");
+            let blob = legacy.encrypt_string(secret).expect("encrypt");
+            db.conn
+                .execute(
+                    "INSERT INTO provider_accounts
+                     (id, provider, name, credentials, credentials_format,
+                      credentials_iterations, is_default, created_at, updated_at)
+                     VALUES ('legacy', 'openai', 'OpenAI', ?1, ?2, NULL, 0, 1, 1)",
+                    params![blob, FORMAT_ENCRYPTED],
+                )
+                .expect("insert legacy row");
+        }
+
+        let db = state.db.lock().unwrap();
+        let recovered = read_credential(&db.conn, "legacy")
+            .expect("db")
+            .expect("row exists")
+            .expect("legacy row must still decrypt");
+        assert_eq!(recovered, secret);
+    }
+
+    /// Deriving at the wrong count fails -- which is *why* the count is stored.
+    ///
+    /// If a legacy blob decrypted under the current count, the stored count
+    /// would be doing nothing and the test above would pass for the wrong
+    /// reason. This pins that the count actually matters.
+    #[tokio::test]
+    async fn the_wrong_iteration_count_does_not_decrypt() {
+        let _guard = ENV_LOCK.lock().await;
+        let _key = MasterKey::set("correct horse battery staple");
+        let (state, _dir) = temp_state("kdf-mismatch");
+
+        let db = state.db.lock().unwrap();
+        init_accounts_table(&db.conn).expect("table");
+        let salt = credential_salt(&db.conn).expect("salt");
+
+        let at_legacy = crate::encryption::EncryptionManager::new_with_iterations(
+            "correct horse battery staple",
+            &salt,
+            KDF_ITERATIONS_LEGACY,
+        )
+        .expect("cipher");
+        let blob = at_legacy.encrypt_string("secret").expect("encrypt");
+
+        let at_current = crate::encryption::EncryptionManager::new_with_iterations(
+            "correct horse battery staple",
+            &salt,
+            KDF_ITERATIONS_CURRENT,
+        )
+        .expect("cipher");
+        assert!(
+            at_current.decrypt_string(&blob).is_err(),
+            "a blob written at 100k decrypted under 600k; the count is not affecting the key"
+        );
     }
 }
 
