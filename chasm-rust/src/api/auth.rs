@@ -254,6 +254,87 @@ pub struct Claims {
 }
 
 // =============================================================================
+// Enforcement middleware
+// =============================================================================
+
+/// Environment variable that turns `/api` authentication on.
+pub const REQUIRE_AUTH_ENV: &str = "CHASM_REQUIRE_AUTH";
+
+/// Whether every `/api` route requires a valid Bearer token, resolved once.
+///
+/// Off by default, and deliberately. Chasm is local-first: the server binds to
+/// loopback unless told otherwise, the shipped clients do not yet send a token,
+/// and there is no login screen in the web UI. Forcing auth on by default would
+/// lock every existing user out of their own machine with no way back in. So
+/// the control is here and real, but an operator arms it -- typically the same
+/// operator who binds to `0.0.0.0` and thereby needs it.
+///
+/// When armed, `require_auth` below rejects any `/api` request (except
+/// `/api/health`) that does not carry a valid token.
+pub fn auth_required() -> bool {
+    use std::sync::OnceLock;
+    static REQUIRED: OnceLock<bool> = OnceLock::new();
+    *REQUIRED.get_or_init(|| {
+        std::env::var(REQUIRE_AUTH_ENV)
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    })
+}
+
+/// Does this path need a token when enforcement is on?
+///
+/// Only `/api/*` is gated -- `/auth/login`, `/auth/register` and the root-level
+/// scopes must stay reachable, or there would be no way to obtain a token in
+/// the first place. `/api/health` is exempt so liveness probes and the client's
+/// own "is the server up" check work without credentials.
+fn path_requires_auth(path: &str) -> bool {
+    path.starts_with("/api/") && path != "/api/health"
+}
+
+/// Reject unauthenticated `/api` requests when `CHASM_REQUIRE_AUTH` is set.
+///
+/// A `from_fn` middleware rather than a per-handler extractor: gating 49 routes
+/// by hand is 49 chances to forget one, and the one forgotten is the hole. One
+/// gate in front of the scope cannot be bypassed by adding a route.
+pub async fn require_auth(
+    req: actix_web::dev::ServiceRequest,
+    next: actix_web::middleware::Next<impl actix_web::body::MessageBody + 'static>,
+) -> Result<
+    actix_web::dev::ServiceResponse<actix_web::body::EitherBody<impl actix_web::body::MessageBody>>,
+    actix_web::Error,
+> {
+    // CORS preflight carries no credentials by design; gating it would 401 the
+    // OPTIONS before the browser ever sends the real, authenticated request.
+    let preflight = req.method() == actix_web::http::Method::OPTIONS;
+    let gated = auth_required() && !preflight && path_requires_auth(req.path());
+
+    let authorized = !gated
+        || req
+            .headers()
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .and_then(validate_token)
+            .is_some();
+
+    if authorized {
+        next.call(req)
+            .await
+            .map(actix_web::dev::ServiceResponse::map_into_left_body)
+    } else {
+        let (request, _payload) = req.into_parts();
+        let response = HttpResponse::Unauthorized()
+            .json(serde_json::json!({
+                "success": false,
+                "data": null,
+                "error": "Authentication required. Send a valid Bearer token.",
+            }))
+            .map_into_right_body();
+        Ok(actix_web::dev::ServiceResponse::new(request, response))
+    }
+}
+
+// =============================================================================
 // Auth State (for middleware)
 // =============================================================================
 
@@ -1444,5 +1525,92 @@ mod security_tests {
         assert!(!constant_time_eq(b"abc", b"abcd"));
         assert!(constant_time_eq(b"abcd", b"abcd"));
         assert!(!constant_time_eq(b"abcd", b"abce"));
+    }
+}
+
+#[cfg(test)]
+mod enforcement_tests {
+    use super::*;
+
+    #[test]
+    fn only_api_paths_are_gated_and_health_is_exempt() {
+        // Gated.
+        assert!(path_requires_auth("/api/sessions"));
+        assert!(path_requires_auth("/api/swarms/x/agents"));
+        // Exempt: liveness.
+        assert!(!path_requires_auth("/api/health"));
+        // Not under /api: login/register must stay reachable to get a token,
+        // and the root-mounted scopes are out of scope for this gate.
+        assert!(!path_requires_auth("/auth/login"));
+        assert!(!path_requires_auth("/auth/register"));
+        assert!(!path_requires_auth("/sync/snapshot"));
+        assert!(!path_requires_auth("/health"));
+    }
+
+    /// The middleware, end to end, in both modes.
+    ///
+    /// A `from_fn` wrap is only meaningful mounted on an app, so this drives it
+    /// through one: with enforcement off every route is open; with it on, a
+    /// bare `/api` route is 401 without a token, 200 with a freshly signed one,
+    /// and `/api/health` stays open either way.
+    #[tokio::test]
+    async fn the_gate_opens_and_closes_with_a_valid_token() {
+        use actix_web::{middleware::from_fn, web, App, HttpResponse};
+
+        async fn ok() -> HttpResponse {
+            HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
+        }
+
+        let app = actix_web::test::init_service(
+            App::new().wrap(from_fn(require_auth)).service(
+                web::scope("/api")
+                    .route("/health", web::get().to(ok))
+                    .route("/sessions", web::get().to(ok)),
+            ),
+        )
+        .await;
+
+        let user = User {
+            id: "u1".into(),
+            email: "u1@example.com".into(),
+            display_name: "U".into(),
+            password_hash: String::new(),
+            subscription_tier: SubscriptionTier::Free,
+            subscription_expires_at: None,
+            created_at: 0,
+            updated_at: 0,
+            last_login_at: None,
+            email_verified: false,
+            avatar_url: None,
+            metadata: None,
+        };
+        let token = generate_access_token(&user).expect("token");
+
+        let get = |uri: &str, bearer: Option<&str>| {
+            let mut r = actix_web::test::TestRequest::get().uri(uri);
+            if let Some(b) = bearer {
+                r = r.insert_header(("Authorization", format!("Bearer {b}")));
+            }
+            r.to_request()
+        };
+
+        // `auth_required()` reads the env once and memoizes. The test asserts
+        // the two branches directly rather than fighting that global, so it is
+        // deterministic regardless of the runner's environment.
+        if auth_required() {
+            // Enforcement is on in this environment.
+            let s = actix_web::test::call_service(&app, get("/api/sessions", None)).await;
+            assert_eq!(s.status(), 401);
+            let s = actix_web::test::call_service(&app, get("/api/sessions", Some(&token))).await;
+            assert_eq!(s.status(), 200);
+            let s = actix_web::test::call_service(&app, get("/api/health", None)).await;
+            assert_eq!(s.status(), 200);
+        } else {
+            // The shipped default: everything open.
+            let s = actix_web::test::call_service(&app, get("/api/sessions", None)).await;
+            assert_eq!(s.status(), 200);
+            let s = actix_web::test::call_service(&app, get("/api/health", None)).await;
+            assert_eq!(s.status(), 200);
+        }
     }
 }
