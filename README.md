@@ -253,12 +253,21 @@ Chasm is local-first, and its defaults assume that:
 - **The server binds to `127.0.0.1`** — this machine only. Expose it on the
   network with `--host 0.0.0.0`, deliberately: the API reads local data and,
   when enabled, runs commands.
-- **`/api` is open by default, and gated by `CHASM_REQUIRE_AUTH`.** Set it and
-  every `/api` route requires a valid Bearer token (401 otherwise); `/api/health`
-  and the `/auth/*` login endpoints stay open so a client can check liveness and
-  obtain a token. It is off by default because the shipped clients do not yet
-  send a token and the web UI has no login screen — turning it on today suits a
-  networked or multi-user deployment, paired with clients that authenticate.
+- **`/api` requires authentication by default.** Every `/api` route needs a
+  valid Bearer token (401 otherwise); `/api/health` and the `/auth/*` login
+  endpoints stay open so a client can check liveness and obtain a token. The web
+  and desktop apps show a login screen the first time the server answers 401 and
+  attach the token from then on. A trusted single-user machine can turn auth off
+  with `CHASM_DISABLE_AUTH=1` — appropriate when the server is bound to loopback
+  and nothing else can reach it. (`CHASM_REQUIRE_AUTH` is still accepted for
+  compatibility but is now redundant.)
+
+  Client support: the **web** and **desktop** apps have full login. The
+  **mobile app** and **browser extension** attach a stored token when present
+  (`csm_access_token` / `accessToken` in their storage) but do not yet ship a
+  login screen; against an auth-required server, set their token manually or run
+  the server with `CHASM_DISABLE_AUTH=1`. The **VS Code extension** sends the
+  API key from its settings as the bearer token.
 - **`run_command` is off** unless `CHASM_ENABLE_RUN_COMMAND=1`. It executes
   arbitrary commands through the shell; it is never on by default.
 - **Session tokens** are signed with `CHASM_JWT_SECRET` (>=32 bytes) or, if

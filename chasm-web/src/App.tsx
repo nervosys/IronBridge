@@ -18,6 +18,7 @@ import Developer from './pages/Developer';
 import Research from './pages/Research';
 import SWE from './pages/SWE';
 import { ApiProvider } from './context';
+import { AuthGate } from './components/AuthGate';
 import { config } from './config';
 
 type ThemeMode = 'light' | 'neutral' | 'dark';
@@ -45,6 +46,7 @@ function App() {
 
   return (
     <ApiProvider baseUrl={config.apiBaseUrl} autoConnect={config.enableWebSocket}>
+      <AuthGate>
       <BrowserRouter>
         <Layout theme={theme} setTheme={setTheme}>
           <Routes>
@@ -77,6 +79,7 @@ function App() {
           </Routes>
         </Layout>
       </BrowserRouter>
+      </AuthGate>
     </ApiProvider>
   );
 }

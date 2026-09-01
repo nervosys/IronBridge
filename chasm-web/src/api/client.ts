@@ -27,6 +27,7 @@ import type {
     AppSettings,
     ProviderAccount,
 } from './types';
+import { getToken, markUnauthorized, setSession, logout } from './session';
 
 // =============================================================================
 // Configuration
@@ -81,6 +82,14 @@ async function request<T>(
             ...customHeaders,
         };
 
+        // Attach the bearer token when we have one. When the server does not
+        // require auth there is none, and it does not ask for one -- so this is
+        // simply absent, not empty-and-rejected.
+        const token = getToken();
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const response = await fetch(`${config.baseUrl}${path}`, {
             method,
             headers,
@@ -89,6 +98,13 @@ async function request<T>(
         });
 
         clearTimeout(timeoutId);
+
+        // 401 means the server requires auth and this request did not satisfy
+        // it. Drop any stale token and raise the login screen. This is the only
+        // thing that turns login on, so a server that never 401s never shows it.
+        if (response.status === 401) {
+            markUnauthorized();
+        }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -146,6 +162,74 @@ async function del<T>(path: string): Promise<ApiResponse<T>> {
 function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
     const entries = Object.entries(params).filter(([, v]) => v !== undefined);
     return new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString();
+}
+
+// =============================================================================
+// Auth API
+// =============================================================================
+
+interface AuthEnvelope {
+    access_token: string;
+    refresh_token?: string;
+    user?: { id: string; email: string; display_name: string };
+}
+
+/**
+ * Log in and register. These call the root-mounted `/auth/*` endpoints, which
+ * stay open even when `CHASM_REQUIRE_AUTH` gates `/api` -- otherwise a token
+ * could never be obtained. On success the token is stored via `session`, which
+ * clears the login-required flag and lets `request()` attach it from then on.
+ *
+ * The `/auth/*` responses are bare (`{ data: { access_token, user } }`), not
+ * the `/api` envelope, so this reads them directly rather than through
+ * `request()`.
+ */
+export const auth = {
+    async login(email: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {
+        return authCall('/auth/login', { email, password });
+    },
+
+    async register(
+        email: string,
+        password: string,
+        displayName: string
+    ): Promise<{ ok: true } | { ok: false; error: string }> {
+        return authCall('/auth/register', { email, password, display_name: displayName });
+    },
+
+    logout(): void {
+        logout();
+    },
+};
+
+async function authCall(
+    path: string,
+    body: Record<string, string>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+        const response = await fetch(`${config.baseUrl}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { ok: false, error: payload?.error || response.statusText || 'Login failed' };
+        }
+        const data: AuthEnvelope = payload?.data ?? payload;
+        if (!data?.access_token) {
+            return { ok: false, error: 'The server returned no token.' };
+        }
+        setSession(
+            data.access_token,
+            data.user
+                ? { id: data.user.id, email: data.user.email, displayName: data.user.display_name }
+                : undefined
+        );
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : 'Network error' };
+    }
 }
 
 // =============================================================================
@@ -442,15 +526,20 @@ export const chat = {
      * Stream a chat completion
      */
     async* stream(request: ChatCompletionRequest): AsyncGenerator<StreamChunk, void, unknown> {
+        const streamToken = getToken();
         const response = await fetch(`${config.baseUrl}/api/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 ...config.headers,
+                ...(streamToken ? { Authorization: `Bearer ${streamToken}` } : {}),
             },
             body: JSON.stringify({ ...request, stream: true }),
         });
 
+        if (response.status === 401) {
+            markUnauthorized();
+        }
         if (!response.ok || !response.body) {
             throw new Error(`Stream request failed: ${response.statusText}`);
         }
