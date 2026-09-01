@@ -296,15 +296,74 @@ pub fn auth_required() -> bool {
 /// scopes must stay reachable, or there would be no way to obtain a token in
 /// the first place. `/api/health` is exempt so liveness probes and the client's
 /// own "is the server up" check work without credentials.
+/// Whether a request to this path needs a token when enforcement is on.
+///
+/// **Default-deny.** Everything is gated except an explicit open-list. The
+/// previous version gated only `/api/`, and that was a real hole: the
+/// root-mounted scopes -- `/sync` (which returns every session, workspace and
+/// agent in one call), `/recording`, `/audit`, `/retention`, `/webhooks`,
+/// `/graphql`, `/ws` -- were reachable with no token even while `/api` itself
+/// answered 401. An allowlist cannot grow that kind of hole: a scope added
+/// tomorrow is gated until someone deliberately opens it, which is the safe
+/// direction to fail.
+///
+/// Open, and why each has to be:
+/// - health/liveness needs no identity;
+/// - `/auth/*` is the login handshake -- gating it removes the only way to
+///   obtain a token; its own sensitive endpoints self-protect with the
+///   `AuthenticatedUser` extractor;
+/// - `/sso/*`, `/oidc/*` are the SSO handshake, reached before a session exists;
+/// - `/docs*` is the published API reference and carries no user data.
 fn path_requires_auth(path: &str) -> bool {
-    path.starts_with("/api/") && path != "/api/health"
+    const OPEN_EXACT: &[&str] = &[
+        "/health",
+        "/api/health",
+        "/api/system/health",
+        "/api/system/providers/health",
+    ];
+    const OPEN_PREFIXES: &[&str] = &["/auth/", "/sso/", "/oidc/", "/docs"];
+
+    if OPEN_EXACT.contains(&path) {
+        return false;
+    }
+    if OPEN_PREFIXES.iter().any(|p| path.starts_with(p)) {
+        return false;
+    }
+    true
 }
 
-/// Reject unauthenticated `/api` requests when `CHASM_REQUIRE_AUTH` is set.
+/// The bearer token on a request, from the `Authorization` header or, failing
+/// that, a `token` query parameter.
 ///
-/// A `from_fn` middleware rather than a per-handler extractor: gating 49 routes
-/// by hand is 49 chances to forget one, and the one forgotten is the hole. One
-/// gate in front of the scope cannot be bypassed by adding a route.
+/// The query parameter exists for WebSocket upgrades: a browser cannot set an
+/// `Authorization` header on a `WebSocket` connection, so `/ws` has to carry
+/// the token in the URL. It is a lesser channel -- URLs are logged in more
+/// places than headers -- so the header is tried first and the query parameter
+/// is the fallback, not the norm.
+fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUser> {
+    if let Some(user) = req
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .and_then(validate_token)
+    {
+        return Some(user);
+    }
+    req.query_string()
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("token="))
+        .and_then(|t| urlencoding::decode(t).ok())
+        .and_then(|t| validate_token(&t))
+}
+
+/// Reject unauthenticated requests to gated paths when `CHASM_REQUIRE_AUTH` is
+/// set (the default; `CHASM_DISABLE_AUTH=1` turns it off).
+///
+/// A `from_fn` middleware rather than a per-handler extractor: gating every
+/// route by hand is a chance to forget one on each new endpoint, and the one
+/// forgotten is the hole. One default-deny gate in front of the app cannot be
+/// bypassed by adding a scope.
 pub async fn require_auth(
     req: actix_web::dev::ServiceRequest,
     next: actix_web::middleware::Next<impl actix_web::body::MessageBody + 'static>,
@@ -317,14 +376,7 @@ pub async fn require_auth(
     let preflight = req.method() == actix_web::http::Method::OPTIONS;
     let gated = auth_required() && !preflight && path_requires_auth(req.path());
 
-    let authorized = !gated
-        || req
-            .headers()
-            .get("Authorization")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.strip_prefix("Bearer "))
-            .and_then(validate_token)
-            .is_some();
+    let authorized = !gated || request_token(&req).is_some();
 
     if authorized {
         next.call(req)
@@ -1542,18 +1594,31 @@ mod enforcement_tests {
     use super::*;
 
     #[test]
-    fn only_api_paths_are_gated_and_health_is_exempt() {
-        // Gated.
+    fn the_gate_is_default_deny_with_a_small_open_list() {
+        // Gated: the API, and -- the bug this replaced -- every sensitive
+        // root-mounted scope that used to be reachable with no token.
         assert!(path_requires_auth("/api/sessions"));
         assert!(path_requires_auth("/api/swarms/x/agents"));
-        // Exempt: liveness.
+        assert!(path_requires_auth("/sync/snapshot"));
+        assert!(path_requires_auth("/recording/sessions"));
+        assert!(path_requires_auth("/audit"));
+        assert!(path_requires_auth("/retention/policies"));
+        assert!(path_requires_auth("/webhooks"));
+        assert!(path_requires_auth("/graphql"));
+        assert!(path_requires_auth("/ws"));
+        // A scope nobody has thought of yet is gated by default.
+        assert!(path_requires_auth("/some/future/scope"));
+
+        // Open: liveness, the login handshake, the SSO handshake, the docs.
         assert!(!path_requires_auth("/api/health"));
-        // Not under /api: login/register must stay reachable to get a token,
-        // and the root-mounted scopes are out of scope for this gate.
+        assert!(!path_requires_auth("/health"));
+        assert!(!path_requires_auth("/api/system/health"));
         assert!(!path_requires_auth("/auth/login"));
         assert!(!path_requires_auth("/auth/register"));
-        assert!(!path_requires_auth("/sync/snapshot"));
-        assert!(!path_requires_auth("/health"));
+        assert!(!path_requires_auth("/sso/login"));
+        assert!(!path_requires_auth("/oidc/callback"));
+        assert!(!path_requires_auth("/docs"));
+        assert!(!path_requires_auth("/docs/openapi.yaml"));
     }
 
     /// The middleware, end to end, in both modes.

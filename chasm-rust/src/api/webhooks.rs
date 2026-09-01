@@ -365,11 +365,47 @@ pub async fn list_webhooks(state: web::Data<Arc<WebhookState>>) -> impl Responde
     HttpResponse::Ok().json(webhooks)
 }
 
+/// Reject webhook targets that turn "deliver a payload" into SSRF.
+///
+/// A webhook makes the server issue an outbound POST to a URL the caller
+/// chose, so the URL is an SSRF primitive. This does not block private or
+/// loopback addresses -- a local-first tool legitimately posts webhooks to
+/// `localhost` during development, and blanket-blocking them would break that
+/// -- but it does refuse the two things a webhook URL is never a good reason
+/// to allow:
+///
+/// - non-HTTP(S) schemes (`file://`, `gopher://`, ...), the usual way SSRF is
+///   escalated into file reads or protocol smuggling;
+/// - the cloud metadata address `169.254.169.254`, whose only purpose to reach
+///   from here would be to steal instance credentials.
+fn validate_webhook_url(url: &str) -> Result<(), &'static str> {
+    let lower = url.trim().to_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err("webhook url must be http or https");
+    }
+    // Host portion, between the scheme and the first `/`, `:`, `?` or `#`.
+    let after_scheme = &lower[lower.find("//").map(|i| i + 2).unwrap_or(0)..];
+    let host = after_scheme
+        .split(['/', ':', '?', '#'])
+        .next()
+        .unwrap_or("");
+    if host == "169.254.169.254" || host == "metadata.google.internal" {
+        return Err("webhook url may not target the cloud metadata endpoint");
+    }
+    Ok(())
+}
+
 /// Create webhook
 pub async fn create_webhook(
     state: web::Data<Arc<WebhookState>>,
     body: web::Json<CreateWebhookRequest>,
 ) -> impl Responder {
+    if let Err(reason) = validate_webhook_url(&body.url) {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "success": false,
+            "error": reason,
+        }));
+    }
     let config = WebhookConfig {
         id: Uuid::new_v4().to_string(),
         name: body.name.clone(),
@@ -416,6 +452,12 @@ pub async fn update_webhook(
             webhook.name = name.clone();
         }
         if let Some(url) = &body.url {
+            if let Err(reason) = validate_webhook_url(url) {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "success": false,
+                    "error": reason,
+                }));
+            }
             webhook.url = url.clone();
         }
         if let Some(secret) = &body.secret {
@@ -541,4 +583,24 @@ pub fn configure_webhook_routes(cfg: &mut web::ServiceConfig, state: web::Data<A
 /// Create webhook state
 pub fn create_webhook_state() -> Arc<WebhookState> {
     Arc::new(WebhookState::new())
+}
+
+#[cfg(test)]
+mod ssrf_tests {
+    use super::validate_webhook_url;
+
+    #[test]
+    fn rejects_non_http_schemes_and_metadata() {
+        assert!(validate_webhook_url("file:///etc/passwd").is_err());
+        assert!(validate_webhook_url("gopher://x/").is_err());
+        assert!(validate_webhook_url("http://169.254.169.254/latest/meta-data/").is_err());
+        assert!(validate_webhook_url("https://metadata.google.internal/x").is_err());
+    }
+
+    #[test]
+    fn allows_ordinary_and_local_targets() {
+        // Local targets stay allowed: a dev legitimately posts to localhost.
+        assert!(validate_webhook_url("http://localhost:9000/hook").is_ok());
+        assert!(validate_webhook_url("https://example.com/webhooks/chasm").is_ok());
+    }
 }

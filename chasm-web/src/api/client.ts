@@ -1132,7 +1132,14 @@ export function connectWebSocket(onMessage?: WebSocketHandler): () => void {
     if (!ws || ws.readyState === WebSocket.CLOSED) {
         // `/ws` is mounted at the server root, not under `/api` -- the socket
         // never connected while this pointed at `/api/ws`.
-        const wsUrl = config.baseUrl?.replace(/^http/, 'ws') + '/ws';
+        //
+        // The token rides in the query string because a browser cannot set an
+        // Authorization header on a WebSocket. On a server with auth enabled
+        // `/ws` is gated like everything else, so without this the live feed
+        // would 401; with auth disabled the token is simply absent.
+        const token = getToken();
+        const base = config.baseUrl?.replace(/^http/, 'ws') + '/ws';
+        const wsUrl = token ? `${base}?token=${encodeURIComponent(token)}` : base;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
