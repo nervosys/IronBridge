@@ -397,20 +397,35 @@ fn path_requires_auth(path: &str) -> bool {
 /// places than headers -- so the header is tried first and the query parameter
 /// is the fallback, not the norm.
 fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUser> {
-    if let Some(user) = req
+    let claims = req
         .headers()
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
-        .and_then(validate_token)
-    {
-        return Some(user);
+        .and_then(validate_token_claims)
+        .or_else(|| {
+            req.query_string()
+                .split('&')
+                .find_map(|pair| pair.strip_prefix("token="))
+                .and_then(|t| urlencoding::decode(t).ok())
+                .and_then(|t| validate_token_claims(&t))
+        })?;
+
+    // Revocation check: the token passed signature and expiry, but may predate
+    // a password change. Look up the user's cut-off when the store is reachable.
+    if let Some(state) = req.app_data::<web::Data<crate::api::state::AppState>>() {
+        if let Ok(db) = state.db.lock() {
+            if !token_not_revoked(&db.conn, &claims.sub, claims.iat) {
+                return None;
+            }
+        }
     }
-    req.query_string()
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("token="))
-        .and_then(|t| urlencoding::decode(t).ok())
-        .and_then(|t| validate_token(&t))
+
+    Some(AuthenticatedUser {
+        user_id: claims.sub,
+        email: claims.email,
+        tier: SubscriptionTier::from_str(&claims.tier).unwrap_or_default(),
+    })
 }
 
 /// Reject unauthenticated requests to gated paths when `CHASM_REQUIRE_AUTH` is
@@ -473,12 +488,28 @@ impl FromRequest for AuthenticatedUser {
             return ready(Ok(user.clone()));
         }
 
-        // Try to extract from Authorization header directly
+        // Try to extract from Authorization header directly, honouring
+        // revocation: a token that predates the user's last password change is
+        // no longer accepted here either, matching the middleware.
         if let Some(auth_header) = req.headers().get("Authorization") {
             if let Ok(auth_str) = auth_header.to_str() {
                 if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                    if let Some(user) = validate_token(token) {
-                        return ready(Ok(user));
+                    if let Some(claims) = validate_token_claims(token) {
+                        let current =
+                            req.app_data::<web::Data<crate::api::state::AppState>>()
+                                .and_then(|state| {
+                                    state.db.lock().ok().map(|db| {
+                                        token_not_revoked(&db.conn, &claims.sub, claims.iat)
+                                    })
+                                })
+                                .unwrap_or(true);
+                        if current {
+                            return ready(Ok(AuthenticatedUser {
+                                user_id: claims.sub,
+                                email: claims.email,
+                                tier: SubscriptionTier::from_str(&claims.tier).unwrap_or_default(),
+                            }));
+                        }
                     }
                 }
             }
@@ -663,24 +694,56 @@ pub fn generate_refresh_token(user: &User) -> Option<String> {
 }
 
 /// Validate a JWT token and return the authenticated user
-pub fn validate_token(token: &str) -> Option<AuthenticatedUser> {
+/// Verify a token's signature and expiry and return its claims.
+///
+/// This is the stateless half of validation -- it does not know whether the
+/// token has been revoked, because that needs the database. `validate_token`
+/// wraps it for callers that only need the identity; the middleware and the
+/// `AuthenticatedUser` extractor go one step further and check revocation.
+pub fn validate_token_claims(token: &str) -> Option<Claims> {
     let validation = Validation::new(Algorithm::HS256);
-
     let token_data =
         decode::<Claims>(token, &DecodingKey::from_secret(jwt_secret()), &validation).ok()?;
-
     let claims = token_data.claims;
-
-    // Check if token is expired
     if claims.exp < Utc::now().timestamp() {
         return None;
     }
+    Some(claims)
+}
 
-    Some(AuthenticatedUser {
+pub fn validate_token(token: &str) -> Option<AuthenticatedUser> {
+    validate_token_claims(token).map(|claims| AuthenticatedUser {
         user_id: claims.sub,
         email: claims.email,
         tier: SubscriptionTier::from_str(&claims.tier).unwrap_or_default(),
     })
+}
+
+/// Whether a table has a column, used to add `tokens_valid_after` to an older
+/// `users` table without a full migration.
+fn user_column_exists(conn: &rusqlite::Connection, col: &str) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare("PRAGMA table_info(users)")?;
+    let names: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(names.iter().any(|n| n == col))
+}
+
+/// Whether a token is still current: issued at or after the point the user's
+/// tokens were last invalidated (a password change moves that point forward).
+///
+/// A missing user or a lookup error is treated as *current*, so this can only
+/// ever reject a token, never manufacture access for one that failed signature
+/// or expiry checks upstream.
+fn token_not_revoked(conn: &rusqlite::Connection, user_id: &str, iat: i64) -> bool {
+    let valid_after: i64 = conn
+        .query_row(
+            "SELECT COALESCE(tokens_valid_after, 0) FROM users WHERE id = ?1",
+            [user_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    iat >= valid_after
 }
 
 /// Validate refresh token specifically
@@ -729,10 +792,22 @@ pub fn init_auth_tables(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             last_login_at INTEGER,
             email_verified INTEGER DEFAULT 0,
             avatar_url TEXT,
-            metadata TEXT
+            metadata TEXT,
+            tokens_valid_after INTEGER NOT NULL DEFAULT 0
         )",
         [],
     )?;
+
+    // Added after the table shipped: the unix time before which this user's
+    // tokens are no longer accepted. A password change bumps it, so tokens
+    // minted before the change stop working. Existing databases need the column
+    // added; new ones already have it from the CREATE above.
+    if !user_column_exists(conn, "tokens_valid_after")? {
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN tokens_valid_after INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -1404,9 +1479,16 @@ pub async fn change_password(
     };
     let now = Utc::now().timestamp();
 
+    // `tokens_valid_after = now` invalidates every token issued before this
+    // change. Changing a password is how you respond to it being compromised;
+    // if the old tokens kept working, the response would not actually lock the
+    // attacker out. The `- 1` guards a same-second race: a token minted in the
+    // same second as the change (iat == now) should still be rejected, and iat
+    // >= valid_after is the accept test, so the cut-off sits one second ahead.
     if let Err(e) = db.conn.execute(
-        "UPDATE users SET password_hash = ?1, password_salt = ?2, updated_at = ?3 WHERE id = ?4",
-        rusqlite::params![new_hash, new_salt, now, auth_user.user_id],
+        "UPDATE users SET password_hash = ?1, password_salt = ?2, updated_at = ?3,
+                tokens_valid_after = ?4 WHERE id = ?5",
+        rusqlite::params![new_hash, new_salt, now, now + 1, auth_user.user_id],
     ) {
         return HttpResponse::InternalServerError().json(serde_json::json!({
             "success": false,
@@ -1560,6 +1642,45 @@ pub fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    /// A token is accepted until the user's `tokens_valid_after` moves past its
+    /// `iat`, and rejected after -- the mechanism a password change uses to
+    /// invalidate outstanding tokens. A missing user is treated as current, so
+    /// the check can only reject, never invent access.
+    #[test]
+    fn a_token_is_revoked_once_valid_after_passes_its_issue_time() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        init_auth_tables(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO users (id, email, display_name, password_hash, password_salt,
+                                created_at, updated_at, tokens_valid_after)
+             VALUES ('u1','u1@e.co','U','h','', 0, 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        // Fresh table: cut-off 0, any token is current.
+        assert!(token_not_revoked(&conn, "u1", 1000));
+
+        // Password change moves the cut-off to 1500.
+        conn.execute(
+            "UPDATE users SET tokens_valid_after = 1500 WHERE id = 'u1'",
+            [],
+        )
+        .unwrap();
+        assert!(
+            !token_not_revoked(&conn, "u1", 1000),
+            "old token still current"
+        );
+        assert!(
+            token_not_revoked(&conn, "u1", 1500),
+            "cut-off itself accepted"
+        );
+        assert!(token_not_revoked(&conn, "u1", 2000), "newer token current");
+
+        // Unknown user -> current (reject-only guarantee).
+        assert!(token_not_revoked(&conn, "nobody", 1));
+    }
 
     /// The login throttle blocks an address after its failure budget, and a
     /// success (modelled here as a clear) resets it. Uses a unique key per test
