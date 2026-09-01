@@ -572,6 +572,14 @@ impl SsoService {
         // response is re-parsed from it and `unverified` is dropped -- see
         // `verify_and_reduce` for why re-reading the original would reintroduce
         // an XML Signature Wrapping bypass.
+        // `InResponseTo` lives in the Response envelope, which some IdPs sign
+        // and some leave outside the signed Assertion -- so it is read from the
+        // envelope here, before verification reduces the document. That is safe
+        // for anti-replay: its only use is to look up a stored `request_id`, a
+        // random UUID an attacker cannot produce, and the assertion's contents
+        // are still authenticated by the signature below.
+        let in_response_to = unverified.in_response_to.clone();
+
         let verified_xml = Self::verify_and_reduce(&response_str, &idp)?;
         drop(unverified);
 
@@ -588,6 +596,30 @@ impl SsoService {
 
         // Validate the signed assertion's time window.
         Self::validate_assertion(&assertion)?;
+
+        // Anti-replay / solicited-response binding. The response must name a
+        // request this SP actually issued (`InResponseTo` == a stored
+        // `request_id`), and consuming that state makes acceptance one-time: a
+        // replayed response finds it already gone, and an unsolicited one names
+        // an id that was never stored. The `request_id` is an unguessable random
+        // UUID, so even though `InResponseTo` rides in the response envelope, an
+        // attacker cannot fabricate one that matches a pending request.
+        if in_response_to.is_empty() {
+            return Err(
+                "SAML response has no InResponseTo; unsolicited responses are refused".into(),
+            );
+        }
+        if self
+            .db
+            .take_sso_request_state(&in_response_to)
+            .map_err(|e| format!("Failed to consume SSO request state: {}", e))?
+            .is_none()
+        {
+            return Err(
+                "SAML response does not match a pending request (replayed, expired or unsolicited)"
+                    .into(),
+            );
+        }
 
         // Extract user attributes
         let email = self

@@ -981,6 +981,21 @@ impl DatabaseOps for SqliteEnterpriseStore {
         Ok(())
     }
 
+    fn take_sso_request_state(&self, request_id: &str) -> Result<Option<SsoRequestState>, String> {
+        let conn = self.lock()?;
+        // `RETURNING` fuses the read and the delete, so a replayed response
+        // cannot be served twice: exactly one caller sees the row, and the
+        // expiry bound rejects a stale one in the same statement.
+        conn.query_row(
+            "DELETE FROM sso_request_states WHERE request_id = ?1 AND expires_at > ?2
+             RETURNING payload",
+            params![request_id, Utc::now().timestamp()],
+            json_from_row::<SsoRequestState>,
+        )
+        .optional()
+        .map_err(err("consuming SSO request state"))
+    }
+
     fn store_sso_session(&self, session: &SsoSession) -> Result<(), String> {
         let conn = self.lock()?;
         conn.execute(
@@ -1647,6 +1662,59 @@ mod store_tests {
     fn an_unknown_login_state_is_absent_not_an_error() {
         let s = store();
         assert!(s.take_oidc_login_state("never-issued").unwrap().is_none());
+    }
+
+    /// A SAML request state is consumed exactly once: the first callback finds
+    /// it, a replay finds nothing. This is the anti-replay / anti-unsolicited
+    /// control -- a response only counts if it names a request that was stored
+    /// and has not been spent.
+    #[test]
+    fn a_sso_request_state_is_single_use() {
+        use crate::api::sso::SsoRequestState;
+        let s = store();
+        let now = Utc::now().timestamp();
+        s.store_sso_request_state(&SsoRequestState {
+            request_id: "req-1".into(),
+            idp_id: "idp1".into(),
+            relay_state: Some("/home".into()),
+            created_at: now,
+            expires_at: now + 600,
+        })
+        .unwrap();
+
+        assert_eq!(
+            s.take_sso_request_state("req-1")
+                .unwrap()
+                .expect("first take")
+                .idp_id,
+            "idp1"
+        );
+        assert!(
+            s.take_sso_request_state("req-1").unwrap().is_none(),
+            "a replayed SAML response must find nothing"
+        );
+    }
+
+    #[test]
+    fn an_unknown_sso_request_state_is_absent_not_an_error() {
+        let s = store();
+        assert!(s.take_sso_request_state("never-issued").unwrap().is_none());
+    }
+
+    #[test]
+    fn an_expired_sso_request_state_is_not_consumable() {
+        use crate::api::sso::SsoRequestState;
+        let s = store();
+        let now = Utc::now().timestamp();
+        s.store_sso_request_state(&SsoRequestState {
+            request_id: "stale".into(),
+            idp_id: "idp1".into(),
+            relay_state: None,
+            created_at: now - 10_000,
+            expires_at: now - 5_000,
+        })
+        .unwrap();
+        assert!(s.take_sso_request_state("stale").unwrap().is_none());
     }
 
     /// Abandoned logins are the common case -- users close the tab -- and
