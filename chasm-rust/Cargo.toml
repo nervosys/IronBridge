@@ -139,6 +139,11 @@ aes-gcm = "0.10"
 jsonwebtoken = "9.3"
 
 # Password hashing
+# argon2id for user account passwords -- memory-hard and deliberately slow, so a
+# leaked users table is not a fast GPU-cracking target the way the previous
+# unsalted-construction SHA-256 was. sha2 remains for non-password digests
+# (content hashes, the legacy verify-and-upgrade path).
+argon2 = "0.5"
 sha2 = "0.10"
 md5 = "0.7"
 hmac = "0.12"

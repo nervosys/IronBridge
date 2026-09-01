@@ -86,7 +86,16 @@ impl EncryptionManager {
 
     /// Derive encryption key from password using PBKDF2
     fn derive_key(password: &str, salt: &[u8]) -> Result<Key<Aes256Gcm>> {
-        // PBKDF2-HMAC-SHA256 with 100,000 iterations
+        // PBKDF2-HMAC-SHA256 with 100,000 iterations.
+        //
+        // OWASP's current floor for this construction is 600,000, and this
+        // should rise to meet it -- but the iteration count is NOT stored
+        // alongside the ciphertext, and this same function guards the encrypted
+        // provider-credential store. Changing the count here re-derives a
+        // different key and makes every already-encrypted credential fail to
+        // decrypt. Raising it therefore needs a stored per-record iteration
+        // count and a migration, not a one-line edit; until then it stays at
+        // the value existing data was written under.
         let mut key = [0u8; KEY_SIZE];
 
         pbkdf2::pbkdf2_hmac::<sha2::Sha256>(password.as_bytes(), salt, 100_000, &mut key);
