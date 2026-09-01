@@ -912,6 +912,14 @@ pub async fn graphql_sdl(schema: web::Data<ChasmSchema>) -> impl Responder {
 pub fn create_schema(state: Arc<AppState>) -> ChasmSchema {
     Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(state)
+        // Bound query cost. async-graphql imposes no depth or complexity limit
+        // by default, so a single deeply-nested query -- cheap to send, and
+        // cheaper still if any type refers back to another -- could force an
+        // arbitrarily large amount of resolver work. These ceilings are well
+        // above any honest query the UI issues and turn that DoS into a
+        // rejected query.
+        .limit_depth(20)
+        .limit_complexity(2000)
         .finish()
 }
 
@@ -1003,3 +1011,44 @@ const GRAPHQL_PLAYGROUND_HTML: &str = r#"<!DOCTYPE html>
 </body>
 </html>
 "#;
+
+#[cfg(test)]
+mod complexity_tests {
+    use super::*;
+
+    fn schema() -> ChasmSchema {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gql.db");
+        crate::commands::create_harvest_database(&path).unwrap();
+        let db = crate::ChatDatabase::open(&path).unwrap();
+        // The dir must outlive the schema for the file to stay open; leak it,
+        // this is a test process.
+        std::mem::forget(dir);
+        create_schema(Arc::new(AppState::new(db, path)))
+    }
+
+    /// An ordinary query runs; a query-complexity bomb is rejected rather than
+    /// executed. Without `limit_complexity` the second query would run every
+    /// one of its thousands of resolvers.
+    #[tokio::test]
+    async fn an_overly_complex_query_is_refused() {
+        let schema = schema();
+
+        let ok = schema.execute("{ stats { totalSessions } }").await;
+        assert!(ok.errors.is_empty(), "normal query failed: {:?}", ok.errors);
+
+        let bomb = format!(
+            "{{ {} }}",
+            (0..2200)
+                .map(|i| format!("a{i}: stats {{ totalSessions }}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        let res = schema.execute(bomb).await;
+        assert!(
+            res.errors.iter().any(|e| e.message.contains("too complex")),
+            "complexity bomb was not rejected: {:?}",
+            res.errors
+        );
+    }
+}
