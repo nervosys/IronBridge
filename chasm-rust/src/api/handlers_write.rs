@@ -2492,6 +2492,50 @@ mod tests {
         assert_eq!(rows[0]["type"], "session");
     }
 
+    /// Search finds a term in message *content*, not just the title, and
+    /// returns a snippet. This branch of `/api/search` was untested; the CLI's
+    /// content search shipped broken for months behind exactly that kind of
+    /// gap, so it is worth a live assertion here.
+    #[tokio::test]
+    async fn search_finds_message_content_with_a_snippet() {
+        let (state, _d) = temp_state("search-content");
+        let app = app!(state);
+        let sid = make_session(&app).await;
+        {
+            let db = state.db.lock().unwrap();
+            db.conn
+                .execute(
+                    "INSERT INTO messages_v2 (session_id, message_index, role, content_raw)
+                     VALUES (?1, 0, 'assistant', 'a long discussion about quicksort partitioning and pivots')",
+                    params![sid],
+                )
+                .expect("insert message");
+        }
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/search?q=quicksort")
+                .to_request(),
+        )
+        .await;
+        let body = body_json(resp).await;
+        let rows = body["data"].as_array().expect("array");
+        let hit = rows
+            .iter()
+            .find(|r| r["type"] == "message")
+            .expect("a message-content hit");
+        assert_eq!(hit["sessionId"], sid);
+        assert!(
+            hit["snippet"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("quicksort"),
+            "snippet missing the term: {}",
+            hit["snippet"]
+        );
+    }
+
     #[tokio::test]
     async fn an_empty_search_returns_nothing_rather_than_everything() {
         let (state, _d) = temp_state("search-empty");
