@@ -112,6 +112,18 @@ apiClient.interceptors.response.use(
     (error) => {
         if (error.response) {
             console.error(`[API] Error ${error.response.status}:`, error.response.data);
+
+            // Carry the server's own explanation onto `error.message`.
+            //
+            // Axios sets it to "Request failed with status code 400", which
+            // discards the `error` field in the response envelope -- the part
+            // that actually says what went wrong and what to do about it. Every
+            // screen that reports `err.message` was showing the status line
+            // instead of the reason.
+            const served = error.response.data?.error;
+            if (typeof served === 'string' && served.trim()) {
+                error.message = served;
+            }
         } else if (error.request) {
             console.error('[API] No response received:', error.message);
         } else {

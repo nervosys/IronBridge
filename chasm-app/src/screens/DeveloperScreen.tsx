@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -11,97 +11,44 @@ import {
     RefreshControl,
     TextInput,
     Dimensions,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { ExampleDataBanner } from '../components/ExampleDataBanner';
+import { serverCompletion } from '../api/completions';
+import { datasets as datasetsApi, type Dataset } from '../api/datasets';
+import { training as trainingApi, type TrainingJob } from '../api/training';
+import { sessions as sessionsApi } from '../api/sessions';
 
-interface MLProject {
-    id: string;
-    name: string;
-    type: 'fine-tune' | 'embedding' | 'rag' | 'agent';
-    status: 'running' | 'completed' | 'failed' | 'queued';
-    baseModel: string;
-    progress: number;
-    metrics?: {
-        loss?: number;
-        accuracy?: number;
-        f1?: number;
-    };
-    createdAt: string;
-    updatedAt: string;
+// Fine-tuning jobs are served by /api/training, not declared here.
+//
+// Four `MLProject` fixtures used to sit here, each with a `progress`
+// percentage and `metrics` carrying accuracy and F1. A fine-tuning API
+// reports a status, and once finished a token count and the resulting model's
+// name -- no percentage, no accuracy, no F1. So the progress bar and the
+// metrics row are gone rather than fed from something invented.
+
+
+/**
+ * Sizes shown in MB, from the server's byte count.
+ *
+ * The fixture this replaced declared its own sizes -- 15.2 MB across 1,247
+ * entries and so on -- for datasets that did not exist. What the server
+ * reports is the length of what it actually stored.
+ */
+function toMegabytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const mb = bytes / (1024 * 1024);
+    return mb < 0.1 ? `${(bytes / 1024).toFixed(1)} KB` : `${mb.toFixed(1)} MB`;
 }
-
-interface Dataset {
-    id: string;
-    name: string;
-    type: 'conversations' | 'documents' | 'qa' | 'custom';
-    size: number;
-    entries: number;
-    format: string;
-}
-
-const sampleProjects: MLProject[] = [
-    {
-        id: '1',
-        name: 'Code Assistant Fine-tune',
-        type: 'fine-tune',
-        status: 'running',
-        baseModel: 'llama-3.2-3b',
-        progress: 67,
-        metrics: { loss: 0.234, accuracy: 0.891 },
-        createdAt: '2024-12-10T10:00:00Z',
-        updatedAt: '2024-12-12T15:30:00Z',
-    },
-    {
-        id: '2',
-        name: 'Document Embeddings',
-        type: 'embedding',
-        status: 'completed',
-        baseModel: 'bge-large-en-v1.5',
-        progress: 100,
-        createdAt: '2024-12-08T09:00:00Z',
-        updatedAt: '2024-12-08T12:00:00Z',
-    },
-    {
-        id: '3',
-        name: 'Support RAG Pipeline',
-        type: 'rag',
-        status: 'completed',
-        baseModel: 'gpt-4o-mini',
-        progress: 100,
-        metrics: { f1: 0.923 },
-        createdAt: '2024-12-05T14:00:00Z',
-        updatedAt: '2024-12-06T08:00:00Z',
-    },
-    {
-        id: '4',
-        name: 'Research Agent',
-        type: 'agent',
-        status: 'queued',
-        baseModel: 'claude-3-haiku',
-        progress: 0,
-        createdAt: '2024-12-12T16:00:00Z',
-        updatedAt: '2024-12-12T16:00:00Z',
-    },
-];
-
-const sampleDatasets: Dataset[] = [
-    { id: '1', name: 'Chat History Export', type: 'conversations', size: 15.2, entries: 1247, format: 'JSONL' },
-    { id: '2', name: 'Technical Docs', type: 'documents', size: 45.8, entries: 324, format: 'Markdown' },
-    { id: '3', name: 'FAQ Pairs', type: 'qa', size: 2.1, entries: 892, format: 'CSV' },
-    { id: '4', name: 'Code Samples', type: 'custom', size: 8.7, entries: 1563, format: 'JSONL' },
-];
-
-const typeConfig = {
-    'fine-tune': { icon: 'fitness-outline', color: '#8b5cf6' },
-    'embedding': { icon: 'cube-outline', color: '#3b82f6' },
-    'rag': { icon: 'git-network-outline', color: '#10b981' },
-    'agent': { icon: 'person-outline', color: '#f59e0b' },
-};
 
 const statusConfig = {
     running: { bg: '#3b82f620', color: '#3b82f6', icon: 'play-circle' },
+    // The provider's own vocabulary, so a status can be rendered without
+    // being translated into something it did not say.
+    validating_files: { bg: '#3b82f620', color: '#3b82f6', icon: 'search-circle' },
+    succeeded: { bg: '#10b98120', color: '#10b981', icon: 'checkmark-circle' },
+    cancelled: { bg: '#64748b20', color: '#64748b', icon: 'stop-circle' },
     completed: { bg: '#10b98120', color: '#10b981', icon: 'checkmark-circle' },
     failed: { bg: '#ef444420', color: '#ef4444', icon: 'close-circle' },
     queued: { bg: '#64748b20', color: '#64748b', icon: 'time' },
@@ -110,33 +57,182 @@ const statusConfig = {
 export function DeveloperScreen() {
     const { colors } = useTheme();
     const [activeTab, setActiveTab] = useState<'projects' | 'datasets' | 'playground'>('projects');
-    const [projects] = useState<MLProject[]>(sampleProjects);
-    const [datasets] = useState<Dataset[]>(sampleDatasets);
+    const [projects, setProjects] = useState<TrainingJob[]>([]);
+
+    // Datasets are the server's, from /api/datasets. Projects above still are
+    // not -- there is no /api/training, which is what the banner says.
+    const [datasets, setDatasets] = useState<Dataset[]>([]);
+    const [datasetError, setDatasetError] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [playgroundPrompt, setPlaygroundPrompt] = useState('');
+
+    // Playground. The model field is free text on purpose: the server proxies
+    // to one configured OpenAI-compatible endpoint and forwards whatever model
+    // string it is given, so a picker over the provider catalogue would imply
+    // routing that does not exist. Blank means the server's own default.
+    const [playgroundModel, setPlaygroundModel] = useState('');
+    const [playgroundOutput, setPlaygroundOutput] = useState<string | null>(null);
+    const [playgroundError, setPlaygroundError] = useState<string | null>(null);
+    const [isRunning, setIsRunning] = useState(false);
 
     // Stats
     const stats = useMemo(() => ({
         totalProjects: projects.length,
-        running: projects.filter(p => p.status === 'running').length,
+        running: projects.filter(p => !['succeeded', 'failed', 'cancelled'].includes(p.status)).length,
         datasets: datasets.length,
-        totalSize: datasets.reduce((sum, d) => sum + d.size, 0).toFixed(1),
+        totalSize: toMegabytes(datasets.reduce((sum, d) => sum + d.sizeBytes, 0)),
     }), [projects, datasets]);
+
+    /**
+     * Reload the datasets.
+     *
+     * This used to be `setTimeout(..., 1000)` -- a spinner that ran for a
+     * second and reloaded nothing, indistinguishable from a fetch that
+     * succeeded and returned the same data. It fetches now. Projects are
+     * still fixtures with no endpoint behind them, as the banner says.
+     *
+     * On failure the list is left alone rather than cleared: an empty store
+     * and an unreachable server look identical once the rows are gone.
+     */
+    const loadDatasets = useCallback(async () => {
+        try {
+            setDatasets(await datasetsApi.list());
+            setDatasetError(null);
+        } catch (err) {
+            setDatasetError(
+                err instanceof Error ? err.message : 'Could not reach the server'
+            );
+        }
+    }, []);
+
+    /**
+     * Load the fine-tuning jobs.
+     *
+     * Every unfinished job is refreshed from the provider by the server on
+     * this call, so pulling to refresh is what advances a status.
+     */
+    const loadProjects = useCallback(async () => {
+        try {
+            setProjects(await trainingApi.jobs());
+        } catch {
+            // The datasets error banner already covers an unreachable server;
+            // a second one saying the same thing is noise.
+        }
+    }, []);
+
+    useEffect(() => {
+        loadDatasets();
+        loadProjects();
+    }, [loadDatasets, loadProjects]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1000);
+        await Promise.all([loadDatasets(), loadProjects()]);
+        setIsRefreshing(false);
     };
 
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
+    /**
+     * Upload the sessions on this device as a dataset.
+     *
+     * The button had no handler at all. It takes what the app already holds --
+     * this is a chat session manager, and its own sessions are the obvious
+     * first dataset -- rather than opening a file picker for a format nothing
+     * here can validate.
+     *
+     * The server counts and measures what it stored; nothing is claimed here.
+     */
+    const handleUploadDataset = async () => {
+        if (isUploading) return;
+        setIsUploading(true);
+        setDatasetError(null);
+        try {
+            const sessions = await sessionsApi.list({ limit: 500 });
+            if (sessions.length === 0) {
+                Alert.alert(
+                    'Nothing to upload',
+                    'This device has no sessions yet, and an empty dataset is not worth storing.'
+                );
+                return;
+            }
+
+            const created = await datasetsApi.create({
+                name: `Sessions ${new Date().toISOString().slice(0, 10)}`,
+                type: 'conversations',
+                format: 'json',
+                entries: sessions,
+            });
+            await loadDatasets();
+            Alert.alert(
+                'Uploaded',
+                `${created.name} stored with ${created.entryCount.toLocaleString()} ` +
+                `entries (${toMegabytes(created.sizeBytes)}).`
+            );
+        } catch (err) {
+            Alert.alert(
+                'Not uploaded',
+                err instanceof Error ? err.message : 'The server rejected the dataset.'
+            );
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDeleteDataset = (dataset: Dataset) => {
+        Alert.alert('Delete dataset', `Delete "${dataset.name}" and its entries?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await datasetsApi.remove(dataset.id);
+                        await loadDatasets();
+                    } catch (err) {
+                        Alert.alert(
+                            'Not deleted',
+                            err instanceof Error ? err.message : 'The server rejected the request.'
+                        );
+                    }
+                },
+            },
+        ]);
+    };
+
+    /**
+     * Send the prompt to `/api/chat/completions`.
+     *
+     * A server with no model configured answers 503 naming the variable to
+     * set; that message is shown rather than swallowed, because "nothing
+     * happened" and "the server has no model" look the same in an empty
+     * output box.
+     */
+    const handleRunPrompt = async () => {
+        const prompt = playgroundPrompt.trim();
+        if (!prompt || isRunning) return;
+
+        setIsRunning(true);
+        setPlaygroundError(null);
+        setPlaygroundOutput(null);
+        try {
+            const completion = await serverCompletion(prompt, playgroundModel);
+            setPlaygroundOutput(completion.content || '(the model returned no content)');
+        } catch (err) {
+            setPlaygroundError(
+                err instanceof Error ? err.message : 'The server rejected the request.'
+            );
+        } finally {
+            setIsRunning(false);
+        }
     };
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <ExampleDataBanner what="ML projects and datasets" />
+            {/*
+              * No example-data banner on this screen any more. All three tabs
+              * read from the server: /api/training, /api/datasets and
+              * /api/chat/completions.
+              */}
             {/* Stats */}
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -195,9 +291,16 @@ export function DeveloperScreen() {
             >
                 {activeTab === 'projects' && (
                     <>
+                        {projects.length === 0 && (
+                            <View style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.projectMeta, { color: colors.textSecondary }]}>
+                                    No fine-tuning jobs. Start one from the web app&apos;s Training tab.
+                                </Text>
+                            </View>
+                        )}
+
                         {projects.map((project) => {
-                            const typeStyle = typeConfig[project.type];
-                            const status = statusConfig[project.status];
+                            const status = statusConfig[project.status] ?? statusConfig.queued;
 
                             return (
                                 <View
@@ -205,13 +308,15 @@ export function DeveloperScreen() {
                                     style={[styles.projectCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                                 >
                                     <View style={styles.projectHeader}>
-                                        <View style={[styles.typeIcon, { backgroundColor: `${typeStyle.color}20` }]}>
-                                            <Ionicons name={typeStyle.icon as any} size={20} color={typeStyle.color} />
+                                        <View style={[styles.typeIcon, { backgroundColor: `${status.color}20` }]}>
+                                            <Ionicons name="fitness-outline" size={20} color={status.color} />
                                         </View>
                                         <View style={styles.projectInfo}>
-                                            <Text style={[styles.projectName, { color: colors.text }]}>{project.name}</Text>
+                                            <Text style={[styles.projectName, { color: colors.text }]}>
+                                                {project.datasetName}
+                                            </Text>
                                             <Text style={[styles.projectMeta, { color: colors.textSecondary }]}>
-                                                {project.type} • {project.baseModel}
+                                                {project.baseModel}
                                             </Text>
                                         </View>
                                         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
@@ -220,45 +325,39 @@ export function DeveloperScreen() {
                                         </View>
                                     </View>
 
-                                    {/* Progress */}
-                                    {project.status === 'running' && (
-                                        <View style={styles.progressSection}>
-                                            <View style={styles.progressHeader}>
-                                                <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>Progress</Text>
-                                                <Text style={[styles.progressValue, { color: colors.text }]}>{project.progress}%</Text>
-                                            </View>
-                                            <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
-                                                <View style={[styles.progressFill, { width: `${project.progress}%`, backgroundColor: typeStyle.color }]} />
-                                            </View>
-                                        </View>
+                                    {/*
+                                      * No progress bar and no metrics row.
+                                      *
+                                      * Both used to be here, drawn from a
+                                      * `progress` percentage and an `accuracy`
+                                      * and `f1` on a literal. A fine-tuning API
+                                      * reports a status, and once finished a
+                                      * token count and the model's name. There
+                                      * is no fraction to draw a bar from.
+                                      */}
+                                    {project.fineTunedModel && (
+                                        <Text style={[styles.projectMeta, { color: colors.text }]} selectable>
+                                            {project.fineTunedModel}
+                                            {project.trainedTokens !== undefined
+                                                ? ` · ${project.trainedTokens.toLocaleString()} tokens trained`
+                                                : ''}
+                                        </Text>
                                     )}
 
-                                    {/* Metrics */}
-                                    {project.metrics && (
-                                        <View style={styles.metricsRow}>
-                                            {project.metrics.loss !== undefined && (
-                                                <View style={styles.metricItem}>
-                                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Loss</Text>
-                                                    <Text style={[styles.metricValue, { color: colors.text }]}>{project.metrics.loss.toFixed(3)}</Text>
-                                                </View>
-                                            )}
-                                            {project.metrics.accuracy !== undefined && (
-                                                <View style={styles.metricItem}>
-                                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Accuracy</Text>
-                                                    <Text style={[styles.metricValue, { color: colors.text }]}>{(project.metrics.accuracy * 100).toFixed(1)}%</Text>
-                                                </View>
-                                            )}
-                                            {project.metrics.f1 !== undefined && (
-                                                <View style={styles.metricItem}>
-                                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>F1 Score</Text>
-                                                    <Text style={[styles.metricValue, { color: colors.text }]}>{(project.metrics.f1 * 100).toFixed(1)}%</Text>
-                                                </View>
-                                            )}
-                                        </View>
+                                    {project.error && (
+                                        <Text style={[styles.projectMeta, { color: '#ef4444' }]}>
+                                            {project.error}
+                                        </Text>
+                                    )}
+
+                                    {project.refreshError && (
+                                        <Text style={[styles.projectMeta, { color: '#f59e0b' }]}>
+                                            Last known status — the provider could not be reached.
+                                        </Text>
                                     )}
 
                                     <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                                        Updated {formatDate(project.updatedAt)}
+                                        Updated {new Date(project.updatedAt).toLocaleString()}
                                     </Text>
                                 </View>
                             );
@@ -268,10 +367,28 @@ export function DeveloperScreen() {
 
                 {activeTab === 'datasets' && (
                     <>
+                        {datasetError && (
+                            <View style={[styles.datasetCard, { backgroundColor: colors.card, borderColor: '#ef4444' }]}>
+                                <Text style={[styles.datasetMeta, { color: colors.textSecondary }]}>
+                                    Could not load datasets: {datasetError}. Pull to retry.
+                                </Text>
+                            </View>
+                        )}
+
+                        {!datasetError && datasets.length === 0 && (
+                            <View style={[styles.datasetCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.datasetMeta, { color: colors.textSecondary }]}>
+                                    No datasets stored yet.
+                                </Text>
+                            </View>
+                        )}
+
                         {datasets.map((dataset) => (
-                            <View
+                            <TouchableOpacity
                                 key={dataset.id}
                                 style={[styles.datasetCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                onLongPress={() => handleDeleteDataset(dataset)}
+                                delayLongPress={400}
                             >
                                 <View style={styles.datasetHeader}>
                                     <Ionicons name="document-text-outline" size={24} color={colors.primary} />
@@ -284,20 +401,39 @@ export function DeveloperScreen() {
                                 </View>
                                 <View style={styles.datasetStats}>
                                     <View style={styles.datasetStat}>
-                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>{dataset.entries.toLocaleString()}</Text>
+                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>
+                                            {dataset.entryCount.toLocaleString()}
+                                        </Text>
                                         <Text style={[styles.datasetStatLabel, { color: colors.textSecondary }]}>entries</Text>
                                     </View>
                                     <View style={styles.datasetStat}>
-                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>{dataset.size}</Text>
-                                        <Text style={[styles.datasetStatLabel, { color: colors.textSecondary }]}>MB</Text>
+                                        <Text style={[styles.datasetStatValue, { color: colors.text }]}>
+                                            {toMegabytes(dataset.sizeBytes)}
+                                        </Text>
+                                        <Text style={[styles.datasetStatLabel, { color: colors.textSecondary }]}>stored</Text>
                                     </View>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         ))}
-                        <TouchableOpacity style={[styles.uploadButton, { borderColor: colors.border }]}>
-                            <Ionicons name="cloud-upload-outline" size={24} color={colors.primary} />
-                            <Text style={[styles.uploadText, { color: colors.primary }]}>Upload Dataset</Text>
+
+                        <TouchableOpacity
+                            style={[styles.uploadButton, { borderColor: colors.border }, isUploading && styles.uploadButtonDisabled]}
+                            onPress={handleUploadDataset}
+                            disabled={isUploading}
+                        >
+                            <Ionicons
+                                name={isUploading ? 'hourglass-outline' : 'cloud-upload-outline'}
+                                size={24}
+                                color={colors.primary}
+                            />
+                            <Text style={[styles.uploadText, { color: colors.primary }]}>
+                                {isUploading ? 'Uploading…' : 'Upload sessions as a dataset'}
+                            </Text>
                         </TouchableOpacity>
+
+                        <Text style={[styles.datasetHint, { color: colors.textSecondary }]}>
+                            Long-press a dataset to delete it.
+                        </Text>
                     </>
                 )}
 
@@ -315,19 +451,40 @@ export function DeveloperScreen() {
                             textAlignVertical="top"
                         />
                         <View style={styles.playgroundActions}>
-                            <TouchableOpacity style={[styles.modelSelect, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                                <Text style={[styles.modelSelectText, { color: colors.text }]}>gpt-4o-mini</Text>
-                                <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.runButton, { backgroundColor: colors.primary }]}>
-                                <Ionicons name="play" size={18} color="#fff" />
-                                <Text style={styles.runButtonText}>Run</Text>
+                            <TextInput
+                                style={[styles.modelSelect, styles.modelSelectText, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                                placeholder="gpt-4o-mini (server default)"
+                                placeholderTextColor={colors.textSecondary}
+                                value={playgroundModel}
+                                onChangeText={setPlaygroundModel}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            <TouchableOpacity
+                                style={[
+                                    styles.runButton,
+                                    { backgroundColor: colors.primary },
+                                    (!playgroundPrompt.trim() || isRunning) && styles.runButtonDisabled,
+                                ]}
+                                disabled={!playgroundPrompt.trim() || isRunning}
+                                onPress={handleRunPrompt}
+                            >
+                                <Ionicons name={isRunning ? 'hourglass' : 'play'} size={18} color="#fff" />
+                                <Text style={styles.runButtonText}>{isRunning ? 'Running…' : 'Run'}</Text>
                             </TouchableOpacity>
                         </View>
                         <View style={[styles.outputArea, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <Text style={[styles.outputPlaceholder, { color: colors.textSecondary }]}>
-                                Output will appear here...
-                            </Text>
+                            {playgroundError ? (
+                                <Text style={[styles.outputText, { color: '#ef4444' }]}>{playgroundError}</Text>
+                            ) : playgroundOutput ? (
+                                <Text style={[styles.outputText, { color: colors.text }]} selectable>
+                                    {playgroundOutput}
+                                </Text>
+                            ) : (
+                                <Text style={[styles.outputPlaceholder, { color: colors.textSecondary }]}>
+                                    Output will appear here...
+                                </Text>
+                            )}
                         </View>
                     </View>
                 )}
@@ -580,6 +737,21 @@ const styles = StyleSheet.create({
     outputPlaceholder: {
         fontSize: 13,
         fontStyle: 'italic',
+    },
+    uploadButtonDisabled: {
+        opacity: 0.5,
+    },
+    datasetHint: {
+        fontSize: 12,
+        textAlign: 'center',
+        marginTop: 8,
+    },
+    outputText: {
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    runButtonDisabled: {
+        opacity: 0.5,
     },
     fab: {
         position: 'absolute',

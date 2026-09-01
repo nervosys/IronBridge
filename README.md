@@ -182,6 +182,33 @@ Writes:
 | POST   | `/api/providers/:id/test`         | Test provider connectivity      |
 | POST   | `/api/chat/completions`           | Proxy a completion              |
 | POST   | `/api/harvest`                    | Run an incremental harvest      |
+| PUT    | `/api/providers/:id`              | Switch a provider on or off     |
+| POST   | `/api/documents`                  | Ingest a document into the knowledge base |
+| GET    | `/api/documents`                  | List ingested documents         |
+| GET    | `/api/documents/search`           | Retrieve chunks by meaning (`?q=`) |
+| GET    | `/api/documents/:id`              | One document and its chunks     |
+| DELETE | `/api/documents/:id`              | Delete a document and its chunks |
+| POST   | `/api/datasets`                   | Upload a dataset                |
+| GET    | `/api/datasets`                   | List stored datasets            |
+| GET    | `/api/datasets/:id`               | One dataset's metadata          |
+| GET    | `/api/datasets/:id/entries`       | A page of its records (`?limit=&offset=`) |
+| DELETE | `/api/datasets/:id`               | Delete a dataset and its entries |
+| GET    | `/api/catalog/models`             | Search models on the Hugging Face Hub (`?q=`) |
+| GET    | `/api/catalog/datasets`           | Search datasets on the Hub (`?q=`) |
+| GET    | `/api/catalog/files`              | A Hub repository's files, with sizes |
+| POST   | `/api/downloads`                  | Start downloading one file      |
+| GET    | `/api/downloads`                  | List download jobs              |
+| GET    | `/api/downloads/:id`              | Poll one download               |
+| DELETE | `/api/downloads/:id`              | Cancel one, or forget a finished one |
+| GET    | `/api/training/validate`          | Check a dataset before paying for it |
+| POST   | `/api/training/jobs`              | Submit a dataset for fine-tuning |
+| GET    | `/api/training/jobs`              | List fine-tuning jobs           |
+| GET    | `/api/training/jobs/:id`          | Poll one job                    |
+| DELETE | `/api/training/jobs/:id`          | Cancel one, or forget a finished one |
+| GET    | `/api/research/papers`            | Search arXiv (`?q=`)            |
+| GET    | `/api/research/saved`             | List saved papers               |
+| POST   | `/api/research/saved`             | Save a paper                    |
+| DELETE | `/api/research/saved/:id`         | Unsave a paper                  |
 
 Endpoints that refuse rather than guess:
 
@@ -193,6 +220,28 @@ Endpoints that refuse rather than guess:
   nothing.
 - `GET /api/stats/providers` reports `tokens: 0` where the store holds no
   token counts, rather than estimating.
+- `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
+  credential it is given. Without one it returns `400` naming the variable,
+  rather than writing the secret to the database in the clear.
+- `POST /api/training/jobs` needs a provider and answers `503` naming the
+  variable without one. Chasm does not train models itself. It also refuses,
+  without uploading anything, a dataset that would not pass the provider's
+  own rules — the upload is the part that costs.
+- `POST /api/downloads` refuses before a job exists when the file is not in
+  that repository, the path could escape the download directory, the file is
+  over `CHASM_MAX_DOWNLOAD_BYTES`, the destination already exists, or it
+  would not leave 2 GB free on the volume. Filling that volume would take the
+  database with it.
+- `GET /api/catalog/*` answers `502` when the Hub is unreachable or has
+  rate-limited the server, never an empty list. "The Hub is down" and
+  "nothing matched" are different answers and an empty table cannot tell
+  them apart.
+- `GET /api/research/papers` does the same for arXiv, for the same reason.
+- `POST /api/documents` and `GET /api/documents/search` need an embedding
+  model, the same `OPENAI_API_KEY` as semantic search. Without one both
+  return `503` naming the variable: ingestion will not store a document it
+  could never retrieve, and search will not fall back to substring matching
+  and present the result as semantic.
 
 Deleting a workspace **detaches** its sessions rather than deleting them.
 Merging leaves its sources intact. A fork is an independent copy, not an alias.
@@ -249,6 +298,133 @@ Indexing is a separate, explicit step — embedding a whole store costs money an
 time proportional to its size, so a query never triggers one silently. The
 response reports how many vectors it searched, so an empty index is
 distinguishable from no matches.
+
+### Datasets
+
+```bash
+curl -X POST localhost:8787/api/datasets \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"FAQ pairs","type":"qa","entries":[{"q":"...","a":"..."}]}'
+curl "localhost:8787/api/datasets"
+```
+
+Collections you upload and this server holds. `entryCount` and `sizeBytes` are
+measured from what was stored and are ignored if you send them — a
+client-supplied size is a number nobody checked.
+
+Note the word is overloaded: the Developer page also shows a *catalogue* of
+remote datasets you would download from. That is a separate feature, not
+implemented, and labelled as such on the page. The data flows the other way.
+
+### Catalogue
+
+```bash
+curl "localhost:8787/api/catalog/models?q=llama&limit=5"
+curl "localhost:8787/api/catalog/datasets?q=orca"
+```
+
+A read-only proxy to the Hugging Face Hub's public search. The host is
+compiled in and only the query is caller-controlled, so it cannot be pointed
+at an arbitrary URL. No credential is needed; `HUGGINGFACE_TOKEN` only raises
+the Hub's anonymous rate limit.
+
+Rows carry no size, sample count, parameter count or format: the Hub's search
+API reports none of them, and the tables this replaced showed all four as
+measurements. `/api/catalog/files` does report real sizes, per file, which is
+what makes a download decidable.
+
+### Downloads
+
+```bash
+curl "localhost:8787/api/catalog/files?kind=models&id=openai-community/gpt2"
+curl -X POST localhost:8787/api/downloads \
+  -H 'Content-Type: application/json' \
+  -d '{"kind":"models","repoId":"openai-community/gpt2","filePath":"config.json"}'
+curl "localhost:8787/api/downloads"
+```
+
+Fetches one file from a Hub repository in the background. The POST returns a
+job immediately and reports `downloadedBytes` against `totalBytes` as it runs —
+these files are large enough that waiting for the transfer would time out the
+request and show no progress on the way.
+
+Files land under `CHASM_DOWNLOAD_DIR`, or a `downloads` directory beside the
+database, as `<kind>/<repo id>/<path>`. They are written to a `.part` file and
+renamed on success, so a file present under its real name is complete.
+
+The URL is built server-side against a compiled-in host from a repository and
+path that were both validated first — it is never supplied by the caller. The
+requested path must appear in that repository's own file listing, and is then
+re-checked to reject absolute paths, drive letters, UNC prefixes and `..`
+segments.
+
+Cancelling stops the transfer and removes the partial file. Deleting a
+finished job removes the record and keeps the file.
+
+### Research
+
+```bash
+curl "localhost:8787/api/research/papers?q=retrieval+augmented+generation&limit=5"
+curl "localhost:8787/api/research/saved"
+```
+
+A read-only proxy to arXiv's public API, plus a saved-papers list this server
+keeps. The host is compiled in, a descriptive User-Agent is sent and the page
+size is capped, as arXiv asks of automated clients.
+
+`totalResults` is arXiv's own count for the query, so a page of 25 out of
+995,199 is distinguishable from 25 and no more.
+
+Papers carry no citation, view, comment or star count and no trend score.
+arXiv reports none of them, and the pages this replaced showed all five and
+ranked a leaderboard by them.
+
+### Fine-tuning
+
+```bash
+curl "localhost:8787/api/training/validate?datasetId=<id>"
+curl -X POST localhost:8787/api/training/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"datasetId":"<id>","baseModel":"gpt-4o-mini-2024-07-18"}'
+curl "localhost:8787/api/training/jobs"
+```
+
+Chasm does not train anything. It converts one of your datasets to JSONL,
+uploads it to the provider configured with `OPENAI_API_KEY`, starts a
+fine-tuning job there, and reports that provider's status back. Every status
+shown came from the provider on the request that displayed it.
+
+`validate` is local, free and offline. Run it first: a bad dataset otherwise
+fails at the provider *after* an upload you have already paid for. It reports
+every problem at once, pinned to the entry at fault.
+
+There is no progress percentage anywhere in the response, and no ETA, GPU,
+accuracy or F1. A fine-tuning API reports a status, and once finished a
+trained-token count and the resulting model's name — so that is what is
+stored and shown. When a job cannot be refreshed, it carries a `refreshError`
+rather than presenting a stale status as a current one.
+
+### Document knowledge base
+
+```bash
+export OPENAI_API_KEY=...                       # or a local endpoint
+curl -X POST localhost:8787/api/documents \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Runbook","content":"...","strategy":"paragraph"}'
+curl "localhost:8787/api/documents/search?q=how+do+we+roll+back"
+```
+
+Separate from semantic search, which indexes your own sessions: this stores
+documents you give it. Ingestion splits the text, embeds each piece and writes
+both in one transaction — a half-written document would list with a chunk count
+it does not have.
+
+Five splitting strategies are available (`semantic`, `paragraph`, `sentence`,
+`fixed_size`, `code`); prose and source do not split the same way and the
+choice is yours. Retrieval reports `searched`, the number of chunks compared,
+and skips chunks embedded under a different model rather than comparing them —
+vectors from two models do not share a space, so the similarity between them is
+a meaningless number that would still rank.
 
 There is no lexical fallback: without a key both routes return `503`. An
 endpoint called "semantic" quietly returning substring matches would be
@@ -394,12 +570,15 @@ AI agent integration via Model Context Protocol:
 ```json
 {
   "mcpServers": {
-    "chasm": { "command": "chasm-mcp" }
+    "chasm": { "command": "csm-mcp" }
   }
 }
 ```
 
-Tools: `chasm_list_workspaces`, `chasm_list_sessions`, `chasm_show_session`, `chasm_search`, `chasm_detect`, `chasm_register_all`
+The binary is `csm-mcp` and the tools are prefixed `csm_`, not `chasm_`:
+`csm_list_workspaces`, `csm_list_sessions`, `csm_show_session`, `csm_search`,
+`csm_detect`, `csm_register_all`, and ten more — see
+[MCP Server](docs/api/mcp.md) for all sixteen and their parameters.
 
 ## TUI
 
@@ -445,11 +624,19 @@ rest of the crate does — no `libxmlsec1`, no OpenSSL, no `clang`.
   document so wrapped forgeries cannot reach the session.
 - **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
 - **Data Retention**: policy model, scheduling, and expiry actions.
-- **Compliance**: SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP, PCI DSS —
-  reporting scaffolding, not certification.
-- **Multi-tenancy**: Subscription tiers, tenant isolation, white-labeling.
+- **Multi-tenancy** and **white-labelling**: subscription tiers, tenant
+  isolation and custom branding. Compiled under `--features enterprise` and
+  tested, but *not routed* — no endpoint, table or caller reaches them. A
+  design in source form, not behaviour you can invoke.
 
-All three services persist through `api::audit::DatabaseOps`. The crate ships
+There is no compliance-framework reporting. A `src/enterprise/compliance.rs`
+once listed SOC2, HIPAA, GDPR, CCPA, ISO 27001, FedRAMP and PCI DSS, but it was
+a second, unrouted implementation of the audit and retention models above, and
+had already drifted from them — two `RetentionPolicy` types keyed on different
+id types, two `AuditEvent`s under one name. It was deleted rather than
+reconciled; the routed implementation is the one that serves traffic.
+
+All of these services persist through `api::audit::DatabaseOps`. The crate ships
 `SqliteEnterpriseStore`, which implements all 35 methods against the same SQLite
 database as the rest of Chasm; an embedder can substitute its own implementor.
 

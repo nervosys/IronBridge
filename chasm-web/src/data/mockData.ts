@@ -160,6 +160,7 @@ export const mockProviders: Provider[] = [
         endpoint: 'https://api.openai.com/v1',
         models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini'],
         status: 'connected',
+        enabled: true,
     },
     {
         id: 'anthropic',
@@ -170,6 +171,7 @@ export const mockProviders: Provider[] = [
         endpoint: 'https://api.anthropic.com/v1',
         models: ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
         status: 'connected',
+        enabled: true,
     },
     {
         id: 'azure',
@@ -180,6 +182,7 @@ export const mockProviders: Provider[] = [
         endpoint: 'https://models.inference.ai.azure.com',
         models: ['gpt-4o', 'gpt-4o-mini', 'Phi-4'],
         status: 'disconnected',
+        enabled: true,
     },
     {
         id: 'ollama',
@@ -190,6 +193,7 @@ export const mockProviders: Provider[] = [
         endpoint: 'http://localhost:11434',
         models: ['llama3.3:70b', 'qwen2.5-coder:14b', 'deepseek-r1:14b'],
         status: 'connected',
+        enabled: true,
     },
     {
         id: 'lmstudio',
@@ -200,6 +204,7 @@ export const mockProviders: Provider[] = [
         endpoint: 'http://localhost:1234/v1',
         models: ['lmstudio-community/qwen2.5-coder-14b'],
         status: 'connected',
+        enabled: true,
     },
 ];
 

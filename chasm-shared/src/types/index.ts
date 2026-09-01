@@ -207,6 +207,15 @@ export interface Provider {
     apiKey?: string | null;
     models: string[];
     status: ProviderStatus;
+    /**
+     * Whether the user has this provider switched on.
+     *
+     * Sent by `GET /api/providers` and written by `PUT /api/providers/{id}`.
+     * Distinct from the optional `settings.enabled` below, which the server
+     * does not send: reading the nested one is what made every provider look
+     * switched off.
+     */
+    enabled: boolean;
     settings?: ProviderSettings;
 }
 

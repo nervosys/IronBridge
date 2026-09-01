@@ -103,6 +103,22 @@ tags:
     description: Data retention policies (enterprise build only)
   - name: SSO
     description: SAML single sign-on (enterprise build only)
+  - name: OIDC
+    description: OpenID Connect single sign-on (enterprise build only)
+  - name: Documents
+    description: The knowledge base -- documents, their chunks and semantic search
+  - name: Datasets
+    description: Locally uploaded datasets
+  - name: Catalog
+    description: A read-only proxy to the Hugging Face Hub
+  - name: Downloads
+    description: Model and dataset downloads to local disk
+  - name: Training
+    description: Fine-tuning jobs, submitted to a provider
+  - name: Research
+    description: arXiv search, and the papers the user saved
+  - name: Notes
+    description: Clippings saved from a page by the browser extension
 
 paths:
   /health:
@@ -389,6 +405,48 @@ paths:
                         items:
                           $ref: "#/components/schemas/Provider"
 
+  /providers/{id}:
+    put:
+      tags: [Providers]
+      summary: Switch a provider on or off
+      description: >
+        Persists the one mutable field on a provider. The catalogue itself is
+        compiled in, so nothing else about a provider can be changed here. An
+        id outside the catalogue is a 404 rather than a stored setting for a
+        provider that does not exist.
+      operationId: updateProvider
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Catalogue id, as returned by listProviders.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: The provider, with the new setting applied
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Provider"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /agents:
     get:
       tags: [Agents]
@@ -600,6 +658,98 @@ paths:
         "200":
           description: Swarm created
 
+  /swarms/{id}/agents:
+    post:
+      tags: [Swarms]
+      summary: Add an agent to a swarm
+      description: >
+        Membership is stored on the swarm as `{agent_id, role}` records, so
+        this reads the list, edits it and writes it back.
+
+
+        Adding an agent that is already a member updates its role rather than
+        duplicating it — a swarm cannot hold one agent in two roles, and
+        refusing would make the obvious way to change a role an error.
+
+
+        The agent must exist. A membership pointing at no agent is a dangling
+        reference that later reads as data. Note the asymmetry: `POST /swarms`
+        does not currently check the ids in its `agents` list.
+      operationId: addSwarmAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, role]
+              properties:
+                agent_id:
+                  type: string
+                  description: >
+                    snake_case, as the server spells it — this body
+                    deserializes into a Rust struct with no serde rename.
+                role:
+                  type: string
+                  example: coordinator
+      responses:
+        "200":
+          description: The swarm's membership after the change
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          agents:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/SwarmAgent"
+                          updatedAt:
+                            type: integer
+                            format: int64
+        "400":
+          description: agent_id or role is blank
+        "404":
+          description: No such swarm, or no such agent
+
+  /swarms/{id}/agents/{agent_id}:
+    delete:
+      tags: [Swarms]
+      summary: Remove an agent from a swarm
+      description: >
+        A 404 when that agent was not a member — reporting a removal that
+        removed nothing is exactly the failure this API tries not to have.
+      operationId: removeSwarmAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The swarm's membership after the removal
+        "404":
+          description: No such swarm, or that agent was not a member
+
   /swarms/{id}:
     get:
       tags: [Swarms]
@@ -747,6 +897,250 @@ paths:
                       data:
                         $ref: "#/components/schemas/HarvestResult"
 
+  /research/papers:
+    get:
+      tags: [Research]
+      summary: Search arXiv
+      description: >
+        A read-only proxy to arXiv's public API. The host is compiled in and
+        only the query is caller-controlled, so it cannot be pointed at an
+        arbitrary URL. A descriptive User-Agent is sent and the page size is
+        capped, as arXiv asks.
+
+
+        `totalResults` is arXiv's own count for the query, so a page of 20 out
+        of 176,736 is distinguishable from 20 and no more.
+
+
+        An unreachable arXiv is a 502, never an empty list.
+      operationId: searchPapers
+      x-chasm-probe: needs-network
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          example: retrieval augmented generation
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+        - name: start
+          in: query
+          description: Offset into the result set, for paging.
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Matching papers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PaperResults"
+        "400":
+          description: q is missing or empty
+        "502":
+          description: arXiv was unreachable or returned something unusable
+
+  /research/saved:
+    get:
+      tags: [Research]
+      summary: List saved papers
+      description: Most recently saved first. Held by this server, not by arXiv.
+      operationId: listSavedPapers
+      responses:
+        "200":
+          description: Saved papers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Paper"
+    post:
+      tags: [Research]
+      summary: Save a paper
+      description: >
+        Idempotent — saving the same paper twice is what an unsure client does
+        and is not an error.
+      operationId: savePaper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paper]
+              properties:
+                paper:
+                  $ref: "#/components/schemas/Paper"
+      responses:
+        "200":
+          description: Saved
+        "400":
+          description: paper.arxivId is missing
+
+  /research/saved/{id}:
+    delete:
+      tags: [Research]
+      summary: Unsave a paper
+      operationId: unsavePaper
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The arXiv id.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notes:
+    get:
+      tags: [Notes]
+      summary: List clippings
+      description: >
+        Most recently saved first, ordered by `createdAt` — this server's
+        clock, not the client's.
+
+
+        `q` is a substring match over the content, source and url. Note that
+        `%` and `_` in `q` are SQL LIKE wildcards; a search for `%` matches
+        everything.
+      operationId: listNotes
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: q
+          in: query
+          description: Substring match over content, source and url.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved clippings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Note"
+    post:
+      tags: [Notes]
+      summary: Save a clipping
+      description: >
+        The body the browser extension's "Save Selection to Chasm" context
+        menu already sends. It also sends `"type": "note"`, a constant, which
+        is ignored — a column whose every value is the same word records
+        nothing.
+
+
+        Not idempotent: the same sentence selected twice is two clippings, and
+        there is no key on which the second could be recognised as the first.
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  description: The selected text, as it was selected.
+                source:
+                  type: string
+                  example: arxiv.org
+                url:
+                  type: string
+                timestamp:
+                  type: string
+                  description: >
+                    The client's own clock. Stored verbatim as `capturedAt`
+                    and never parsed; ordering uses the server's `createdAt`.
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Note"
+        "400":
+          description: content is empty or longer than 100,000 characters
+
+  /notes/{id}:
+    get:
+      tags: [Notes]
+      summary: Get one clipping
+      operationId: getNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The clipping
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Note"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Notes]
+      summary: Delete a clipping
+      operationId: deleteNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /settings:
     get:
       tags: [Settings]
@@ -880,8 +1274,9 @@ paths:
       tags: [Settings]
       summary: List provider accounts
       description: >
-        Stored provider credentials, newest first. The credential itself is
-        never returned -- only the metadata around it.
+        Stored provider accounts, newest first. The credential itself is never
+        returned -- only the metadata around it. Credentials are held encrypted;
+        see createAccount.
       operationId: listAccounts
       responses:
         "200":
@@ -901,8 +1296,18 @@ paths:
       tags: [Settings]
       summary: Add a provider account
       description: >
-        Stores a credential for a provider. The credential is written to the
-        local database as JSON in the clear; Chasm has no encryption at rest.
+        Stores a credential for a provider, encrypted with AES-256-GCM under a
+        key derived from the server's `CHASM_MASTER_KEY` environment variable
+        and a per-install salt.
+
+
+        If `CHASM_MASTER_KEY` is unset the request is refused with a 400 rather
+        than the credential being written in the clear. Set it in the server's
+        environment and restart.
+
+
+        The credential is never returned by any endpoint, including this one:
+        the response carries only the account metadata.
       operationId: createAccount
       requestBody:
         required: true
@@ -918,7 +1323,7 @@ paths:
                   example: Anthropic
                 credentials:
                   type: object
-                  description: Opaque credential blob, stored verbatim and never read back out.
+                  description: Opaque credential blob, encrypted before storage and never read back out.
                   additionalProperties: true
       responses:
         "200":
@@ -932,6 +1337,13 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/ProviderAccount"
+        "400":
+          description: >
+            No encryption key is configured, so the credential was not stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiEnvelope"
 
   /settings/accounts/{id}:
     delete:
@@ -947,6 +1359,811 @@ paths:
       responses:
         "200":
           description: Account removed
+
+  /catalog/models:
+    get:
+      tags: [Catalog]
+      summary: Search models on the Hugging Face Hub
+      description: >
+        A read-only proxy to the Hub's public search. The host is compiled in;
+        only the query is caller-controlled, so this cannot be pointed at an
+        arbitrary URL.
+
+
+        It searches and does not download: nothing here writes a file. Fetching
+        an artifact needs a destination, a free-space guard and a background
+        job with progress, none of which exist.
+
+
+        No credential is required. Setting `HUGGINGFACE_TOKEN` on the server
+        only raises the Hub's anonymous rate limit.
+
+
+        An unreachable Hub is a 502, never an empty list -- "the Hub is down"
+        and "nothing matched" are different answers and an empty table cannot
+        tell them apart.
+      operationId: searchCatalogModels
+      x-chasm-probe: needs-network
+      parameters:
+        - name: q
+          in: query
+          description: Free-text search. Omitted or blank lists what the Hub returns by default.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Matching models
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CatalogResults"
+        "502":
+          description: The Hub was unreachable, rate-limited, or returned something unusable
+
+  /catalog/files:
+    get:
+      tags: [Catalog]
+      summary: List a Hub repository's files, with sizes
+      description: >
+        Sizes are what makes a download decidable: without them a client
+        cannot warn about a 5 GB file and the server cannot check the disk
+        before starting. The Hub reports the real size for LFS files here, not
+        the pointer size.
+
+
+        Directories are omitted — there is nothing to download about one.
+      operationId: listRepoFiles
+      x-chasm-probe: needs-network
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [models, datasets]
+        - name: id
+          in: query
+          required: true
+          description: >
+            `author/name`, or a bare name for the canonical repositories. The
+            shape is validated before it reaches a URL path.
+          schema:
+            type: string
+          example: openai-community/gpt2
+      responses:
+        "200":
+          description: The repository's files
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          kind:
+                            type: string
+                          id:
+                            type: string
+                          files:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/RepoFile"
+        "400":
+          description: kind or id missing, or an id that is not a repository id
+        "502":
+          description: The Hub was unreachable, or has no such repository
+
+  /catalog/datasets:
+    get:
+      tags: [Catalog]
+      summary: Search datasets on the Hugging Face Hub
+      description: >
+        As `searchCatalogModels`, for datasets.
+
+
+        Note this is the *catalogue* -- artifacts published elsewhere. The
+        local store of datasets uploaded to this server is `/datasets`, and the
+        two are deliberately separate: the data flows in opposite directions.
+      operationId: searchCatalogDatasets
+      x-chasm-probe: needs-network
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Matching datasets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CatalogResults"
+        "502":
+          description: The Hub was unreachable, rate-limited, or returned something unusable
+
+  /datasets:
+    get:
+      tags: [Datasets]
+      summary: List stored datasets
+      description: >
+        Newest first, without their entries: a listing carrying every record
+        would be the whole store in one response.
+
+
+        Note there are two things the clients have called a "dataset". This is
+        the local store -- collections the user uploads and this server holds.
+        A remote catalogue to download from would be a separate feature; the
+        data flows the other way and the two are not merged here.
+      operationId: listDatasets
+      responses:
+        "200":
+          description: Datasets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Dataset"
+    post:
+      tags: [Datasets]
+      summary: Upload a dataset
+      description: >
+        Stores the records verbatim as JSON, in one transaction: a dataset
+        whose entries were half written would list with a count it does not
+        have.
+
+
+        `entryCount` and `sizeBytes` are computed from what was stored and are
+        ignored if sent. A client-supplied size is a number nobody checked.
+      operationId: createDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, entries]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  description: >
+                    A closed set, because the clients switch on it for their
+                    icons and filters; an unrecognised value is a 400 rather
+                    than something that renders as nothing.
+                  enum: [conversations, documents, qa, custom]
+                  default: custom
+                format:
+                  type: string
+                  description: Free-form label for the record shape. Defaults to `json`.
+                entries:
+                  type: array
+                  description: >
+                    The records. At most 50,000 per request -- the body is
+                    parsed into memory and written in one transaction, and
+                    there is no streaming import yet.
+                  items: {}
+      responses:
+        "200":
+          description: Dataset stored
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Name or entries missing, too many entries, or an unknown type
+
+  /datasets/{id}:
+    get:
+      tags: [Datasets]
+      summary: Get one dataset's metadata
+      description: Its records come from `/datasets/{id}/entries`.
+      operationId: getDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The dataset
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Dataset"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Datasets]
+      summary: Delete a dataset and its entries
+      operationId: deleteDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /datasets/{id}/entries:
+    get:
+      tags: [Datasets]
+      summary: Read a page of a dataset's records
+      description: >
+        In upload order. Paged because a dataset may hold 50,000 records and
+        nothing renders that many at once.
+
+
+        An unknown dataset is a 404 rather than an empty page: a missing
+        dataset and a page past the end would otherwise be the same answer.
+      operationId: listDatasetEntries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: A page of records
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DatasetEntryPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /training/validate:
+    get:
+      tags: [Training]
+      summary: Check a dataset against a provider's fine-tuning rules
+      description: >
+        Local, free and offline — no provider is contacted. That is the point:
+        a bad dataset otherwise fails at the provider *after* the upload, which
+        has already been paid for.
+
+
+        Reports every problem it finds rather than the first, so a caller can
+        fix them in one pass. Capped at 20, because a systematically broken
+        dataset has one problem per row.
+      operationId: validateTrainingDataset
+      # A dataset has to exist before there is anything to validate, and
+      # this suite deliberately does not build fixtures. The 404 it answers
+      # to a cold probe is documented below and checked against that.
+      x-chasm-probe: needs-prior-state
+      parameters:
+        - name: datasetId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The verdict, with any problems
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DatasetValidation"
+        "400":
+          description: datasetId missing
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /training/jobs:
+    get:
+      tags: [Training]
+      summary: List fine-tuning jobs
+      description: >
+        Newest first. Every unfinished job is refreshed from the provider on
+        this request, so the status shown is the provider's current one.
+
+
+        With no provider configured, or when a refresh fails, the stored
+        status is returned with `refreshError` set rather than the whole list
+        failing. That field is how a stale status is told apart from a current
+        one.
+      operationId: listTrainingJobs
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/TrainingJob"
+    post:
+      tags: [Training]
+      summary: Submit a dataset for fine-tuning
+      description: >
+        Chasm does not train anything. It converts the dataset to JSONL,
+        uploads it to the provider configured with `OPENAI_API_KEY`, creates a
+        fine-tuning job there, and records the provider's job id.
+
+
+        The dataset is validated locally first and the request is refused
+        without uploading if it would not pass — the upload is the part that
+        costs.
+
+
+        Note there is no progress figure anywhere in the response. A
+        fine-tuning API reports a status, and once finished a trained-token
+        count and the resulting model name. It reports no percentage, no ETA
+        and no GPU, so none are invented here.
+      operationId: startTraining
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datasetId, baseModel]
+              properties:
+                datasetId:
+                  type: string
+                  description: A dataset from `/datasets`.
+                baseModel:
+                  type: string
+                  description: The provider's identifier for the model to fine-tune.
+                  example: gpt-4o-mini-2024-07-18
+                suffix:
+                  type: string
+                  description: Optional label the provider appends to the resulting model's name.
+      responses:
+        "200":
+          description: The job, as the provider created it
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TrainingJob"
+        "400":
+          description: >
+            datasetId or baseModel missing, or a dataset that would not pass
+            the provider's rules. The response carries a `problems` array.
+        "404":
+          description: No dataset with that id
+        "502":
+          description: The provider refused the upload or the job
+        "503":
+          description: No provider configured
+
+  /training/jobs/{id}:
+    get:
+      tags: [Training]
+      summary: Read one fine-tuning job
+      description: Refreshed from the provider unless it has already finished.
+      operationId: getTrainingJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TrainingJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Training]
+      summary: Cancel a running job, or forget a finished one
+      description: >
+        A running job is cancelled at the provider and the refreshed job is
+        returned. A finished job's record is deleted, which needs no provider.
+      operationId: cancelTrainingJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelled, or the record was removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: The provider refused the cancellation
+        "503":
+          description: No provider configured, and the job has not finished
+
+  /downloads:
+    get:
+      tags: [Downloads]
+      summary: List download jobs
+      description: >
+        Newest first.
+
+
+        A job left `running` by a server that stopped is reported as failed
+        rather than left running: nothing will ever advance it, and a progress
+        bar that never moves is indistinguishable from a slow download.
+      operationId: listDownloads
+      responses:
+        "200":
+          description: Download jobs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DownloadJob"
+    post:
+      tags: [Downloads]
+      summary: Start downloading one file from a Hub repository
+      description: >
+        Returns immediately with a job to poll. The files are large enough that
+        a handler which downloaded before answering would time out every client
+        in front of it and report no progress on the way.
+
+
+        Files land under `CHASM_DOWNLOAD_DIR`, or a `downloads` directory
+        beside the database, as `<kind>/<repo id>/<path>`.
+
+
+        Refused before a job exists when: the repository does not publish that
+        path; the path could escape the download directory; the file exceeds
+        `CHASM_MAX_DOWNLOAD_BYTES`; the destination already exists; or the file
+        would not fit on the volume with 2 GB left spare. Filling the volume
+        would take the database with it.
+
+
+        The URL is built server-side from the validated repository and path
+        against a compiled-in host — it is never supplied by the caller.
+      operationId: startDownload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, repoId, filePath]
+              properties:
+                kind:
+                  type: string
+                  enum: [models, datasets]
+                repoId:
+                  type: string
+                  example: openai-community/gpt2
+                filePath:
+                  type: string
+                  description: As `listRepoFiles` reports it. Must exist in that repository.
+                  example: config.json
+      responses:
+        "200":
+          description: The job, already running
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DownloadJob"
+        "400":
+          description: >
+            Unknown kind, unusable repository id or path, a file the repository
+            does not have, a destination that already exists, a file over the
+            size cap, or not enough free space
+        "502":
+          description: The Hub was unreachable while checking the file
+
+  /downloads/{id}:
+    get:
+      tags: [Downloads]
+      summary: Poll one download
+      operationId: getDownload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DownloadJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Downloads]
+      summary: Cancel a running download, or forget a finished one
+      description: >
+        A running job is asked to stop and reports `cancelling`; the task
+        notices between chunks, deletes its partial file and records the
+        outcome itself. A finished job's record is deleted.
+
+
+        The downloaded file is never removed. Deleting a job record is a
+        request to stop tracking it, not to lose a file that finished an hour
+        ago.
+      operationId: cancelDownload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelling, or the record was removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /documents:
+    get:
+      tags: [Documents]
+      summary: List ingested documents
+      description: >
+        Newest first, without their content: a listing carrying every
+        document's full text would grow without bound and none of it is shown
+        in a list.
+      operationId: listDocuments
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentSummary"
+    post:
+      tags: [Documents]
+      summary: Ingest a document
+      description: >
+        Splits the content, embeds each piece and stores both, so the document
+        can afterwards be retrieved by meaning.
+
+
+        The whole ingestion is one transaction: a document whose chunks were
+        half written would list with a chunk count it does not have and return
+        partial answers to searches.
+
+
+        Needs an embedding model. With none configured this answers 503 naming
+        the variable rather than storing the document unindexed.
+      operationId: ingestDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                source:
+                  type: string
+                  description: Where the document came from. Defaults to `upload`.
+                docType:
+                  type: string
+                  description: Free-form type label. Defaults to `text`.
+                strategy:
+                  type: string
+                  description: >
+                    How to split the content. Prose splits well on paragraphs
+                    and source does not, so the choice is the caller's.
+                  enum: [semantic, paragraph, sentence, fixed_size, code]
+                  default: semantic
+      responses:
+        "200":
+          description: Document ingested
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DocumentSummary"
+        "400":
+          description: Title or content missing, content produced no chunks, or an unknown strategy
+        "502":
+          description: The embedding endpoint was unreachable or errored
+        "503":
+          description: No embedding model configured on the server
+
+  /documents/search:
+    get:
+      tags: [Documents]
+      summary: Rank stored chunks by meaning
+      description: >
+        Cosine similarity against the ingested chunks. Reports `searched`, the
+        number of chunks compared, so an empty knowledge base is
+        distinguishable from a query that matched nothing.
+
+
+        Chunks embedded under a different model are skipped rather than
+        compared: vectors from two models do not share a space, so the
+        similarity between them is a meaningless number that would still rank.
+
+
+        Never falls back to substring matching.
+      operationId: searchDocuments
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        "200":
+          description: Ranked chunks
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DocumentSearchResults"
+        "400":
+          description: q is missing or empty
+        "502":
+          description: The embedding endpoint was unreachable or errored
+        "503":
+          description: No embedding model configured on the server
+
+  /documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get one document and its chunks
+      description: >
+        The vectors are not returned: they are large, unreadable, and nothing
+        on the other side has a use for them.
+      operationId: getDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The document
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DocumentDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Documents]
+      summary: Delete a document and its chunks
+      operationId: deleteDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document removed
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /mcp/tools:
     get:
@@ -4140,8 +5357,329 @@ components:
           format: int64
           description: Milliseconds since the Unix epoch.
 
-    Provider:
+    SwarmAgent:
       type: object
+      description: >
+        One agent's membership of a swarm. The field is `agent_id`, not
+        `agentId`: the struct carries no serde rename.
+      required: [agent_id, role]
+      properties:
+        agent_id:
+          type: string
+        role:
+          type: string
+          example: coordinator
+
+    Note:
+      type: object
+      description: >
+        One clipping: text selected in a page and saved by the browser
+        extension.
+      required: [id, content, createdAt]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+          description: The selected text, as it was selected.
+        source:
+          type: string
+          description: The hostname of the page. Absent when the client sent none.
+          example: arxiv.org
+        url:
+          type: string
+          description: Absent when the client sent none.
+        capturedAt:
+          type: string
+          description: >
+            The client's clock when it captured the selection, verbatim. Not
+            parsed and not authoritative; absent when the client sent none.
+        createdAt:
+          type: integer
+          format: int64
+          description: When this server wrote the row, in milliseconds since the epoch.
+
+    Paper:
+      type: object
+      description: >
+        One arXiv entry.
+
+
+        There is deliberately no `citations`, `views`, `comments`, `stars` or
+        `trendScore`. arXiv's API reports none of them, and the pages this
+        replaced showed all five and ranked a leaderboard by them.
+      required: [arxivId, title, authors, summary, categories, published, url]
+      properties:
+        arxivId:
+          type: string
+          example: 2201.00978v1
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+          description: The abstract, unwrapped — arXiv hard-wraps it at the source.
+        categories:
+          type: array
+          items:
+            type: string
+          example: [cs.CV, cs.LG]
+        published:
+          type: string
+        updated:
+          type: string
+        url:
+          type: string
+          description: The abstract page.
+        pdfUrl:
+          type: string
+          description: Absent when the entry links no PDF.
+        comment:
+          type: string
+          description: The authors' own note, e.g. a venue. Often absent.
+
+    PaperResults:
+      type: object
+      required: [query, source, totalResults, start, results]
+      properties:
+        query:
+          type: string
+        source:
+          type: string
+          enum: [arxiv]
+        totalResults:
+          type: integer
+          description: arXiv's own count for the query, not this page's length.
+        start:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Paper"
+
+    RepoFile:
+      type: object
+      required: [path, size]
+      properties:
+        path:
+          type: string
+          description: Path within the repository. May contain `/`.
+        size:
+          type: integer
+          format: int64
+          description: Bytes, as the Hub reports them — the real size for LFS files.
+
+    DatasetProblem:
+      type: object
+      required: [message]
+      properties:
+        entryIndex:
+          type: integer
+          description: Which entry is at fault. Absent for a whole-dataset problem.
+        message:
+          type: string
+
+    DatasetValidation:
+      type: object
+      required: [datasetId, datasetName, entryCount, usable, problems]
+      properties:
+        datasetId:
+          type: string
+        datasetName:
+          type: string
+        entryCount:
+          type: integer
+        usable:
+          type: boolean
+          description: True when `problems` is empty.
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetProblem"
+
+    TrainingJob:
+      type: object
+      description: >
+        A fine-tuning job at a provider.
+
+
+        There is deliberately no `progress`, `eta`, `gpu`, `accuracy` or `f1`.
+        A fine-tuning API reports none of them, and the tables this replaced
+        showed all five — including jobs 67% through work that had never
+        started.
+      required:
+        [id, providerJobId, datasetId, datasetName, baseModel, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        providerJobId:
+          type: string
+          description: The provider's own id, so the job can be found in their dashboard.
+        datasetId:
+          type: string
+        datasetName:
+          type: string
+        baseModel:
+          type: string
+        status:
+          type: string
+          description: The provider's status verbatim — never derived or simulated.
+          enum: [validating_files, queued, running, succeeded, failed, cancelled]
+        fineTunedModel:
+          type: string
+          description: The resulting model's name, once the provider reports one.
+        trainedTokens:
+          type: integer
+          format: int64
+        error:
+          type: string
+          description: The provider's failure message.
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        finishedAt:
+          type: integer
+          format: int64
+        refreshError:
+          type: string
+          description: >
+            Present when the provider could not be reached on this request,
+            meaning `status` is the last one successfully read rather than the
+            current one.
+
+    DownloadJob:
+      type: object
+      required:
+        [
+          id,
+          kind,
+          repoId,
+          filePath,
+          destPath,
+          totalBytes,
+          downloadedBytes,
+          status,
+          startedAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [models, datasets]
+        repoId:
+          type: string
+        filePath:
+          type: string
+        destPath:
+          type: string
+          description: Absolute path on the server, so a user can find the file.
+        totalBytes:
+          type: integer
+          format: int64
+          description: From the Hub's file listing, read before the transfer started.
+        downloadedBytes:
+          type: integer
+          format: int64
+          description: >
+            Written periodically by the running transfer, so it lags the true
+            figure by at most a few megabytes.
+        status:
+          type: string
+          enum: [running, completed, failed, cancelled]
+        error:
+          type: string
+          description: Present on `failed`.
+        startedAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        completedAt:
+          type: integer
+          format: int64
+
+    CatalogResults:
+      type: object
+      required: [query, source, results]
+      properties:
+        query:
+          type: string
+        source:
+          type: string
+          enum: [huggingface]
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogEntry"
+
+    CatalogEntry:
+      type: object
+      description: >
+        One row as the Hub publishes it.
+
+
+        There is deliberately no `size`, `samples`, `params`, `format` or
+        `downloaded` field. The Hub's search API reports none of them, and the
+        tables this replaced rendered all five as measurements -- "12.5 GB",
+        "4.2M samples", "GGUF" -- for artifacts nothing had measured.
+      required: [id, name, downloads, likes, tags, url, gated]
+      properties:
+        id:
+          type: string
+          description: Full Hub id.
+          example: meta-llama/Llama-3.1-8B-Instruct
+        author:
+          type: string
+          description: Absent for canonical, unnamespaced ids such as `gpt2`.
+        name:
+          type: string
+        downloads:
+          type: integer
+          format: int64
+        likes:
+          type: integer
+          format: int64
+        task:
+          type: string
+          description: Models only, e.g. `text-generation`.
+        library:
+          type: string
+          description: Models only, e.g. `transformers`.
+        description:
+          type: string
+          description: Datasets only, and often long.
+        tags:
+          type: array
+          description: >
+            Trimmed to what a reader can use; the Hub's bookkeeping tags
+            (`region:`, `arxiv:`, `base_model:`, and similar) are dropped.
+          items:
+            type: string
+        updatedAt:
+          type: string
+          description: >
+            ISO-8601, straight from the Hub. Absent rather than defaulted when
+            the row carries no date.
+        url:
+          type: string
+          description: Canonical Hub page, so clients link out rather than build the URL.
+        gated:
+          type: boolean
+          description: Whether the Hub requires accepting terms before the files are readable.
+
+    Dataset:
+      type: object
+      required:
+        [id, name, type, format, entryCount, sizeBytes, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -4149,26 +5687,183 @@ components:
           type: string
         type:
           type: string
-          enum:
-            [
-              copilot,
-              cursor,
-              chatgpt,
-              claude,
-              ollama,
-              lm-studio,
-              openai,
-              anthropic,
-              custom,
-            ]
-        enabled:
-          type: boolean
-        base_url:
+          enum: [conversations, documents, qa, custom]
+        format:
           type: string
+        entryCount:
+          type: integer
+          description: Counted from the rows written, never taken from the request.
+        sizeBytes:
+          type: integer
+          format: int64
+          description: >
+            Summed over the stored JSON, so it describes what is on disk rather
+            than what the uploader claimed.
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+
+    DatasetEntryPage:
+      type: object
+      required: [datasetId, total, limit, offset, entries]
+      properties:
+        datasetId:
+          type: string
+        total:
+          type: integer
+          description: >
+            The dataset's whole record count, so a short last page is
+            distinguishable from an empty dataset.
+        limit:
+          type: integer
+        offset:
+          type: integer
+        entries:
+          type: array
+          description: The records as JSON, in the order they were uploaded.
+          items: {}
+
+    DocumentSummary:
+      type: object
+      required:
+        [
+          id,
+          title,
+          source,
+          docType,
+          chunkCount,
+          tokenCount,
+          embeddingModel,
+          chunkingStrategy,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        source:
+          type: string
+        docType:
+          type: string
+        chunkCount:
+          type: integer
+        tokenCount:
+          type: integer
+          description: Estimated, summed over the document's chunks.
+        embeddingModel:
+          type: string
+          description: >
+            The model the chunks were embedded with. Search compares only
+            against chunks embedded under the model currently configured.
+        chunkingStrategy:
+          type: string
+          enum: [semantic, paragraph, sentence, fixed_size, code]
+        createdAt:
+          type: integer
+          format: int64
+
+    DocumentDetail:
+      allOf:
+        - $ref: "#/components/schemas/DocumentSummary"
+        - type: object
+          properties:
+            content:
+              type: string
+            chunks:
+              type: array
+              items:
+                type: object
+                properties:
+                  index:
+                    type: integer
+                  content:
+                    type: string
+                  tokenCount:
+                    type: integer
+
+    DocumentSearchResults:
+      type: object
+      required: [query, searched, results]
+      properties:
+        query:
+          type: string
+        searched:
+          type: integer
+          description: >
+            How many chunks were compared. Zero means nothing has been
+            ingested under the current embedding model, which is a different
+            answer from no matches.
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              documentId:
+                type: string
+              documentTitle:
+                type: string
+              chunkIndex:
+                type: integer
+              content:
+                type: string
+              score:
+                type: number
+                format: float
+
+    Provider:
+      type: object
+      description: >
+        An entry in the compiled-in provider catalogue. Every field but
+        `enabled` is static: the catalogue cannot be edited over the API.
+      required: [id, name, type, status, icon, color, models, enabled]
+      properties:
+        id:
+          type: string
+          description: Catalogue id, also the path parameter for updateProvider.
+          example: ollama
+        name:
+          type: string
+          example: Ollama
+        type:
+          type: string
+          description: >
+            Whether the provider runs on the user's own machine (`local`) or is
+            reached over the network (`cloud`). Clients should use this rather
+            than inferring it from the id.
+          enum: [cloud, local]
+        status:
+          type: string
+          description: >
+            The catalogue's declared status. This is not a probe result -- for
+            a measured answer use `/system/providers/health`.
+          enum: [connected, disconnected]
+        icon:
+          type: string
+          description: Emoji used as the provider's glyph.
+          example: "🦙"
+        color:
+          type: string
+          description: Brand colour as a hex triplet.
+          example: "#000000"
+        endpoint:
+          type: string
+          description: >
+            Base URL, omitted for providers that declare none. Note the name:
+            this field is `endpoint`, not `base_url`.
+          example: http://localhost:11434
         models:
           type: array
           items:
             type: string
+        enabled:
+          type: boolean
+          description: >
+            Whether the user has switched this provider on. Defaults to true
+            and is persisted per id by updateProvider.
 
     Agent:
       type: object

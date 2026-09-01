@@ -62,21 +62,28 @@ const CRATES: &[(&str, &[&str])] = &[
 /// compiled; it is here so the test can guard against *new* orphans without
 /// pretending the existing ones are fine.
 ///
-/// `src/enterprise/` differs in kind from the provider files that prompted this
-/// test. Those produced 137 errors the moment they were declared, so deleting
-/// them cost nothing. These 2,044 lines compile clean -- multi-tenancy,
-/// white-labelling and a compliance framework, all working code that nothing
-/// ever calls. Wiring them up means routes, persistence and tests; deleting
-/// them throws away functioning work. That is a product call, not a
-/// housekeeping one, so it stays visible here until someone makes it.
+/// It is currently empty, and the guard below is what keeps it honest.
+///
+/// `src/enterprise/` used to be its only occupant: four files, 2,250 lines of
+/// multi-tenancy, white-labelling and a compliance framework, left orphaned
+/// because wiring them means routes and persistence while deleting them
+/// throws away working code -- a product call, deliberately deferred.
+///
+/// That call is still open, and declaring `pub mod enterprise` behind the
+/// `enterprise` feature does not make it. Nothing routes, persists or calls
+/// any of it. What changed is only that rustc, clippy and rustfmt can now see
+/// it, and its eleven tests run.
+///
+/// Leaving it out had a cost that is easy to miss: an orphan cannot rot
+/// *detectably*. Appending `this is not valid rust at all !!!` to
+/// `compliance.rs` and building both feature sets produced no error, because
+/// no `mod` declaration reached the file. Two thousand lines the compiler has
+/// never read are not preserved work; they are work nobody can any longer
+/// vouch for. Declaring the module is the cheapest way to keep the option
+/// open while the decision waits.
 ///
 /// Note that `README.md` documents all three as Enterprise Features.
-const KNOWN_ORPHANS: &[&str] = &[
-    "chasm-rust/src/enterprise/mod.rs",
-    "chasm-rust/src/enterprise/compliance.rs",
-    "chasm-rust/src/enterprise/multitenancy.rs",
-    "chasm-rust/src/enterprise/whitelabel.rs",
-];
+const KNOWN_ORPHANS: &[&str] = &[];
 
 /// The repository root, reached from this crate's manifest directory.
 ///

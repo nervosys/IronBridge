@@ -26,7 +26,11 @@
 mod audit;
 mod auth;
 pub mod caching;
+pub mod catalog;
+pub mod datasets;
 mod docs;
+pub mod documents;
+pub mod downloads;
 #[cfg(feature = "enterprise")]
 mod enterprise_store;
 mod graphql;
@@ -34,9 +38,11 @@ mod handlers_simple;
 mod handlers_swe;
 mod handlers_write;
 pub mod inbox;
+pub mod notes;
 #[cfg(feature = "enterprise")]
 mod oidc;
 mod recording;
+pub mod research;
 #[cfg(feature = "enterprise")]
 mod retention;
 pub mod sdk;
@@ -44,6 +50,7 @@ pub mod sdk;
 mod sso;
 mod state;
 mod sync;
+pub mod training;
 mod webhooks;
 mod websocket;
 
@@ -52,20 +59,27 @@ pub use audit::{
     configure_audit_routes, AuditAction, AuditCategory, AuditEvent, AuditEventBuilder, AuditService,
 };
 pub use auth::configure_auth_routes;
+pub use catalog::configure_catalog_routes;
+pub use datasets::configure_dataset_routes;
 pub use docs::configure_docs_routes;
+pub use documents::configure_document_routes;
+pub use downloads::configure_download_routes;
 #[cfg(feature = "enterprise")]
 pub use enterprise_store::SqliteEnterpriseStore;
 pub use graphql::{configure_graphql_routes, create_schema, ChasmSchema};
 pub use inbox::{configure_inbox_routes, init_inbox_tables, InboxEmitter};
+pub use notes::{configure_notes_routes, init_notes_tables};
 #[cfg(feature = "enterprise")]
 pub use oidc::{configure_oidc_routes, OidcProviderConfig, OidcService};
 pub use recording::{configure_recording_routes, create_recording_state};
+pub use research::configure_research_routes;
 #[cfg(feature = "enterprise")]
 pub use retention::{configure_retention_routes, RetentionPolicy, RetentionService};
 #[cfg(feature = "enterprise")]
 pub use sso::{configure_sso_routes, SamlIdpConfig, SsoService};
 pub use state::AppState;
 pub use sync::{configure_sync_routes, create_sync_state};
+pub use training::configure_training_routes;
 pub use webhooks::{configure_webhook_routes, WebhookState};
 pub use websocket::{configure_websocket_routes, WebSocketState};
 
@@ -158,6 +172,7 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
             .route("/sessions/search", web::get().to(search_sessions))
             .route("/sessions/{id}", web::get().to(get_session))
             .route("/providers", web::get().to(list_providers))
+            .route("/providers/{id}", web::put().to(update_provider))
             .route("/stats", web::get().to(get_stats))
             .route("/stats/overview", web::get().to(get_stats))
             // Agent routes
@@ -171,6 +186,11 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
             .route("/swarms", web::post().to(create_swarm))
             .route("/swarms/{id}", web::get().to(get_swarm))
             .route("/swarms/{id}", web::delete().to(delete_swarm))
+            .route("/swarms/{id}/agents", web::post().to(add_swarm_agent))
+            .route(
+                "/swarms/{id}/agents/{agent_id}",
+                web::delete().to(remove_swarm_agent),
+            )
             // Settings routes
             .route("/settings", web::get().to(get_settings))
             .route("/settings", web::put().to(update_settings))
@@ -426,6 +446,16 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             // otherwise match `/api/inbox/...` first and return 404 -- actix
             // resolves scopes in registration order, not by specificity.
             .configure(configure_inbox_routes)
+            // Same reason as the inbox above: registered before the broad
+            // `/api` scope, which would otherwise match `/api/documents/...`
+            // first and answer 404.
+            .configure(configure_document_routes)
+            .configure(configure_dataset_routes)
+            .configure(configure_catalog_routes)
+            .configure(configure_download_routes)
+            .configure(configure_training_routes)
+            .configure(configure_research_routes)
+            .configure(configure_notes_routes)
             .configure(configure_routes)
             .configure(configure_sync_routes)
             .configure(configure_auth_routes)

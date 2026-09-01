@@ -15,6 +15,9 @@ const OPENAPI_YAML: &str = include_str!("../../openapi.yaml");
 #[cfg(test)]
 const OPENAPI_YAML_DOCS_COPY: &str = include_str!("../../docs/assets/openapi.yaml");
 
+/// The MCP reference page, checked against the tool registry below.
+const MCP_DOC: &str = include_str!("../../../docs/api/mcp.md");
+
 /// Get OpenAPI specification (YAML)
 pub async fn openapi_yaml() -> impl Responder {
     HttpResponse::Ok()
@@ -214,6 +217,109 @@ mod tests {
         }
     }
 
+    /// `docs/api/mcp.md` must document exactly the tools the server registers.
+    ///
+    /// This is the same guarantee `every_documented_path_is_actually_routed`
+    /// gives the REST API, for the surface that had drifted furthest. Before
+    /// this test, that page documented `chasm_list_workspaces`,
+    /// `chasm_get_session`, `chasm_search_sessions` and `chasm_get_stats`, and
+    /// told the reader to run `chasm mcp serve`. Not one of those names has
+    /// ever existed: the prefix is `csm_`, two of the four have no counterpart
+    /// under any prefix, and `chasm` has no `mcp` subcommand. An agent
+    /// following the documentation failed at the first call, and nothing in
+    /// the build could notice.
+    #[test]
+    fn the_mcp_reference_documents_exactly_the_tools_that_exist() {
+        let registered: std::collections::BTreeSet<String> = crate::mcp::tools::list_tools()
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+        assert!(
+            !registered.is_empty(),
+            "expected the server to register tools"
+        );
+
+        // Headings of the form: #### `csm_something`
+        let documented: std::collections::BTreeSet<String> = MCP_DOC
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("#### `"))
+            .filter_map(|rest| rest.strip_suffix("`"))
+            .map(str::to_string)
+            .collect();
+
+        let undocumented: Vec<_> = registered.difference(&documented).cloned().collect();
+        let invented: Vec<_> = documented.difference(&registered).cloned().collect();
+
+        assert!(
+            undocumented.is_empty() && invented.is_empty(),
+            "docs/api/mcp.md and the tool registry disagree.\n  \
+             registered but undocumented: {undocumented:?}\n  \
+             documented but not registered: {invented:?}"
+        );
+    }
+
+    /// The page must not tell the reader to run a command that does not exist.
+    ///
+    /// `chasm mcp serve` was the documented way to start the server for as
+    /// long as the page existed. The binary is `csm-mcp`.
+    #[test]
+    fn the_mcp_reference_names_the_binary_that_exists() {
+        assert!(
+            MCP_DOC.contains("csm-mcp"),
+            "docs/api/mcp.md should name the csm-mcp binary"
+        );
+        for line in MCP_DOC.lines() {
+            let trimmed = line.trim();
+            // Allow the paragraph that explains the old, wrong invocation.
+            if trimmed.contains("chasm mcp") && !trimmed.contains("There is no") {
+                assert!(
+                    trimmed.contains("no `chasm mcp`") || trimmed.contains("`chasm mcp serve`"),
+                    "docs/api/mcp.md still instructs `chasm mcp`, which is not a subcommand: {trimmed}"
+                );
+            }
+        }
+    }
+
+    /// Every tag an operation uses must be declared in the top-level `tags`
+    /// list.
+    ///
+    /// The list is what a reader takes as the map of the API, so a tag missing
+    /// from it is a group of endpoints the documentation does not admit to
+    /// having. Seven were missing when this was written -- Catalog, Datasets,
+    /// Documents, Downloads, OIDC, Research and Training -- every one of them
+    /// a group whose paths the spec described in full a few hundred lines
+    /// below. A one-time tidy would drift again by the next endpoint, so this
+    /// is a test rather than a correction.
+    #[test]
+    fn every_tag_an_operation_uses_is_declared() {
+        let spec = spec();
+
+        let declared: std::collections::BTreeSet<String> = spec["tags"]
+            .as_array()
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(|t| t["name"].as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(!declared.is_empty(), "expected the spec to declare tags");
+
+        let mut used = std::collections::BTreeSet::new();
+        for (_, item) in spec["paths"].as_object().expect("paths") {
+            for (_, operation) in item.as_object().expect("path item") {
+                if let Some(tags) = operation.get("tags").and_then(|t| t.as_array()) {
+                    used.extend(tags.iter().filter_map(|t| t.as_str().map(str::to_string)));
+                }
+            }
+        }
+
+        let undeclared: Vec<_> = used.difference(&declared).cloned().collect();
+        assert!(
+            undeclared.is_empty(),
+            "these tags are used by operations but not declared in the top-level              `tags` list of openapi.yaml: {undeclared:?}"
+        );
+    }
+
     /// Every path in the spec must resolve to a real route.
     ///
     /// This is the guard that was missing: `openapi.yaml` accumulated twenty
@@ -221,7 +327,11 @@ mod tests {
     /// then 404'd on every call to them.
     #[tokio::test]
     async fn every_documented_path_is_actually_routed() {
-        use crate::api::{configure_inbox_routes, AppState};
+        use crate::api::{
+            configure_catalog_routes, configure_dataset_routes, configure_document_routes,
+            configure_download_routes, configure_inbox_routes, configure_notes_routes,
+            configure_research_routes, configure_training_routes, AppState,
+        };
         use crate::ChatDatabase;
         use actix_web::web::Data;
 
@@ -249,6 +359,13 @@ mod tests {
                 .app_data(sync_state)
                 .app_data(recording_state)
                 .configure(configure_inbox_routes)
+                .configure(configure_document_routes)
+                .configure(configure_dataset_routes)
+                .configure(configure_catalog_routes)
+                .configure(configure_download_routes)
+                .configure(configure_training_routes)
+                .configure(configure_research_routes)
+                .configure(configure_notes_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -444,7 +561,11 @@ mod tests {
     /// checked; this catches wholesale drift, not every detail.
     #[tokio::test]
     async fn documented_response_bodies_match_what_the_server_sends() {
-        use crate::api::{configure_inbox_routes, AppState};
+        use crate::api::{
+            configure_catalog_routes, configure_dataset_routes, configure_document_routes,
+            configure_download_routes, configure_inbox_routes, configure_notes_routes,
+            configure_research_routes, configure_training_routes, AppState,
+        };
         use crate::ChatDatabase;
         use actix_web::web::Data;
 
@@ -480,6 +601,13 @@ mod tests {
                 .app_data(sync_state)
                 .app_data(recording_state)
                 .configure(configure_inbox_routes)
+                .configure(configure_document_routes)
+                .configure(configure_dataset_routes)
+                .configure(configure_catalog_routes)
+                .configure(configure_download_routes)
+                .configure(configure_training_routes)
+                .configure(configure_research_routes)
+                .configure(configure_notes_routes)
                 .configure(super::super::configure_routes)
                 .configure(super::super::configure_sync_routes)
                 .configure(super::super::configure_auth_routes)
@@ -539,6 +667,19 @@ mod tests {
             if resp.status() == StatusCode::SERVICE_UNAVAILABLE
                 && op.pointer("/responses/503").is_some()
             {
+                continue;
+            }
+            // Some endpoints answer only by calling a third party. Probing
+            // them would make this suite pass or fail on whether
+            // huggingface.co is reachable from wherever it happens to run,
+            // which is not a property of this repository. Their response
+            // shapes are covered by unit tests over captured payloads
+            // instead -- see `api::catalog::tests`.
+            //
+            // Unlike the marker below, nothing is asserted about the status:
+            // there is no answer that is correct in both the online and
+            // offline cases.
+            if op.get("x-chasm-probe").and_then(|v| v.as_str()) == Some("needs-network") {
                 continue;
             }
             // Some endpoints cannot reach 200 from a cold probe at all: the

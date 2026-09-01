@@ -30,7 +30,6 @@ import {
     FlaskConical,
     Network,
     Shield,
-    ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -79,7 +78,6 @@ const navItems: NavItem[] = [
     { path: '/providers', icon: Server, label: 'Providers' },
     { path: '/accounts', icon: Key, label: 'Accounts' },
     { path: '/developer', icon: Code, label: 'Developer' },
-    { path: '/admin', icon: ShieldCheck, label: 'Admin' },
 ];
 
 export default function Layout({ children, theme, setTheme }: LayoutProps) {

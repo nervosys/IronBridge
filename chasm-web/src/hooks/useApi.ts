@@ -19,9 +19,26 @@ import {
     transfer,
     chat,
     mcp,
+    documents,
+    datasets,
+    catalog,
+    downloads,
+    training,
+    research,
     connectWebSocket,
 } from '../api/client';
-import type { CreateSwarmRequest } from '../api/client';
+import type {
+    CreateSwarmRequest,
+    SwarmMember,
+    CreateAgentRequest,
+    UpdateAgentRequest,
+    DocumentSummary,
+    Dataset,
+    DatasetType,
+    DownloadJob,
+    TrainingJob,
+    Paper,
+} from '../api/client';
 import type {
     Workspace,
     Session,
@@ -50,9 +67,22 @@ import type {
 // Types
 // =============================================================================
 
-interface UseQueryOptions {
+interface UseQueryOptions<T = unknown> {
     enabled?: boolean;
-    refetchInterval?: number;
+    /**
+     * How often to refetch, or a function of the data that decides.
+     *
+     * The function form exists so a caller can poll only while there is
+     * something to poll for -- a training job still running, a download not
+     * yet finished -- without holding the answer in state. Deriving it here,
+     * where the data already lives, avoids the alternative: an effect in the
+     * caller that watches the query result and pushes an interval back into
+     * state, which is a second render on every poll and the cascade that
+     * `react-hooks/set-state-in-effect` exists to catch.
+     *
+     * Return `undefined` to stop polling.
+     */
+    refetchInterval?: number | ((data: T | null) => number | undefined);
     refetchOnWindowFocus?: boolean;
 }
 
@@ -82,7 +112,7 @@ interface UseMutationResult<TData, TVariables> {
 function useQuery<T>(
     queryFn: () => Promise<ApiResponse<T>>,
     deps: unknown[] = [],
-    options: UseQueryOptions = {}
+    options: UseQueryOptions<T> = {}
 ): UseQueryResult<T> {
     const { enabled = true, refetchInterval, refetchOnWindowFocus = false } = options;
     const [data, setData] = useState<T | null>(null);
@@ -142,12 +172,18 @@ function useQuery<T>(
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [...deps, enabled, fetchData]);
 
-    // Refetch interval
+    // Refetch interval.
+    //
+    // Resolved during render, so a data-dependent interval re-evaluates when
+    // the data changes and the effect simply follows it. Nothing is stored.
+    const resolvedInterval =
+        typeof refetchInterval === 'function' ? refetchInterval(data) : refetchInterval;
+
     useEffect(() => {
-        if (!refetchInterval || !enabled) return;
-        const interval = setInterval(() => fetchData(true), refetchInterval);
+        if (!resolvedInterval || !enabled) return;
+        const interval = setInterval(() => fetchData(true), resolvedInterval);
         return () => clearInterval(interval);
-    }, [refetchInterval, enabled, fetchData]);
+    }, [resolvedInterval, enabled, fetchData]);
 
     // Refetch on window focus
     useEffect(() => {
@@ -329,6 +365,159 @@ export function useMcpTools(options?: UseQueryOptions): UseQueryResult<{ mcp_too
     return useQuery(queryFn, [], options);
 }
 
+/**
+ * The papers saved on this server.
+ */
+export function useSavedPapers(options?: UseQueryOptions): UseQueryResult<Paper[]> {
+    const queryFn = useCallback(() => research.saved(), []);
+    return useQuery(queryFn, [], options);
+}
+
+/**
+ * Search arXiv.
+ *
+ * A mutation rather than a query: arXiv asks that clients not hammer the
+ * endpoint, so nothing is fetched until someone asks for it.
+ */
+export function useSearchPapers() {
+    return useMutation(({ q, limit }: { q: string; limit?: number }) =>
+        research.search(q, limit)
+    );
+}
+
+export function useSavePaper() {
+    return useMutation((paper: Paper) => research.save(paper));
+}
+
+export function useUnsavePaper() {
+    return useMutation((arxivId: string) => research.unsave(arxivId));
+}
+
+/**
+ * Fine-tuning jobs.
+ *
+ * Every unfinished job is refreshed from the provider on each request, so
+ * polling is what makes a status current -- and the caller stops polling once
+ * nothing is unfinished.
+ */
+export function useTrainingJobs(
+    options?: UseQueryOptions<TrainingJob[]>
+): UseQueryResult<TrainingJob[]> {
+    const queryFn = useCallback(() => training.jobs(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useValidateDataset() {
+    return useMutation((datasetId: string) => training.validate(datasetId));
+}
+
+export function useStartTraining() {
+    return useMutation((input: { datasetId: string; baseModel: string; suffix?: string }) =>
+        training.start(input)
+    );
+}
+
+export function useCancelTraining() {
+    return useMutation((id: string) => training.cancel(id));
+}
+
+/**
+ * The download jobs on the server.
+ *
+ * Polled while anything is running: progress is written by the transfer, so
+ * the only way to see it advance is to ask again. The interval is chosen by
+ * the caller, which stops polling once nothing is running.
+ */
+export function useDownloads(
+    options?: UseQueryOptions<DownloadJob[]>
+): UseQueryResult<DownloadJob[]> {
+    const queryFn = useCallback(() => downloads.list(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useStartDownload() {
+    return useMutation((input: { kind: 'models' | 'datasets'; repoId: string; filePath: string }) =>
+        downloads.start(input)
+    );
+}
+
+export function useCancelDownload() {
+    return useMutation((id: string) => downloads.cancel(id));
+}
+
+export function useRepoFiles() {
+    return useMutation(({ kind, id }: { kind: 'models' | 'datasets'; id: string }) =>
+        catalog.files(kind, id)
+    );
+}
+
+/**
+ * Search the Hugging Face Hub.
+ *
+ * Debounced by the caller, not here: the Hub rate-limits anonymous callers and
+ * a request per keystroke reaches that limit quickly.
+ */
+export function useCatalogSearch(kind: 'models' | 'datasets') {
+    return useMutation(({ q, limit }: { q: string; limit?: number }) =>
+        kind === 'models' ? catalog.models(q, limit) : catalog.datasets(q, limit)
+    );
+}
+
+/**
+ * The datasets this server holds -- the ones the user uploaded, not a remote
+ * catalogue.
+ */
+export function useDatasets(options?: UseQueryOptions): UseQueryResult<Dataset[]> {
+    const queryFn = useCallback(() => datasets.list(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useCreateDataset() {
+    return useMutation(
+        (input: { name: string; type?: DatasetType; format?: string; entries: unknown[] }) =>
+            datasets.create(input)
+    );
+}
+
+export function useDeleteDataset() {
+    return useMutation((id: string) => datasets.remove(id));
+}
+
+/**
+ * The documents in the server's knowledge base.
+ */
+export function useDocuments(options?: UseQueryOptions): UseQueryResult<DocumentSummary[]> {
+    const queryFn = useCallback(() => documents.list(), []);
+    return useQuery(queryFn, [], options);
+}
+
+export function useIngestDocument() {
+    return useMutation((input: { title: string; content: string; source?: string; strategy?: string }) =>
+        documents.ingest(input)
+    );
+}
+
+export function useSearchDocuments() {
+    return useMutation(({ q, limit }: { q: string; limit?: number }) => documents.search(q, limit));
+}
+
+export function useDeleteDocument() {
+    return useMutation((id: string) => documents.remove(id));
+}
+
+/**
+ * Run an MCP tool.
+ *
+ * Note the result: a tool that failed still comes back on the success path
+ * with `result.isError` set, so callers check that rather than assuming a
+ * resolved promise means the tool worked.
+ */
+export function useCallMcpTool() {
+    return useMutation(({ name, args }: { name: string; args: Record<string, unknown> }) =>
+        mcp.callTool(name, args)
+    );
+}
+
 // =============================================================================
 // Agent Hooks
 // =============================================================================
@@ -353,14 +542,14 @@ export function useAgent(id: string | null, options?: UseQueryOptions): UseQuery
  * Create agent mutation
  */
 export function useCreateAgent() {
-    return useMutation((data: Partial<Agent>) => agents.create(data));
+    return useMutation((data: CreateAgentRequest) => agents.create(data));
 }
 
 /**
  * Update agent mutation
  */
 export function useUpdateAgent() {
-    return useMutation(({ id, data }: { id: string; data: Partial<Agent> }) => agents.update(id, data));
+    return useMutation(({ id, data }: { id: string; data: UpdateAgentRequest }) => agents.update(id, data));
 }
 
 /**
@@ -402,6 +591,24 @@ export function useUpdateSwarm() {
  */
 export function useDeleteSwarm() {
     return useMutation((id: string) => swarms.delete(id));
+}
+
+/**
+ * Add an agent to a swarm, or change the role it already holds.
+ */
+export function useAddSwarmAgent() {
+    return useMutation(({ id, member }: { id: string; member: SwarmMember }) =>
+        swarms.addAgent(id, member)
+    );
+}
+
+/**
+ * Remove an agent from a swarm.
+ */
+export function useRemoveSwarmAgent() {
+    return useMutation(({ id, agentId }: { id: string; agentId: string }) =>
+        swarms.removeAgent(id, agentId)
+    );
 }
 
 export function useSearch(query: string, types?: string[], options?: UseQueryOptions): UseQueryResult<SearchResult[]> {

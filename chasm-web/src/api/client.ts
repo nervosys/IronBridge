@@ -277,14 +277,17 @@ export const agents = {
     /**
      * Create a new agent
      */
-    async create(data: Partial<Agent>): Promise<ApiResponse<Agent>> {
+    async create(data: CreateAgentRequest): Promise<ApiResponse<Agent>> {
         return post('/api/agents', data);
     },
 
     /**
      * Update an agent
+     *
+     * Every field optional here, and on the server too -- `UpdateAgentRequest`
+     * is all `Option<T>`, so a partial update is genuinely what it accepts.
      */
-    async update(id: string, data: Partial<Agent>): Promise<ApiResponse<Agent>> {
+    async update(id: string, data: UpdateAgentRequest): Promise<ApiResponse<Agent>> {
         return put(`/api/agents/${encodeURIComponent(id)}`, data);
     },
 
@@ -296,6 +299,38 @@ export const agents = {
     },
 
 };
+
+/**
+ * What `POST /api/agents` actually accepts.
+ *
+ * `Partial<Agent>` used to stand in for this, and it hid the same bug the
+ * swarm request had: the server requires an `instruction`, and the shared
+ * `Agent` type has no such field -- it declares `systemPrompt`. So a body of
+ * `{ name, description, role }` type-checked cleanly and the server answered
+ * 400 "missing field `instruction`". Creating an agent from the web UI had
+ * never once worked.
+ *
+ * The snake_case fields are not a slip: the request deserializes into a Rust
+ * struct with no serde rename, so `max_tokens` and `sub_agents` are spelled
+ * as the server spells them. `maxTokens` is silently ignored.
+ */
+export interface CreateAgentRequest {
+    name: string;
+    /** What the agent is told to do. Required.  */
+    instruction: string;
+    description?: string;
+    role?: string;
+    model?: string;
+    provider?: string;
+    temperature?: number;
+    max_tokens?: number;
+    tools?: string[];
+    sub_agents?: string[];
+    metadata?: string;
+}
+
+/** What `PUT /api/agents/{id}` accepts -- every field optional, server-side too. */
+export type UpdateAgentRequest = Partial<CreateAgentRequest>;
 
 // =============================================================================
 // Swarms API
@@ -321,6 +356,19 @@ export interface CreateSwarmRequest {
     orchestration: 'sequential' | 'parallel' | 'hierarchical' | 'debate';
     agents: { agent_id: string; role: string }[];
     max_iterations?: number;
+}
+
+/** One agent's membership of a swarm, spelled as the server spells it. */
+export interface SwarmMember {
+    agent_id: string;
+    role: string;
+}
+
+/** What the membership endpoints return: the swarm's list after the change. */
+export interface SwarmMembership {
+    id: string;
+    agents: SwarmMember[];
+    updatedAt: number;
 }
 
 export const swarms = {
@@ -357,6 +405,23 @@ export const swarms = {
      */
     async delete(id: string): Promise<ApiResponse<void>> {
         return del(`/api/swarms/${encodeURIComponent(id)}`);
+    },
+
+    /**
+     * Add an agent to a swarm, or change the role it already holds.
+     *
+     * `agent_id` is snake_case because that is how the server spells it: the
+     * body deserializes into a Rust struct with no serde rename.
+     */
+    async addAgent(id: string, member: SwarmMember): Promise<ApiResponse<SwarmMembership>> {
+        return post(`/api/swarms/${encodeURIComponent(id)}/agents`, member);
+    },
+
+    /**
+     * Remove an agent from a swarm. A 404 means it was not a member.
+     */
+    async removeAgent(id: string, agentId: string): Promise<ApiResponse<SwarmMembership>> {
+        return del(`/api/swarms/${encodeURIComponent(id)}/agents/${encodeURIComponent(agentId)}`);
     },
 
 };
@@ -522,6 +587,411 @@ export const mcp = {
      */
     async systemPrompt(): Promise<ApiResponse<{ system_prompt: string }>> {
         return get('/api/mcp/system-prompt');
+    },
+
+    /**
+     * Run one of those tools and return what it produced.
+     *
+     * A failed tool still answers 200: the failure is reported as
+     * `result.isError` on the payload, not as an HTTP status. Callers must
+     * check it -- treating the status alone as success is how a tool that
+     * returned "Unknown tool" would render as a successful run.
+     */
+    async callTool(
+        name: string,
+        args: Record<string, unknown>
+    ): Promise<ApiResponse<import('./types').McpToolResult>> {
+        return post('/api/mcp/call', { name, arguments: args });
+    },
+};
+
+// =============================================================================
+// Research API
+// =============================================================================
+//
+// arXiv search, plus the papers this server has saved.
+//
+// Note what a Paper does not carry: no citations, views, comments, stars or
+// trend score. arXiv's API reports none of them, and the page this replaced
+// showed all five and ranked a leaderboard by them.
+
+export interface Paper {
+    arxivId: string;
+    title: string;
+    authors: string[];
+    /** The abstract, unwrapped -- arXiv hard-wraps it at the source. */
+    summary: string;
+    categories: string[];
+    published: string;
+    updated?: string;
+    /** The abstract page. */
+    url: string;
+    pdfUrl?: string;
+    /** The authors' own note, e.g. a venue. Often absent. */
+    comment?: string;
+}
+
+export interface PaperResults {
+    query: string;
+    source: 'arxiv';
+    /** arXiv's own count for the query, not this page's length. */
+    totalResults: number;
+    start: number;
+    results: Paper[];
+}
+
+export const research = {
+    async search(q: string, limit = 20, start = 0): Promise<ApiResponse<PaperResults>> {
+        return get(
+            `/api/research/papers?q=${encodeURIComponent(q)}&limit=${limit}&start=${start}`
+        );
+    },
+
+    async saved(): Promise<ApiResponse<Paper[]>> {
+        return get('/api/research/saved');
+    },
+
+    /** Idempotent: saving the same paper twice is not an error. */
+    async save(paper: Paper): Promise<ApiResponse<unknown>> {
+        return post('/api/research/saved', { paper });
+    },
+
+    async unsave(arxivId: string): Promise<ApiResponse<unknown>> {
+        return del(`/api/research/saved/${encodeURIComponent(arxivId)}`);
+    },
+};
+
+// =============================================================================
+// Fine-tuning API
+// =============================================================================
+//
+// Chasm does not train anything. It hands a dataset to the provider configured
+// on the server and reads that provider's status back.
+//
+// Note what a TrainingJob does not have: no progress, no ETA, no GPU, no
+// accuracy, no F1. A fine-tuning API reports none of them, and the table this
+// replaced showed all five -- including jobs 67% through work that had never
+// started.
+
+export interface DatasetProblem {
+    /** Which entry is at fault. Absent for a whole-dataset problem. */
+    entryIndex?: number;
+    message: string;
+}
+
+export interface DatasetValidation {
+    datasetId: string;
+    datasetName: string;
+    entryCount: number;
+    usable: boolean;
+    problems: DatasetProblem[];
+}
+
+export interface TrainingJob {
+    id: string;
+    /** The provider's own id, so the job can be found in their dashboard. */
+    providerJobId: string;
+    datasetId: string;
+    datasetName: string;
+    baseModel: string;
+    /** The provider's status verbatim. */
+    status: 'validating_files' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+    fineTunedModel?: string;
+    trainedTokens?: number;
+    error?: string;
+    createdAt: number;
+    updatedAt: number;
+    finishedAt?: number;
+    /**
+     * Present when the provider could not be reached on this request, so
+     * `status` is the last one read rather than the current one. Render it:
+     * a stale status is otherwise indistinguishable from a fresh one.
+     */
+    refreshError?: string;
+}
+
+export const training = {
+    /**
+     * Check a dataset before spending anything.
+     *
+     * Local and free. The alternative is finding out at the provider, after
+     * an upload that has already been paid for.
+     */
+    async validate(datasetId: string): Promise<ApiResponse<DatasetValidation>> {
+        return get(`/api/training/validate?datasetId=${encodeURIComponent(datasetId)}`);
+    },
+
+    async jobs(): Promise<ApiResponse<TrainingJob[]>> {
+        return get('/api/training/jobs');
+    },
+
+    async start(input: {
+        datasetId: string;
+        baseModel: string;
+        suffix?: string;
+    }): Promise<ApiResponse<TrainingJob>> {
+        return post('/api/training/jobs', input);
+    },
+
+    /** Cancels a running job at the provider, or forgets a finished one. */
+    async cancel(id: string): Promise<ApiResponse<unknown>> {
+        return del(`/api/training/jobs/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
+// Remote catalogue API
+// =============================================================================
+//
+// Models and datasets published on the Hugging Face Hub.
+//
+// The other half of the word "dataset": this is the catalogue you would fetch
+// *from*, `datasets` below is the local store you upload *to*.
+//
+// Note what a CatalogEntry does not have: no size, no sample count, no
+// parameter count, no format, no `downloaded` flag. The Hub's search API
+// reports none of them, and the tables this replaced rendered all five as
+// measurements of artifacts nothing had measured.
+
+export interface CatalogEntry {
+    id: string;
+    author?: string;
+    name: string;
+    downloads: number;
+    likes: number;
+    /** Models only, e.g. `text-generation`. */
+    task?: string;
+    /** Models only, e.g. `transformers`. */
+    library?: string;
+    /** Datasets only, and often long. */
+    description?: string;
+    tags: string[];
+    updatedAt?: string;
+    /** Canonical Hub page. Link to it rather than rebuilding the URL. */
+    url: string;
+    gated: boolean;
+}
+
+export interface CatalogResults {
+    query: string;
+    source: 'huggingface';
+    results: CatalogEntry[];
+}
+
+export const catalog = {
+    /**
+     * Search the Hub.
+     *
+     * An unreachable or rate-limited Hub is a 502, never an empty list, so a
+     * thrown error here is a real answer and worth showing.
+     */
+    async models(q: string, limit = 20): Promise<ApiResponse<CatalogResults>> {
+        return get(`/api/catalog/models?q=${encodeURIComponent(q)}&limit=${limit}`);
+    },
+
+    async datasets(q: string, limit = 20): Promise<ApiResponse<CatalogResults>> {
+        return get(`/api/catalog/datasets?q=${encodeURIComponent(q)}&limit=${limit}`);
+    },
+
+    /**
+     * A repository's files, with sizes.
+     *
+     * Sizes are what makes a download decidable: they are why a 5 GB file can
+     * be flagged before anyone clicks, and why the server can check the disk.
+     */
+    async files(kind: 'models' | 'datasets', id: string): Promise<ApiResponse<RepoFileList>> {
+        return get(`/api/catalog/files?kind=${kind}&id=${encodeURIComponent(id)}`);
+    },
+};
+
+export interface RepoFile {
+    path: string;
+    size: number;
+}
+
+export interface RepoFileList {
+    kind: string;
+    id: string;
+    files: RepoFile[];
+}
+
+// =============================================================================
+// Downloads API
+// =============================================================================
+
+export interface DownloadJob {
+    id: string;
+    kind: 'models' | 'datasets';
+    repoId: string;
+    filePath: string;
+    /** Absolute path on the server, so a user can find the file. */
+    destPath: string;
+    totalBytes: number;
+    /**
+     * Written periodically by the running transfer, so it lags the true
+     * figure by at most a few megabytes.
+     */
+    downloadedBytes: number;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    error?: string;
+    startedAt: number;
+    updatedAt: number;
+    completedAt?: number;
+}
+
+export const downloads = {
+    async list(): Promise<ApiResponse<DownloadJob[]>> {
+        return get('/api/downloads');
+    },
+
+    /**
+     * Start one. Returns immediately with a job to poll -- these files are
+     * large enough that waiting for the transfer would time out the request.
+     */
+    async start(input: {
+        kind: 'models' | 'datasets';
+        repoId: string;
+        filePath: string;
+    }): Promise<ApiResponse<DownloadJob>> {
+        return post('/api/downloads', input);
+    },
+
+    async get(id: string): Promise<ApiResponse<DownloadJob>> {
+        return get(`/api/downloads/${encodeURIComponent(id)}`);
+    },
+
+    /**
+     * Cancel a running job, or forget a finished one.
+     *
+     * Never deletes the downloaded file: dropping the record is a request to
+     * stop tracking it, not to lose the artifact.
+     */
+    async cancel(id: string): Promise<ApiResponse<unknown>> {
+        return del(`/api/downloads/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
+// Local dataset store API
+// =============================================================================
+//
+// Datasets the user uploads and this server holds.
+//
+// Deliberately not the same thing as the HuggingFace catalogue on the
+// Developer page, which is something you download *from*. The data flows the
+// other way, so they are separate features rather than one endpoint pretending
+// to be both.
+
+export type DatasetType = 'conversations' | 'documents' | 'qa' | 'custom';
+
+export interface Dataset {
+    id: string;
+    name: string;
+    type: DatasetType;
+    format: string;
+    /** Counted by the server from the rows it wrote, never supplied here. */
+    entryCount: number;
+    /** Summed by the server over the stored JSON, so it describes what is on disk. */
+    sizeBytes: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface DatasetEntryPage {
+    datasetId: string;
+    /** The dataset's whole record count, not this page's length. */
+    total: number;
+    limit: number;
+    offset: number;
+    entries: unknown[];
+}
+
+export const datasets = {
+    async list(): Promise<ApiResponse<Dataset[]>> {
+        return get('/api/datasets');
+    },
+
+    /** At most 50,000 entries; the server has no streaming import. */
+    async create(input: {
+        name: string;
+        type?: DatasetType;
+        format?: string;
+        entries: unknown[];
+    }): Promise<ApiResponse<Dataset>> {
+        return post('/api/datasets', input);
+    },
+
+    async entries(id: string, limit = 50, offset = 0): Promise<ApiResponse<DatasetEntryPage>> {
+        return get(`/api/datasets/${encodeURIComponent(id)}/entries?limit=${limit}&offset=${offset}`);
+    },
+
+    async remove(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+        return del(`/api/datasets/${encodeURIComponent(id)}`);
+    },
+};
+
+// =============================================================================
+// Document knowledge base API
+// =============================================================================
+
+export interface DocumentSummary {
+    id: string;
+    title: string;
+    source: string;
+    docType: string;
+    chunkCount: number;
+    tokenCount: number;
+    embeddingModel: string;
+    chunkingStrategy: string;
+    createdAt: number;
+}
+
+export interface DocumentChunkMatch {
+    documentId: string;
+    documentTitle: string;
+    chunkIndex: number;
+    content: string;
+    score: number;
+}
+
+export interface DocumentSearchResults {
+    query: string;
+    /**
+     * How many chunks were compared.
+     *
+     * Zero means nothing has been ingested under the embedding model the
+     * server is currently configured with -- a different answer from "no
+     * matches", and the reason this field is rendered rather than dropped.
+     */
+    searched: number;
+    results: DocumentChunkMatch[];
+}
+
+export const documents = {
+    async list(): Promise<ApiResponse<DocumentSummary[]>> {
+        return get('/api/documents');
+    },
+
+    /**
+     * Ingest a document: the server chunks it, embeds the chunks and stores
+     * both. Answers 503 when no embedding model is configured, rather than
+     * storing something that could never be found again.
+     */
+    async ingest(input: {
+        title: string;
+        content: string;
+        source?: string;
+        strategy?: string;
+    }): Promise<ApiResponse<DocumentSummary>> {
+        return post('/api/documents', input);
+    },
+
+    async search(q: string, limit = 10): Promise<ApiResponse<DocumentSearchResults>> {
+        return get(`/api/documents/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+    },
+
+    async remove(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
+        return del(`/api/documents/${encodeURIComponent(id)}`);
     },
 };
 
@@ -725,6 +1195,12 @@ export const api = {
     transfer,
     settings,
     mcp,
+    documents,
+    datasets,
+    catalog,
+    downloads,
+    training,
+    research,
     system,
     connectWebSocket,
     sendWebSocketMessage,

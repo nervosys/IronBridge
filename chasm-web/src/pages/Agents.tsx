@@ -58,14 +58,20 @@ import {
     Area,
 } from 'recharts';
 import { useApi } from '../context/ApiContext';
-import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../hooks/useApi';
+import { useCreateSwarm, useDeleteSwarm, useUpdateSwarm, useAddSwarmAgent, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../hooks/useApi';
 import { formatRelativeTime, formatTime, AGENT_ROLES } from '@csm/shared';
 import { AgentInbox } from '../components/AgentInbox';
 import type { Agent, Swarm, SwarmStatus } from '../api/types';
 import type { SweProject, SweMemory, SweRule, SweMemoryCategory } from '@csm/shared';
 
 // SWE Memory API base URL
-const SWE_API_BASE = 'http://localhost:8787/api/v1';
+/*
+ * `/api`, not `/api/v1`: the server has never routed a `/v1` segment, so all
+ * three requests below answered 404 and each `catch` turned that into an
+ * empty list. Probed against a running server -- `/api/v1/swe/projects` 404,
+ * `/api/swe/projects` 200.
+ */
+const SWE_API_BASE = 'http://localhost:8787/api';
 
 // SWE Memory categories
 const MEMORY_CATEGORIES: { value: SweMemoryCategory; label: string; icon: typeof Brain; color: string }[] = [
@@ -221,15 +227,21 @@ const SWARM_TEMPLATES = [
 ];
 
 // Agent Templates - roles use valid AgentRole values: coordinator, researcher, coder, reviewer, executor, writer, tester, household, business, custom
+/*
+ * `instruction` is what the server requires and what the agent is actually
+ * told to do. A template fills it in so choosing one produces a working
+ * agent; the field stays editable because a default directive is a starting
+ * point, not an answer.
+ */
 const AGENT_TEMPLATES = [
-    { id: 'coordinator', name: 'Coordinator', role: 'coordinator', description: 'Orchestrates tasks and manages agents', icon: Brain },
-    { id: 'researcher', name: 'Researcher', role: 'researcher', description: 'Gathers and analyzes information', icon: Search },
-    { id: 'coder', name: 'Coder', role: 'coder', description: 'Writes, reviews, and debugs code', icon: Code },
-    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', description: 'Reviews code and provides feedback', icon: FileText },
-    { id: 'executor', name: 'Executor', role: 'executor', description: 'Executes tools and commands', icon: Zap },
-    { id: 'writer', name: 'Writer', role: 'writer', description: 'Creates and edits documentation', icon: Lightbulb },
-    { id: 'tester', name: 'Tester', role: 'tester', description: 'Creates and runs tests', icon: FlaskConical },
-    { id: 'custom', name: 'Custom', role: 'custom', description: 'Custom agent configuration', icon: Settings },
+    { id: 'coordinator', name: 'Coordinator', role: 'coordinator', description: 'Orchestrates tasks and manages agents', instruction: 'Break the task into steps, delegate them to the other agents, and assemble their results.', icon: Brain },
+    { id: 'researcher', name: 'Researcher', role: 'researcher', description: 'Gathers and analyzes information', instruction: 'Gather relevant information, weigh the sources, and report what is supported and what is not.', icon: Search },
+    { id: 'coder', name: 'Coder', role: 'coder', description: 'Writes, reviews, and debugs code', instruction: 'Write and fix code that matches the surrounding style. Explain what you changed and why.', icon: Code },
+    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', description: 'Reviews code and provides feedback', instruction: 'Review the change for correctness first, then for clarity. Say plainly what is wrong and what would fix it.', icon: FileText },
+    { id: 'executor', name: 'Executor', role: 'executor', description: 'Executes tools and commands', instruction: 'Run the tools needed to complete the task and report exactly what each one returned.', icon: Zap },
+    { id: 'writer', name: 'Writer', role: 'writer', description: 'Creates and edits documentation', instruction: 'Write documentation that matches what the code does, not what it was meant to do.', icon: Lightbulb },
+    { id: 'tester', name: 'Tester', role: 'tester', description: 'Creates and runs tests', instruction: 'Write tests that would fail if the behaviour regressed, and run them.', icon: FlaskConical },
+    { id: 'custom', name: 'Custom', role: 'custom', description: 'Custom agent configuration', instruction: '', icon: Settings },
 ];
 
 // ==================== HELPERS ====================
@@ -325,6 +337,7 @@ export default function Agents() {
     const [newSwarmOrchestration, setNewSwarmOrchestration] = useState<Orchestration>('sequential');
     const deleteSwarm = useDeleteSwarm();
     const updateSwarm = useUpdateSwarm();
+    const addSwarmAgent = useAddSwarmAgent();
 
     // Agent mutation hooks
     const createAgent = useCreateAgent();
@@ -361,6 +374,12 @@ export default function Agents() {
     const [selectedSwarm, setSelectedSwarm] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showAddAgentModal, setShowAddAgentModal] = useState(false);
+    // The two selects in that modal had no value and no onChange, and its
+    // confirm button only closed the dialog. Nothing could have been sent:
+    // until now there was no route to send it to.
+    const [newMemberAgentId, setNewMemberAgentId] = useState('');
+    const [newMemberRole, setNewMemberRole] = useState(agentRoles[0]?.id ?? '');
+    const [addMemberError, setAddMemberError] = useState<string | null>(null);
     const [newSwarmName, setNewSwarmName] = useState('');
     const [newSwarmDescription, setNewSwarmDescription] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
@@ -370,6 +389,9 @@ export default function Agents() {
     const [newAgentName, setNewAgentName] = useState('');
     const [newAgentDescription, setNewAgentDescription] = useState('');
     const [newAgentRole, setNewAgentRole] = useState<import('@csm/shared').AgentRole>('custom');
+    // Required by the server; there was no field for it, which is why
+    // creating an agent from this page always answered 400.
+    const [newAgentInstruction, setNewAgentInstruction] = useState('');
     const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<string | null>(null);
 
     // ==================== AGENTS DATA ====================
@@ -507,15 +529,38 @@ export default function Agents() {
     };
 
     // Create Agent handlers
+    // `selectedSwarm` is the id, not the swarm.
+    const handleAddAgentToSwarm = async () => {
+        if (!selectedSwarm || !newMemberAgentId || !newMemberRole) return;
+        setAddMemberError(null);
+        try {
+            await addSwarmAgent.mutate({
+                id: selectedSwarm,
+                member: { agent_id: newMemberAgentId, role: newMemberRole },
+            });
+            refetchSwarms();
+            setShowAddAgentModal(false);
+            setNewMemberAgentId('');
+        } catch (error) {
+            // The server says why -- no such agent, no such swarm, a blank
+            // role. Closing the dialog on a failure would report an addition
+            // that did not happen.
+            setAddMemberError(error instanceof Error ? error.message : String(error));
+        }
+    };
+
     const handleCreateAgent = async () => {
+        // Both are required by `POST /api/agents`, so both are required
+        // here -- the alternative is a 400 the user cannot act on.
         if (!newAgentName.trim()) return;
 
         const template = selectedAgentTemplate ? AGENT_TEMPLATES.find(t => t.id === selectedAgentTemplate) : null;
 
         await createAgent.mutate({
             name: newAgentName.trim(),
+            instruction: newAgentInstruction.trim() || template?.instruction || '',
             description: newAgentDescription.trim() || template?.description || undefined,
-            role: (template?.role || newAgentRole) as import('@csm/shared').AgentRole,
+            role: template?.role || newAgentRole,
         });
 
         setShowCreateAgentModal(false);
@@ -891,37 +936,55 @@ export default function Agents() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Select Agent</label>
-                                <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
+                                <select
+                                    value={newMemberAgentId}
+                                    onChange={(e) => setNewMemberAgentId(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                >
                                     {agents.length === 0 ? (
-                                        <option disabled>No agents available</option>
+                                        <option value="" disabled>No agents available</option>
                                     ) : (
-                                        agents.map(agent => (
-                                            <option key={agent.id} value={agent.id}>{agent.name} ({agent.providerId || 'N/A'})</option>
-                                        ))
+                                        <>
+                                            <option value="" disabled>Choose an agent</option>
+                                            {agents.map(agent => (
+                                                <option key={agent.id} value={agent.id}>{agent.name} ({agent.providerId || 'N/A'})</option>
+                                            ))}
+                                        </>
                                     )}
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">Role in Swarm</label>
-                                <select className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]">
+                                <select
+                                    value={newMemberRole}
+                                    onChange={(e) => setNewMemberRole(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                >
                                     {agentRoles.map(role => (
                                         <option key={role.id} value={role.id}>{role.name} - {role.description}</option>
                                     ))}
                                 </select>
                             </div>
                         </div>
+                        {addMemberError && (
+                            <p className="mt-4 text-sm text-red-500">{addMemberError}</p>
+                        )}
                         <div className="flex justify-end gap-2 mt-6">
                             <button
-                                onClick={() => setShowAddAgentModal(false)}
+                                onClick={() => {
+                                    setShowAddAgentModal(false);
+                                    setAddMemberError(null);
+                                }}
                                 className="px-4 py-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                onClick={() => setShowAddAgentModal(false)}
-                                className="px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                                onClick={handleAddAgentToSwarm}
+                                disabled={addSwarmAgent.isLoading || !newMemberAgentId || !newMemberRole}
+                                className="px-4 py-2 bg-[hsl(var(--primary))] text-white rounded-lg hover:bg-[hsl(var(--primary))]/90 transition-colors disabled:opacity-50"
                             >
-                                Add Agent
+                                {addSwarmAgent.isLoading ? 'Adding...' : 'Add Agent'}
                             </button>
                         </div>
                     </div>
@@ -988,6 +1051,26 @@ export default function Agents() {
                                     rows={3}
                                     placeholder="What will this agent do?"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1">
+                                    Instruction
+                                </label>
+                                <textarea
+                                    value={newAgentInstruction}
+                                    onChange={(e) => setNewAgentInstruction(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[hsl(var(--muted))] rounded-lg text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] resize-none"
+                                    rows={3}
+                                    placeholder={
+                                        selectedAgentTemplate
+                                            ? AGENT_TEMPLATES.find(t => t.id === selectedAgentTemplate)?.instruction
+                                            : 'What should this agent do?'
+                                    }
+                                />
+                                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                                    What the agent is told to do. Required — a template fills it in if you leave it blank.
+                                </p>
                             </div>
 
                             <div>

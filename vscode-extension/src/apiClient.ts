@@ -45,7 +45,10 @@ export interface ChasmApiConfig {
  * Default API configuration
  */
 const DEFAULT_CONFIG: ChasmApiConfig = {
-    baseUrl: 'http://localhost:3000',
+    // 8787 is what `chasm api serve` binds by default. This said 3000, which
+    // nothing in this repository listens on, so every request failed at the
+    // socket before a path was ever in question.
+    baseUrl: 'http://localhost:8787',
     timeout: 30000,
 };
 
@@ -151,7 +154,7 @@ export class ChasmApiClient {
     }
 
     async getStatistics(): Promise<ApiResponse<Statistics>> {
-        return this._get('/api/v1/stats');
+        return this._get('/api/stats');
     }
 
     // =========================================================================
@@ -160,27 +163,23 @@ export class ChasmApiClient {
 
     workspaces = {
         list: (): Promise<ApiResponse<Workspace[]>> => {
-            return this._get('/api/v1/workspaces');
+            return this._get('/api/workspaces');
         },
 
         get: (id: string): Promise<ApiResponse<Workspace>> => {
-            return this._get(`/api/v1/workspaces/${encodeURIComponent(id)}`);
+            return this._get(`/api/workspaces/${encodeURIComponent(id)}`);
         },
 
         create: (data: Partial<Workspace>): Promise<ApiResponse<Workspace>> => {
-            return this._post('/api/v1/workspaces', data);
+            return this._post('/api/workspaces', data);
         },
 
         update: (id: string, data: Partial<Workspace>): Promise<ApiResponse<Workspace>> => {
-            return this._put(`/api/v1/workspaces/${encodeURIComponent(id)}`, data);
+            return this._put(`/api/workspaces/${encodeURIComponent(id)}`, data);
         },
 
         delete: (id: string): Promise<ApiResponse<void>> => {
-            return this._delete(`/api/v1/workspaces/${encodeURIComponent(id)}`);
-        },
-
-        getSessions: (id: string): Promise<ApiResponse<Session[]>> => {
-            return this._get(`/api/v1/workspaces/${encodeURIComponent(id)}/sessions`);
+            return this._delete(`/api/workspaces/${encodeURIComponent(id)}`);
         },
     };
 
@@ -199,41 +198,34 @@ export class ChasmApiClient {
                 });
             }
             const query = params.toString();
-            return this._get(`/api/v1/sessions${query ? `?${query}` : ''}`);
+            return this._get(`/api/sessions${query ? `?${query}` : ''}`);
         },
 
         get: (id: string): Promise<ApiResponse<Session>> => {
-            return this._get(`/api/v1/sessions/${encodeURIComponent(id)}`);
+            return this._get(`/api/sessions/${encodeURIComponent(id)}`);
         },
 
         getWithMessages: (id: string): Promise<ApiResponse<Session>> => {
-            return this._get(`/api/v1/sessions/${encodeURIComponent(id)}?include=messages`);
+            return this._get(`/api/sessions/${encodeURIComponent(id)}?include=messages`);
         },
 
         create: (data: Partial<Session>): Promise<ApiResponse<Session>> => {
-            return this._post('/api/v1/sessions', data);
+            return this._post('/api/sessions', data);
         },
 
         update: (id: string, data: Partial<Session>): Promise<ApiResponse<Session>> => {
-            return this._put(`/api/v1/sessions/${encodeURIComponent(id)}`, data);
+            return this._put(`/api/sessions/${encodeURIComponent(id)}`, data);
         },
 
         delete: (id: string): Promise<ApiResponse<void>> => {
-            return this._delete(`/api/v1/sessions/${encodeURIComponent(id)}`);
-        },
-
-        archive: (id: string): Promise<ApiResponse<Session>> => {
-            return this._post(`/api/v1/sessions/${encodeURIComponent(id)}/archive`);
+            return this._delete(`/api/sessions/${encodeURIComponent(id)}`);
         },
 
         export: (id: string, options?: ExportOptions): Promise<ApiResponse<string>> => {
             const format = options?.format || 'json';
-            return this._get(`/api/v1/sessions/${encodeURIComponent(id)}/export?format=${format}`);
+            return this._get(`/api/sessions/${encodeURIComponent(id)}/export?format=${format}`);
         },
 
-        search: (query: string): Promise<ApiResponse<SearchResult[]>> => {
-            return this._get(`/api/v1/sessions/search?q=${encodeURIComponent(query)}`);
-        },
     };
 
     // =========================================================================
@@ -242,24 +234,20 @@ export class ChasmApiClient {
 
     providers = {
         list: (): Promise<ApiResponse<Provider[]>> => {
-            return this._get('/api/v1/providers');
+            return this._get('/api/providers');
         },
 
         get: (id: string): Promise<ApiResponse<Provider>> => {
-            return this._get(`/api/v1/providers/${encodeURIComponent(id)}`);
-        },
-
-        health: (id: string): Promise<ApiResponse<ProviderHealth>> => {
-            return this._get(`/api/v1/providers/${encodeURIComponent(id)}/health`);
+            return this._get(`/api/providers/${encodeURIComponent(id)}`);
         },
 
         healthAll: (): Promise<ApiResponse<ProviderHealth[]>> => {
-            return this._get('/api/v1/providers/health');
+            // Served as /api/system/providers/health; there is no
+            // /api/providers/health. Same note chasm-web's client carries,
+            // because the same wrong guess was made in both.
+            return this._get('/api/system/providers/health');
         },
 
-        models: (id: string): Promise<ApiResponse<string[]>> => {
-            return this._get(`/api/v1/providers/${encodeURIComponent(id)}/models`);
-        },
     };
 
     // =========================================================================
@@ -268,28 +256,25 @@ export class ChasmApiClient {
 
     agents = {
         list: (): Promise<ApiResponse<Agent[]>> => {
-            return this._get('/api/v1/agents');
+            return this._get('/api/agents');
         },
 
         get: (id: string): Promise<ApiResponse<Agent>> => {
-            return this._get(`/api/v1/agents/${encodeURIComponent(id)}`);
+            return this._get(`/api/agents/${encodeURIComponent(id)}`);
         },
 
         create: (data: Partial<Agent>): Promise<ApiResponse<Agent>> => {
-            return this._post('/api/v1/agents', data);
+            return this._post('/api/agents', data);
         },
 
         update: (id: string, data: Partial<Agent>): Promise<ApiResponse<Agent>> => {
-            return this._put(`/api/v1/agents/${encodeURIComponent(id)}`, data);
+            return this._put(`/api/agents/${encodeURIComponent(id)}`, data);
         },
 
         delete: (id: string): Promise<ApiResponse<void>> => {
-            return this._delete(`/api/v1/agents/${encodeURIComponent(id)}`);
+            return this._delete(`/api/agents/${encodeURIComponent(id)}`);
         },
 
-        clone: (id: string): Promise<ApiResponse<Agent>> => {
-            return this._post(`/api/v1/agents/${encodeURIComponent(id)}/clone`);
-        },
     };
 
     // =========================================================================
@@ -298,61 +283,23 @@ export class ChasmApiClient {
 
     swarms = {
         list: (): Promise<ApiResponse<Swarm[]>> => {
-            return this._get('/api/v1/swarms');
+            return this._get('/api/swarms');
         },
 
         get: (id: string): Promise<ApiResponse<Swarm>> => {
-            return this._get(`/api/v1/swarms/${encodeURIComponent(id)}`);
+            return this._get(`/api/swarms/${encodeURIComponent(id)}`);
         },
 
         create: (data: Partial<Swarm>): Promise<ApiResponse<Swarm>> => {
-            return this._post('/api/v1/swarms', data);
+            return this._post('/api/swarms', data);
         },
 
         update: (id: string, data: Partial<Swarm>): Promise<ApiResponse<Swarm>> => {
-            return this._put(`/api/v1/swarms/${encodeURIComponent(id)}`, data);
+            return this._put(`/api/swarms/${encodeURIComponent(id)}`, data);
         },
 
         delete: (id: string): Promise<ApiResponse<void>> => {
-            return this._delete(`/api/v1/swarms/${encodeURIComponent(id)}`);
-        },
-
-        start: (id: string, goal?: string): Promise<ApiResponse<AgentRun>> => {
-            return this._post(`/api/v1/swarms/${encodeURIComponent(id)}/start`, { goal });
-        },
-
-        pause: (id: string): Promise<ApiResponse<Swarm>> => {
-            return this._post(`/api/v1/swarms/${encodeURIComponent(id)}/pause`);
-        },
-
-        resume: (id: string): Promise<ApiResponse<Swarm>> => {
-            return this._post(`/api/v1/swarms/${encodeURIComponent(id)}/resume`);
-        },
-
-        addAgent: (id: string, agentId: string, role: string): Promise<ApiResponse<Swarm>> => {
-            return this._post(`/api/v1/swarms/${encodeURIComponent(id)}/agents`, { agentId, role });
-        },
-
-        removeAgent: (id: string, agentId: string): Promise<ApiResponse<Swarm>> => {
-            return this._delete(`/api/v1/swarms/${encodeURIComponent(id)}/agents/${encodeURIComponent(agentId)}`);
-        },
-    };
-
-    // =========================================================================
-    // Runs API
-    // =========================================================================
-
-    runs = {
-        list: (): Promise<ApiResponse<AgentRun[]>> => {
-            return this._get('/api/v1/runs');
-        },
-
-        get: (id: string): Promise<ApiResponse<AgentRun>> => {
-            return this._get(`/api/v1/runs/${encodeURIComponent(id)}`);
-        },
-
-        cancel: (id: string): Promise<ApiResponse<AgentRun>> => {
-            return this._post(`/api/v1/runs/${encodeURIComponent(id)}/cancel`);
+            return this._delete(`/api/swarms/${encodeURIComponent(id)}`);
         },
     };
 
@@ -362,14 +309,14 @@ export class ChasmApiClient {
 
     chat = {
         completion: (request: ChatCompletionRequest): Promise<ApiResponse<ChatCompletionResponse>> => {
-            return this._post('/api/v1/chat/completions', request);
+            return this._post('/api/chat/completions', request);
         },
 
         completionStream: async function* (
             this: ChasmApiClient,
             request: ChatCompletionRequest
         ): AsyncGenerator<string, void, unknown> {
-            const url = `${this._config.baseUrl}/api/v1/chat/completions`;
+            const url = `${this._config.baseUrl}/api/chat/completions`;
 
             try {
                 const response = await fetch(url, {
@@ -422,15 +369,7 @@ export class ChasmApiClient {
 
     search = {
         global: (query: string): Promise<ApiResponse<SearchResult[]>> => {
-            return this._get(`/api/v1/search?q=${encodeURIComponent(query)}`);
-        },
-
-        sessions: (query: string): Promise<ApiResponse<SearchResult[]>> => {
-            return this._get(`/api/v1/search/sessions?q=${encodeURIComponent(query)}`);
-        },
-
-        messages: (query: string): Promise<ApiResponse<SearchResult[]>> => {
-            return this._get(`/api/v1/search/messages?q=${encodeURIComponent(query)}`);
+            return this._get(`/api/search?q=${encodeURIComponent(query)}`);
         },
     };
 
@@ -440,12 +379,9 @@ export class ChasmApiClient {
 
     mcp = {
         tools: (): Promise<ApiResponse<Array<{ name: string; description: string; inputSchema: unknown }>>> => {
-            return this._get('/api/v1/mcp/tools');
+            return this._get('/api/mcp/tools');
         },
 
-        callTool: (name: string, args: Record<string, unknown>): Promise<ApiResponse<unknown>> => {
-            return this._post('/api/v1/mcp/tools/call', { name, arguments: args });
-        },
     };
 
     // =========================================================================
@@ -457,42 +393,42 @@ export class ChasmApiClient {
          * Send recording events to the backend
          */
         sendEvents: (events: RecordingEventPayload[]): Promise<ApiResponse<RecordingEventsResponse>> => {
-            return this._post('/api/recording/events', { events });
+            return this._post('/recording/events', { events });
         },
 
         /**
          * Store a full session snapshot
          */
         storeSnapshot: (snapshot: RecordingEventPayload): Promise<ApiResponse<RecordingAckResponse>> => {
-            return this._post('/api/recording/snapshot', snapshot);
+            return this._post('/recording/snapshot', snapshot);
         },
 
         /**
          * Get recording service status
          */
         status: (): Promise<ApiResponse<RecordingStatusResponse>> => {
-            return this._get('/api/recording/status');
+            return this._get('/recording/status');
         },
 
         /**
          * List active recording sessions
          */
         listSessions: (): Promise<ApiResponse<ActiveRecordingSessionsResponse>> => {
-            return this._get('/api/recording/sessions');
+            return this._get('/recording/sessions');
         },
 
         /**
          * Get a specific recording session
          */
         getSession: (sessionId: string): Promise<ApiResponse<ActiveRecordingSession>> => {
-            return this._get(`/api/recording/session/${sessionId}`);
+            return this._get(`/recording/session/${sessionId}`);
         },
 
         /**
          * Get recovery info for a session
          */
         getRecovery: (sessionId: string): Promise<ApiResponse<RecordingRecoveryResponse>> => {
-            return this._get(`/api/recording/session/${sessionId}/recovery`);
+            return this._get(`/recording/session/${sessionId}/recovery`);
         },
     };
 }
@@ -601,5 +537,4 @@ export function getApiClient(config?: Partial<ChasmApiConfig>): ChasmApiClient {
 export function createApiClient(config?: Partial<ChasmApiConfig>, outputChannel?: vscode.OutputChannel): ChasmApiClient {
     return new ChasmApiClient(config, outputChannel);
 }
-
 

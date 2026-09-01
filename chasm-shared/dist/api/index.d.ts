@@ -16,8 +16,6 @@ declare function createApiClient(config?: ApiClientConfig): {
     workspaces: {
         list(filter?: WorkspaceFilter): Promise<ApiResponse<Workspace[]>>;
         get(id: string): Promise<ApiResponse<Workspace>>;
-        getByPath(path: string): Promise<ApiResponse<Workspace>>;
-        refresh(id: string): Promise<ApiResponse<Workspace>>;
     };
     sessions: {
         list(filter?: SessionFilter): Promise<ApiResponse<Session[]>>;
@@ -26,7 +24,6 @@ declare function createApiClient(config?: ApiClientConfig): {
         create(data: Partial<Session>): Promise<ApiResponse<Session>>;
         update(id: string, data: Partial<Session>): Promise<ApiResponse<Session>>;
         delete(id: string): Promise<ApiResponse<void>>;
-        archive(id: string, archived?: boolean): Promise<ApiResponse<Session>>;
         fork(id: string, fromMessageId?: string): Promise<ApiResponse<Session>>;
         merge(sessionIds: string[], title: string): Promise<ApiResponse<Session>>;
     };
@@ -66,8 +63,6 @@ declare const api: {
     workspaces: {
         list(filter?: WorkspaceFilter): Promise<ApiResponse<Workspace[]>>;
         get(id: string): Promise<ApiResponse<Workspace>>;
-        getByPath(path: string): Promise<ApiResponse<Workspace>>;
-        refresh(id: string): Promise<ApiResponse<Workspace>>;
     };
     sessions: {
         list(filter?: SessionFilter): Promise<ApiResponse<Session[]>>;
@@ -76,7 +71,6 @@ declare const api: {
         create(data: Partial<Session>): Promise<ApiResponse<Session>>;
         update(id: string, data: Partial<Session>): Promise<ApiResponse<Session>>;
         delete(id: string): Promise<ApiResponse<void>>;
-        archive(id: string, archived?: boolean): Promise<ApiResponse<Session>>;
         fork(id: string, fromMessageId?: string): Promise<ApiResponse<Session>>;
         merge(sessionIds: string[], title: string): Promise<ApiResponse<Session>>;
     };

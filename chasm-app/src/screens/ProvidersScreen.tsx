@@ -30,9 +30,6 @@ interface Provider {
 }
 
 
-/** Provider ids the server reports that run on the user's own machine. */
-const LOCAL_PROVIDER_TYPES = new Set(['ollama', 'lm-studio', 'cursor', 'copilot']);
-
 /**
  * Fold a server provider and its health row into what this screen renders.
  *
@@ -40,15 +37,20 @@ const LOCAL_PROVIDER_TYPES = new Set(['ollama', 'lm-studio', 'cursor', 'copilot'
  * distinguishes connected / disconnected / error / unknown, and `unknown` is a
  * real answer here -- it is what a cloud provider reports when the server holds
  * no credentials for it and will not pretend to know.
+ *
+ * `type` comes from the server too. This used to guess, from a four-id set
+ * (`ollama`, `lm-studio`, `cursor`, `copilot`) plus a localhost test against
+ * `base_url`. All three parts were wrong: the catalogue has 32 providers and
+ * 11 local ones, so nine locals were drawn as cloud; `copilot` is a cloud
+ * provider and was drawn as local; `cursor` is not in the catalogue at all;
+ * and the field is called `endpoint`, not `base_url`, so the localhost test
+ * read undefined on every provider and never once fired.
  */
 function toScreenProvider(
-    p: { id: string; name: string; type?: string; enabled?: boolean; base_url?: string; models?: string[] },
+    p: { id: string; name: string; type?: string; enabled?: boolean; endpoint?: string | null; models?: string[] },
     health: Map<string, string>
 ): Provider {
-    const serverType = (p.type ?? '').toLowerCase();
-    const isLocal =
-        LOCAL_PROVIDER_TYPES.has(serverType) ||
-        /localhost|127\.0\.0\.1|\[::1\]/.test(p.base_url ?? '');
+    const isLocal = (p.type ?? '').toLowerCase() === 'local';
 
     const reported = health.get(p.id);
     const status: Provider['status'] =
@@ -60,9 +62,13 @@ function toScreenProvider(
         type: isLocal ? 'local' : 'cloud',
         icon: isLocal ? '💻' : '☁️',
         status,
-        apiEndpoint: p.base_url,
+        apiEndpoint: p.endpoint ?? undefined,
         models: p.models ?? [],
-        enabled: p.enabled ?? false,
+        // `?? true` matches the server's default for a provider nobody has
+        // touched. It used to be `?? false` against a field the server did not
+        // send at all, so every provider rendered switched off and the stat
+        // above read 0 of 32 on every install.
+        enabled: p.enabled ?? true,
         // No quota fields: the server reports none, and the numbers that used
         // to sit here (45 of 100, and so on) were invented.
     };
@@ -123,23 +129,28 @@ export function ProvidersScreen() {
     }), [providers]);
 
     /**
-     * Local only -- this does not persist.
+     * Persisted server-side via `PUT /api/providers/{id}`.
      *
-     * Enabling a provider server-side would need `PUT /api/providers/{id}`,
-     * which the server does not route. The switch therefore survives until the
-     * next load and no further, and the toast says so rather than letting the
-     * user believe a setting was saved.
+     * This used to be local only -- the endpoint did not exist, so the switch
+     * survived until the next load and no further, and an alert said so. The
+     * switch is moved optimistically and rolled back if the write fails, so
+     * what is on screen is never a setting the server did not accept.
      */
-    const handleToggleProvider = (id: string) => {
+    const handleToggleProvider = async (id: string) => {
         const provider = providers.find(p => p.id === id);
-        setProviders(prev => prev.map(p =>
-            p.id === id ? { ...p, enabled: !p.enabled } : p
-        ));
-        if (provider) {
+        if (!provider) return;
+
+        const next = !provider.enabled;
+        setProviders(prev => prev.map(p => (p.id === id ? { ...p, enabled: next } : p)));
+
+        try {
+            await providersApi.update(id, next);
+        } catch (error) {
+            setProviders(prev => prev.map(p => (p.id === id ? { ...p, enabled: !next } : p)));
             Alert.alert(
                 'Not saved',
-                `${provider.name} was toggled for this session only. Chasm has no endpoint ` +
-                `for changing provider settings yet, so this resets when the screen reloads.`
+                `${provider.name} could not be ${next ? 'enabled' : 'disabled'}: ` +
+                `${error instanceof Error ? error.message : 'the server did not accept the change'}.`
             );
         }
     };

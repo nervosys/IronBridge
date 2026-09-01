@@ -57,6 +57,8 @@ pub mod commands;
 pub mod copilot_version;
 pub mod database;
 pub mod encryption;
+#[cfg(feature = "enterprise")]
+pub mod enterprise;
 pub mod error;
 pub mod integrations;
 pub mod intelligence;

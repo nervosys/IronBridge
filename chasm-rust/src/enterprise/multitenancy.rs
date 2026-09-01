@@ -90,10 +90,7 @@ impl SubscriptionTier {
                 max_storage_gb: 1.0,
                 max_api_calls_per_day: 1000,
                 retention_days: 30,
-                features: vec![
-                    Feature::BasicHarvest,
-                    Feature::SessionView,
-                ],
+                features: vec![Feature::BasicHarvest, Feature::SessionView],
             },
             SubscriptionTier::Starter => TenantLimits {
                 max_users: 25,
@@ -453,12 +450,16 @@ impl TenantManager {
 
     /// Get tenant by slug
     pub fn get_tenant_by_slug(&self, slug: &str) -> Option<&Tenant> {
-        self.slug_index.get(slug).and_then(|id| self.tenants.get(id))
+        self.slug_index
+            .get(slug)
+            .and_then(|id| self.tenants.get(id))
     }
 
     /// Get tenant by domain
     pub fn get_tenant_by_domain(&self, domain: &str) -> Option<&Tenant> {
-        self.domain_index.get(domain).and_then(|id| self.tenants.get(id))
+        self.domain_index
+            .get(domain)
+            .and_then(|id| self.tenants.get(id))
     }
 
     /// Update tenant status
@@ -493,11 +494,17 @@ impl TenantManager {
         display_name: &str,
         role: TenantRole,
     ) -> Result<TenantUser, TenantError> {
-        let tenant = self.tenants.get(&tenant_id)
+        let tenant = self
+            .tenants
+            .get(&tenant_id)
             .ok_or(TenantError::NotFound(tenant_id))?;
 
         // Check user limit
-        let current_users = self.tenant_users.get(&tenant_id).map(|u| u.len()).unwrap_or(0);
+        let current_users = self
+            .tenant_users
+            .get(&tenant_id)
+            .map(|u| u.len())
+            .unwrap_or(0);
         if tenant.limits.max_users > 0 && current_users >= tenant.limits.max_users {
             return Err(TenantError::LimitExceeded("users".to_string()));
         }
@@ -515,7 +522,10 @@ impl TenantManager {
             mfa_enabled: false,
         };
 
-        self.tenant_users.entry(tenant_id).or_default().push(user.clone());
+        self.tenant_users
+            .entry(tenant_id)
+            .or_default()
+            .push(user.clone());
 
         // Update usage
         if let Some(tenant) = self.tenants.get_mut(&tenant_id) {
@@ -528,14 +538,16 @@ impl TenantManager {
 
     /// Get tenant users
     pub fn get_users(&self, tenant_id: Uuid) -> Vec<&TenantUser> {
-        self.tenant_users.get(&tenant_id)
+        self.tenant_users
+            .get(&tenant_id)
             .map(|users| users.iter().collect())
             .unwrap_or_default()
     }
 
     /// Check if tenant has feature
     pub fn has_feature(&self, tenant_id: Uuid, feature: Feature) -> bool {
-        self.tenants.get(&tenant_id)
+        self.tenants
+            .get(&tenant_id)
             .map(|t| t.limits.features.contains(&feature))
             .unwrap_or(false)
     }
@@ -549,9 +561,14 @@ impl TenantManager {
 
         match limit_type {
             "users" => tenant.limits.max_users == 0 || value < tenant.limits.max_users,
-            "workspaces" => tenant.limits.max_workspaces == 0 || value < tenant.limits.max_workspaces,
+            "workspaces" => {
+                tenant.limits.max_workspaces == 0 || value < tenant.limits.max_workspaces
+            }
             "sessions" => tenant.limits.max_sessions == 0 || value < tenant.limits.max_sessions,
-            "api_calls" => tenant.limits.max_api_calls_per_day == 0 || value < tenant.limits.max_api_calls_per_day,
+            "api_calls" => {
+                tenant.limits.max_api_calls_per_day == 0
+                    || value < tenant.limits.max_api_calls_per_day
+            }
             _ => true,
         }
     }
@@ -595,7 +612,9 @@ impl std::fmt::Display for TenantError {
             TenantError::SlugTaken(slug) => write!(f, "Slug already taken: {}", slug),
             TenantError::DomainTaken(domain) => write!(f, "Domain already taken: {}", domain),
             TenantError::LimitExceeded(limit) => write!(f, "Limit exceeded: {}", limit),
-            TenantError::FeatureNotAvailable(feature) => write!(f, "Feature not available: {:?}", feature),
+            TenantError::FeatureNotAvailable(feature) => {
+                write!(f, "Feature not available: {:?}", feature)
+            }
             TenantError::InvalidStatus(status) => write!(f, "Invalid status: {:?}", status),
         }
     }
@@ -610,13 +629,15 @@ mod tests {
     #[test]
     fn test_create_tenant() {
         let mut manager = TenantManager::new();
-        
-        let tenant = manager.create_tenant(
-            "Acme Corp",
-            "acme",
-            SubscriptionTier::Professional,
-            Some("acme.com"),
-        ).unwrap();
+
+        let tenant = manager
+            .create_tenant(
+                "Acme Corp",
+                "acme",
+                SubscriptionTier::Professional,
+                Some("acme.com"),
+            )
+            .unwrap();
 
         assert_eq!(tenant.name, "Acme Corp");
         assert_eq!(tenant.slug, "acme");
@@ -626,9 +647,11 @@ mod tests {
     #[test]
     fn test_slug_uniqueness() {
         let mut manager = TenantManager::new();
-        
-        manager.create_tenant("First", "unique", SubscriptionTier::Free, None).unwrap();
-        
+
+        manager
+            .create_tenant("First", "unique", SubscriptionTier::Free, None)
+            .unwrap();
+
         let result = manager.create_tenant("Second", "unique", SubscriptionTier::Free, None);
         assert!(matches!(result, Err(TenantError::SlugTaken(_))));
     }
@@ -647,16 +670,20 @@ mod tests {
     #[test]
     fn test_add_user() {
         let mut manager = TenantManager::new();
-        
-        let tenant = manager.create_tenant("Test", "test", SubscriptionTier::Starter, None).unwrap();
-        
-        let user = manager.add_user(
-            tenant.id,
-            Uuid::new_v4(),
-            "user@test.com",
-            "Test User",
-            TenantRole::Member,
-        ).unwrap();
+
+        let tenant = manager
+            .create_tenant("Test", "test", SubscriptionTier::Starter, None)
+            .unwrap();
+
+        let user = manager
+            .add_user(
+                tenant.id,
+                Uuid::new_v4(),
+                "user@test.com",
+                "Test User",
+                TenantRole::Member,
+            )
+            .unwrap();
 
         assert_eq!(user.email, "user@test.com");
         assert_eq!(user.role, TenantRole::Member);

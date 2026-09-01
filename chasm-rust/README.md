@@ -280,34 +280,52 @@ curl http://localhost:8787/api/stats
 Chasm provides [Model Context Protocol](https://modelcontextprotocol.io/) tools for AI agent integration:
 
 ```bash
-chasm mcp serve
+csm-mcp
 ```
+
+`csm-mcp` is a separate binary. There is no `chasm mcp` subcommand.
 
 ### Available Tools
 
-- `chasm_list_workspaces` - List all workspaces
-- `chasm_list_sessions` - List sessions in a workspace
-- `chasm_get_session` - Get full session content
-- `chasm_search_sessions` - Search across all sessions
-- `chasm_get_stats` - Get database statistics
+Sixteen, all prefixed `csm_`. The `csm_*` tools read VS Code's on-disk
+workspace storage; the `csm_db_*` tools read the harvested Chasm database.
+
+- `csm_list_workspaces` - List VS Code workspaces with chat sessions
+- `csm_find_workspace` - Find workspaces matching a pattern
+- `csm_list_sessions` - List sessions, optionally filtered by project path
+- `csm_list_orphaned` - Sessions on disk that VS Code's index has dropped
+- `csm_show_session` - Show one session
+- `csm_show_history` - Chat history timeline for a project
+- `csm_search` - Full-text search across harvested sessions
+- `csm_detect` - Detect workspace and providers for a path
+- `csm_register_all` / `csm_register_sessions` - Write sessions back into
+  VS Code's index
+- `csm_merge_sessions` - Merge sessions into one history
+- `csm_db_list_workspaces` / `csm_db_list_sessions` / `csm_db_get_session` /
+  `csm_db_search` / `csm_db_stats` - Read the Chasm database
+
+See [MCP Server](docs/api/mcp.md) for parameters. A test in
+`src/api/docs.rs` keeps that page and the tool registry in step.
 
 ## 🏢 Enterprise Features
 
-> **⚠️ The three sections below describe code that is not compiled.**
-> `src/enterprise/` — multi-tenancy, compliance and white-labelling, 2,044
-> lines — is not declared in `lib.rs`, so it is not part of any build. It does
-> compile cleanly when declared, unlike the provider files that were deleted
-> for the same reason, but nothing calls it: there are no routes, no
-> persistence and no CLI surface. Read what follows as a design that exists in
-> source form, not as behaviour you can invoke.
+> **⚠️ The two sections below describe code that compiles but is not routed.**
+> `src/enterprise/` — multi-tenancy and white-labelling, 1,389 lines — is
+> declared behind the `enterprise` feature, so rustc, clippy and rustfmt see
+> it and its tests run. Nothing calls it: there are no routes, no persistence
+> and no CLI surface. Read what follows as a design that exists in source
+> form, not as behaviour you can invoke.
+>
+> It is compiled rather than deleted because an orphan cannot rot *detectably*
+> — while these files had no `mod` declaration, appending invalid Rust to one
+> of them broke no build. Wiring them is a product decision and a substantial
+> one: every table here is single-tenant today, so tenancy touches all of them.
 >
 > What *is* built and served under `--features enterprise` is SSO (`/sso`,
 > `/oidc`), audit logging (`/audit`) and retention policy (`/retention`) —
-> see [REST API](docs/api/rest.md). Audit and retention are separate
-> implementations in `src/api/`, not the ones in `src/enterprise/compliance.rs`.
+> see [REST API](docs/api/rest.md).
 >
-> `tests/module_reachability.rs` holds these four files in an explicit list so
-> the gap cannot be forgotten, and fails on any *new* unreachable file.
+> `tests/module_reachability.rs` fails on any *new* unreachable file.
 
 ### Multi-Tenancy
 
@@ -319,16 +337,6 @@ Support for multiple isolated tenants with subscription tiers:
 | Starter      | 25     | 10 GB   | Cloud sync, API access              |
 | Professional | 100    | 100 GB  | SSO, advanced analytics, priority   |
 | Enterprise   | Custom | Custom  | Audit logs, compliance, white-label |
-
-### Compliance Frameworks
-
-- SOC 2 Type II
-- HIPAA
-- GDPR
-- CCPA
-- ISO 27001
-- FedRAMP
-- PCI DSS
 
 ### White-Labeling
 

@@ -264,6 +264,19 @@ pub async fn post_sync_batch(
 }
 
 /// Get full snapshot
+/// A snapshot that cannot be built is an error, not an empty snapshot.
+///
+/// Naming the part that failed matters here: a client that gets "swarms" back
+/// knows its sessions and workspaces are fine and that this is a server-side
+/// fault, which an empty list told it nothing about.
+fn snapshot_failed(part: &str, e: &rusqlite::Error) -> HttpResponse {
+    HttpResponse::InternalServerError().json(serde_json::json!({
+        "success": false,
+        "data": null,
+        "error": format!("Could not read {part} for the snapshot: {e}"),
+    }))
+}
+
 pub async fn get_sync_snapshot(
     sync_state: web::Data<SharedSyncState>,
     app_state: web::Data<crate::api::state::AppState>,
@@ -287,11 +300,22 @@ pub async fn get_sync_snapshot(
         .map(|s| serde_json::to_value(s).unwrap_or_default())
         .collect();
 
-    // Query agents directly from database
-    let agents: Vec<serde_json::Value> = query_agents_from_db(&db.conn).unwrap_or_default();
+    // A failed query is reported, not flattened into an empty list.
+    //
+    // These two used to end in `unwrap_or_default()`, and that is what hid the
+    // schema conflict below for as long as it existed: `query_swarms_from_db`
+    // selected columns the `swarms` table does not have, so the query errored
+    // on every call and the snapshot answered 200 with `"swarms": []`. No
+    // client could tell "no swarms" from "this server cannot read its swarms".
+    let agents: Vec<serde_json::Value> = match query_agents_from_db(&db.conn) {
+        Ok(agents) => agents,
+        Err(e) => return snapshot_failed("agents", &e),
+    };
 
-    // Query swarms directly from database
-    let swarms: Vec<serde_json::Value> = query_swarms_from_db(&db.conn).unwrap_or_default();
+    let swarms: Vec<serde_json::Value> = match query_swarms_from_db(&db.conn) {
+        Ok(swarms) => swarms,
+        Err(e) => return snapshot_failed("swarms", &e),
+    };
 
     // Providers are hardcoded, return empty for snapshot
     // (clients should call /api/providers for the full list)
@@ -340,9 +364,9 @@ fn query_agents_from_db(
     )?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, instruction, role, model, provider, 
-                temperature, max_tokens, tools, sub_agents, is_active, 
-                created_at, updated_at, metadata 
+        "SELECT id, name, description, instruction, role, model, provider,
+                temperature, max_tokens, tools, sub_agents, is_active,
+                created_at, updated_at, metadata
          FROM agents ORDER BY updated_at DESC",
     )?;
 
@@ -375,46 +399,52 @@ fn query_agents_from_db(
     Ok(agents)
 }
 
-/// Query swarms directly from database  
+/// The swarms in the database, in the shape `GET /api/swarms` returns.
+///
+/// # There is only one `swarms` table
+///
+/// This function used to declare a second one -- `orchestrator`, `is_active`
+/// and `metadata`, where the real table has `orchestration`, `max_iterations`
+/// and `status` -- and then select those columns. `CREATE TABLE IF NOT EXISTS`
+/// made the conflict silent: the table already existed with the other schema,
+/// so the statement did nothing and the SELECT failed on every call. Paired
+/// with an `unwrap_or_default()` at the call site, the sync snapshot reported
+/// an empty swarm list to every client while `GET /api/swarms` returned the
+/// same swarms perfectly well.
+///
+/// The table belongs to `handlers_simple`, so its initializer is the one that
+/// runs here. Two modules each declaring one table is how the two schemas
+/// drifted apart without anything noticing.
 fn query_swarms_from_db(
     conn: &rusqlite::Connection,
 ) -> Result<Vec<serde_json::Value>, rusqlite::Error> {
-    // Ensure table exists
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS swarms (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT,
-            agents TEXT NOT NULL,
-            orchestrator TEXT,
-            is_active INTEGER DEFAULT 1,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            metadata TEXT
-        )",
-        [],
-    )?;
+    super::handlers_simple::init_swarms_table(conn)?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, agents, orchestrator, is_active, 
-                created_at, updated_at, metadata 
+        "SELECT id, name, description, orchestration, agents, max_iterations,
+                status, created_at, updated_at
          FROM swarms ORDER BY updated_at DESC",
     )?;
 
     let swarms: Vec<serde_json::Value> = stmt
         .query_map([], |row| {
-            let agents_str: String = row.get::<_, String>(3)?;
-            let agents: Vec<String> = serde_json::from_str(&agents_str).unwrap_or_default();
+            // Objects of `{agentId, role}`, not bare id strings: the old
+            // mapping deserialized them as `Vec<String>`, which would have
+            // silently emptied every swarm's membership even once the columns
+            // were right.
+            let agents_str: String = row.get::<_, String>(4)?;
+            let agents: Vec<serde_json::Value> =
+                serde_json::from_str(&agents_str).unwrap_or_default();
             Ok(serde_json::json!({
                 "id": row.get::<_, String>(0)?,
                 "name": row.get::<_, String>(1)?,
                 "description": row.get::<_, Option<String>>(2)?,
+                "orchestration": row.get::<_, String>(3)?,
                 "agents": agents,
-                "orchestrator": row.get::<_, Option<String>>(4)?,
-                "isActive": row.get::<_, i32>(5)? == 1,
-                "createdAt": row.get::<_, i64>(6)?,
-                "updatedAt": row.get::<_, i64>(7)?,
-                "metadata": row.get::<_, Option<String>>(8)?,
+                "maxIterations": row.get::<_, Option<i32>>(5)?,
+                "status": row.get::<_, String>(6)?,
+                "createdAt": row.get::<_, i64>(7)?,
+                "updatedAt": row.get::<_, i64>(8)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -477,4 +507,137 @@ pub fn configure_sync_routes(cfg: &mut web::ServiceConfig) {
             .route("/snapshot", web::get().to(get_sync_snapshot))
             .route("/subscribe", web::get().to(sync_sse)),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ChatDatabase;
+    use actix_web::{test, App};
+
+    /// A swarm written through `/api/swarms` must appear in the sync snapshot.
+    ///
+    /// It did not, for as long as `sync` declared its own `swarms` table.
+    /// `CREATE TABLE IF NOT EXISTS` is a no-op against an existing table, so
+    /// the second schema never took effect and every SELECT of its columns
+    /// failed -- silently, because the call site called `unwrap_or_default()`.
+    /// The snapshot answered 200 with an empty list while `GET /api/swarms`
+    /// returned the swarm.
+    ///
+    /// This test fails against that code: it writes through one module and
+    /// reads through the other, which is the only way the conflict shows.
+    #[tokio::test]
+    async fn a_swarm_written_by_the_api_appears_in_the_snapshot() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("sync-swarms.db");
+        crate::commands::create_harvest_database(&db_path).expect("schema");
+
+        let db = ChatDatabase::open(&db_path).expect("open");
+        let state = web::Data::new(crate::api::state::AppState::new(db, db_path));
+        let sync_state = web::Data::new(crate::api::create_sync_state());
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .app_data(sync_state.clone())
+                .configure(crate::api::configure_routes)
+                .configure(crate::api::configure_sync_routes),
+        )
+        .await;
+
+        let created = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/swarms")
+                .set_json(serde_json::json!({
+                    "name": "probe swarm",
+                    "description": "d",
+                    "orchestration": "sequential",
+                    "agents": [{ "agent_id": "a1", "role": "coordinator" }],
+                    "max_iterations": 5
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(created.status(), 200);
+
+        let snapshot = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/sync/snapshot").to_request(),
+        )
+        .await;
+        assert_eq!(snapshot.status(), 200);
+        let body: serde_json::Value = test::read_body_json(snapshot).await;
+
+        let swarms = body["data"]["swarms"].as_array().expect("swarms array");
+        assert_eq!(
+            swarms.len(),
+            1,
+            "the snapshot dropped the swarm: {}",
+            serde_json::to_string(&body).unwrap_or_default()
+        );
+        assert_eq!(swarms[0]["name"], "probe swarm");
+        assert_eq!(swarms[0]["orchestration"], "sequential");
+        assert_eq!(swarms[0]["status"], "idle");
+        assert_eq!(swarms[0]["maxIterations"], 5);
+
+        // Membership survives as objects. Deserializing these as `Vec<String>`
+        // would empty every swarm without erroring.
+        let agents = swarms[0]["agents"].as_array().expect("agents array");
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0]["agent_id"], "a1");
+        assert_eq!(agents[0]["role"], "coordinator");
+    }
+
+    /// The snapshot and `GET /api/swarms` must not disagree about a swarm.
+    #[tokio::test]
+    async fn the_snapshot_and_the_swarms_endpoint_agree() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("sync-agree.db");
+        crate::commands::create_harvest_database(&db_path).expect("schema");
+
+        let db = ChatDatabase::open(&db_path).expect("open");
+        let state = web::Data::new(crate::api::state::AppState::new(db, db_path));
+        let sync_state = web::Data::new(crate::api::create_sync_state());
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .app_data(sync_state.clone())
+                .configure(crate::api::configure_routes)
+                .configure(crate::api::configure_sync_routes),
+        )
+        .await;
+
+        for name in ["one", "two"] {
+            test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/api/swarms")
+                    .set_json(serde_json::json!({
+                        "name": name,
+                        "orchestration": "parallel",
+                        "agents": []
+                    }))
+                    .to_request(),
+            )
+            .await;
+        }
+
+        let listed = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/api/swarms").to_request(),
+        )
+        .await;
+        let listed: serde_json::Value = test::read_body_json(listed).await;
+
+        let snapshot = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/sync/snapshot").to_request(),
+        )
+        .await;
+        let snapshot: serde_json::Value = test::read_body_json(snapshot).await;
+
+        assert_eq!(listed["data"], snapshot["data"]["swarms"]);
+    }
 }

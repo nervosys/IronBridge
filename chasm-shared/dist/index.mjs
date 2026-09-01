@@ -1033,13 +1033,10 @@ function createApiClient(config = DEFAULT_CONFIG) {
     },
     async get(id) {
       return get(`/api/workspaces/${encodeURIComponent(id)}`);
-    },
-    async getByPath(path) {
-      return get("/api/workspaces/by-path", { path });
-    },
-    async refresh(id) {
-      return post(`/api/workspaces/${encodeURIComponent(id)}/refresh`);
     }
+    // No getByPath or refresh: `/api/workspaces/by-path` and
+    // `/api/workspaces/{id}/refresh` are not routed, both answered 404,
+    // and neither had a caller.
   };
   const sessions = {
     async list(filter) {
@@ -1060,9 +1057,6 @@ function createApiClient(config = DEFAULT_CONFIG) {
     async delete(id) {
       return del(`/api/sessions/${encodeURIComponent(id)}`);
     },
-    async archive(id, archived = true) {
-      return post(`/api/sessions/${encodeURIComponent(id)}/archive`, { archived });
-    },
     async fork(id, fromMessageId) {
       return post(`/api/sessions/${encodeURIComponent(id)}/fork`, { fromMessageId });
     },
@@ -1075,7 +1069,7 @@ function createApiClient(config = DEFAULT_CONFIG) {
       return get("/api/search", { q, limit });
     },
     async sessions(q, filter) {
-      return get("/api/search/sessions", { q, ...filter });
+      return get("/api/sessions/search", { q, ...filter });
     }
   };
   const stats = {
@@ -1083,7 +1077,7 @@ function createApiClient(config = DEFAULT_CONFIG) {
       return get("/api/stats");
     },
     async byProvider() {
-      return get("/api/stats/by-provider");
+      return get("/api/stats/providers");
     }
   };
   const mcp = {
@@ -2530,22 +2524,6 @@ var API_CONFIG = {
   defaultTimeout: 3e4,
   version: "v1"
 };
-var API_ENDPOINTS = {
-  health: "/api/health",
-  stats: "/api/v1/stats",
-  workspaces: "/api/v1/workspaces",
-  sessions: "/api/v1/sessions",
-  messages: "/api/v1/messages",
-  providers: "/api/v1/providers",
-  agents: "/api/v1/agents",
-  swarms: "/api/v1/swarms",
-  runs: "/api/v1/runs",
-  chat: "/api/v1/chat",
-  search: "/api/v1/search",
-  mcp: "/api/v1/mcp",
-  export: "/api/v1/export",
-  import: "/api/v1/import"
-};
 var SESSION_FORMAT = {
   version: 3,
   maxMessages: 1e3,
@@ -3528,6 +3506,6 @@ var HOOK_ACTIONS = {
   translate: { id: "translate", name: "Translate", category: "ai" }
 };
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, CHUNKING_DEFAULTS, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SMART_COLLECTIONS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, EMBEDDING_MODELS, EXPORT_FORMATS, HIGHLIGHT_COLORS, HOOK_ACTIONS, HOOK_TRIGGERS, INTEGRATIONS, INTEGRATION_CATEGORIES, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ORCHESTRATION_MODES, PERMISSION_HIERARCHY, PRESENCE_COLORS, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWARM_STATUSES, SWARM_TEMPLATES, SWE_PROJECT_TEMPLATES, SYSTEM_TAGS, TAG_COLORS, TAG_COLOR_STYLES, TAG_COLOR_STYLES_DARK, TASK_STATUSES, TEMPLATE_CATEGORIES, TOOL_CATEGORIES, VLA_MODELS, VLM_MODELS, api, buildFolderTree, buildTagPath, calculateCompressionRatio, capitalize, chunk, chunkText, cosineSimilarity, countTotalTokens, createApiClient, debounce, deepClone, deepMerge, delay, downloadExport, estimateTokenCount, estimateTokens, evaluateCondition, exportSession, exportToHtml, exportToJson, exportToMarkdown, exportToPdf, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatShortcut, formatTime, formatTokens, generateCollectionId, generateShortId, generateTagId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, getInitials, getModelsByCategory, getTagColorStyles, getUserColor, getVLAModels, getVLMModels, groupBy, hasPermission, hexToRgb, initialSelectionState, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, matchesShortcut, normalizePath, normalizeVector, omit, parseKeyboardEvent, pick, retry, rgbToHex, safeJsonParse, selectionReducer, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, BUILTIN_TEMPLATES, BUILT_IN_TEMPLATES, CHUNKING_DEFAULTS, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, DEFAULT_INDEX_SETTINGS, DEFAULT_SEARCH_OPTIONS, DEFAULT_SHORTCUTS, DEFAULT_SMART_COLLECTIONS, DEFAULT_SUMMARIZATION_OPTIONS, DEFAULT_TAGS, DEFAULT_TEAM_PERMISSIONS, EMBEDDING_MODELS, EXPORT_FORMATS, HIGHLIGHT_COLORS, HOOK_ACTIONS, HOOK_TRIGGERS, INTEGRATIONS, INTEGRATION_CATEGORIES, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ORCHESTRATION_MODES, PERMISSION_HIERARCHY, PRESENCE_COLORS, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SHORTCUT_CATEGORIES, SUBSCRIPTION_TIERS, SUMMARY_TYPE_CONFIG, SWARM_STATUSES, SWARM_TEMPLATES, SWE_PROJECT_TEMPLATES, SYSTEM_TAGS, TAG_COLORS, TAG_COLOR_STYLES, TAG_COLOR_STYLES_DARK, TASK_STATUSES, TEMPLATE_CATEGORIES, TOOL_CATEGORIES, VLA_MODELS, VLM_MODELS, api, buildFolderTree, buildTagPath, calculateCompressionRatio, capitalize, chunk, chunkText, cosineSimilarity, countTotalTokens, createApiClient, debounce, deepClone, deepMerge, delay, downloadExport, estimateTokenCount, estimateTokens, evaluateCondition, exportSession, exportToHtml, exportToJson, exportToMarkdown, exportToPdf, extractFirstLine, extractSessionTitle, formatBytes, formatDate, formatDateISO, formatDuration, formatNumber, formatRelativeTime, formatShortcut, formatTime, formatTokens, generateCollectionId, generateShortId, generateTagId, generateTimestampId, generateUUID, getDirectory, getExtension, getFileName, getInitials, getModelsByCategory, getTagColorStyles, getUserColor, getVLAModels, getVLMModels, groupBy, hasPermission, hexToRgb, initialSelectionState, isColorDark, isToday, isValidJson, isValidUUID, isValidUrl, isWithinDays, matchesShortcut, normalizePath, normalizeVector, omit, parseKeyboardEvent, pick, retry, rgbToHex, safeJsonParse, selectionReducer, slugify, sortBy, stripMarkdown, throttle, toTitleCase, truncate, uniqueBy };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

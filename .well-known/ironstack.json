@@ -1,0 +1,171 @@
+{
+  "ironstack": "1",
+  "id": "chasm",
+  "product": "Chasm",
+  "layer": "tools",
+  "role": "Chat session capture and recovery across AI providers: workspace discovery, orphaned-session recovery, chronological merging, and full-text search over a harvested store. The one tool in the stack whose subject is the agent transcript itself, which is what makes an agent's own history durable rather than a side effect of whichever editor produced it.",
+  "surfaces": [
+    "cli",
+    "tui",
+    "rest",
+    "mcp"
+  ],
+  "ontology": {
+    "command": "chasm schema ontology --json",
+    "document": "chasm-rust/ontology.yaml",
+    "schema": 1
+  },
+  "capabilities": [
+    {
+      "name": "schema.ontology",
+      "description": "Emit the cross-provider ontology: entity types, relationships, and semantic tags.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "list",
+      "description": "List workspaces, sessions, or paths.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "find",
+      "description": "Search workspaces or sessions by text pattern across title, content, and id.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "show",
+      "description": "Show a workspace, session, or path.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "detect",
+      "description": "Auto-detect workspace and provider information.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "doctor",
+      "description": "Check system environment, providers, and configuration health.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "inspect",
+      "description": "Inspect editor state databases, session indices, caches, and file validity.",
+      "requires_grant": false,
+      "budgeted": false
+    },
+    {
+      "name": "fetch",
+      "description": "Fetch chat sessions from workspaces, sessions, or paths into the local store.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "harvest",
+      "description": "Harvest chat sessions from all providers into the unified database.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "sync",
+      "description": "Sync sessions between the harvest database and provider workspaces.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "import",
+      "description": "Import session files from external directories into a workspace.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "export",
+      "description": "Export chat sessions to files outside the store.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "merge",
+      "description": "Merge chat sessions from workspaces, sessions, or paths chronologically.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "move",
+      "description": "Move chat sessions between workspaces.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "shard",
+      "description": "Split oversized sessions into linked shards by request count or file size.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "recover",
+      "description": "Recover lost chat sessions from backups, recording state, or corrupted files.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "register",
+      "description": "Add on-disk sessions to the editor's database index, making orphaned sessions visible.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "migration",
+      "description": "Move chat sessions between machines.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "git",
+      "description": "Version chat sessions through git.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "provider",
+      "description": "Manage LLM provider configuration.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "telemetry",
+      "description": "Manage anonymous usage data collection.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "watch",
+      "description": "Watch agent session directories for changes and auto-harvest.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "api",
+      "description": "Start the HTTP API server that serves the web frontend.",
+      "requires_grant": true,
+      "budgeted": false
+    },
+    {
+      "name": "run",
+      "description": "Launch an AI coding agent with auto-save, or run interactive tools.",
+      "requires_grant": true,
+      "budgeted": true
+    },
+    {
+      "name": "agency",
+      "description": "Manage agents and orchestration through the agent development kit.",
+      "requires_grant": true,
+      "budgeted": true
+    }
+  ],
+  "note": "Declares the top-level command groups, not the 137 REST operations, which are routed and documented but not yet enumerated here; silence about them is not a claim that they are absent. Two capabilities draw a budget because they spend model tokens on repetition -- `run` launches an agent and `agency` orchestrates them. The rest are granted and unbudgeted because they move bytes already on this machine: repetition costs disk and time, not money, and marking them budgeted would make a budget mean two different things. Reversibility, consequence and scope are left undeclared rather than guessed; an unmeasured axis satisfies no requirement, which is the honest reading until someone establishes them."
+}

@@ -478,22 +478,6 @@ declare const API_CONFIG: {
     readonly defaultTimeout: 30000;
     readonly version: "v1";
 };
-declare const API_ENDPOINTS: {
-    readonly health: "/api/health";
-    readonly stats: "/api/v1/stats";
-    readonly workspaces: "/api/v1/workspaces";
-    readonly sessions: "/api/v1/sessions";
-    readonly messages: "/api/v1/messages";
-    readonly providers: "/api/v1/providers";
-    readonly agents: "/api/v1/agents";
-    readonly swarms: "/api/v1/swarms";
-    readonly runs: "/api/v1/runs";
-    readonly chat: "/api/v1/chat";
-    readonly search: "/api/v1/search";
-    readonly mcp: "/api/v1/mcp";
-    readonly export: "/api/v1/export";
-    readonly import: "/api/v1/import";
-};
 declare const SESSION_FORMAT: {
     readonly version: 3;
     readonly maxMessages: 1000;
@@ -1682,4 +1666,4 @@ declare const HOOK_ACTIONS: {
 };
 type HookActionId = keyof typeof HOOK_ACTIONS;
 
-export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, API_ENDPOINTS, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ModelCategory, MultimodalModel, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId, VLA_MODELS, VLM_MODELS, getModelsByCategory, getVLAModels, getVLMModels };
+export { AGENT_ROLES, AGENT_STATUSES, API_CONFIG, type AgentRoleId, type AgentStatusType, DEFAULT_AGENTS, DEFAULT_AGENT_CONFIG, EXPORT_FORMATS, type ExportFormatType, HOOK_ACTIONS, HOOK_TRIGGERS, type HookActionId, type HookTriggerId, INTEGRATIONS, INTEGRATION_CATEGORIES, type IntegrationCategoryType, type IntegrationId, LIMITS, MEMORY_CONFIG, MODEL_CATEGORIES, MULTIMODAL_MODELS, ModelCategory, MultimodalModel, ORCHESTRATION_MODES, type OrchestrationModeId, PROACTIVE_AGENT_CONFIG, PROVIDERS, PROVIDER_STATUSES, type ProviderId, type ProviderStatusType, REMOTE_MONITOR_CONFIG, SESSION_FORMAT, SWARM_STATUSES, SWARM_TEMPLATES, type SwarmStatusType, TASK_STATUSES, TOOL_CATEGORIES, type TaskStatusType, type ToolCategoryId, VLA_MODELS, VLM_MODELS, getModelsByCategory, getVLAModels, getVLMModels };
