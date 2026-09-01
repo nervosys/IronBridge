@@ -6,6 +6,25 @@
 
 const API_BASE = 'http://localhost:8787';
 
+// Headers for an /api request, including a bearer token when one is stored.
+//
+// A Chasm server with CHASM_REQUIRE_AUTH set rejects unauthenticated /api calls
+// with 401. The token is saved under `accessToken` in extension storage (set it
+// from the options page after logging in); without one, requests go out
+// unauthenticated, which is correct against a server that does not require auth.
+async function apiHeaders(extra = {}) {
+    const headers = { Accept: 'application/json', 'Content-Type': 'application/json', ...extra };
+    try {
+        const { accessToken } = await chrome.storage.local.get('accessToken');
+        if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+    } catch (error) {
+        // Storage unavailable: send unauthenticated rather than fail outright.
+    }
+    return headers;
+}
+
 // Install event
 chrome.runtime.onInstalled.addListener(async () => {
     console.log('Chasm extension installed');
@@ -112,7 +131,7 @@ async function handleExportSession(tab) {
         if (response && response.session) {
             const apiResponse = await fetch(API_BASE + '/api/sessions', {
                 method: 'POST',
-                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                headers: await apiHeaders(),
                 body: JSON.stringify(response.session),
             });
             if (apiResponse.ok) {
@@ -139,7 +158,7 @@ async function handleExportSelection(info, tab) {
         };
         const apiResponse = await fetch(API_BASE + '/api/notes', {
             method: 'POST',
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            headers: await apiHeaders(),
             body: JSON.stringify(note),
         });
         if (apiResponse.ok) {
@@ -195,7 +214,7 @@ async function handleHarvest() {
     try {
         const response = await fetch(API_BASE + '/api/harvest', {
             method: 'POST',
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            headers: await apiHeaders(),
             body: JSON.stringify({ all: true }),
         });
         if (response.ok) {
@@ -212,7 +231,7 @@ async function handleHarvest() {
 // Check API connection
 async function checkApiConnection() {
     try {
-        const response = await fetch(API_BASE + '/api/health');
+        const response = await fetch(API_BASE + '/api/health', { headers: await apiHeaders() });
         return { connected: response.ok };
     } catch {
         return { connected: false };

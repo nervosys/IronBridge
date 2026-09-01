@@ -257,27 +257,36 @@ pub struct Claims {
 // Enforcement middleware
 // =============================================================================
 
-/// Environment variable that turns `/api` authentication on.
+/// Opt **out** of `/api` authentication -- for a trusted single-user machine.
+pub const DISABLE_AUTH_ENV: &str = "CHASM_DISABLE_AUTH";
+
+/// Legacy opt-**in** switch, kept working. Once the default became "on", this
+/// is redundant, but a deployment that set it should not suddenly behave
+/// differently, so it is still honoured as a no-op-that-confirms-on.
 pub const REQUIRE_AUTH_ENV: &str = "CHASM_REQUIRE_AUTH";
 
 /// Whether every `/api` route requires a valid Bearer token, resolved once.
 ///
-/// Off by default, and deliberately. Chasm is local-first: the server binds to
-/// loopback unless told otherwise, the shipped clients do not yet send a token,
-/// and there is no login screen in the web UI. Forcing auth on by default would
-/// lock every existing user out of their own machine with no way back in. So
-/// the control is here and real, but an operator arms it -- typically the same
-/// operator who binds to `0.0.0.0` and thereby needs it.
+/// **On by default.** The web and desktop clients present a login screen and
+/// attach a token, so an authenticated API is the safe posture to ship. A
+/// single-user machine that wants the old open behaviour sets
+/// `CHASM_DISABLE_AUTH=1` and takes responsibility for it -- appropriate when
+/// the server is bound to loopback and nothing else can reach it.
 ///
-/// When armed, `require_auth` below rejects any `/api` request (except
+/// The precedence is "secure unless explicitly told otherwise": if
+/// `CHASM_DISABLE_AUTH` is set, auth is off; otherwise it is on, whether or not
+/// the old `CHASM_REQUIRE_AUTH` is present.
+///
+/// When on, `require_auth` below rejects any `/api` request (except
 /// `/api/health`) that does not carry a valid token.
 pub fn auth_required() -> bool {
     use std::sync::OnceLock;
     static REQUIRED: OnceLock<bool> = OnceLock::new();
     *REQUIRED.get_or_init(|| {
-        std::env::var(REQUIRE_AUTH_ENV)
+        let disabled = std::env::var(DISABLE_AUTH_ENV)
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false)
+            .unwrap_or(false);
+        !disabled
     })
 }
 
@@ -1606,7 +1615,7 @@ mod enforcement_tests {
             let s = actix_web::test::call_service(&app, get("/api/health", None)).await;
             assert_eq!(s.status(), 200);
         } else {
-            // The shipped default: everything open.
+            // CHASM_DISABLE_AUTH is set in this environment: everything open.
             let s = actix_web::test::call_service(&app, get("/api/sessions", None)).await;
             assert_eq!(s.status(), 200);
             let s = actix_web::test::call_service(&app, get("/api/health", None)).await;

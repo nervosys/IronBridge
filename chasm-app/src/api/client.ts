@@ -94,10 +94,59 @@ export const testApiConnection = async (): Promise<boolean> => {
     }
 };
 
-// Request interceptor for logging
+// Bearer token for a server that has CHASM_REQUIRE_AUTH set. Absent by default;
+// the same key the web client uses, so the two agree on "logged in".
+const ACCESS_TOKEN_KEY = 'csm_access_token';
+
+export async function getAuthToken(): Promise<string | null> {
+    try {
+        return await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    } catch {
+        return null;
+    }
+}
+
+export async function setAuthToken(token: string): Promise<void> {
+    await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+export async function clearAuthToken(): Promise<void> {
+    await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
+/**
+ * Log in against `/auth/login` and store the token.
+ *
+ * `/auth/*` stays open even when `/api` is gated, so this works before the app
+ * has a token. On success every subsequent request carries the token via the
+ * interceptor below.
+ */
+export async function login(
+    email: string,
+    password: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+        const resp = await apiClient.post('/auth/login', { email, password });
+        const token = resp.data?.data?.access_token;
+        if (!token) return { ok: false, error: 'The server returned no token.' };
+        await setAuthToken(token);
+        return { ok: true };
+    } catch (error: unknown) {
+        const message =
+            (error as { message?: string })?.message ?? 'Login failed';
+        return { ok: false, error: message };
+    }
+}
+
+// Request interceptor: attach the token when we have one, and log.
 apiClient.interceptors.request.use(
-    (config) => {
+    async (config) => {
         console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
+        const token = await getAuthToken();
+        if (token) {
+            config.headers = config.headers ?? {};
+            config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
     },
     (error) => {
@@ -112,6 +161,12 @@ apiClient.interceptors.response.use(
     (error) => {
         if (error.response) {
             console.error(`[API] Error ${error.response.status}:`, error.response.data);
+
+            // A 401 means the token is missing or stale. Drop it so the app
+            // stops sending a rejected credential and can prompt for login.
+            if (error.response.status === 401) {
+                void clearAuthToken();
+            }
 
             // Carry the server's own explanation onto `error.message`.
             //
