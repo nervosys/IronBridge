@@ -116,6 +116,15 @@ pub trait DatabaseOps {
 
     // -- SSO flow state and sessions ----------------------------------------
     fn store_sso_request_state(&self, state: &SsoRequestState) -> Result<(), String>;
+    /// Fetch a pending SAML request state by its `request_id` **and delete it**,
+    /// atomically -- the same single-use contract as [`Self::take_oidc_login_state`].
+    ///
+    /// A SAML Response is only accepted if it names a request this SP actually
+    /// made (`InResponseTo`), and consuming the state here is what makes that a
+    /// one-time acceptance: a replayed response finds the state already gone,
+    /// and an unsolicited one names a `request_id` that was never stored.
+    /// Implementors must not offer a non-consuming read.
+    fn take_sso_request_state(&self, request_id: &str) -> Result<Option<SsoRequestState>, String>;
     fn store_sso_session(&self, session: &SsoSession) -> Result<(), String>;
 
     // -- OIDC identity providers --------------------------------------------
