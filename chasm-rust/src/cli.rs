@@ -2198,8 +2198,13 @@ pub enum ShardCommands {
 pub enum ApiCommands {
     /// Start the API server
     Serve {
-        /// Host to bind to (default: 0.0.0.0 for all interfaces)
-        #[arg(long, default_value = "0.0.0.0")]
+        /// Host to bind to. Defaults to 127.0.0.1 (this machine only).
+        ///
+        /// Pass --host 0.0.0.0 to expose the server on all interfaces. Do that
+        /// deliberately: the API has endpoints that run commands and read local
+        /// data, and binding to the network makes them reachable by anything
+        /// that can route to this host.
+        #[arg(long, default_value = "127.0.0.1")]
         host: String,
 
         /// Port to listen on (default: 8787)

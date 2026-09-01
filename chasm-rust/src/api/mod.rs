@@ -130,7 +130,7 @@ impl ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(), // Bind to all interfaces
+            host: "127.0.0.1".to_string(), // Loopback only; opt into 0.0.0.0 explicitly.
             port: 8787,
             database_path: dirs::data_local_dir()
                 .map(|p| p.join("csm").join("csm.db").to_string_lossy().to_string())
