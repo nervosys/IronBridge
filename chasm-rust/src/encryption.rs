@@ -64,10 +64,32 @@ pub struct EncryptionManager {
     enabled: bool,
 }
 
+/// PBKDF2 iteration count for data written from now on -- OWASP's current
+/// floor for PBKDF2-HMAC-SHA256.
+pub const KDF_ITERATIONS_CURRENT: u32 = 600_000;
+
+/// The count everything before the per-record migration was written under.
+/// A stored record with no recorded count is assumed to be one of these.
+pub const KDF_ITERATIONS_LEGACY: u32 = 100_000;
+
 impl EncryptionManager {
-    /// Create a new encryption manager with a password
+    /// Create a new encryption manager with a password, at the legacy count.
+    ///
+    /// Kept for existing callers and tests. New code that stores the iteration
+    /// count should use [`EncryptionManager::new_with_iterations`] so the count
+    /// it derived under travels with the ciphertext.
     pub fn new(password: &str, salt: &[u8]) -> Result<Self> {
-        let key = Self::derive_key(password, salt)?;
+        Self::new_with_iterations(password, salt, KDF_ITERATIONS_LEGACY)
+    }
+
+    /// Create a manager whose key is derived at an explicit iteration count.
+    ///
+    /// The count is not part of the key or the ciphertext, so whoever decrypts
+    /// must derive at the same count. That is exactly why the credential store
+    /// records it per row: a credential written at 600k and one written at 100k
+    /// both decrypt, each with the count it was written under.
+    pub fn new_with_iterations(password: &str, salt: &[u8], iterations: u32) -> Result<Self> {
+        let key = Self::derive_key(password, salt, iterations)?;
         Ok(Self { key, enabled: true })
     }
 
@@ -84,21 +106,16 @@ impl EncryptionManager {
         self.enabled
     }
 
-    /// Derive encryption key from password using PBKDF2
-    fn derive_key(password: &str, salt: &[u8]) -> Result<Key<Aes256Gcm>> {
-        // PBKDF2-HMAC-SHA256 with 100,000 iterations.
-        //
-        // OWASP's current floor for this construction is 600,000, and this
-        // should rise to meet it -- but the iteration count is NOT stored
-        // alongside the ciphertext, and this same function guards the encrypted
-        // provider-credential store. Changing the count here re-derives a
-        // different key and makes every already-encrypted credential fail to
-        // decrypt. Raising it therefore needs a stored per-record iteration
-        // count and a migration, not a one-line edit; until then it stays at
-        // the value existing data was written under.
+    /// Derive an AES-256 key from a password with PBKDF2-HMAC-SHA256.
+    ///
+    /// The iteration count is a parameter, not a constant, precisely because it
+    /// changed: raising it re-derives a different key, so the count that wrote a
+    /// ciphertext is the only count that can read it. The credential store keeps
+    /// the count per row for that reason; see `handlers_simple::read_credential`.
+    fn derive_key(password: &str, salt: &[u8], iterations: u32) -> Result<Key<Aes256Gcm>> {
         let mut key = [0u8; KEY_SIZE];
 
-        pbkdf2::pbkdf2_hmac::<sha2::Sha256>(password.as_bytes(), salt, 100_000, &mut key);
+        pbkdf2::pbkdf2_hmac::<sha2::Sha256>(password.as_bytes(), salt, iterations, &mut key);
 
         Ok(*Key::<Aes256Gcm>::from_slice(&key))
     }
