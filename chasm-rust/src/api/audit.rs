@@ -797,8 +797,8 @@ impl AuditService {
                 event.outcome,
                 csv_escape(actor_id),
                 csv_escape(actor_email),
-                resource_type,
-                resource_id,
+                csv_escape(resource_type),
+                csv_escape(resource_id),
                 csv_escape(&event.description),
                 csv_escape(error),
             ));
@@ -809,10 +809,28 @@ impl AuditService {
 }
 
 fn csv_escape(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    // Neutralise spreadsheet formula injection. A cell a spreadsheet would
+    // evaluate -- one starting `=`, `+`, `-`, `@`, or a tab/CR that can smuggle
+    // a formula past a naive check -- is prefixed with a quote so it is read as
+    // text. Audit rows carry attacker-influenced strings (an actor email, a
+    // description, an error message), and a CSV is opened in Excel, so this is
+    // the realistic exposure.
+    let leads_formula = s
+        .chars()
+        .next()
+        .is_some_and(|c| matches!(c, '=' | '+' | '-' | '@' | '\t' | '\r'));
+    let guarded = if leads_formula {
+        format!("'{s}")
     } else {
         s.to_string()
+    };
+
+    // RFC 4180 quoting for the field separators, plus the formula-guarded case
+    // (which must be quoted so the leading quote is preserved literally).
+    if leads_formula || guarded.contains(',') || guarded.contains('"') || guarded.contains('\n') {
+        format!("\"{}\"", guarded.replace('"', "\"\""))
+    } else {
+        guarded
     }
 }
 
@@ -1026,4 +1044,26 @@ macro_rules! audit {
                 $(.detail($key, $value))*
         ).await
     };
+}
+
+#[cfg(test)]
+mod csv_tests {
+    use super::csv_escape;
+
+    #[test]
+    fn csv_escape_quotes_separators() {
+        assert_eq!(csv_escape("plain"), "plain");
+        assert_eq!(csv_escape("a,b"), "\"a,b\"");
+        assert_eq!(csv_escape("she said \"hi\""), "\"she said \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn csv_escape_neutralises_formula_injection() {
+        // A cell a spreadsheet would evaluate is prefixed with a quote and
+        // wrapped, so it is text, not a formula.
+        for payload in ["=1+1", "+cmd", "-2", "@SUM(A1)", "\t=evil"] {
+            let out = csv_escape(payload);
+            assert!(out.starts_with("\"'"), "not guarded: {payload:?} -> {out}");
+        }
+    }
 }
