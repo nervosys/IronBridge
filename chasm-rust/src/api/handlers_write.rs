@@ -599,25 +599,77 @@ pub async fn search(state: web::Data<AppState>, query: web::Query<SearchQuery>) 
         // Message hits, when the normalized table is present.
         if table_exists(&db.conn, "messages_v2") && (results.len() as i64) < limit {
             let remaining = limit - results.len() as i64;
-            let mut stmt = db.conn.prepare(
-                "SELECT m.session_id, s.title, m.content_raw, s.updated_at
-                 FROM messages_v2 m JOIN sessions s ON s.id = m.session_id
-                 WHERE m.content_raw LIKE ?1 COLLATE NOCASE
-                 ORDER BY s.updated_at DESC LIMIT ?2",
-            )?;
-            let hits = stmt.query_map(params![term, remaining], |row| {
-                let content: String = row.get(2)?;
-                Ok(json!({
-                    "type": "message",
-                    "id": row.get::<_, String>(0)?,
-                    "sessionId": row.get::<_, String>(0)?,
-                    "title": row.get::<_, String>(1)?,
-                    "snippet": snippet(&content, 200),
-                    "timestamp": row.get::<_, Option<i64>>(3)?,
-                }))
-            })?;
+
+            // Fast path: the FTS5 index, when it exists and the query yields a
+            // usable MATCH expression. This turns a full `content_raw LIKE`
+            // scan -- O(rows), the slow part of search on a large history --
+            // into an indexed lookup. `snippet()` and `rank` are valid here
+            // because `messages_fts` is matched directly, with no GROUP BY and
+            // no wrapping subquery (the two shapes SQLite rejects with "unable
+            // to use function snippet in the requested context"). Any FTS error
+            // falls through to the LIKE scan, so the fast path can only ever add
+            // speed, never remove a result the substring scan would have found.
+            let fts_hits: Option<Vec<Value>> = if table_exists(&db.conn, "messages_fts") {
+                fts_query_from(q).and_then(|match_q| {
+                    (|| -> rusqlite::Result<Vec<Value>> {
+                        let mut stmt = db.conn.prepare(
+                            "SELECT m.session_id, s.title,
+                                    snippet(messages_fts, 0, '', '', '...', 40),
+                                    s.updated_at
+                             FROM messages_fts
+                             JOIN messages_v2 m ON m.id = messages_fts.rowid
+                             JOIN sessions s ON s.id = m.session_id
+                             WHERE messages_fts MATCH ?1
+                             ORDER BY rank LIMIT ?2",
+                        )?;
+                        let rows = stmt
+                            .query_map(params![match_q, remaining], |row| {
+                                Ok(json!({
+                                    "type": "message",
+                                    "id": row.get::<_, String>(0)?,
+                                    "sessionId": row.get::<_, String>(0)?,
+                                    "title": row.get::<_, String>(1)?,
+                                    "snippet": row.get::<_, String>(2)?,
+                                    "timestamp": row.get::<_, Option<i64>>(3)?,
+                                }))
+                            })?
+                            .collect::<rusqlite::Result<Vec<_>>>()?;
+                        Ok(rows)
+                    })()
+                    .ok()
+                })
+            } else {
+                None
+            };
+
+            let hits: Vec<Value> = match fts_hits {
+                Some(hits) => hits,
+                None => {
+                    // Fallback: the substring scan. Always correct, just slower.
+                    let mut stmt = db.conn.prepare(
+                        "SELECT m.session_id, s.title, m.content_raw, s.updated_at
+                         FROM messages_v2 m JOIN sessions s ON s.id = m.session_id
+                         WHERE m.content_raw LIKE ?1 COLLATE NOCASE
+                         ORDER BY s.updated_at DESC LIMIT ?2",
+                    )?;
+                    let rows = stmt
+                        .query_map(params![term, remaining], |row| {
+                            let content: String = row.get(2)?;
+                            Ok(json!({
+                                "type": "message",
+                                "id": row.get::<_, String>(0)?,
+                                "sessionId": row.get::<_, String>(0)?,
+                                "title": row.get::<_, String>(1)?,
+                                "snippet": snippet(&content, 200),
+                                "timestamp": row.get::<_, Option<i64>>(3)?,
+                            }))
+                        })?
+                        .collect::<rusqlite::Result<Vec<_>>>()?;
+                    rows
+                }
+            };
             for hit in hits {
-                results.push(hit?);
+                results.push(hit);
             }
         }
 
@@ -627,6 +679,37 @@ pub async fn search(state: web::Data<AppState>, query: web::Query<SearchQuery>) 
     match result {
         Ok(rows) => ok(rows),
         Err(e) => db_error(e),
+    }
+}
+
+/// Turn a user's free-text query into a safe FTS5 MATCH expression.
+///
+/// Each whitespace-separated token becomes a prefix term (`token*`), AND-ed
+/// together, so "quick sort" matches a message with a word starting "quick"
+/// and one starting "sort". Prefix matching is what a search box is expected
+/// to do -- "quick" finding "quicksort" -- and is closer to the old substring
+/// behaviour than exact-token matching would be.
+///
+/// Every token is reduced to alphanumerics and `_` first, so an FTS operator,
+/// a stray quote or a bare `*` in the input can never assemble into a
+/// malformed MATCH expression. When nothing usable survives (a query of pure
+/// punctuation), this returns `None` and the caller uses the LIKE scan, which
+/// has no such syntax to trip over.
+fn fts_query_from(user: &str) -> Option<String> {
+    let terms: Vec<String> = user
+        .split_whitespace()
+        .map(|tok| {
+            tok.chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_')
+                .collect::<String>()
+        })
+        .filter(|t| !t.is_empty())
+        .map(|t| format!("{t}*"))
+        .collect();
+    if terms.is_empty() {
+        None
+    } else {
+        Some(terms.join(" "))
     }
 }
 
@@ -2534,6 +2617,93 @@ mod tests {
             "snippet missing the term: {}",
             hit["snippet"]
         );
+    }
+
+    /// A word prefix matches: "quick" finds "quicksort". The FTS fast path
+    /// searches by prefix term, which is what a search box is expected to do.
+    #[tokio::test]
+    async fn search_matches_a_word_prefix() {
+        let (state, _d) = temp_state("search-prefix");
+        let app = app!(state);
+        let sid = make_session(&app).await;
+        {
+            let db = state.db.lock().unwrap();
+            db.conn
+                .execute(
+                    "INSERT INTO messages_v2 (session_id, message_index, role, content_raw)
+                     VALUES (?1, 0, 'assistant', 'implementing quicksort today')",
+                    params![sid],
+                )
+                .expect("insert message");
+        }
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/search?q=quick")
+                .to_request(),
+        )
+        .await;
+        let body = body_json(resp).await;
+        let rows = body["data"].as_array().expect("array");
+        assert!(
+            rows.iter()
+                .any(|r| r["type"] == "message" && r["sessionId"] == sid),
+            "prefix search found nothing: {rows:?}"
+        );
+    }
+
+    /// Without the FTS index, search still works via the LIKE fallback -- and
+    /// because LIKE is a substring match, a mid-word fragment ("sort" inside
+    /// "quicksort") that the token-prefix index could not find proves the
+    /// fallback actually ran.
+    #[tokio::test]
+    async fn search_falls_back_to_like_without_the_fts_index() {
+        let (state, _d) = temp_state("search-fallback");
+        let app = app!(state);
+        let sid = make_session(&app).await;
+        {
+            let db = state.db.lock().unwrap();
+            db.conn
+                .execute(
+                    "INSERT INTO messages_v2 (session_id, message_index, role, content_raw)
+                     VALUES (?1, 0, 'assistant', 'implementing quicksort today')",
+                    params![sid],
+                )
+                .expect("insert message");
+            db.conn
+                .execute_batch(
+                    "DROP TRIGGER IF EXISTS messages_v2_ai;
+                     DROP TRIGGER IF EXISTS messages_v2_ad;
+                     DROP TRIGGER IF EXISTS messages_v2_au;
+                     DROP TABLE IF EXISTS messages_fts;",
+                )
+                .expect("drop fts");
+        }
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/search?q=sort")
+                .to_request(),
+        )
+        .await;
+        let body = body_json(resp).await;
+        let rows = body["data"].as_array().expect("array");
+        assert!(
+            rows.iter()
+                .any(|r| r["type"] == "message" && r["sessionId"] == sid),
+            "LIKE fallback found nothing: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn fts_query_from_sanitises_and_prefixes() {
+        assert_eq!(
+            fts_query_from("quick sort").as_deref(),
+            Some("quick* sort*")
+        );
+        assert_eq!(fts_query_from("a*b (c)").as_deref(), Some("ab* c*"));
+        assert_eq!(fts_query_from("   "), None);
+        assert_eq!(fts_query_from("!@#$"), None);
     }
 
     #[tokio::test]
