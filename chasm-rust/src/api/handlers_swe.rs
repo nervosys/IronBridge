@@ -1256,6 +1256,23 @@ pub async fn execute_tool(
             }
         }
         "run_command" => {
+            // Arbitrary command execution, off unless the operator opts in.
+            //
+            // This runs whatever string it is given through `cmd /C` / `sh -c`.
+            // The endpoint carries no authentication, so with it enabled anyone
+            // who can reach the API can run commands as this process -- which,
+            // before the bind default moved to loopback, meant anyone on the
+            // network. It stays disabled until `CHASM_ENABLE_RUN_COMMAND=1`, so
+            // the capability is a deliberate choice, not a default.
+            let enabled = std::env::var("CHASM_ENABLE_RUN_COMMAND")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            if !enabled {
+                return ApiResponse::<()>::error(
+                    "run_command is disabled. Set CHASM_ENABLE_RUN_COMMAND=1 in the server's \
+                     environment to allow it, and only bind the server to a trusted interface.",
+                );
+            }
             let command = body.input["command"].as_str().unwrap_or("");
             let working_dir = body.input["workingDirectory"]
                 .as_str()
@@ -1435,5 +1452,85 @@ fn resolve_path(base: &std::path::Path, relative: &str) -> PathBuf {
         path
     } else {
         base.join(relative)
+    }
+}
+
+#[cfg(test)]
+mod run_command_gate_tests {
+    use super::*;
+    use crate::ChatDatabase;
+    use actix_web::{test, App};
+
+    /// `run_command` must refuse unless `CHASM_ENABLE_RUN_COMMAND` is set.
+    ///
+    /// This is the endpoint that gave unauthenticated arbitrary command
+    /// execution: no `AuthenticatedUser`, a `command` string run through
+    /// `cmd /C` / `sh -c`. The gate is the guard; this proves the default is
+    /// closed. The test never sets the env var, so it asserts the shipped
+    /// default -- a `whoami` here must not run.
+    #[tokio::test]
+    async fn run_command_is_refused_by_default() {
+        // Guard against a polluted environment: if something set the flag, the
+        // default this test exists to check is not observable.
+        assert!(
+            std::env::var("CHASM_ENABLE_RUN_COMMAND").is_err(),
+            "CHASM_ENABLE_RUN_COMMAND is set in the test environment; \
+             this test can only verify the default when it is unset"
+        );
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("swe-gate.db");
+        crate::commands::create_harvest_database(&db_path).expect("schema");
+        {
+            let conn = rusqlite::Connection::open(&db_path).expect("open");
+            init_swe_tables(&conn).expect("swe tables");
+        }
+        let db = ChatDatabase::open(&db_path).expect("open");
+        let state = web::Data::new(AppState::new(db, db_path));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(crate::api::configure_routes),
+        )
+        .await;
+
+        let created = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/swe/projects")
+                .set_json(serde_json::json!({
+                    "name": "p",
+                    "path": dir.path().to_string_lossy()
+                }))
+                .to_request(),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(created).await;
+        let pid = body["data"]["id"].as_str().expect("project id").to_string();
+
+        let resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(&format!("/api/swe/projects/{pid}/execute"))
+                .set_json(serde_json::json!({
+                    "tool": "run_command",
+                    "input": { "command": "whoami" }
+                }))
+                .to_request(),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["success"], false, "run_command ran with no opt-in");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("run_command is disabled"),
+            "unexpected error: {}",
+            body["error"]
+        );
+        // A refusal must carry no command output.
+        assert!(body["data"]["stdout"].as_str().unwrap_or("").is_empty());
     }
 }

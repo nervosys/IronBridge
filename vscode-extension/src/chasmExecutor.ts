@@ -10,7 +10,12 @@ import * as util from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const execPromise = util.promisify(cp.exec);
+// execFile, not exec: the arguments are passed to the binary directly as an
+// argv array with no shell in between, so a search query or a path containing
+// a quote, a backtick or `$(...)` is data, never a command. The previous
+// implementation built a shell string -- `"${binary}" ${args.join(' ')}` --
+// and `harvest search "foo\"; rm -rf ~; \""` would have run `rm -rf ~`.
+const execFilePromise = util.promisify(cp.execFile);
 
 export interface ChasmResult {
     success: boolean;
@@ -109,12 +114,12 @@ export class ChasmExecutor {
     }
 
     async execute(args: string[]): Promise<ChasmResult> {
-        const command = `"${this.binaryPath}" ${args.join(' ')}`;
-        this.log(`Executing: ${command}`);
+        this.log(`Executing: ${this.binaryPath} ${args.join(' ')}`);
 
         try {
-            const { stdout, stderr } = await execPromise(command, {
-                maxBuffer: 10 * 1024 * 1024  // 10MB buffer for large outputs
+            const { stdout, stderr } = await execFilePromise(this.binaryPath, args, {
+                maxBuffer: 10 * 1024 * 1024,  // 10MB buffer for large outputs
+                windowsHide: true
             });
 
             if (stderr) {
@@ -144,43 +149,43 @@ export class ChasmExecutor {
     }
 
     async listSessions(projectPath: string): Promise<ChasmResult> {
-        return this.execute(['list', 'path', `"${projectPath}"`]);
+        return this.execute(['list', 'path', projectPath]);
     }
 
     async findWorkspace(pattern: string): Promise<ChasmResult> {
-        return this.execute(['find', 'workspace', `"${pattern}"`]);
+        return this.execute(['find', 'workspace', pattern]);
     }
 
     async showHistory(projectPath: string): Promise<ChasmResult> {
-        return this.execute(['show', 'path', `"${projectPath}"`]);
+        return this.execute(['show', 'path', projectPath]);
     }
 
     // ── Session operations ─────────────────────────────────────────────
 
     async fetchHistory(projectPath: string): Promise<ChasmResult> {
-        return this.execute(['fetch', 'path', `"${projectPath}"`]);
+        return this.execute(['fetch', 'path', projectPath]);
     }
 
     async mergeHistory(projectPath: string): Promise<ChasmResult> {
-        return this.execute(['merge', 'path', `"${projectPath}"`]);
+        return this.execute(['merge', 'path', projectPath]);
     }
 
     async exportSessions(dest: string, projectPath: string): Promise<ChasmResult> {
-        return this.execute(['export', 'path', `"${dest}"`, `"${projectPath}"`]);
+        return this.execute(['export', 'path', dest, projectPath]);
     }
 
     async importSessions(src: string, targetPath: string): Promise<ChasmResult> {
-        return this.execute(['import', 'path', `"${src}"`, `"${targetPath}"`]);
+        return this.execute(['import', 'path', src, targetPath]);
     }
 
     async moveSessions(sourceHash: string, targetPath: string): Promise<ChasmResult> {
-        return this.execute(['move', `"${sourceHash}"`, `"${targetPath}"`]);
+        return this.execute(['move', sourceHash, targetPath]);
     }
 
     async searchSessions(query: string, projectPath?: string): Promise<ChasmResult> {
-        const args = ['find', 'session', `"${query}"`];
+        const args = ['find', 'session', query];
         if (projectPath) {
-            args.push('--path', `"${projectPath}"`);
+            args.push('--path', projectPath);
         }
         return this.execute(args);
     }
@@ -190,7 +195,7 @@ export class ChasmExecutor {
     async harvestSessions(projectPath?: string): Promise<ChasmResult> {
         const args = ['harvest', 'run'];
         if (projectPath) {
-            args.push('--path', `"${projectPath}"`);
+            args.push('--path', projectPath);
         }
         return this.execute(args);
     }
@@ -204,7 +209,7 @@ export class ChasmExecutor {
     }
 
     async harvestSearch(query: string): Promise<ChasmResult> {
-        return this.execute(['harvest', 'search', `"${query}"`]);
+        return this.execute(['harvest', 'search', query]);
     }
 
     // ── Doctor / Health checks ─────────────────────────────────────────
@@ -228,7 +233,7 @@ export class ChasmExecutor {
     // ── Register / Repair commands ─────────────────────────────────────
 
     async registerAll(projectPath: string, force: boolean = false): Promise<ChasmResult> {
-        const args = ['register', 'all', '--path', `"${projectPath}"`];
+        const args = ['register', 'all', '--path', projectPath];
         if (force) {
             args.push('--force');
         }
@@ -252,7 +257,7 @@ export class ChasmExecutor {
         dryRun: boolean = false,
         force: boolean = false
     ): Promise<ChasmResult> {
-        const args = ['register', 'repair', '--recursive', '--path', `"${scanPath}"`];
+        const args = ['register', 'repair', '--recursive', '--path', scanPath];
         if (depth !== undefined) {
             args.push('--depth', depth.toString());
         }
@@ -272,7 +277,7 @@ export class ChasmExecutor {
     // ── Detect / Recover commands ──────────────────────────────────────
 
     async detectOrphaned(projectPath: string, recover: boolean = false): Promise<ChasmResult> {
-        const args = ['detect', 'orphaned', `"${projectPath}"`];
+        const args = ['detect', 'orphaned', projectPath];
         if (recover) {
             args.push('--recover');
         }
@@ -304,10 +309,10 @@ export class ChasmExecutor {
     async syncPull(provider?: string, workspace?: string, dryRun: boolean = false): Promise<ChasmResult> {
         const args = ['sync', '--pull'];
         if (provider) {
-            args.push('--provider', `"${provider}"`);
+            args.push('--provider', provider);
         }
         if (workspace) {
-            args.push('--workspace', `"${workspace}"`);
+            args.push('--workspace', workspace);
         }
         if (dryRun) {
             args.push('--dry-run');
@@ -318,10 +323,10 @@ export class ChasmExecutor {
     async syncPush(provider?: string, workspace?: string, dryRun: boolean = false): Promise<ChasmResult> {
         const args = ['sync', '--push'];
         if (provider) {
-            args.push('--provider', `"${provider}"`);
+            args.push('--provider', provider);
         }
         if (workspace) {
-            args.push('--workspace', `"${workspace}"`);
+            args.push('--workspace', workspace);
         }
         if (dryRun) {
             args.push('--dry-run');
@@ -338,25 +343,25 @@ export class ChasmExecutor {
     // ── Git operations ─────────────────────────────────────────────────
 
     async gitInit(projectPath: string): Promise<ChasmResult> {
-        return this.execute(['git', 'init', `"${projectPath}"`]);
+        return this.execute(['git', 'init', projectPath]);
     }
 
     async gitAdd(projectPath: string, commitMessage?: string): Promise<ChasmResult> {
-        const args = ['git', 'add', `"${projectPath}"`];
+        const args = ['git', 'add', projectPath];
         if (commitMessage) {
-            args.push('--message', `"${commitMessage}"`);
+            args.push('--message', commitMessage);
         }
         return this.execute(args);
     }
 
     async gitStatus(projectPath: string): Promise<ChasmResult> {
-        return this.execute(['git', 'status', `"${projectPath}"`]);
+        return this.execute(['git', 'status', projectPath]);
     }
 
     async gitSnapshot(projectPath: string, tag?: string): Promise<ChasmResult> {
-        const args = ['git', 'snapshot', `"${projectPath}"`];
+        const args = ['git', 'snapshot', projectPath];
         if (tag) {
-            args.push('--tag', `"${tag}"`);
+            args.push('--tag', tag);
         }
         return this.execute(args);
     }
@@ -364,7 +369,7 @@ export class ChasmExecutor {
     // ── Migration operations ───────────────────────────────────────────
 
     async createMigration(destPath: string, includeAll: boolean = true): Promise<ChasmResult> {
-        const args = ['migration', 'create', `"${destPath}"`];
+        const args = ['migration', 'create', destPath];
         if (includeAll) {
             args.push('--all');
         }
@@ -372,7 +377,7 @@ export class ChasmExecutor {
     }
 
     async restoreMigration(srcPath: string, dryRun: boolean = false): Promise<ChasmResult> {
-        const args = ['migration', 'restore', `"${srcPath}"`];
+        const args = ['migration', 'restore', srcPath];
         if (dryRun) {
             args.push('--dry-run');
         }

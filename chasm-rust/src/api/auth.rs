@@ -18,8 +18,55 @@ use uuid::Uuid;
 // Configuration
 // =============================================================================
 
-/// JWT secret key - in production, this should come from environment variables
-const JWT_SECRET: &[u8] = b"csm_jwt_secret_key_change_in_production_2024";
+/// Environment variable that supplies the JWT signing secret.
+const JWT_SECRET_ENV: &str = "CHASM_JWT_SECRET";
+
+/// The HMAC secret that signs session tokens, resolved once per process.
+///
+/// - `CHASM_JWT_SECRET` if set and at least 32 bytes: tokens then survive a
+///   restart and can be shared across instances behind a load balancer.
+/// - otherwise a cryptographically random 32-byte secret generated at startup.
+///   Tokens are unforgeable but do not outlive the process; a restart makes
+///   everyone log in again, which for a local-first tool is an inconvenience,
+///   not a hole.
+///
+/// What it is never again: a constant compiled into the binary. The previous
+/// value -- `csm_jwt_secret_key_change_in_production_2024` -- shipped in the
+/// public source, so anyone who read the repository could forge a valid token
+/// for any user at any subscription tier. A random default closes that even
+/// when the operator sets nothing.
+fn jwt_secret() -> &'static [u8] {
+    use std::sync::OnceLock;
+    static SECRET: OnceLock<Vec<u8>> = OnceLock::new();
+    SECRET.get_or_init(|| match std::env::var(JWT_SECRET_ENV) {
+        Ok(s) if s.len() >= 32 => s.into_bytes(),
+        Ok(s) => {
+            eprintln!(
+                "[WARN] {JWT_SECRET_ENV} is set but only {} bytes; a signing secret must be \
+                 at least 32. Ignoring it and using a random per-process secret instead.",
+                s.len()
+            );
+            random_secret()
+        }
+        Err(_) => {
+            eprintln!(
+                "[INFO] {JWT_SECRET_ENV} is not set; signing sessions with a random \
+                 per-process secret. Sessions will not survive a restart. Set \
+                 {JWT_SECRET_ENV} (>=32 bytes) to keep sessions across restarts or share \
+                 them across instances."
+            );
+            random_secret()
+        }
+    })
+}
+
+fn random_secret() -> Vec<u8> {
+    use rand::RngCore;
+    let mut buf = vec![0u8; 32];
+    rand::thread_rng().fill_bytes(&mut buf);
+    buf
+}
+
 const JWT_EXPIRY_HOURS: i64 = 24;
 const REFRESH_TOKEN_EXPIRY_DAYS: i64 = 30;
 
@@ -302,11 +349,75 @@ pub struct UpgradeSubscriptionRequest {
 // =============================================================================
 
 /// Hash a password using SHA-256 with salt
-pub fn hash_password(password: &str, salt: &str) -> String {
+/// Hash a password for storage as an Argon2id PHC string.
+///
+/// The algorithm, its parameters and a fresh random salt are all embedded in
+/// the returned string, so it is self-describing and needs no separate salt
+/// column. This replaces `Sha256(password || salt)` -- a *fast* hash a leaked
+/// table could be cracked against at billions of guesses a second. Argon2id is
+/// memory-hard and deliberately slow.
+pub fn hash_password_argon2(password: &str) -> Result<String, String> {
+    use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
+    use argon2::Argon2;
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// The legacy scheme: `Sha256(password || salt)`, hex-encoded.
+///
+/// Kept only so accounts created before the move to Argon2 can still log in --
+/// and be upgraded on that login. Never used to write a new hash.
+fn legacy_sha256(password: &str, salt: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
     hasher.update(salt.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+/// A length-independent-ish constant-time byte comparison for the legacy path.
+///
+/// Argon2 verification is already constant-time internally; this is only for
+/// comparing the two hex SHA-256 strings, where the naive `==` leaks a timing
+/// signal on how many leading characters matched.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Verify a password against whatever is stored, old scheme or new.
+///
+/// Returns `(matches, needs_upgrade)`. `needs_upgrade` is true only when the
+/// match succeeded against a legacy SHA-256 hash, signalling the caller to
+/// rewrite it as Argon2 -- the transparent upgrade that moves an existing
+/// account off the weak hash on its next successful login, without a reset.
+pub fn verify_password(password: &str, stored_hash: &str, salt: &str) -> (bool, bool) {
+    if stored_hash.starts_with("$argon2") {
+        use argon2::password_hash::{PasswordHash, PasswordVerifier};
+        use argon2::Argon2;
+        let parsed = match PasswordHash::new(stored_hash) {
+            Ok(p) => p,
+            Err(_) => return (false, false),
+        };
+        let ok = Argon2::default()
+            .verify_password(password.as_bytes(), &parsed)
+            .is_ok();
+        (ok, false)
+    } else {
+        let ok = constant_time_eq(
+            legacy_sha256(password, salt).as_bytes(),
+            stored_hash.as_bytes(),
+        );
+        (ok, ok)
+    }
 }
 
 /// Generate a JWT access token
@@ -326,7 +437,7 @@ pub fn generate_access_token(user: &User) -> Option<String> {
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(JWT_SECRET),
+        &EncodingKey::from_secret(jwt_secret()),
     )
     .ok()
 }
@@ -348,7 +459,7 @@ pub fn generate_refresh_token(user: &User) -> Option<String> {
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(JWT_SECRET),
+        &EncodingKey::from_secret(jwt_secret()),
     )
     .ok()
 }
@@ -358,7 +469,7 @@ pub fn validate_token(token: &str) -> Option<AuthenticatedUser> {
     let validation = Validation::new(Algorithm::HS256);
 
     let token_data =
-        decode::<Claims>(token, &DecodingKey::from_secret(JWT_SECRET), &validation).ok()?;
+        decode::<Claims>(token, &DecodingKey::from_secret(jwt_secret()), &validation).ok()?;
 
     let claims = token_data.claims;
 
@@ -379,7 +490,7 @@ pub fn validate_refresh_token(token: &str) -> Option<AuthenticatedUser> {
     let validation = Validation::new(Algorithm::HS256);
 
     let token_data =
-        decode::<Claims>(token, &DecodingKey::from_secret(JWT_SECRET), &validation).ok()?;
+        decode::<Claims>(token, &DecodingKey::from_secret(jwt_secret()), &validation).ok()?;
 
     let claims = token_data.claims;
 
@@ -531,8 +642,19 @@ pub async fn register(
 
     // Create user
     let user_id = Uuid::new_v4().to_string();
-    let salt = Uuid::new_v4().to_string();
-    let password_hash = hash_password(&body.password, &salt);
+    // Argon2 embeds its own salt in the hash string, so the `password_salt`
+    // column is vestigial for new rows. It stays NOT NULL in the schema, so
+    // write an empty string rather than dropping it.
+    let salt = String::new();
+    let password_hash = match hash_password_argon2(&body.password) {
+        Ok(h) => h,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to hash password: {}", e)
+            }))
+        }
+    };
     let now = Utc::now().timestamp();
 
     let result = db.conn.execute(
@@ -682,13 +804,24 @@ pub async fn login(
         }
     };
 
-    // Verify password
-    let provided_hash = hash_password(&body.password, &salt);
-    if provided_hash != stored_hash {
+    // Verify password against whatever scheme it was stored under.
+    let (matches, needs_upgrade) = verify_password(&body.password, &stored_hash, &salt);
+    if !matches {
         return HttpResponse::Unauthorized().json(serde_json::json!({
             "success": false,
             "error": "Invalid email or password"
         }));
+    }
+
+    // A legacy SHA-256 account that just proved its password: rewrite the hash
+    // as Argon2 now, while we have the plaintext, so it never has to again.
+    if needs_upgrade {
+        if let Ok(upgraded) = hash_password_argon2(&body.password) {
+            let _ = db.conn.execute(
+                "UPDATE users SET password_hash = ?1, password_salt = ?2 WHERE id = ?3",
+                rusqlite::params![upgraded, "", id],
+            );
+        }
     }
 
     // Update last login time
@@ -1033,18 +1166,27 @@ pub async fn change_password(
         }
     };
 
-    // Verify current password
-    let current_hash = hash_password(&body.current_password, &salt);
-    if current_hash != stored_hash {
+    // Verify current password (old scheme or new).
+    let (matches, _) = verify_password(&body.current_password, &stored_hash, &salt);
+    if !matches {
         return HttpResponse::Unauthorized().json(serde_json::json!({
             "success": false,
             "error": "Current password is incorrect"
         }));
     }
 
-    // Update password
-    let new_salt = Uuid::new_v4().to_string();
-    let new_hash = hash_password(&body.new_password, &new_salt);
+    // Update password. The new hash is always Argon2; the salt column goes
+    // empty because Argon2 carries its own.
+    let new_salt = String::new();
+    let new_hash = match hash_password_argon2(&body.new_password) {
+        Ok(h) => h,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to hash password: {}", e)
+            }))
+        }
+    };
     let now = Utc::now().timestamp();
 
     if let Err(e) = db.conn.execute(
@@ -1198,4 +1340,109 @@ pub fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
                 web::post().to(upgrade_subscription),
             ),
     );
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    /// A token this process signs must verify; a byte-flipped one must not.
+    #[test]
+    fn a_token_signed_now_round_trips_and_tampering_is_rejected() {
+        let user = User {
+            id: "u1".into(),
+            email: "u1@example.com".into(),
+            display_name: "U".into(),
+            password_hash: String::new(),
+            subscription_tier: SubscriptionTier::Free,
+            subscription_expires_at: None,
+            created_at: 0,
+            updated_at: 0,
+            last_login_at: None,
+            email_verified: false,
+            avatar_url: None,
+            metadata: None,
+        };
+        let token = generate_access_token(&user).expect("signed");
+        assert!(validate_token(&token).is_some());
+
+        let mut bad = token.clone();
+        bad.pop();
+        bad.push(if token.ends_with('a') { 'b' } else { 'a' });
+        assert!(validate_token(&bad).is_none(), "a tampered token verified");
+    }
+
+    /// The exploit that motivated this: a token signed with the old
+    /// compiled-in constant must NOT validate, because that constant is no
+    /// longer the signing secret.
+    #[test]
+    fn a_token_forged_with_the_old_hardcoded_secret_is_rejected() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        const OLD_SECRET: &[u8] = b"csm_jwt_secret_key_change_in_production_2024";
+        let claims = Claims {
+            sub: "attacker".into(),
+            email: "attacker@evil.test".into(),
+            tier: "enterprise".into(),
+            iat: Utc::now().timestamp(),
+            exp: (Utc::now() + Duration::hours(1)).timestamp(),
+            token_type: "access".into(),
+        };
+        let forged = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(OLD_SECRET),
+        )
+        .expect("forge");
+        assert!(
+            validate_token(&forged).is_none(),
+            "a token forged with the leaked constant still validated"
+        );
+    }
+
+    /// New passwords are stored as Argon2, never the legacy SHA-256.
+    #[test]
+    fn new_hashes_are_argon2_and_verify() {
+        let hash = hash_password_argon2("correct horse battery staple").expect("hash");
+        assert!(
+            hash.starts_with("$argon2"),
+            "not an argon2 PHC string: {hash}"
+        );
+        let (ok, upgrade) = verify_password("correct horse battery staple", &hash, "");
+        assert!(ok);
+        assert!(!upgrade, "an argon2 hash should not ask to be upgraded");
+        let (bad, _) = verify_password("wrong password", &hash, "");
+        assert!(!bad);
+    }
+
+    /// Two hashes of the same password differ (per-hash random salt), so the
+    /// store is not a lookup table of equal passwords to equal hashes.
+    #[test]
+    fn argon2_salts_are_unique_per_hash() {
+        let a = hash_password_argon2("same").unwrap();
+        let b = hash_password_argon2("same").unwrap();
+        assert_ne!(a, b);
+    }
+
+    /// A legacy SHA-256 account still logs in, and asks to be upgraded.
+    #[test]
+    fn a_legacy_hash_verifies_and_requests_upgrade() {
+        let salt = "legacy-salt";
+        let legacy = legacy_sha256("hunter2", salt);
+        assert!(!legacy.starts_with("$argon2"));
+
+        let (ok, upgrade) = verify_password("hunter2", &legacy, salt);
+        assert!(ok, "legacy password did not verify");
+        assert!(upgrade, "legacy verify did not flag an upgrade");
+
+        let (bad, _) = verify_password("not it", &legacy, salt);
+        assert!(!bad);
+    }
+
+    /// The legacy comparison is length-checked; a truncated hash never matches.
+    #[test]
+    fn legacy_compare_rejects_mismatched_lengths() {
+        assert!(!constant_time_eq(b"abc", b"abcd"));
+        assert!(constant_time_eq(b"abcd", b"abcd"));
+        assert!(!constant_time_eq(b"abcd", b"abce"));
+    }
 }

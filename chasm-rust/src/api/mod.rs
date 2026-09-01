@@ -130,7 +130,7 @@ impl ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(), // Bind to all interfaces
+            host: "127.0.0.1".to_string(), // Loopback only; opt into 0.0.0.0 explicitly.
             port: 8787,
             database_path: dirs::data_local_dir()
                 .map(|p| p.join("csm").join("csm.db").to_string_lossy().to_string())
@@ -422,13 +422,25 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
     eprintln!("[DEBUG] Creating HttpServer...");
     let server = HttpServer::new(move || {
         let origins = cors_origins.clone();
+        // Wildcard localhost / exp:// matching is convenient in development,
+        // but combined with `supports_credentials()` it lets a page served on
+        // *any* local port -- including a hostile one at, say,
+        // http://localhost:31337 -- make credentialed cross-origin requests to
+        // this server. So it is opt-in: `CHASM_CORS_ALLOW_LOCALHOST=1` restores
+        // it. The explicit allow-list already covers the standard Vite, CRA and
+        // Expo dev ports, so the default keeps the real app working while
+        // refusing arbitrary local origins.
+        let allow_wildcard_localhost = std::env::var("CHASM_CORS_ALLOW_LOCALHOST")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         let cors = Cors::default()
             .allowed_origin_fn(move |origin, _req_head| {
                 let origin_str = origin.to_str().unwrap_or("");
                 origins.iter().any(|allowed| allowed == origin_str)
-                    || origin_str.starts_with("http://localhost:")
-                    || origin_str.starts_with("http://127.0.0.1:")
-                    || origin_str.starts_with("exp://")
+                    || (allow_wildcard_localhost
+                        && (origin_str.starts_with("http://localhost:")
+                            || origin_str.starts_with("http://127.0.0.1:")
+                            || origin_str.starts_with("exp://")))
             })
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allowed_headers(vec!["Content-Type", "Authorization", "Accept"])
