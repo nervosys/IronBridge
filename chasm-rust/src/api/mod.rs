@@ -452,6 +452,11 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .app_data(sync_state.clone())
             .app_data(ws_state.clone())
             .app_data(recording_state.clone())
+            // Registered before `cors`, so `cors` stays the outer layer: it
+            // answers preflight and, when this gate returns 401, still stamps
+            // the CORS headers on that response. Off unless CHASM_REQUIRE_AUTH
+            // is set; see `auth::auth_required`.
+            .wrap(actix_web::middleware::from_fn(auth::require_auth))
             .wrap(cors)
             .wrap(middleware::Logger::default())
             // Ahead of `configure_routes`, whose broad `/api` scope would

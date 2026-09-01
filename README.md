@@ -246,6 +246,27 @@ Endpoints that refuse rather than guess:
 Deleting a workspace **detaches** its sessions rather than deleting them.
 Merging leaves its sources intact. A fork is an independent copy, not an alias.
 
+### Security posture
+
+Chasm is local-first, and its defaults assume that:
+
+- **The server binds to `127.0.0.1`** — this machine only. Expose it on the
+  network with `--host 0.0.0.0`, deliberately: the API reads local data and,
+  when enabled, runs commands.
+- **`/api` is open by default, and gated by `CHASM_REQUIRE_AUTH`.** Set it and
+  every `/api` route requires a valid Bearer token (401 otherwise); `/api/health`
+  and the `/auth/*` login endpoints stay open so a client can check liveness and
+  obtain a token. It is off by default because the shipped clients do not yet
+  send a token and the web UI has no login screen — turning it on today suits a
+  networked or multi-user deployment, paired with clients that authenticate.
+- **`run_command` is off** unless `CHASM_ENABLE_RUN_COMMAND=1`. It executes
+  arbitrary commands through the shell; it is never on by default.
+- **Session tokens** are signed with `CHASM_JWT_SECRET` (>=32 bytes) or, if
+  unset, a random per-process secret — never a value baked into the binary.
+- **Stored provider credentials** need `CHASM_MASTER_KEY`; without it the server
+  refuses to store one rather than writing it in the clear.
+- **Passwords** are hashed with Argon2id.
+
 ### Response envelope
 
 Every endpoint **except `GET /api/health`** wraps its payload:
