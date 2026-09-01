@@ -71,6 +71,62 @@ const JWT_EXPIRY_HOURS: i64 = 24;
 const REFRESH_TOKEN_EXPIRY_DAYS: i64 = 30;
 
 // =============================================================================
+// Login brute-force throttle
+// =============================================================================
+
+/// After this many failed logins from one address within the window, further
+/// attempts are refused until the window slides past them.
+const LOGIN_MAX_FAILURES: usize = 10;
+/// The sliding window for counting failures, in seconds (15 minutes).
+const LOGIN_WINDOW_SECS: u64 = 900;
+
+fn login_failures(
+) -> &'static std::sync::Mutex<std::collections::HashMap<String, Vec<std::time::Instant>>> {
+    use std::sync::OnceLock;
+    static FAILURES: OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Vec<std::time::Instant>>>,
+    > = OnceLock::new();
+    FAILURES.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Whether this address has spent its failed-login budget for now.
+///
+/// Keyed on the socket peer address, not `X-Forwarded-For` or a body field, so
+/// it cannot be reset by spoofing a header. An attacker guessing passwords is
+/// slowed to `LOGIN_MAX_FAILURES` per window; a legitimate user who mistypes a
+/// few times is not affected, and -- because the key is the caller's own
+/// address -- no one can lock a victim out by failing *their* login.
+fn login_throttled(key: &str) -> bool {
+    let mut map = login_failures().lock().unwrap();
+    let now = std::time::Instant::now();
+    if let Some(times) = map.get_mut(key) {
+        times.retain(|t| now.duration_since(*t).as_secs() < LOGIN_WINDOW_SECS);
+        times.len() >= LOGIN_MAX_FAILURES
+    } else {
+        false
+    }
+}
+
+fn record_login_failure(key: &str) {
+    let mut map = login_failures().lock().unwrap();
+    let now = std::time::Instant::now();
+    let times = map.entry(key.to_string()).or_default();
+    times.retain(|t| now.duration_since(*t).as_secs() < LOGIN_WINDOW_SECS);
+    times.push(now);
+}
+
+fn clear_login_failures(key: &str) {
+    login_failures().lock().unwrap().remove(key);
+}
+
+/// The throttle key: the connection's peer address (host without port).
+fn throttle_key(req: &HttpRequest) -> String {
+    req.peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+// =============================================================================
 // Subscription Tiers
 // =============================================================================
 
@@ -872,9 +928,21 @@ pub async fn register(
 
 /// Login with email and password
 pub async fn login(
+    req: HttpRequest,
     app_state: web::Data<crate::api::state::AppState>,
     body: web::Json<LoginRequest>,
 ) -> HttpResponse {
+    // Refuse before touching the database or the password hash: an address that
+    // has burned its failure budget is answered 429 without an Argon2
+    // verification, so the throttle also caps the CPU a guesser can spend.
+    let key = throttle_key(&req);
+    if login_throttled(&key) {
+        return HttpResponse::TooManyRequests().json(serde_json::json!({
+            "success": false,
+            "error": "Too many failed login attempts. Try again later.",
+        }));
+    }
+
     let db = app_state.db.lock().unwrap();
 
     // Initialize tables if needed
@@ -939,21 +1007,26 @@ pub async fn login(
     ) = match user_result {
         Ok(data) => data,
         Err(_) => {
+            record_login_failure(&key);
             return HttpResponse::Unauthorized().json(serde_json::json!({
                 "success": false,
                 "error": "Invalid email or password"
-            }))
+            }));
         }
     };
 
     // Verify password against whatever scheme it was stored under.
     let (matches, needs_upgrade) = verify_password(&body.password, &stored_hash, &salt);
     if !matches {
+        record_login_failure(&key);
         return HttpResponse::Unauthorized().json(serde_json::json!({
             "success": false,
             "error": "Invalid email or password"
         }));
     }
+
+    // A correct password clears this address's failure budget.
+    clear_login_failures(&key);
 
     // A legacy SHA-256 account that just proved its password: rewrite the hash
     // as Argon2 now, while we have the plaintext, so it never has to again.
@@ -1487,6 +1560,35 @@ pub fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    /// The login throttle blocks an address after its failure budget, and a
+    /// success (modelled here as a clear) resets it. Uses a unique key per test
+    /// so the process-global map does not couple tests.
+    #[test]
+    fn login_throttle_blocks_after_the_budget_and_resets_on_success() {
+        let key = format!("test-key-{}", uuid::Uuid::new_v4());
+        assert!(!login_throttled(&key));
+        for _ in 0..LOGIN_MAX_FAILURES {
+            record_login_failure(&key);
+        }
+        assert!(login_throttled(&key), "not throttled after the budget");
+        clear_login_failures(&key);
+        assert!(
+            !login_throttled(&key),
+            "a success did not reset the counter"
+        );
+    }
+
+    /// One failure short of the budget is still allowed -- an ordinary user who
+    /// mistypes is not locked out.
+    #[test]
+    fn login_throttle_allows_up_to_the_budget() {
+        let key = format!("test-key-{}", uuid::Uuid::new_v4());
+        for _ in 0..(LOGIN_MAX_FAILURES - 1) {
+            record_login_failure(&key);
+        }
+        assert!(!login_throttled(&key));
+    }
 
     /// A token this process signs must verify; a byte-flipped one must not.
     #[test]
