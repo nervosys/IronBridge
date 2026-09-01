@@ -293,7 +293,10 @@ pub async fn list_sessions(
     query: web::Query<SessionQuery>,
 ) -> impl Responder {
     let db = state.db.lock().unwrap();
-    let limit = query.limit.unwrap_or(100) as i64;
+    // Capped: an unbounded `?limit=` would make the server materialise and
+    // serialise an arbitrarily large result set. The sibling list endpoints
+    // clamp the same way; these two had been missed.
+    let limit = query.limit.unwrap_or(100).clamp(1, 1000) as i64;
 
     let result: Result<Vec<serde_json::Value>, _> = (|| {
         let mut sql = String::from(
@@ -692,7 +695,7 @@ pub async fn search_sessions(
     query: web::Query<SearchQuery>,
 ) -> impl Responder {
     let db = state.db.lock().unwrap();
-    let limit = query.limit.unwrap_or(20) as i64;
+    let limit = query.limit.unwrap_or(20).clamp(1, 1000) as i64;
     let search_term = format!("%{}%", query.q);
 
     let result: Result<Vec<serde_json::Value>, _> = (|| {
