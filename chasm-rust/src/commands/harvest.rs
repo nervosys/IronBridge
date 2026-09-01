@@ -3948,26 +3948,34 @@ pub fn harvest_rebuild_fts(db_path: Option<&str>) -> Result<()> {
         "#,
     )?;
 
-    // Create new FTS table with content_raw and session_id for filtering
+    // Recreate the index in the SAME shape the main harvest path uses: a
+    // STANDALONE fts5 table with plain-DELETE triggers.
+    //
+    // It used to be recreated here as an *external-content* table
+    // (`content='messages_v2'`) with the `'delete'` command in its triggers --
+    // a different table type from the one the rest of the code creates and
+    // queries. On a database built by the normal harvest, a rebuild then left
+    // the two paths disagreeing about what `messages_fts` is, and the
+    // `'delete'` command raises "SQL logic error" on a standalone table (the
+    // very hazard the main-path comment warns about). Matching the main path
+    // exactly is the fix: one definition of the index, everywhere.
     println!("{} Creating new FTS index...", "[*]".blue());
     conn.execute_batch(
         r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-            content_raw,
-            content='messages_v2',
-            content_rowid='id'
+            content_raw
         );
-        
+
         CREATE TRIGGER IF NOT EXISTS messages_v2_ai AFTER INSERT ON messages_v2 BEGIN
             INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
         END;
-        
+
         CREATE TRIGGER IF NOT EXISTS messages_v2_ad AFTER DELETE ON messages_v2 BEGIN
-            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+            DELETE FROM messages_fts WHERE rowid = old.id;
         END;
-        
+
         CREATE TRIGGER IF NOT EXISTS messages_v2_au AFTER UPDATE ON messages_v2 BEGIN
-            INSERT INTO messages_fts(messages_fts, rowid, content_raw) VALUES ('delete', old.id, old.content_raw);
+            DELETE FROM messages_fts WHERE rowid = old.id;
             INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
         END;
         "#,
@@ -4028,31 +4036,54 @@ pub fn harvest_search(
             .unwrap_or(false);
 
         if fts_exists {
-            // Use FTS5 search with built-in snippet() for fast highlighting
-            // and rank for relevance ordering, deduplicated per session
+            // `snippet()`, `highlight()`, `bm25()` and `rank` are FTS5 auxiliary
+            // constructs that are only valid in a query whose FROM is the FTS
+            // table matched by MATCH -- not across a JOIN, and not under a
+            // GROUP BY. Using `snippet(messages_fts, ...)` directly in the
+            // joined+grouped query below raised "unable to use function snippet
+            // in the requested context", so every search errored.
+            //
+            // The fix computes snippet and rank in an inner query where
+            // `messages_fts` is matched alone -- the only place they are legal
+            // -- and the outer query joins the resulting rowids to sessions and
+            // deduplicates. `ORDER BY rank` inside means the first row seen per
+            // session (SQLite keeps the first for a bare GROUP BY) is the most
+            // relevant one.
+            // No GROUP BY: `snippet()` is rejected ("unable to use function
+            // snippet in the requested context") the moment the query groups or
+            // wraps the FTS match in a subquery. It is valid across a JOIN as
+            // long as `messages_fts` is matched directly in this query, so the
+            // rows come back one-per-matching-message, ordered by relevance, and
+            // are deduplicated to one-per-session in Rust below. The row budget
+            // is generous so a common term still yields `limit` distinct
+            // sessions after dedup.
+            let row_budget = (limit * 40).clamp(limit, 2000);
             let sql = format!(
                 "SELECT s.id, s.provider, s.title,
                         snippet(messages_fts, 0, '>>>', '<<<', '...', 32) as snip
-                 FROM messages_fts fts
-                 JOIN messages_v2 m ON m.id = fts.rowid
+                 FROM messages_fts
+                 JOIN messages_v2 m ON m.id = messages_fts.rowid
                  JOIN sessions s ON m.session_id = s.id
                  WHERE messages_fts MATCH ?
                  {}
-                 GROUP BY s.id
                  ORDER BY rank
                  LIMIT {}",
                 if provider_filter.is_some() {
-                    "AND s.provider = ?"
+                    // Substring, case-insensitive: users pass "copilot", the
+                    // stored value is the display name "GitHub Copilot".
+                    "AND LOWER(s.provider) LIKE ?"
                 } else {
                     ""
                 },
-                limit
+                row_budget
             );
 
             let mut stmt = conn.prepare(&sql)?;
 
-            if let Some(provider) = provider_filter {
-                stmt.query_map(params![query, provider], |row| {
+            let raw: Vec<(String, String, String, String)> = if let Some(provider) = provider_filter
+            {
+                let prov_like = format!("%{}%", provider.to_lowercase());
+                stmt.query_map(params![query, prov_like], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
@@ -4071,7 +4102,14 @@ pub fn harvest_search(
                     ))
                 })?
                 .collect::<Result<Vec<_>, _>>()?
-            }
+            };
+
+            // One result per session, keeping the highest-ranked (first) match.
+            let mut seen = std::collections::HashSet::new();
+            raw.into_iter()
+                .filter(|(id, _, _, _)| seen.insert(id.clone()))
+                .take(limit)
+                .collect::<Vec<_>>()
         } else {
             // Fall back to LIKE search with session deduplication
             let search_pattern = format!("%{}%", query);
@@ -4088,7 +4126,7 @@ pub fn harvest_search(
                  ORDER BY s.updated_at DESC
                  LIMIT {}",
                 if provider_filter.is_some() {
-                    "AND s.provider = ?"
+                    "AND LOWER(s.provider) LIKE ?"
                 } else {
                     ""
                 },
@@ -4098,7 +4136,8 @@ pub fn harvest_search(
             let mut stmt = conn.prepare(&sql)?;
 
             if let Some(provider) = provider_filter {
-                stmt.query_map(params![query, search_pattern, provider], |row| {
+                let prov_like = format!("%{}%", provider.to_lowercase());
+                stmt.query_map(params![query, search_pattern, prov_like], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
@@ -4634,5 +4673,122 @@ mod pull_url_tests {
     fn test_parse_bad_path() {
         assert!(parse_pull_url("https://chatgpt.com/").is_none());
         assert!(parse_pull_url("https://claude.ai/about").is_none());
+    }
+}
+
+#[cfg(test)]
+mod fts_search_tests {
+    use rusqlite::{params, Connection};
+
+    /// Build the minimal schema the search touches: sessions, messages_v2, and
+    /// the STANDALONE `messages_fts` index the main harvest path creates.
+    fn seed() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE sessions (id TEXT PRIMARY KEY, provider TEXT, title TEXT, updated_at INTEGER);
+            CREATE TABLE messages_v2 (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, content_raw TEXT);
+            CREATE VIRTUAL TABLE messages_fts USING fts5(content_raw);
+            CREATE TRIGGER messages_v2_ai AFTER INSERT ON messages_v2 BEGIN
+                INSERT INTO messages_fts(rowid, content_raw) VALUES (new.id, new.content_raw);
+            END;
+            "#,
+        )
+        .unwrap();
+        // Two Copilot sessions; the first has two matching messages, so a
+        // per-session dedup is actually exercised.
+        conn.execute(
+            "INSERT INTO sessions VALUES ('s1','GitHub Copilot','Rust async',1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sessions VALUES ('s2','GitHub Copilot','Python',2)",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO messages_v2(session_id,content_raw) VALUES ('s1','an async function in rust')", []).unwrap();
+        conn.execute(
+            "INSERT INTO messages_v2(session_id,content_raw) VALUES ('s1','another async call')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO messages_v2(session_id,content_raw) VALUES ('s2','a sync helper')",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    /// The exact search shape: snippet() across a JOIN, ordered by rank, with
+    /// NO GROUP BY. Grouping or a joined subquery makes SQLite reject snippet()
+    /// with "unable to use function snippet in the requested context" -- the
+    /// bug that made every search error. Dedup-per-session happens in Rust.
+    #[test]
+    fn snippet_search_across_a_join_returns_highlighted_rows() {
+        let conn = seed();
+        let mut stmt = conn
+            .prepare(
+                "SELECT s.id, snippet(messages_fts, 0, '>>>', '<<<', '...', 32)
+                 FROM messages_fts
+                 JOIN messages_v2 m ON m.id = messages_fts.rowid
+                 JOIN sessions s ON m.session_id = s.id
+                 WHERE messages_fts MATCH ?
+                 ORDER BY rank",
+            )
+            .unwrap();
+        let rows: Vec<(String, String)> = stmt
+            .query_map(params!["async"], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        // Two messages in s1 match, so two rows before dedup.
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|(id, _)| id == "s1"));
+        assert!(rows[0].1.contains(">>>async<<<") || rows[0].1.contains(">>>an async"));
+
+        // Dedup keeps one row per session, as the command does.
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<_> = rows
+            .into_iter()
+            .filter(|(id, _)| seen.insert(id.clone()))
+            .collect();
+        assert_eq!(deduped.len(), 1);
+    }
+
+    /// The provider filter matches the display name by case-insensitive
+    /// substring, so `copilot` finds sessions stored as "GitHub Copilot". The
+    /// old exact `s.provider = ?` returned nothing for the natural input.
+    #[test]
+    fn provider_filter_is_case_insensitive_substring() {
+        let conn = seed();
+        let mut stmt = conn
+            .prepare(
+                "SELECT DISTINCT s.id
+                 FROM messages_fts
+                 JOIN messages_v2 m ON m.id = messages_fts.rowid
+                 JOIN sessions s ON m.session_id = s.id
+                 WHERE messages_fts MATCH ? AND LOWER(s.provider) LIKE ?
+                 ORDER BY rank",
+            )
+            .unwrap();
+        let ids: Vec<String> = stmt
+            .query_map(params!["async", "%copilot%"], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(ids, vec!["s1".to_string()]);
+
+        // The old exact-match behaviour would have found nothing.
+        let none: Vec<String> = conn
+            .prepare("SELECT id FROM sessions WHERE provider = 'copilot'")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(none.is_empty());
     }
 }
