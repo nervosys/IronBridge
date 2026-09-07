@@ -15,7 +15,7 @@ We will acknowledge receipt within 48 hours and provide a detailed response with
 
 ## Security Audit Status
 
-Last audit: **January 13, 2026**
+Last audit: **September 7, 2026**
 
 ### Compliance Frameworks
 
@@ -30,26 +30,48 @@ Last audit: **January 13, 2026**
 
 #### Rust (chasm-cli, chasm-rust)
 
-| Check             | Status                                               |
-| ----------------- | ---------------------------------------------------- |
-| `cargo audit`     | ⚠️ 3 warnings (unmaintained deps in ratatui, no CVEs) |
-| Hardcoded secrets | ✅ None found                                         |
-| API key exposure  | ✅ Keys loaded from env vars only                     |
-| SQL injection     | ✅ Using parameterized queries (rusqlite)             |
+| Check             | Status                                                          |
+| ----------------- | -------------------------------------------------------------- |
+| `cargo audit`     | ✅ Exits 0 (2 advisories risk-accepted in `.cargo/audit.toml`)  |
+| Hardcoded secrets | ✅ None found (full git-history content scan, Sep 2026)          |
+| API key exposure  | ✅ Keys loaded from env vars only                               |
+| SQL injection     | ✅ Using parameterized queries (rusqlite)                       |
 
-**Accepted Risks:**
+**Accepted Risks** (recorded with rationale in `chasm-rust/.cargo/audit.toml`):
 
-- `paste 1.0.15` - Unmaintained but no security issues, transitive via ratatui
-- `proc-macro-error 1.0.4` - Unmaintained, transitive via tabled
-- `lru 0.12.5` - Unsound in IterMut (not used in our code path)
+- `h2 0.3.27` (RUSTSEC-2026-0258, HTTP/2 DATA-frame DoS) — **not reachable**:
+  the API server binds plain HTTP, so actix-web serves HTTP/1.1 only (HTTP/2 is
+  negotiated solely over TLS ALPN, which the process never does). Pinned by the
+  entire actix-web 4.x stack; the fix exists only in h2 ≥0.4.16 (hyper 1.x),
+  which no actix-web release uses yet. Revisit when actix moves to hyper 1.x.
+- `rsa 0.9.10` (RUSTSEC-2023-0071, "Marvin" timing side-channel) — **no upstream
+  fix available**. The classic attack needs an RSA *decryption* padding oracle;
+  `chasm-sso` performs no RSA decryption (it only verifies IdP signatures with
+  public keys and signs its own requests). Revisit when a constant-time `rsa`
+  release ships.
+- Unmaintained/unsound warnings (`instant`, `paste`, `proc-macro-error2`,
+  `lru`) — transitive, no CVE, not on a reachable code path.
 
 #### JavaScript (chasm-web, chasm-app, chasm-shared)
 
-| Check           | Status                                            |
-| --------------- | ------------------------------------------------- |
-| `npm audit`     | ✅ 0 vulnerabilities                               |
-| XSS protection  | ✅ React's default escaping                        |
-| CSRF protection | ✅ react-router updated to fix GHSA-h5cw-625j-3rxh |
+| Check           | Status                                                              |
+| --------------- | ------------------------------------------------------------------ |
+| `npm audit`     | ✅ web/shared/extensions: 0; chasm-app: 0 high (2 moderate accepted) |
+| XSS protection  | ✅ React's default escaping; highlight.js escapes rendered code      |
+| CSRF protection | ✅ react-router updated to fix GHSA-h5cw-625j-3rxh                   |
+| Token in URL    | ✅ WebSocket auth moved to `Sec-WebSocket-Protocol` (not logged)     |
+
+**Remediated (Sep 2026):** `axios` → 1.20.0 (prototype-pollution / proxy-SSRF
+cluster), `esbuild` (dev-server file read), and `prismjs`/`postcss` pinned via
+`overrides` (DOM-clobbering / source-map path traversal). chasm-app was
+upgraded Expo SDK 54→57, which cleared the HIGH `image-size` DoS.
+
+**Accepted Risks (JS):**
+
+- `decode-uri-component 0.2.2` (moderate DoS, via react-navigation's
+  query-string) — **no upstream fix available**.
+- `uuid` (moderate) — the fix is a breaking ESM-only major that risks breaking
+  React Native internals; deferred.
 
 ### Threat Model (MITRE ATT&CK)
 
