@@ -431,7 +431,30 @@ pub async fn ws_handler(
     sync_state: Option<web::Data<crate::api::sync::SharedSyncState>>,
 ) -> Result<HttpResponse, Error> {
     // Perform WebSocket handshake
-    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    let (mut response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+
+    // If the client authenticated via the `bearer` subprotocol (the log-safe
+    // alternative to a `?token=` URL), echo the selected subprotocol so the
+    // browser's handshake completes cleanly. We never echo the token itself.
+    if req
+        .headers()
+        .get("Sec-WebSocket-Protocol")
+        .and_then(|h| h.to_str().ok())
+        .map(|v| {
+            v.split(',')
+                .next()
+                .map(|s| s.trim().eq_ignore_ascii_case("bearer"))
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+    {
+        if let Ok(val) = actix_web::http::header::HeaderValue::from_str("bearer") {
+            response.headers_mut().insert(
+                actix_web::http::header::SEC_WEBSOCKET_PROTOCOL,
+                val,
+            );
+        }
+    }
 
     let client_id = Uuid::new_v4().to_string();
     let state_clone = state.clone();

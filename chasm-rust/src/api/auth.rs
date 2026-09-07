@@ -396,6 +396,18 @@ fn path_requires_auth(path: &str) -> bool {
 /// the token in the URL. It is a lesser channel -- URLs are logged in more
 /// places than headers -- so the header is tried first and the query parameter
 /// is the fallback, not the norm.
+/// True when the request is a WebSocket handshake, i.e. it carries an
+/// `Upgrade: websocket` header (case-insensitive per RFC 6455). Ordinary HTTP
+/// API requests never set this, so it cleanly distinguishes the one channel
+/// that legitimately needs a token in the URL.
+fn is_websocket_upgrade(req: &actix_web::dev::ServiceRequest) -> bool {
+    req.headers()
+        .get("Upgrade")
+        .and_then(|h| h.to_str().ok())
+        .map(|v| v.eq_ignore_ascii_case("websocket"))
+        .unwrap_or(false)
+}
+
 fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUser> {
     let claims = req
         .headers()
@@ -404,11 +416,43 @@ fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUs
         .and_then(|s| s.strip_prefix("Bearer "))
         .and_then(validate_token_claims)
         .or_else(|| {
-            req.query_string()
-                .split('&')
-                .find_map(|pair| pair.strip_prefix("token="))
-                .and_then(|t| urlencoding::decode(t).ok())
-                .and_then(|t| validate_token_claims(&t))
+            // The query-parameter fallback is *only* for WebSocket upgrades,
+            // where the browser cannot set an `Authorization` header. Accepting
+            // it on ordinary requests would let a token ride in the URL of any
+            // API call, where it leaks into access logs, proxy logs, browser
+            // history, and the `Referer` of anything the response loads. Gate
+            // it on the `Upgrade: websocket` handshake header, which normal
+            // requests never carry.
+            if !is_websocket_upgrade(req) {
+                return None;
+            }
+            // Preferred WS channel: the token rides in the `Sec-WebSocket-
+            // Protocol` handshake header (sent by `new WebSocket(url,
+            // ['bearer', token])`), which — unlike the URL — is not written to
+            // request-line access logs. Format is `bearer, <token>`.
+            let from_subprotocol = req
+                .headers()
+                .get("Sec-WebSocket-Protocol")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|v| {
+                    let mut parts = v.split(',').map(|s| s.trim());
+                    match (parts.next(), parts.next()) {
+                        (Some(scheme), Some(tok)) if scheme.eq_ignore_ascii_case("bearer") => {
+                            Some(tok.to_string())
+                        }
+                        _ => None,
+                    }
+                })
+                .and_then(|t| validate_token_claims(&t));
+
+            from_subprotocol.or_else(|| {
+                // Legacy fallback: token in the query string. Still WS-only.
+                req.query_string()
+                    .split('&')
+                    .find_map(|pair| pair.strip_prefix("token="))
+                    .and_then(|t| urlencoding::decode(t).ok())
+                    .and_then(|t| validate_token_claims(&t))
+            })
         })?;
 
     // Revocation check: the token passed signature and expiry, but may predate
@@ -1926,5 +1970,56 @@ mod enforcement_tests {
             let s = actix_web::test::call_service(&app, get("/api/health", None)).await;
             assert_eq!(s.status(), 200);
         }
+    }
+
+    #[test]
+    fn query_token_accepted_only_on_websocket_upgrade() {
+        let user = User {
+            id: "u1".into(),
+            email: "u1@example.com".into(),
+            display_name: "U".into(),
+            password_hash: String::new(),
+            subscription_tier: SubscriptionTier::Free,
+            subscription_expires_at: None,
+            created_at: 0,
+            updated_at: 0,
+            last_login_at: None,
+            email_verified: false,
+            avatar_url: None,
+            metadata: None,
+        };
+        let token = generate_access_token(&user).expect("token");
+
+        // A bare `?token=` on an ordinary request must NOT authenticate: the
+        // query fallback exists only so WebSocket handshakes (which cannot set
+        // an Authorization header) can carry a token. Honouring it elsewhere
+        // would leak tokens into logs, history, and Referer headers.
+        let plain = actix_web::test::TestRequest::get()
+            .uri(&format!("/api/sessions?token={token}"))
+            .to_srv_request();
+        assert!(
+            request_token(&plain).is_none(),
+            "a ?token= on a non-WebSocket request must not authenticate"
+        );
+
+        // The same token on a genuine WebSocket upgrade IS accepted.
+        let ws = actix_web::test::TestRequest::get()
+            .uri(&format!("/ws?token={token}"))
+            .insert_header(("Upgrade", "websocket"))
+            .to_srv_request();
+        assert!(
+            request_token(&ws).is_some(),
+            "a ?token= on a WebSocket upgrade must authenticate"
+        );
+
+        // The Authorization header path is unaffected on ordinary requests.
+        let hdr = actix_web::test::TestRequest::get()
+            .uri("/api/sessions")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_srv_request();
+        assert!(
+            request_token(&hdr).is_some(),
+            "the Authorization header must still authenticate ordinary requests"
+        );
     }
 }
