@@ -118,3 +118,58 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod hardening_tests {
+    //! Guards for the webview hardening. These assert the security-relevant
+    //! shape of the shipped config so a future edit cannot silently reopen the
+    //! surface (a null CSP, the global Tauri API, or fs/process capabilities).
+
+    use serde_json::Value;
+
+    const TAURI_CONF: &str = include_str!("../tauri.conf.json");
+    const CAPABILITIES: &str = include_str!("../capabilities/default.json");
+
+    #[test]
+    fn csp_is_set() {
+        let conf: Value = serde_json::from_str(TAURI_CONF).expect("tauri.conf.json parses");
+        let csp = &conf["app"]["security"]["csp"];
+        assert!(
+            csp.is_string() && !csp.as_str().unwrap().is_empty(),
+            "app.security.csp must be a non-empty policy, not null: {csp:?}"
+        );
+        let csp = csp.as_str().unwrap();
+        assert!(
+            csp.contains("script-src 'self'"),
+            "CSP must restrict scripts to 'self': {csp}"
+        );
+        assert!(
+            csp.contains("object-src 'none'"),
+            "CSP must forbid plugins/objects: {csp}"
+        );
+    }
+
+    #[test]
+    fn global_tauri_is_disabled() {
+        let conf: Value = serde_json::from_str(TAURI_CONF).expect("tauri.conf.json parses");
+        assert_eq!(
+            conf["app"]["withGlobalTauri"],
+            Value::Bool(false),
+            "withGlobalTauri must be false so window.__TAURI__ is not injected"
+        );
+    }
+
+    #[test]
+    fn dangerous_capabilities_are_not_granted() {
+        let caps: Value = serde_json::from_str(CAPABILITIES).expect("capabilities parse");
+        let perms = caps["permissions"]
+            .as_array()
+            .expect("permissions is an array");
+        for forbidden in ["fs:default", "process:default"] {
+            assert!(
+                !perms.iter().any(|p| p == forbidden),
+                "capability {forbidden} must not be granted to the main window"
+            );
+        }
+    }
+}
