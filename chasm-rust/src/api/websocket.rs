@@ -433,26 +433,16 @@ pub async fn ws_handler(
     // Perform WebSocket handshake
     let (mut response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
-    // If the client authenticated via the `bearer` subprotocol (the log-safe
-    // alternative to a `?token=` URL), echo the selected subprotocol so the
-    // browser's handshake completes cleanly. We never echo the token itself.
-    if req
-        .headers()
-        .get("Sec-WebSocket-Protocol")
-        .and_then(|h| h.to_str().ok())
-        .map(|v| {
-            v.split(',')
-                .next()
-                .map(|s| s.trim().eq_ignore_ascii_case("bearer"))
-                .unwrap_or(false)
-        })
-        .unwrap_or(false)
-    {
+    // If the client offered the `bearer` subprotocol (the log-safe alternative
+    // to a `?token=` URL), echo the selected subprotocol so the browser's
+    // handshake completes cleanly. We never echo the token itself. Uses the same
+    // parser as the auth extractor so the two cannot disagree on what a bearer
+    // subprotocol is.
+    if crate::api::auth::bearer_subprotocol_token(req.headers()).is_some() {
         if let Ok(val) = actix_web::http::header::HeaderValue::from_str("bearer") {
-            response.headers_mut().insert(
-                actix_web::http::header::SEC_WEBSOCKET_PROTOCOL,
-                val,
-            );
+            response
+                .headers_mut()
+                .insert(actix_web::http::header::SEC_WEBSOCKET_PROTOCOL, val);
         }
     }
 

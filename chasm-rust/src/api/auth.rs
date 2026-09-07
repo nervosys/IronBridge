@@ -396,16 +396,39 @@ fn path_requires_auth(path: &str) -> bool {
 /// the token in the URL. It is a lesser channel -- URLs are logged in more
 /// places than headers -- so the header is tried first and the query parameter
 /// is the fallback, not the norm.
-/// True when the request is a WebSocket handshake, i.e. it carries an
-/// `Upgrade: websocket` header (case-insensitive per RFC 6455). Ordinary HTTP
-/// API requests never set this, so it cleanly distinguishes the one channel
-/// that legitimately needs a token in the URL.
-fn is_websocket_upgrade(req: &actix_web::dev::ServiceRequest) -> bool {
-    req.headers()
-        .get("Upgrade")
+/// True when the request targets a WebSocket route -- the only endpoints that
+/// legitimately carry the token in the handshake (subprotocol, or the legacy
+/// query string) because a browser cannot set an `Authorization` header on a
+/// `WebSocket`.
+///
+/// This is bound to the request *path*, not the client-settable `Upgrade`
+/// header: gating on `Upgrade: websocket` would let a caller set that header on
+/// an ordinary endpoint (`GET /api/sessions?token=...`) to smuggle the token in
+/// the URL and have it logged -- exactly the leak this guard exists to prevent.
+/// The path cannot be spoofed into hitting a non-WS handler.
+fn is_websocket_route(req: &actix_web::dev::ServiceRequest) -> bool {
+    matches!(req.path(), "/ws" | "/recording/ws")
+}
+
+/// The bearer token offered in the `Sec-WebSocket-Protocol` handshake header,
+/// if any. Format is `bearer, <token>` (from `new WebSocket(url, ['bearer',
+/// token])`). Shared with the WS handler's handshake echo so the two never
+/// disagree on what counts as a bearer subprotocol.
+pub(crate) fn bearer_subprotocol_token(
+    headers: &actix_web::http::header::HeaderMap,
+) -> Option<String> {
+    headers
+        .get("Sec-WebSocket-Protocol")
         .and_then(|h| h.to_str().ok())
-        .map(|v| v.eq_ignore_ascii_case("websocket"))
-        .unwrap_or(false)
+        .and_then(|v| {
+            let mut parts = v.split(',').map(|s| s.trim());
+            match (parts.next(), parts.next()) {
+                (Some(scheme), Some(tok)) if scheme.eq_ignore_ascii_case("bearer") => {
+                    Some(tok.to_string())
+                }
+                _ => None,
+            }
+        })
 }
 
 fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUser> {
@@ -416,34 +439,20 @@ fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUs
         .and_then(|s| s.strip_prefix("Bearer "))
         .and_then(validate_token_claims)
         .or_else(|| {
-            // The query-parameter fallback is *only* for WebSocket upgrades,
-            // where the browser cannot set an `Authorization` header. Accepting
-            // it on ordinary requests would let a token ride in the URL of any
-            // API call, where it leaks into access logs, proxy logs, browser
-            // history, and the `Referer` of anything the response loads. Gate
-            // it on the `Upgrade: websocket` handshake header, which normal
-            // requests never carry.
-            if !is_websocket_upgrade(req) {
+            // The subprotocol / query-string token channels are *only* for the
+            // WebSocket routes, where a browser cannot set an `Authorization`
+            // header. Honouring them elsewhere would let a token ride in the URL
+            // of an ordinary API call, where it leaks into access logs, proxy
+            // logs, browser history, and the `Referer` of anything the response
+            // loads. Bound to the route path (not a spoofable header).
+            if !is_websocket_route(req) {
                 return None;
             }
             // Preferred WS channel: the token rides in the `Sec-WebSocket-
-            // Protocol` handshake header (sent by `new WebSocket(url,
-            // ['bearer', token])`), which — unlike the URL — is not written to
-            // request-line access logs. Format is `bearer, <token>`.
-            let from_subprotocol = req
-                .headers()
-                .get("Sec-WebSocket-Protocol")
-                .and_then(|h| h.to_str().ok())
-                .and_then(|v| {
-                    let mut parts = v.split(',').map(|s| s.trim());
-                    match (parts.next(), parts.next()) {
-                        (Some(scheme), Some(tok)) if scheme.eq_ignore_ascii_case("bearer") => {
-                            Some(tok.to_string())
-                        }
-                        _ => None,
-                    }
-                })
-                .and_then(|t| validate_token_claims(&t));
+            // Protocol` handshake header, which — unlike the URL — is not
+            // written to request-line access logs.
+            let from_subprotocol =
+                bearer_subprotocol_token(req.headers()).and_then(|t| validate_token_claims(&t));
 
             from_subprotocol.or_else(|| {
                 // Legacy fallback: token in the query string. Still WS-only.
@@ -1973,7 +1982,7 @@ mod enforcement_tests {
     }
 
     #[test]
-    fn query_token_accepted_only_on_websocket_upgrade() {
+    fn query_token_accepted_only_on_websocket_routes() {
         let user = User {
             id: "u1".into(),
             email: "u1@example.com".into(),
@@ -1999,17 +2008,39 @@ mod enforcement_tests {
             .to_srv_request();
         assert!(
             request_token(&plain).is_none(),
-            "a ?token= on a non-WebSocket request must not authenticate"
+            "a ?token= on a non-WebSocket route must not authenticate"
         );
 
-        // The same token on a genuine WebSocket upgrade IS accepted.
-        let ws = actix_web::test::TestRequest::get()
-            .uri(&format!("/ws?token={token}"))
+        // Spoof guard: setting `Upgrade: websocket` on an ordinary route must
+        // still NOT authenticate from the URL. The gate is the route path, not
+        // this client-settable header -- otherwise the token would ride in (and
+        // be logged from) the URL of a normal API request.
+        let spoof = actix_web::test::TestRequest::get()
+            .uri(&format!("/api/sessions?token={token}"))
             .insert_header(("Upgrade", "websocket"))
             .to_srv_request();
         assert!(
-            request_token(&ws).is_some(),
-            "a ?token= on a WebSocket upgrade must authenticate"
+            request_token(&spoof).is_none(),
+            "a forged Upgrade header on a non-WS route must not authenticate from the URL"
+        );
+
+        // On a WebSocket route the query fallback IS accepted (legacy path).
+        let ws_query = actix_web::test::TestRequest::get()
+            .uri(&format!("/ws?token={token}"))
+            .to_srv_request();
+        assert!(
+            request_token(&ws_query).is_some(),
+            "a ?token= on the /ws route must authenticate"
+        );
+
+        // Preferred WS channel: token in the Sec-WebSocket-Protocol header.
+        let ws_subproto = actix_web::test::TestRequest::get()
+            .uri("/ws")
+            .insert_header(("Sec-WebSocket-Protocol", format!("bearer, {token}")))
+            .to_srv_request();
+        assert!(
+            request_token(&ws_subproto).is_some(),
+            "a bearer subprotocol on /ws must authenticate"
         );
 
         // The Authorization header path is unaffected on ordinary requests.
