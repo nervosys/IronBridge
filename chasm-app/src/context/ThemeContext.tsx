@@ -158,7 +158,11 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 // Provider component
 export function ThemeContextProvider({ children }: { children: ReactNode }) {
-    const systemColorScheme = useColorScheme() || 'light';
+    // RN 0.86 types `useColorScheme()` as `ColorSchemeName`
+    // ('light' | 'dark' | null | undefined); collapse it to the two values the
+    // reducer accepts so null/undefined defaults to light.
+    const systemColorScheme: 'light' | 'dark' =
+        useColorScheme() === 'dark' ? 'dark' : 'light';
 
     const [state, dispatch] = useReducer(themeReducer, {
         mode: 'system',
