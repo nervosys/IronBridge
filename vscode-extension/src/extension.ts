@@ -2348,7 +2348,9 @@ async function showWorkspacesWebview(_context: vscode.ExtensionContext) {
         'chasmWorkspaces',
         'Chasm: All Workspaces',
         vscode.ViewColumn.One,
-        { enableScripts: true }
+        // Static, script-free report; disabling scripts removes any XSS path
+        // through the interpolated command output entirely.
+        { enableScripts: false }
     );
 
     panel.webview.html = getWorkspacesHtml(result.output);
@@ -2361,7 +2363,9 @@ async function showSessionsWebview(_context: vscode.ExtensionContext, path: stri
         'chasmSessions',
         'Chasm: Sessions',
         vscode.ViewColumn.One,
-        { enableScripts: true }
+        // Static, script-free report; disabling scripts removes any XSS path
+        // through the interpolated command output entirely.
+        { enableScripts: false }
     );
 
     panel.webview.html = getSessionsHtml(path, result.output);
@@ -2374,7 +2378,9 @@ async function showHistoryWebview(_context: vscode.ExtensionContext, path: strin
         'chasmHistory',
         'Chasm: Chat History',
         vscode.ViewColumn.One,
-        { enableScripts: true }
+        // Static, script-free report; disabling scripts removes any XSS path
+        // through the interpolated command output entirely.
+        { enableScripts: false }
     );
 
     panel.webview.html = getHistoryHtml(path, result.output);
