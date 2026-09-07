@@ -9,7 +9,7 @@
         "frontendDist": "../chasm-web/dist"
     },
     "app": {
-        "withGlobalTauri": true,
+        "withGlobalTauri": false,
         "windows": [
             {
                 "title": "Chasm",
@@ -23,7 +23,7 @@
             }
         ],
         "security": {
-            "csp": null
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:8787 http://127.0.0.1:8788 http://localhost:8787 http://localhost:8788 ws://127.0.0.1:8787 ws://127.0.0.1:8788 ws://localhost:8787 ws://localhost:8788; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
         },
         "trayIcon": {
             "iconPath": "icons/icon.png",

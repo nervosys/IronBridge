@@ -6,11 +6,9 @@
         "core:default",
         "shell:allow-open",
         "dialog:default",
-        "fs:default",
         "clipboard-manager:default",
         "notification:default",
         "os:default",
-        "process:default",
         "opener:default"
     ]
 }
