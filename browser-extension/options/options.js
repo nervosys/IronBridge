@@ -136,10 +136,16 @@ async function resetSettings() {
 
 // Export settings to file
 function exportSettingsFile() {
-    chrome.storage.local.get(null).then(settings => {
-        // Remove sensitive data
-        const exportData = { ...settings };
-        delete exportData.apiKey;
+    chrome.storage.local.get(DEFAULT_SETTINGS).then(settings => {
+        // Export only the known settings keys, and never the apiKey. Excluding
+        // runtime state (cachedSessions/lastHarvest/stats) keeps export/import
+        // symmetric with the import allowlist, so a round-trip neither leaks
+        // that data into a shared file nor silently drops it on re-import.
+        const exportData = {};
+        for (const key of Object.keys(DEFAULT_SETTINGS)) {
+            if (key === 'apiKey') continue;
+            exportData[key] = settings[key];
+        }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -162,15 +168,23 @@ function importSettingsFile(event) {
     reader.onload = async (e) => {
         try {
             const parsed = JSON.parse(e.target.result);
-            // Only apply known settings keys. An imported file must not be able
-            // to inject arbitrary storage entries -- e.g. silently repointing
-            // `apiUrl` at an attacker host to exfiltrate captured sessions.
-            const allowed = Object.keys(DEFAULT_SETTINGS);
+            // Apply only the known settings keys, and only when the value's type
+            // matches the default. This keeps an imported file from injecting
+            // unknown storage entries (e.g. a forged `cachedSessions` blob) and
+            // from writing a wrong-typed value -- e.g. `providers` as a number,
+            // which would throw in loadSettings() and break the page on reload.
             const settings = {};
-            for (const key of allowed) {
-                if (Object.prototype.hasOwnProperty.call(parsed, key)) {
-                    settings[key] = parsed[key];
-                }
+            for (const [key, def] of Object.entries(DEFAULT_SETTINGS)) {
+                if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
+                const value = parsed[key];
+                const typeOk = Array.isArray(def)
+                    ? Array.isArray(value) && value.every((v) => typeof v === 'string')
+                    : typeof value === typeof def;
+                if (typeOk) settings[key] = value;
+            }
+            if (Object.keys(settings).length === 0) {
+                showToast('No valid settings found in file', 'error');
+                return;
             }
             await chrome.storage.local.set(settings);
             await loadSettings();
