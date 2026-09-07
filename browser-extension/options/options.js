@@ -161,7 +161,17 @@ function importSettingsFile(event) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const settings = JSON.parse(e.target.result);
+            const parsed = JSON.parse(e.target.result);
+            // Only apply known settings keys. An imported file must not be able
+            // to inject arbitrary storage entries -- e.g. silently repointing
+            // `apiUrl` at an attacker host to exfiltrate captured sessions.
+            const allowed = Object.keys(DEFAULT_SETTINGS);
+            const settings = {};
+            for (const key of allowed) {
+                if (Object.prototype.hasOwnProperty.call(parsed, key)) {
+                    settings[key] = parsed[key];
+                }
+            }
             await chrome.storage.local.set(settings);
             await loadSettings();
             showToast('Settings imported', 'success');
