@@ -1133,14 +1133,18 @@ export function connectWebSocket(onMessage?: WebSocketHandler): () => void {
         // `/ws` is mounted at the server root, not under `/api` -- the socket
         // never connected while this pointed at `/api/ws`.
         //
-        // The token rides in the query string because a browser cannot set an
-        // Authorization header on a WebSocket. On a server with auth enabled
-        // `/ws` is gated like everything else, so without this the live feed
-        // would 401; with auth disabled the token is simply absent.
+        // A browser cannot set an Authorization header on a WebSocket, so the
+        // token travels in the `Sec-WebSocket-Protocol` subprotocol instead of
+        // the URL. Unlike a `?token=` query string, the subprotocol header is
+        // not written to request-line access/proxy logs or browser history, so
+        // the token does not leak there. The server reads `['bearer', token]`
+        // and echoes `bearer`. On a server with auth enabled `/ws` is gated
+        // like everything else; with auth disabled the token is simply absent.
         const token = getToken();
         const base = config.baseUrl?.replace(/^http/, 'ws') + '/ws';
-        const wsUrl = token ? `${base}?token=${encodeURIComponent(token)}` : base;
-        ws = new WebSocket(wsUrl);
+        ws = token
+            ? new WebSocket(base, ['bearer', token])
+            : new WebSocket(base);
 
         ws.onopen = () => {
             wsHandlers.forEach((h) => h({ type: 'connected' }));
