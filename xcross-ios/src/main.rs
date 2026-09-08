@@ -53,6 +53,7 @@ fn run(args: &[String]) -> Result<()> {
         "entitlements" => cmd_entitlements(rest),
         "simctl" => cmd_simctl(rest),
         "codesign" => cmd_codesign(rest),
+        "ship" => cmd_ship(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -642,6 +643,77 @@ fn cmd_codesign(args: &[String]) -> Result<()> {
     }
 }
 
+fn cmd_ship(args: &[String]) -> Result<()> {
+    use xcross_ios::ontology::BuildConfiguration;
+    use xcross_ios::pipeline::{ShipConfig, ShipPlan};
+    use xcross_ios::remote::RemoteHost;
+    use xcross_ios::xcode::ProjectRef;
+
+    let o = parse_opts(args)?;
+    let mut host = RemoteHost::new(o.require("host")?);
+    if let Some(u) = o.get("user") {
+        host = host.user(u);
+    }
+    if let Some(p) = o.get("port") {
+        host = host.port(
+            p.parse()
+                .map_err(|_| Error::InvalidInput(format!("bad --port `{p}`")))?,
+        );
+    }
+    if let Some(i) = o.get("identity") {
+        host = host.identity(i);
+    }
+
+    let project = if let Some(w) = o.get("workspace") {
+        ProjectRef::Workspace(w.into())
+    } else if let Some(p) = o.get("project") {
+        ProjectRef::Project(p.into())
+    } else {
+        return Err(Error::InvalidInput("ship requires --workspace or --project".into()));
+    };
+    let workdir = o.get("workdir").unwrap_or("~").to_string();
+    // Defaults are relative to --workdir: they resolve after the remote `cd`,
+    // carry no `~`/spaces, and so are not shell-quoted (xcodebuild would not
+    // expand a `~` in an argument itself). Pass absolute paths if you prefer.
+    let archive_path = o
+        .get("archive-path")
+        .unwrap_or("build/App.xcarchive")
+        .to_string();
+    let export_path = o.get("export-path").unwrap_or("build/export").to_string();
+
+    let cfg = ShipConfig {
+        host,
+        workdir,
+        project,
+        scheme: o.require("scheme")?.to_string(),
+        configuration: match o.get("configuration").unwrap_or("Release") {
+            "Debug" => BuildConfiguration::Debug,
+            "Release" => BuildConfiguration::Release,
+            other => BuildConfiguration::Custom(other.to_string()),
+        },
+        archive_path,
+        export_options_plist: o
+            .get("export-options")
+            .unwrap_or("build/ExportOptions.plist")
+            .to_string(),
+        export_path,
+        ipa_name: o.get("ipa-name").unwrap_or("App.ipa").to_string(),
+        pull_to: o.get("out").unwrap_or("dist").to_string(),
+        verify: !o.has("no-verify"),
+        verify_bundle: o.get("verify-bundle").map(str::to_string),
+    };
+
+    let plan = ShipPlan::plan(&cfg);
+    println!("ship plan ({} steps):\n", plan.steps.len());
+    print!("{}", plan.render());
+    if o.has("dry-run") {
+        return Ok(());
+    }
+    // Real run: execute each step (the Mac steps go over ssh/scp).
+    println!("\nexecuting…");
+    plan.execute()
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -688,6 +760,10 @@ COMMANDS:
                          parses identity/team/authorities (any host);
                          verify/entitlements run on a Mac (entitlements can
                          --profile <p> to diff a signed app's real entitlements).
+  ship                   Orchestrate the whole release on a remote Mac:
+                         archive -> exportArchive .ipa -> scp pull -> verify.
+                         --host/--user/--scheme/--workspace|--project required;
+                         --dry-run prints the plan (works on any host).
   help                   Show this help.
 
 REMOTE-XCODEBUILD OPTIONS:

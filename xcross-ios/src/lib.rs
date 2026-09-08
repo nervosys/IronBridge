@@ -42,6 +42,7 @@ pub mod entitlements;
 pub mod error;
 pub mod ipa;
 pub mod ontology;
+pub mod pipeline;
 pub mod plist;
 pub mod plist_read;
 pub mod process;
