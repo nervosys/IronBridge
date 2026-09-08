@@ -145,6 +145,28 @@ The library identifier (`ios-arm64_x86_64-simulator`), the
 the `ontology` types. (Slices use `;`, not `:`, so Windows drive-letter paths
 survive.)
 
+## Remote Mac over SSH (`remote` module)
+
+The Xcode-only stages (a full Swift build, keychain signing) can be triggered
+*from* Windows by driving a Mac over SSH. The `ssh`/`scp` argument construction
+and POSIX shell-quoting are pure and tested here; only the runners need a
+reachable Mac.
+
+```sh
+xcross-ios remote-xcodebuild \
+  --host mac.local --user ci --port 2222 --identity ~/.ssh/id_ed25519 \
+  --workdir '~/Chasm' --workspace Chasm.xcworkspace --scheme Chasm \
+  --configuration Release --platform iOS --action archive --dry-run
+# -> ssh -p 2222 -i ~/.ssh/id_ed25519 -o BatchMode=yes ci@mac.local -- \
+#      "cd ~/Chasm && xcodebuild -workspace Chasm.xcworkspace -scheme Chasm \
+#       -configuration Release -destination generic/platform=iOS archive"
+```
+
+`RemoteHost` also builds `scp` push/pull argv to sync the project up and the
+`.app`/`.ipa`/`.xcframework` products back. It encodes the classic gotcha that
+`ssh` spells the port `-p` while `scp` spells it `-P`, and preserves a leading
+`~` in the remote workdir so it still expands to the remote `$HOME`.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
