@@ -8,7 +8,7 @@ const API_BASE = 'http://localhost:8787';
 
 // Headers for an /api request, including a bearer token when one is stored.
 //
-// A IronBridge server with IRONBRIDGE_REQUIRE_AUTH set rejects unauthenticated /api calls
+// A IronBridge server rejects unauthenticated /api calls by default
 // with 401. The token is saved under `accessToken` in extension storage (set it
 // from the options page after logging in); without one, requests go out
 // unauthenticated, which is correct against a server that does not require auth.

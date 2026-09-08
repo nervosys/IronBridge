@@ -94,7 +94,8 @@ export const testApiConnection = async (): Promise<boolean> => {
     }
 };
 
-// Bearer token for a server that has IRONBRIDGE_REQUIRE_AUTH set. Absent by default;
+// Bearer token for a server that requires auth, which is the default. Absent
+// until login;
 // the same key the web client uses, so the two agree on "logged in".
 const ACCESS_TOKEN_KEY = 'ironbridge_access_token';
 

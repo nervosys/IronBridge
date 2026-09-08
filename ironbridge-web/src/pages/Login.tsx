@@ -9,7 +9,7 @@ import { auth } from '../api/client';
  * The login / register screen.
  *
  * Shown by `AuthGate` only when the server has returned 401 -- i.e. when
- * `IRONBRIDGE_REQUIRE_AUTH` is set. On success `auth.login`/`auth.register` store the
+ * the server requires auth, which is the default. On success `auth.login`/`auth.register` store the
  * token in the session module, which flips `isLoginRequired()` off and lets the
  * app render. There is no route for this; it replaces the whole app while login
  * is required, so a half-loaded authenticated page is never visible behind it.

@@ -481,8 +481,8 @@ fn request_token(req: &actix_web::dev::ServiceRequest) -> Option<AuthenticatedUs
     })
 }
 
-/// Reject unauthenticated requests to gated paths when `IRONBRIDGE_REQUIRE_AUTH` is
-/// set (the default; `IRONBRIDGE_DISABLE_AUTH=1` turns it off).
+/// Reject unauthenticated requests to gated paths. On by default;
+/// `IRONBRIDGE_DISABLE_AUTH=1` is the only thing that turns it off.
 ///
 /// A `from_fn` middleware rather than a per-handler extractor: gating every
 /// route by hand is a chance to forget one on each new endpoint, and the one
