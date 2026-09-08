@@ -34,6 +34,7 @@
 pub mod build_settings;
 pub mod builder;
 pub mod bundle;
+pub mod codesign;
 pub mod command;
 pub mod config;
 pub mod doctor;

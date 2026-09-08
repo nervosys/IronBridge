@@ -237,6 +237,24 @@ xcross-ios simctl launch  --udid <UDID> --bundle-id com.nervosys.csm --dry-run
 format, including device names that themselves contain parentheses, and
 `SimDevice::is_booted()` finds a running simulator.
 
+## Signature inspection (`codesign` module)
+
+Read back what a *signed* bundle actually contains and verify it — closing the
+signing loop:
+
+```sh
+xcross-ios codesign display --file dvvv.txt     # parse identity/team/authorities anywhere
+xcross-ios codesign verify --bundle Chasm.app   # (Mac) verify the signature
+xcross-ios codesign entitlements --bundle Chasm.app --profile Dev.mobileprovision
+#   (Mac) extract the signed app's REAL entitlements and diff them vs the profile
+```
+
+`parse_display` distinguishes a certificate signature (full `Authority=` chain,
+`TeamIdentifier`) from an ad-hoc one (no authority, `flags=0x2(adhoc)` — what
+`ldid` produces). The `entitlements --profile` form composes with the
+`entitlements` diff so you validate the *actually-embedded* entitlements, not
+just the `.entitlements` source.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

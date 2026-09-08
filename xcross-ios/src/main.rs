@@ -52,6 +52,7 @@ fn run(args: &[String]) -> Result<()> {
         "build-settings" => cmd_build_settings(rest),
         "entitlements" => cmd_entitlements(rest),
         "simctl" => cmd_simctl(rest),
+        "codesign" => cmd_codesign(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -561,6 +562,86 @@ fn cmd_simctl(args: &[String]) -> Result<()> {
     }
 }
 
+fn cmd_codesign(args: &[String]) -> Result<()> {
+    use xcross_ios::codesign::{self, parse_display};
+    let sub = args.first().map(String::as_str).unwrap_or("display");
+    let o = parse_opts(&args[args.len().min(1)..])?;
+
+    match sub {
+        "display" => {
+            // Parse a captured `codesign -dvvv` dump (any host) or run on a Mac.
+            let info = if let Some(file) = o.get("file") {
+                let text = std::fs::read_to_string(file)
+                    .map_err(|e| Error::io(format!("reading {file}"), e))?;
+                parse_display(&text)
+            } else {
+                codesign::display(std::path::Path::new(o.require("bundle")?))?
+            };
+            println!("Identifier:  {}", info.identifier.as_deref().unwrap_or("-"));
+            println!("Team:        {}", info.team_identifier.as_deref().unwrap_or("(none)"));
+            println!("Format:      {}", info.format.as_deref().unwrap_or("-"));
+            println!("Flags:       {}", info.flags.as_deref().unwrap_or("-"));
+            println!(
+                "Signed:      {}",
+                if info.is_certificate_signed() {
+                    "certificate"
+                } else {
+                    "ad-hoc / unsigned (no Authority)"
+                }
+            );
+            for (i, a) in info.authorities.iter().enumerate() {
+                println!("Authority[{i}]: {a}");
+            }
+            Ok(())
+        }
+        "verify" => {
+            codesign::verify(std::path::Path::new(o.require("bundle")?))?;
+            println!("OK: signature verifies.");
+            Ok(())
+        }
+        "entitlements" => {
+            // Extract a signed bundle's real entitlements; optionally diff them
+            // against a profile — closing the loop with `entitlements`.
+            let ent = codesign::entitlements(std::path::Path::new(o.require("bundle")?))?;
+            if let Some(profile_file) = o.get("profile") {
+                use xcross_ios::entitlements::diff;
+                use xcross_ios::provision::ParsedProfile;
+                let profile = ParsedProfile::from_file(std::path::Path::new(profile_file))?;
+                let granted = profile
+                    .entitlements
+                    .as_ref()
+                    .ok_or_else(|| Error::InvalidInput("profile has no Entitlements".into()))?;
+                let report = diff(&ent, granted);
+                if report.is_satisfiable() {
+                    println!("OK: the signed app's entitlements are covered by the profile.");
+                } else {
+                    for f in &report.findings {
+                        println!("  - {}", f.explain());
+                    }
+                    return Err(Error::InvalidInput("signed entitlements not covered by profile".into()));
+                }
+            } else {
+                println!("{ent:#?}");
+            }
+            Ok(())
+        }
+        "sign" => {
+            // Only build the command (dry-run); actual signing is a Mac action
+            // the user runs deliberately.
+            let argv = codesign::sign_args(
+                o.require("identity")?,
+                o.get("entitlements"),
+                o.require("bundle")?,
+            );
+            println!("codesign {}", shell_join(&argv));
+            Ok(())
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown codesign subcommand `{other}` (display|verify|entitlements|sign)"
+        ))),
+    }
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -603,6 +684,10 @@ COMMANDS:
   simctl <sub>           iOS simulator control. `list [--file <dump>]` parses
                          devices (any host); boot/shutdown/install/launch build
                          `xcrun simctl` commands (--dry-run) or run on a Mac.
+  codesign <sub>         Inspect/verify a signature. `display [--file <dump>]`
+                         parses identity/team/authorities (any host);
+                         verify/entitlements run on a Mac (entitlements can
+                         --profile <p> to diff a signed app's real entitlements).
   help                   Show this help.
 
 REMOTE-XCODEBUILD OPTIONS:

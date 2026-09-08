@@ -21,6 +21,22 @@ pub fn run(program: &str, args: &[&str]) -> Result<()> {
     }
 }
 
+/// Run `program` and capture `(stdout, stderr)` regardless of exit status.
+///
+/// Some Apple tools (`codesign -dvvv`) print their information to stderr and
+/// still exit zero, so the caller needs both streams and the status.
+pub fn output(program: &str, args: &[&str]) -> Result<(String, String, bool)> {
+    let out = Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|e| Error::io(format!("spawning {program}"), e))?;
+    Ok((
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+        out.status.success(),
+    ))
+}
+
 /// Run `program` capturing stdout; fail with captured stderr on non-zero exit.
 pub fn capture(program: &str, args: &[&str]) -> Result<String> {
     let out = Command::new(program)
