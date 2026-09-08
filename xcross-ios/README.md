@@ -167,6 +167,24 @@ xcross-ios remote-xcodebuild \
 `ssh` spells the port `-p` while `scp` spells it `-P`, and preserves a leading
 `~` in the remote workdir so it still expands to the remote `$HOME`.
 
+## Provisioning profiles (`provision`, `plist_read` modules)
+
+A `.mobileprovision` is a PKCS#7/CMS blob whose content is an XML plist that
+Apple stores in cleartext — so the profile's identity, team, expiry,
+entitlements, and device list can be read **without any crypto dependency** by
+slicing out the embedded `<plist>` and parsing it. (The CMS signature is not
+verified; the goal is to *read* a profile, not trust it.)
+
+```sh
+xcross-ios provision Chasm.mobileprovision
+# Name / UUID / Team / App identifier / Expires / Xcode-managed /
+# development-vs-distribution / provisioned-device count / entitlement keys
+```
+
+Built on `plist_read`, a small dependency-free reader for the XML property-list
+subset Apple emits (`dict`/`array`/`string`/`integer`/`real`/`bool`/`date`/
+`data`), reused for any Apple plist the crate needs to read.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
