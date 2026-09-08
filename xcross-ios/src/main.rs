@@ -56,6 +56,7 @@ fn run(args: &[String]) -> Result<()> {
         "ship" => cmd_ship(rest),
         "export-options" => cmd_export_options(rest),
         "notarize" => cmd_notarize(rest),
+        "xcresult" => cmd_xcresult(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -818,6 +819,39 @@ fn cmd_notarize(args: &[String]) -> Result<()> {
     }
 }
 
+fn cmd_xcresult(args: &[String]) -> Result<()> {
+    use xcross_ios::xcresult;
+    let o = parse_opts(args)?;
+
+    // Parse a captured summary (any host) or run xcresulttool on a Mac.
+    let summary = if let Some(file) = o.get("file") {
+        let text = std::fs::read_to_string(file)
+            .map_err(|e| Error::io(format!("reading {file}"), e))?;
+        xcresult::parse_summary(&text)?
+    } else {
+        xcresult::summary(o.require("path")?)?
+    };
+
+    println!("{}", summary.headline());
+    if summary.expected_failures > 0 {
+        println!("  ({} expected failures)", summary.expected_failures);
+    }
+    for f in &summary.failures {
+        println!("\n  FAIL {}/{}", f.target_name, f.test_name);
+        for line in f.failure_text.lines() {
+            println!("       {line}");
+        }
+    }
+    if !summary.is_success() {
+        // Non-zero exit so CI fails on test failures.
+        return Err(Error::InvalidInput(format!(
+            "{} test(s) failed",
+            summary.failed
+        )));
+    }
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -868,6 +902,9 @@ COMMANDS:
                          app-store|ad-hoc|enterprise|development, --team <id>,
                          --manual --certificate <c> --profiles bundle=name,…,
                          --out <file> (else stdout). Any host.
+  xcresult               Report test results. --file <summary.json> parses a
+                         capture (any host); --path <x.xcresult> runs
+                         xcresulttool on a Mac. Non-zero exit if tests failed.
   notarize <sub>         Apple notarization. `submit --path <ipa> [--wait]` and
                          `staple --path <ipa>` build `xcrun notarytool`/`stapler`
                          commands (--dry-run, secrets redacted) or run on a Mac.
