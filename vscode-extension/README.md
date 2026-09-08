@@ -26,7 +26,7 @@ Universal AI chat session manager for VS Code — harvest, repair, merge, and se
 ## Requirements
 
 - VS Code 1.85.0 or later
-- [IronBridge CLI](https://github.com/nervosys/ironbridge) must be installed and accessible in PATH
+- [IronBridge CLI](https://github.com/nervosys/IronBridge) must be installed and accessible in PATH
 
 ## Installation
 
@@ -234,5 +234,5 @@ AGPL-3.0-only
 ## Links
 
 - [IronBridge CLI on crates.io](https://crates.io/crates/ironbridge-cli)
-- [IronBridge Repository](https://github.com/nervosys/ironbridge)
-- [Report Issues](https://github.com/nervosys/ironbridge/issues)
+- [IronBridge Repository](https://github.com/nervosys/IronBridge)
+- [Report Issues](https://github.com/nervosys/IronBridge/issues)

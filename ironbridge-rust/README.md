@@ -9,13 +9,13 @@
 <p align="center">
   <a href="https://crates.io/crates/ironbridge"><img src="https://img.shields.io/crates/v/ironbridge.svg" alt="Crates.io"></a>
   <a href="https://docs.rs/ironbridge"><img src="https://docs.rs/ironbridge/badge.svg" alt="Documentation"></a>
-  <a href="https://github.com/nervosys/ironbridge/actions"><img src="https://github.com/nervosys/ironbridge/workflows/CI/badge.svg" alt="CI Status"></a>
-  <a href="https://codecov.io/gh/nervosys/ironbridge"><img src="https://codecov.io/gh/nervosys/ironbridge/branch/main/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://github.com/nervosys/IronBridge/actions"><img src="https://github.com/nervosys/IronBridge/workflows/CI/badge.svg" alt="CI Status"></a>
+  <a href="https://codecov.io/gh/nervosys/IronBridge"><img src="https://codecov.io/gh/nervosys/IronBridge/branch/main/graph/badge.svg" alt="Coverage"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL_3.0-blue.svg" alt="License"></a>
 </p>
 
 <p align="center">
-  <video src="https://github.com/nervosys/ironbridge/raw/master/videos/out/getting-started.mp4" width="800" autoplay loop muted playsinline>
+  <video src="https://github.com/nervosys/IronBridge/raw/master/videos/out/getting-started.mp4" width="800" autoplay loop muted playsinline>
     Your browser does not support the video tag. <a href="../videos/out/getting-started.mp4">Watch the demo</a>.
   </video>
 </p>
@@ -48,27 +48,27 @@ cargo install ironbridge
 ### From source
 
 ```bash
-git clone https://github.com/nervosys/ironbridge.git
+git clone https://github.com/nervosys/IronBridge.git
 cd ironbridge
 cargo install --path .
 ```
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/nervosys/ironbridge/releases):
+Download from [GitHub Releases](https://github.com/nervosys/IronBridge/releases):
 
 | Platform    | Download                                                                       |
 | ----------- | ------------------------------------------------------------------------------ |
-| Windows x64 | [ironbridge-windows-x64.zip](https://github.com/nervosys/ironbridge/releases/latest)     |
-| macOS x64   | [ironbridge-darwin-x64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest)   |
-| macOS ARM   | [ironbridge-darwin-arm64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest) |
-| Linux x64   | [ironbridge-linux-x64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest)    |
+| Windows x64 | [ironbridge-windows-x64.zip](https://github.com/nervosys/IronBridge/releases/latest)     |
+| macOS x64   | [ironbridge-darwin-x64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest)   |
+| macOS ARM   | [ironbridge-darwin-arm64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest) |
+| Linux x64   | [ironbridge-linux-x64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest)    |
 
 ### Docker
 
 ```bash
-docker pull ghcr.io/nervosys/ironbridge:latest
-docker run -v ~/.ironbridge:/data ghcr.io/nervosys/ironbridge list workspaces
+docker pull ghcr.io/nervosys/IronBridge:latest
+docker run -v ~/.ironbridge:/data ghcr.io/nervosys/IronBridge list workspaces
 ```
 
 ## 🚀 Quick Start
@@ -808,7 +808,7 @@ Workspaces ──< Sessions ──< Messages
 ### Building
 
 ```bash
-git clone https://github.com/nervosys/ironbridge.git
+git clone https://github.com/nervosys/IronBridge.git
 cd ironbridge
 cargo build --release
 ```
@@ -849,8 +849,8 @@ For security issues, please see our [Security Policy](SECURITY.md).
 ## 📞 Support
 
 - 📖 [Documentation](https://docs.rs/ironbridge)
-- 💬 [GitHub Discussions](https://github.com/nervosys/ironbridge/discussions)
-- 🐛 [Issue Tracker](https://github.com/nervosys/ironbridge/issues)
+- 💬 [GitHub Discussions](https://github.com/nervosys/IronBridge/discussions)
+- 🐛 [Issue Tracker](https://github.com/nervosys/IronBridge/issues)
 
 ---
 

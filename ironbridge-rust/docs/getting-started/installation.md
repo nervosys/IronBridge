@@ -15,22 +15,22 @@ ironbridge --version
 ## From Source
 
 ```bash
-git clone https://github.com/nervosys/ironbridge.git
+git clone https://github.com/nervosys/IronBridge.git
 cd ironbridge/ironbridge-rust
 cargo install --path .
 ```
 
 ## Pre-built Binaries
 
-Download from [GitHub Releases](https://github.com/nervosys/ironbridge/releases):
+Download from [GitHub Releases](https://github.com/nervosys/IronBridge/releases):
 
 | Platform | Architecture | Download |
 |---|---|---|
-| Windows | x86_64 | [ironbridge-windows-x64.zip](https://github.com/nervosys/ironbridge/releases/latest) |
-| macOS | x86_64 | [ironbridge-darwin-x64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest) |
-| macOS | aarch64 | [ironbridge-darwin-arm64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest) |
-| Linux | x86_64 | [ironbridge-linux-x64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest) |
-| Linux | aarch64 | [ironbridge-linux-arm64.tar.gz](https://github.com/nervosys/ironbridge/releases/latest) |
+| Windows | x86_64 | [ironbridge-windows-x64.zip](https://github.com/nervosys/IronBridge/releases/latest) |
+| macOS | x86_64 | [ironbridge-darwin-x64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest) |
+| macOS | aarch64 | [ironbridge-darwin-arm64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest) |
+| Linux | x86_64 | [ironbridge-linux-x64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest) |
+| Linux | aarch64 | [ironbridge-linux-arm64.tar.gz](https://github.com/nervosys/IronBridge/releases/latest) |
 
 ### Installing from Binary
 
@@ -52,8 +52,8 @@ Download from [GitHub Releases](https://github.com/nervosys/ironbridge/releases)
 ## Docker
 
 ```bash
-docker pull ghcr.io/nervosys/ironbridge:latest
-docker run -v ~/.ironbridge:/data ghcr.io/nervosys/ironbridge list workspaces
+docker pull ghcr.io/nervosys/IronBridge:latest
+docker run -v ~/.ironbridge:/data ghcr.io/nervosys/IronBridge list workspaces
 ```
 
 ## Platform Notes

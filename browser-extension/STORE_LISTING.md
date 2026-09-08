@@ -40,7 +40,7 @@ IronBridge sends your data only to your self-hosted IronBridge API server (defau
 **Open Source:**
 IronBridge is fully open source under the AGPL-3.0-only license. Review the code, contribute, or self-host.
 
-Learn more: https://github.com/nervosys/ironbridge
+Learn more: https://github.com/nervosys/IronBridge
 
 ### Category
 
@@ -52,15 +52,15 @@ English
 
 ### Website
 
-https://github.com/nervosys/ironbridge
+https://github.com/nervosys/IronBridge
 
 ### Support URL
 
-https://github.com/nervosys/ironbridge/issues
+https://github.com/nervosys/IronBridge/issues
 
 ### Privacy Policy URL
 
-https://github.com/nervosys/ironbridge/blob/master/browser-extension/PRIVACY_POLICY.md
+https://github.com/nervosys/IronBridge/blob/master/browser-extension/PRIVACY_POLICY.md
 
 ---
 
@@ -92,7 +92,7 @@ AGPL-3.0-only
 
 ### Homepage
 
-https://github.com/nervosys/ironbridge
+https://github.com/nervosys/IronBridge
 
 ### Support Email
 
@@ -100,7 +100,7 @@ support@nervosys.com
 
 ### Support URL
 
-https://github.com/nervosys/ironbridge/issues
+https://github.com/nervosys/IronBridge/issues
 
 ---
 

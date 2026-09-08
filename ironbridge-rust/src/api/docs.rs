@@ -122,7 +122,7 @@ const SWAGGER_UI_HTML: &str = r#"<!DOCTYPE html>
     <div class="custom-header">
         <h1>🔗 IronBridge API</h1>
         <span class="version">v2.0.0</span>
-        <a href="https://github.com/nervosys/ironbridge" target="_blank">GitHub →</a>
+        <a href="https://github.com/nervosys/IronBridge" target="_blank">GitHub →</a>
     </div>
     <div id="swagger-ui"></div>
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>

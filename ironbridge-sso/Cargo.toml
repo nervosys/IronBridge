@@ -6,7 +6,7 @@ rust-version = "1.75"
 description = "Enterprise single sign-on for IronBridge: OIDC and SAML, without native dependencies"
 authors = ["Nervosys LLC <hello@nervosys.ai>"]
 license = "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
-repository = "https://github.com/nervosys/ironbridge"
+repository = "https://github.com/nervosys/IronBridge"
 
 [features]
 default = ["http"]

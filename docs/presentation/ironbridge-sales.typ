@@ -947,7 +947,7 @@ let result = runtime
         #v(4pt)
         #text(size: 8pt, fill: text-dark)[Docker / Podman deployment]
         #v(2pt)
-        #code-block("$ docker run ghcr.io/nervosys/ironbridge")
+        #code-block("$ docker run ghcr.io/nervosys/IronBridge")
       ]
 
       #v(8pt)
@@ -957,7 +957,7 @@ let result = runtime
         #v(4pt)
         #text(size: 8pt, fill: text-dark)[Kubernetes with HA, SSO, LDAP]
         #v(2pt)
-        #code-block("$ helm install ironbridge nervosys/ironbridge")
+        #code-block("$ helm install ironbridge nervosys/IronBridge")
       ]
     ],
   )

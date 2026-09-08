@@ -23,7 +23,7 @@ A Neovim plugin for managing AI chat sessions with the IronBridge system.
 
 ```lua
 {
-  "nervosys/ironbridge.nvim",
+  "nervosys/IronBridge.nvim",
   dependencies = {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope.nvim", -- optional
@@ -40,7 +40,7 @@ A Neovim plugin for managing AI chat sessions with the IronBridge system.
 
 ```lua
 use {
-  "nervosys/ironbridge.nvim",
+  "nervosys/IronBridge.nvim",
   requires = {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope.nvim",
@@ -56,7 +56,7 @@ use {
 ```vim
 Plug 'nvim-lua/plenary.nvim'
 Plug 'nvim-telescope/telescope.nvim'
-Plug 'nervosys/ironbridge.nvim'
+Plug 'nervosys/IronBridge.nvim'
 ```
 
 ## Configuration

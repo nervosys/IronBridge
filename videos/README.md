@@ -1,6 +1,6 @@
 # IronBridge Video Tutorials
 
-Programmatic video tutorials for [IronBridge](https://github.com/nervosys/ironbridge), built with [Remotion](https://remotion.dev/).
+Programmatic video tutorials for [IronBridge](https://github.com/nervosys/IronBridge), built with [Remotion](https://remotion.dev/).
 
 ## Videos
 

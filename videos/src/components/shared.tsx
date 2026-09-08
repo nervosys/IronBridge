@@ -497,7 +497,7 @@ export const OutroSlide: React.FC<{ startFrame?: number }> = ({
         cargo install ironbridge-cli
       </div>
       <div style={{ fontSize: 20, color: COLORS.textMuted }}>
-        github.com/nervosys/ironbridge
+        github.com/nervosys/IronBridge
       </div>
     </AbsoluteFill>
   );

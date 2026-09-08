@@ -23,7 +23,7 @@ export default function HomePage() {
               CLI Reference
             </Link>
             <a
-              href="https://github.com/nervosys/ironbridge"
+              href="https://github.com/nervosys/IronBridge"
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"

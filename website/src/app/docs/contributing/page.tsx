@@ -20,7 +20,7 @@ git clone https://github.com/YOUR_USERNAME/ironbridge.git
 cd ironbridge
 
 # 3. Add upstream remote
-git remote add upstream https://github.com/nervosys/ironbridge.git
+git remote add upstream https://github.com/nervosys/IronBridge.git
 
 # 4. Build the CLI
 cd ironbridge-rust

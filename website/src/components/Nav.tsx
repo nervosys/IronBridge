@@ -19,7 +19,7 @@ export function Header() {
                 <Link href="/docs/features">Features</Link>
                 <Link href="/docs/api">API</Link>
                 <a
-                    href="https://github.com/nervosys/ironbridge"
+                    href="https://github.com/nervosys/IronBridge"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="header-github"

@@ -100,6 +100,6 @@ with the subject line "CLA Signature — [Your Name]".
 **Project:** IronBridge — Universal Chat Session Manager
 **Company:** Nervosys LLC
 **Contact:** [hello@nervosys.ai](mailto:hello@nervosys.ai)
-**Repository:** [github.com/nervosys/ironbridge](https://github.com/nervosys/ironbridge)
+**Repository:** [github.com/nervosys/IronBridge](https://github.com/nervosys/IronBridge)
 
 Copyright 2024-2026 Nervosys LLC. All rights reserved.

@@ -51,7 +51,7 @@
 === "From Source"
 
     ```bash
-    git clone https://github.com/nervosys/ironbridge.git
+    git clone https://github.com/nervosys/IronBridge.git
     cd ironbridge/ironbridge-rust
     cargo install --path .
     ```

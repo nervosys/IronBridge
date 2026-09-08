@@ -2,8 +2,8 @@ site_name: IronBridge
 site_url: https://ironbridge.nervosys.ai
 site_description: "Chat Session Manager — Bridging the divide between AI providers"
 site_author: Nervosys
-repo_url: https://github.com/nervosys/ironbridge
-repo_name: nervosys/ironbridge
+repo_url: https://github.com/nervosys/IronBridge
+repo_name: nervosys/IronBridge
 
 theme:
   name: material
@@ -50,7 +50,7 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/nervosys/ironbridge
+      link: https://github.com/nervosys/IronBridge
     - icon: fontawesome/brands/x-twitter
       link: https://x.com/nervosys
   generator: false

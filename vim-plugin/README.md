@@ -20,20 +20,20 @@ A Vim plugin for managing AI chat sessions with the IronBridge system.
 ### Using vim-plug
 
 ```vim
-Plug 'nervosys/ironbridge.vim'
+Plug 'nervosys/IronBridge.vim'
 ```
 
 ### Using Vundle
 
 ```vim
-Plugin 'nervosys/ironbridge.vim'
+Plugin 'nervosys/IronBridge.vim'
 ```
 
 ### Using Pathogen
 
 ```bash
 cd ~/.vim/bundle
-git clone https://github.com/nervosys/ironbridge.vim
+git clone https://github.com/nervosys/IronBridge.vim
 ```
 
 ### Manual
