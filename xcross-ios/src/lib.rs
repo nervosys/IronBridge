@@ -42,6 +42,7 @@ pub mod entitlements;
 pub mod error;
 pub mod export_options;
 pub mod ipa;
+pub mod notarize;
 pub mod ontology;
 pub mod pipeline;
 pub mod plist;

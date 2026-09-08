@@ -288,6 +288,22 @@ Typed `ExportMethod`/`SigningStyle`; manual signing requires a certificate and a
 least one profile (validated before emit). `--method` accepts the classic and
 newer Xcode aliases (`app-store-connect`, `release-testing`, `debugging`).
 
+## Notarization (`notarize` module)
+
+For distribution outside the App Store, Apple requires the build to be notarized
+and the ticket stapled. This wraps `xcrun notarytool` + `stapler`:
+
+```sh
+xcross-ios notarize submit --path Chasm.ipa --keychain-profile chasm --wait
+xcross-ios notarize staple --path Chasm.ipa --keychain-profile chasm
+```
+
+Credentials: `--keychain-profile` (recommended), App Store Connect API key
+(`--key-id/--issuer/--key`), or `--apple-id/--team/--password`. The status parser
+(`parse_status`, `parse_submission_id`) reads the `--wait` output, taking the
+*final* status. **Secrets are redacted in `--dry-run` output** (an app-specific
+password shows as `***`).
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

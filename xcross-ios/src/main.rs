@@ -55,6 +55,7 @@ fn run(args: &[String]) -> Result<()> {
         "codesign" => cmd_codesign(rest),
         "ship" => cmd_ship(rest),
         "export-options" => cmd_export_options(rest),
+        "notarize" => cmd_notarize(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -752,6 +753,65 @@ fn cmd_export_options(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_notarize(args: &[String]) -> Result<()> {
+    use xcross_ios::notarize::{self, Credentials};
+    let sub = args.first().map(String::as_str).unwrap_or("submit");
+    let o = parse_opts(&args[args.len().min(1)..])?;
+
+    // Resolve credentials (keychain profile preferred).
+    let creds = if let Some(p) = o.get("keychain-profile") {
+        Credentials::KeychainProfile(p.to_string())
+    } else if let (Some(k), Some(i), Some(kp)) = (o.get("key-id"), o.get("issuer"), o.get("key")) {
+        Credentials::ApiKey {
+            key_id: k.to_string(),
+            issuer: i.to_string(),
+            key_path: kp.to_string(),
+        }
+    } else if let (Some(a), Some(t), Some(pw)) =
+        (o.get("apple-id"), o.get("team"), o.get("password"))
+    {
+        Credentials::AppleId {
+            apple_id: a.to_string(),
+            team_id: t.to_string(),
+            password: pw.to_string(),
+        }
+    } else {
+        return Err(Error::InvalidInput(
+            "provide credentials: --keychain-profile, OR --key-id/--issuer/--key, OR --apple-id/--team/--password".into(),
+        ));
+    };
+
+    match sub {
+        "submit" => {
+            let path = o.require("path")?;
+            let wait = o.has("wait");
+            let argv = notarize::submit_args(path, &creds, wait);
+            if o.has("dry-run") {
+                // Redact any secret in the shown command.
+                println!("xcrun {}", shell_join(&notarize::redact(&argv)));
+                return Ok(());
+            }
+            let (id, status) = notarize::submit(path, &creds, wait)?;
+            println!("submission id: {}", id.as_deref().unwrap_or("(unknown)"));
+            println!("status:        {:?}", status);
+            Ok(())
+        }
+        "staple" => {
+            let path = o.require("path")?;
+            if o.has("dry-run") {
+                println!("{}", shell_join(&notarize::staple_args(path)));
+                return Ok(());
+            }
+            notarize::staple(path)?;
+            println!("stapled {path}");
+            Ok(())
+        }
+        other => Err(Error::InvalidInput(format!(
+            "unknown notarize subcommand `{other}` (submit|staple)"
+        ))),
+    }
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -802,6 +862,11 @@ COMMANDS:
                          app-store|ad-hoc|enterprise|development, --team <id>,
                          --manual --certificate <c> --profiles bundle=name,…,
                          --out <file> (else stdout). Any host.
+  notarize <sub>         Apple notarization. `submit --path <ipa> [--wait]` and
+                         `staple --path <ipa>` build `xcrun notarytool`/`stapler`
+                         commands (--dry-run, secrets redacted) or run on a Mac.
+                         Creds: --keychain-profile | --key-id/--issuer/--key |
+                         --apple-id/--team/--password.
   ship                   Orchestrate the whole release on a remote Mac:
                          archive -> exportArchive .ipa -> scp pull -> verify.
                          --host/--user/--scheme/--workspace|--project required;
