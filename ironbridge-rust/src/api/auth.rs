@@ -369,15 +369,24 @@ pub fn auth_required() -> bool {
 ///   obtain a token; its own sensitive endpoints self-protect with the
 ///   `AuthenticatedUser` extractor;
 /// - `/sso/*`, `/oidc/*` are the SSO handshake, reached before a session exists;
-/// - `/docs*` is the published API reference and carries no user data.
+/// - `/docs` and `/docs/*` are the published API reference and carry no user
+///   data.
+///
+/// Every prefix ends in `/`, and a bare path that must stay open is listed in
+/// `OPEN_EXACT` instead. That is deliberate: a prefix without the separator
+/// opens every path merely *starting* with those characters, so a plain
+/// `"/docs"` would also hand out `/docs-admin` or `/docsecrets` to anyone. No
+/// such route exists today -- this is about the hole not being there to fall
+/// into when one is added.
 fn path_requires_auth(path: &str) -> bool {
     const OPEN_EXACT: &[&str] = &[
         "/health",
         "/api/health",
         "/api/system/health",
         "/api/system/providers/health",
+        "/docs",
     ];
-    const OPEN_PREFIXES: &[&str] = &["/auth/", "/sso/", "/oidc/", "/docs"];
+    const OPEN_PREFIXES: &[&str] = &["/auth/", "/sso/", "/oidc/", "/docs/"];
 
     if OPEN_EXACT.contains(&path) {
         return false;
@@ -1993,6 +2002,18 @@ mod enforcement_tests {
         assert!(!path_requires_auth("/oidc/callback"));
         assert!(!path_requires_auth("/docs"));
         assert!(!path_requires_auth("/docs/openapi.yaml"));
+
+        // An open prefix must not extend past the path separator. `/docs` was
+        // once listed as a prefix rather than an exact path, which opened
+        // every route merely starting with those characters. Nothing named
+        // like this exists yet, which is the point: the gate should already be
+        // shut when one is added.
+        assert!(path_requires_auth("/docs-admin"));
+        assert!(path_requires_auth("/docsecrets"));
+        assert!(path_requires_auth("/authorize"));
+        assert!(path_requires_auth("/ssoconfig"));
+        assert!(path_requires_auth("/oidcadmin"));
+        assert!(path_requires_auth("/healthz"));
     }
 
     /// The middleware, end to end, in both modes.
