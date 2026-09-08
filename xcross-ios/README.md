@@ -94,6 +94,35 @@ println!("{}", artifacts.ipa.unwrap().display());
 # Ok::<(), xcross_ios::Error>(())
 ```
 
+## Xcode ontology & wrapper (`ontology`, `xcode` modules)
+
+For the parts of an iOS build that genuinely require Xcode (a full Swift/Xcode
+project, real code signing), the crate also ships a **typed ontology** of the
+Apple build domain and a **wrapper** that automates the Xcode command surface.
+
+- `ontology` — host-independent types and their relationships: `Platform`,
+  `Arch` (with the platform→arch constraint), `Version` (numerically ordered),
+  `InstalledSdk`, `Destination` (renders `xcodebuild -destination`),
+  `BuildConfiguration`, `ProductType`, `SigningIdentity`/`SigningKind`,
+  `ProvisioningProfile`.
+- `xcode` — typed builders (`Xcodebuild`, and wrappers for `xcrun`,
+  `xcode-select`, `security`) plus parsers (`-showsdks`, `security
+  find-identity`). The command construction and parsing are **pure and tested on
+  any host**; only execution needs a Mac.
+
+The split is the point: **author and test the whole pipeline on Windows**, then
+run it on a Mac (locally or over SSH). Demonstrate it off a Mac with `--dry-run`:
+
+```sh
+xcross-ios xcode-build --workspace App.xcworkspace --scheme App \
+  --configuration Release --platform iOS --action archive --dry-run
+# -> xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+#      -destination generic/platform=iOS archive
+
+xcross-ios xcode-sdks         # lists SDKs on a Mac; clean "macOS-only" error otherwise
+xcross-ios xcode-identities   # lists signing identities on a Mac
+```
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

@@ -43,6 +43,9 @@ fn run(args: &[String]) -> Result<()> {
         "build" => cmd_build(rest),
         "bundle" => cmd_bundle(rest),
         "package" => cmd_package(rest),
+        "xcode-build" => cmd_xcode_build(rest),
+        "xcode-sdks" => cmd_xcode_sdks(),
+        "xcode-identities" => cmd_xcode_identities(),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -170,6 +173,102 @@ fn cmd_package(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_xcode_build(args: &[String]) -> Result<()> {
+    use xcross_ios::ontology::{BuildConfiguration, Destination, Platform};
+    use xcross_ios::xcode::{Action, Xcodebuild};
+
+    let o = parse_opts(args)?;
+    let action = match o.get("action").unwrap_or("build") {
+        "build" => Action::Build,
+        "clean" => Action::Clean,
+        "test" => Action::Test,
+        "archive" => Action::Archive,
+        "build-for-testing" => Action::BuildForTesting,
+        other => return Err(Error::InvalidInput(format!("unknown --action `{other}`"))),
+    };
+    let mut xb = Xcodebuild::new(action);
+    if let Some(w) = o.get("workspace") {
+        xb = xb.workspace(w);
+    } else if let Some(p) = o.get("project") {
+        xb = xb.project(p);
+    }
+    if let Some(s) = o.get("scheme") {
+        xb = xb.scheme(s);
+    }
+    if let Some(c) = o.get("configuration") {
+        xb = xb.configuration(match c {
+            "Debug" => BuildConfiguration::Debug,
+            "Release" => BuildConfiguration::Release,
+            other => BuildConfiguration::Custom(other.to_string()),
+        });
+    }
+    // Destination: platform + optional simulator name/os.
+    if let Some(pf) = o.get("platform") {
+        let platform = Platform::from_sdk_family(pf)
+            .or_else(|| match pf {
+                "iOS" => Some(Platform::IOS),
+                "iOS Simulator" => Some(Platform::IOSSimulator),
+                _ => None,
+            })
+            .ok_or_else(|| Error::InvalidInput(format!("unknown --platform `{pf}`")))?;
+        let dest = match o.get("device") {
+            Some(name) => Destination::simulator(
+                platform,
+                name,
+                o.get("os").and_then(xcross_ios::ontology::Version::parse),
+            ),
+            None => Destination::generic(platform),
+        };
+        xb = xb.destination(dest);
+    }
+    xb.skip_signing = o.has("no-sign");
+
+    if o.has("dry-run") {
+        // Print the exact command that would run — works on any host.
+        println!("xcodebuild {}", shell_join(&xb.args()));
+        return Ok(());
+    }
+    xb.run()
+}
+
+fn cmd_xcode_sdks() -> Result<()> {
+    for sdk in xcross_ios::xcode::installed_sdks()? {
+        println!(
+            "{:<16} {:<8} -sdk {}",
+            sdk.platform.destination_name(),
+            sdk.version,
+            sdk.canonical_name
+        );
+    }
+    Ok(())
+}
+
+fn cmd_xcode_identities() -> Result<()> {
+    for id in xcross_ios::xcode::signing_identities()? {
+        println!(
+            "{:<13?} {} {}",
+            id.kind,
+            id.sha1.as_deref().unwrap_or("-"),
+            id.name
+        );
+    }
+    Ok(())
+}
+
+/// Join args for display, quoting any that contain spaces.
+fn shell_join(args: &[String]) -> String {
+    args.iter()
+        .map(|a| {
+            if a.contains(' ') {
+                format!("\"{a}\"")
+            } else {
+                a.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 const HELP: &str = "\
 xcross-ios — build iOS apps off a Mac (cross-compile, bundle, pseudo-sign, package)
 
@@ -182,7 +281,19 @@ COMMANDS:
   build                  Full pipeline: (compile) -> bundle -> sign -> package.
   bundle                 Assemble a .app from a prebuilt executable.
   package                Package an existing .app into a .ipa.
+  xcode-build            Drive `xcodebuild` via the typed wrapper (--dry-run to
+                         print the command; runs it on a Mac otherwise).
+  xcode-sdks             List installed SDKs (parses `xcodebuild -showsdks`; Mac).
+  xcode-identities       List code-signing identities (`security`; Mac).
   help                   Show this help.
+
+XCODE-BUILD OPTIONS:
+  --action <a>           build | clean | test | archive | build-for-testing
+  --workspace <p> | --project <p>
+  --scheme <s>  --configuration <Debug|Release|...>
+  --platform <p>  --device <name>  --os <ver>   (destination)
+  --no-sign      Add CODE_SIGNING_ALLOWED=NO (CI compile checks)
+  --dry-run      Print the xcodebuild command instead of running it
 
 COMMON OPTIONS:
   --target <t>           device | sim | x86_64-sim        (default: device)

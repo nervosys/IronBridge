@@ -38,12 +38,14 @@ pub mod config;
 pub mod doctor;
 pub mod error;
 pub mod ipa;
+pub mod ontology;
 pub mod plist;
 pub mod process;
 pub mod sdk;
 pub mod sign;
 pub mod target;
 pub mod toolchain;
+pub mod xcode;
 pub mod zip;
 
 pub use config::Config;
