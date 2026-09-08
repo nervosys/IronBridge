@@ -51,6 +51,7 @@ fn run(args: &[String]) -> Result<()> {
         "provision" => cmd_provision(rest),
         "build-settings" => cmd_build_settings(rest),
         "entitlements" => cmd_entitlements(rest),
+        "simctl" => cmd_simctl(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -513,6 +514,53 @@ fn cmd_entitlements(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_simctl(args: &[String]) -> Result<()> {
+    use xcross_ios::simctl;
+    let sub = args.first().map(String::as_str).unwrap_or("list");
+    let o = parse_opts(&args[args.len().min(1)..])?;
+
+    // For action subcommands, either print the `xcrun` command (--dry-run) or
+    // run it on a Mac.
+    let emit = |argv: Vec<String>, dry: bool| -> Result<()> {
+        if dry {
+            println!("xcrun {}", shell_join(&argv));
+            Ok(())
+        } else {
+            simctl::run(&argv)
+        }
+    };
+    let dry = o.has("dry-run");
+
+    match sub {
+        "list" => {
+            let devices = if let Some(file) = o.get("file") {
+                let text = std::fs::read_to_string(file)
+                    .map_err(|e| Error::io(format!("reading {file}"), e))?;
+                simctl::parse_list_devices(&text)
+            } else {
+                simctl::list_devices()?
+            };
+            for d in devices {
+                println!("{:<28} {:<12} {:<10} {}", d.name, format!("{:?}", d.state), d.runtime, d.udid);
+            }
+            Ok(())
+        }
+        "boot" => emit(simctl::boot_args(o.require("udid")?), dry),
+        "shutdown" => emit(simctl::shutdown_args(o.require("udid")?), dry),
+        "install" => emit(
+            simctl::install_args(o.require("udid")?, o.require("app")?),
+            dry,
+        ),
+        "launch" => emit(
+            simctl::launch_args(o.require("udid")?, o.require("bundle-id")?),
+            dry,
+        ),
+        other => Err(Error::InvalidInput(format!(
+            "unknown simctl subcommand `{other}` (list|boot|shutdown|install|launch)"
+        ))),
+    }
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -552,6 +600,9 @@ COMMANDS:
   build-settings         Parse `xcodebuild -showBuildSettings`. --file <dump>
                          parses a capture (any host); else runs on a Mac via
                          --workspace/--project + --scheme. --key <K> prints one.
+  simctl <sub>           iOS simulator control. `list [--file <dump>]` parses
+                         devices (any host); boot/shutdown/install/launch build
+                         `xcrun simctl` commands (--dry-run) or run on a Mac.
   help                   Show this help.
 
 REMOTE-XCODEBUILD OPTIONS:

@@ -220,6 +220,23 @@ identifier-shaped ones (`application-identifier`, `keychain-access-groups`, the
 application-groups array) let the profile carry a trailing `*` the app value
 prefix-matches. Arrays are covered element-wise.
 
+## Simulator control (`simctl` module)
+
+Wrap `xcrun simctl`: parse the device list and build boot/install/launch
+commands. The parser and builders are pure (tested on Windows); execution runs
+on a Mac.
+
+```sh
+xcross-ios simctl list --file devices.txt      # parse a capture anywhere
+xcross-ios simctl boot    --udid <UDID> --dry-run
+xcross-ios simctl install --udid <UDID> --app Chasm.app --dry-run
+xcross-ios simctl launch  --udid <UDID> --bundle-id com.nervosys.csm --dry-run
+```
+
+`parse_list_devices` handles the `-- <runtime> --` / `Name (UDID) (State)`
+format, including device names that themselves contain parentheses, and
+`SimDevice::is_booted()` finds a running simulator.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
