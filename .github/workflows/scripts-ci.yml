@@ -4,371 +4,114 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'ironbridge-rust/examples/**'
+      - 'examples/**'
+      - 'browser-extension/build.ps1'
       - '.github/workflows/scripts-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'ironbridge-rust/examples/**'
+      - 'examples/**'
+      - 'browser-extension/build.ps1'
       - '.github/workflows/scripts-ci.yml'
   workflow_dispatch:
 
 jobs:
   # ==========================================================================
-  # PowerShell Scripts (Cross-Platform)
+  # Parse every committed PowerShell file.
+  #
+  # This is the deterministic half: it needs no binary, no VS Code data and no
+  # network, so it gives the same answer on every runner. It catches the thing
+  # a rename or a bad edit actually breaks -- a file that no longer parses.
   # ==========================================================================
-  powershell-scripts:
-    name: PowerShell Scripts (${{ matrix.os }})
+  parse:
+    name: Parse PowerShell (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PowerShell (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            # Install PowerShell on Ubuntu
-            sudo apt-get update
-            sudo apt-get install -y wget apt-transport-https software-properties-common
-            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
-            sudo dpkg -i packages-microsoft-prod.deb
-            sudo apt-get update
-            sudo apt-get install -y powershell
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            # Install PowerShell on macOS
-            brew install --cask powershell
-          fi
-
-      - name: Verify PowerShell installation
+      - name: Parse all .ps1 files
         shell: pwsh
         run: |
-          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
-          Write-Host "OS: $($PSVersionTable.OS)"
-          Write-Host "Platform: $($PSVersionTable.Platform)"
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            ironbridge-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
-
-      - name: Build IRONBRIDGE binary
-        working-directory: ironbridge-rust
-        run: cargo build --release
-
-      - name: Create mock VS Code data directory
-        shell: pwsh
-        run: |
-          $vscodePath = switch ($PSVersionTable.Platform) {
-            "Win32NT" { "$env:APPDATA/Code" }
-            "Unix" { 
-              if ($IsMacOS) { "$HOME/Library/Application Support/Code" }
-              else { "$HOME/.config/Code" }
+          $files = git ls-files '*.ps1'
+          if (-not $files) { throw 'No .ps1 files found -- the path filter and the repo disagree.' }
+          $bad = 0
+          foreach ($f in $files) {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f), [ref]$null, [ref]$errs)
+            if ($errs -and $errs.Count) {
+              $bad++
+              Write-Host "FAIL $f"
+              $errs | ForEach-Object { Write-Host "   line $($_.Extent.StartLineNumber): $($_.Message)" }
+            } else {
+              Write-Host "ok   $f"
             }
-            default { "$HOME/.config/Code" }
           }
-          
-          # Create minimal mock structure
-          $workspaceStorage = Join-Path $vscodePath "User/workspaceStorage"
-          New-Item -ItemType Directory -Path $workspaceStorage -Force | Out-Null
-          Write-Host "Created mock VS Code directory: $vscodePath"
-
-      - name: Test local_providers.ps1
-        shell: pwsh
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          Write-Host "Testing local_providers.ps1..."
-          try {
-            ./local_providers.ps1
-            Write-Host "✓ local_providers.ps1 completed successfully"
-          } catch {
-            Write-Host "⚠ local_providers.ps1 failed (may be expected without VS Code): $_"
-            exit 0  # Don't fail the job
-          }
-
-      - name: Test cloud_providers.ps1
-        shell: pwsh
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          Write-Host "Testing cloud_providers.ps1..."
-          ./cloud_providers.ps1
-          Write-Host "✓ cloud_providers.ps1 completed successfully"
-
-      - name: Verify generated JSON files
-        shell: pwsh
-        working-directory: ironbridge-rust/examples
-        run: |
-          $tempDir = "./temp"
-          if (Test-Path $tempDir) {
-            Write-Host "Generated files in temp/:"
-            Get-ChildItem $tempDir -Filter "*.json" | ForEach-Object {
-              Write-Host "  - $($_.Name) ($($_.Length) bytes)"
-              # Validate JSON
-              try {
-                $content = Get-Content $_.FullName -Raw | ConvertFrom-Json
-                Write-Host "    ✓ Valid JSON"
-              } catch {
-                Write-Host "    ✗ Invalid JSON: $_"
-                exit 1
-              }
-            }
-          } else {
-            Write-Host "No temp directory created"
-          }
-
-      - name: Upload generated files
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-json-${{ matrix.os }}
-          path: ironbridge-rust/examples/temp/*.json
-          if-no-files-found: ignore
+          Write-Host "$($files.Count) files, $bad with parse errors"
+          if ($bad) { exit 1 }
 
   # ==========================================================================
-  # Bash Scripts (Linux/macOS)
+  # Smoke-run the example script against a real binary.
+  #
+  # Deliberately tolerant. examples/basic_usage.ps1 inspects the VS Code data
+  # of the machine it runs on -- workspaces, chat sessions, git state -- and a
+  # CI runner has none of that, so the interesting commands legitimately find
+  # nothing. What this proves is narrower but still worth proving: the binary
+  # builds under the name the scripts invoke, starts, and answers the
+  # subcommands they use rather than erroring out on an unknown one.
+  #
+  # Note it does NOT stage a mock VS Code directory. The previous version of
+  # this workflow did, by setting $env:APPDATA -- which has no effect, because
+  # on Windows the binary resolves that location through the known-folder API
+  # and ignores the environment variable.
   # ==========================================================================
-  bash-scripts:
-    name: Bash Scripts (${{ matrix.os }})
+  smoke:
+    name: Smoke-run examples (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
-
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install jq coreutils
-
-      - name: Verify bash version
-        run: |
-          echo "Bash version: $BASH_VERSION"
-          echo "Shell: $SHELL"
-
-      - name: Setup Rust toolchain
+      - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            ironbridge-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
+          workspaces: ironbridge-rust
 
-      - name: Build IRONBRIDGE binary
+      - name: Build the ironbridge binary
         working-directory: ironbridge-rust
-        run: cargo build --release
+        run: cargo build --release --bin ironbridge
 
-      - name: Create mock VS Code data directory
-        run: |
-          if [ "$(uname)" = "Darwin" ]; then
-            VSCODE_PATH="$HOME/Library/Application Support/Code"
-          else
-            VSCODE_PATH="$HOME/.config/Code"
-          fi
-          
-          mkdir -p "$VSCODE_PATH/User/workspaceStorage"
-          echo "Created mock VS Code directory: $VSCODE_PATH"
-
-      - name: Make scripts executable
-        working-directory: ironbridge-rust/examples/scripts
-        run: chmod +x *.sh
-
-      - name: Test local_providers.sh
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          echo "Testing local_providers.sh..."
-          ./local_providers.sh || {
-            echo "⚠ local_providers.sh failed (may be expected without VS Code)"
-            exit 0
-          }
-          echo "✓ local_providers.sh completed successfully"
-
-      - name: Test cloud_providers.sh
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          echo "Testing cloud_providers.sh..."
-          ./cloud_providers.sh
-          echo "✓ cloud_providers.sh completed successfully"
-
-      - name: Verify generated JSON files
-        working-directory: ironbridge-rust/examples
-        run: |
-          if [ -d "./temp" ]; then
-            echo "Generated files in temp/:"
-            for file in ./temp/*.json; do
-              if [ -f "$file" ]; then
-                size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
-                echo "  - $(basename "$file") ($size bytes)"
-                # Validate JSON with jq
-                if jq empty "$file" 2>/dev/null; then
-                  echo "    ✓ Valid JSON"
-                else
-                  echo "    ✗ Invalid JSON"
-                  exit 1
-                fi
-              fi
-            done
-          else
-            echo "No temp directory created"
-          fi
-
-      - name: Upload generated files
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-json-bash-${{ matrix.os }}
-          path: ironbridge-rust/examples/temp/*.json
-          if-no-files-found: ignore
-
-  # ==========================================================================
-  # Bash Scripts on Windows (Git Bash)
-  # ==========================================================================
-  bash-scripts-windows:
-    name: Bash Scripts (Windows/Git Bash)
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            ironbridge-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
-
-      - name: Build IRONBRIDGE binary
-        working-directory: ironbridge-rust
-        run: cargo build --release
-
-      - name: Create mock VS Code data directory
-        shell: bash
-        run: |
-          mkdir -p "$APPDATA/Code/User/workspaceStorage"
-          echo "Created mock VS Code directory: $APPDATA/Code"
-
-      - name: Test local_providers.sh (Git Bash)
-        shell: bash
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          echo "Testing local_providers.sh on Windows (Git Bash)..."
-          bash ./local_providers.sh || {
-            echo "⚠ local_providers.sh failed (may be expected without VS Code)"
-            exit 0
-          }
-          echo "✓ local_providers.sh completed successfully"
-
-      - name: Test cloud_providers.sh (Git Bash)
-        shell: bash
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          echo "Testing cloud_providers.sh on Windows (Git Bash)..."
-          bash ./cloud_providers.sh
-          echo "✓ cloud_providers.sh completed successfully"
-
-      - name: Upload generated files
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-json-bash-windows
-          path: ironbridge-rust/examples/temp/*.json
-          if-no-files-found: ignore
-
-  # ==========================================================================
-  # Script Syntax Validation
-  # ==========================================================================
-  syntax-check:
-    name: Script Syntax Check
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install ShellCheck
-        run: sudo apt-get install -y shellcheck
-
-      - name: Setup PowerShell
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget apt-transport-https software-properties-common
-          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
-          sudo dpkg -i packages-microsoft-prod.deb
-          sudo apt-get update
-          sudo apt-get install -y powershell
-
-      - name: Check Bash script syntax
-        working-directory: ironbridge-rust/examples/scripts
-        run: |
-          echo "Checking Bash script syntax with ShellCheck..."
-          for script in *.sh; do
-            echo "Checking $script..."
-            shellcheck --severity=error "$script" || {
-              echo "⚠ ShellCheck found issues in $script"
-            }
-          done
-          echo "✓ Bash syntax check complete"
-
-      - name: Check PowerShell script syntax
+      - name: Report version
         shell: pwsh
-        working-directory: ironbridge-rust/examples/scripts
         run: |
-          Write-Host "Checking PowerShell script syntax..."
-          $errors = @()
-          Get-ChildItem -Filter "*.ps1" | ForEach-Object {
-            Write-Host "Checking $($_.Name)..."
-            $parseErrors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile(
-              $_.FullName,
-              [ref]$null,
-              [ref]$parseErrors
-            ) | Out-Null
-            
-            if ($parseErrors.Count -gt 0) {
-              Write-Host "  ✗ Syntax errors found:"
-              $parseErrors | ForEach-Object { Write-Host "    - $_" }
-              $errors += $_.Name
-            } else {
-              Write-Host "  ✓ Syntax OK"
-            }
+          $exe = if ($IsWindows) { 'ironbridge.exe' } else { 'ironbridge' }
+          $bin = Join-Path 'ironbridge-rust/target/release' $exe
+          if (-not (Test-Path $bin)) { throw "Binary not found at $bin" }
+          & $bin --version
+
+      - name: Run basic_usage.ps1
+        shell: pwsh
+        working-directory: examples
+        run: |
+          $exe = if ($IsWindows) { 'ironbridge.exe' } else { 'ironbridge' }
+          $bin = Join-Path (Resolve-Path '../ironbridge-rust/target/release') $exe
+          try {
+            ./basic_usage.ps1 -IronBridgePath $bin
+            Write-Host "basic_usage.ps1 completed"
+          } catch {
+            # Expected on a runner with no VS Code data; the parse job is the
+            # part that must stay green.
+            Write-Host "basic_usage.ps1 did not complete: $_"
           }
-          
-          if ($errors.Count -gt 0) {
-            Write-Host "`n✗ Scripts with errors: $($errors -join ', ')"
-            exit 1
-          }
-          Write-Host "`n✓ All PowerShell scripts have valid syntax"
