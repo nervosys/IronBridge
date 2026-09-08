@@ -322,6 +322,24 @@ xcross-ios simctl list --file devices.json   # JSON auto-detected
 fields — so names like `iPhone SE (3rd generation)` are exact — and derives the
 readable runtime (`com.apple.CoreSimulator.SimRuntime.iOS-17-4` → `iOS 17.4`).
 
+## Test results (`xcresult` module)
+
+`xcodebuild test` writes an `.xcresult`; this reads the numbers a build report
+actually needs out of it, via Xcode 16's stable summary command:
+
+```sh
+# On a Mac:
+xcross-ios xcresult --path Chasm.xcresult
+# Anywhere, from a captured summary:
+xcrun xcresulttool get test-results summary --path Chasm.xcresult --format json > s.json
+xcross-ios xcresult --file s.json
+```
+
+Prints a headline (`Failed — 42 tests, 39 passed, 2 failed, 1 skipped`) plus each
+failure's target, test name and message, and **exits non-zero when tests
+failed** so CI fails correctly. `is_success()` is decided by the failure *count*,
+not the verdict string, so an unexpected spelling can't mask a failure.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
