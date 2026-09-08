@@ -41,6 +41,7 @@ pub mod ipa;
 pub mod ontology;
 pub mod plist;
 pub mod process;
+pub mod remote;
 pub mod sdk;
 pub mod sign;
 pub mod target;

@@ -47,6 +47,7 @@ fn run(args: &[String]) -> Result<()> {
         "xcode-sdks" => cmd_xcode_sdks(),
         "xcode-identities" => cmd_xcode_identities(),
         "xcframework" => cmd_xcframework(rest),
+        "remote-xcodebuild" => cmd_remote_xcodebuild(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -338,6 +339,76 @@ fn cmd_xcframework(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_remote_xcodebuild(args: &[String]) -> Result<()> {
+    use xcross_ios::ontology::{BuildConfiguration, Destination, Platform};
+    use xcross_ios::remote::{RemoteHost, RemoteXcode};
+    use xcross_ios::xcode::{Action, Xcodebuild};
+
+    let o = parse_opts(args)?;
+    // Remote host.
+    let mut host = RemoteHost::new(o.require("host")?);
+    if let Some(u) = o.get("user") {
+        host = host.user(u);
+    }
+    if let Some(p) = o.get("port") {
+        host = host.port(
+            p.parse()
+                .map_err(|_| Error::InvalidInput(format!("bad --port `{p}`")))?,
+        );
+    }
+    if let Some(i) = o.get("identity") {
+        host = host.identity(i);
+    }
+    if o.has("insecure") {
+        host.strict_host_key_checking = false;
+    }
+    let workdir = o.get("workdir").unwrap_or("~").to_string();
+    let rx = RemoteXcode::new(host, workdir);
+
+    // The xcodebuild to run remotely.
+    let action = match o.get("action").unwrap_or("build") {
+        "build" => Action::Build,
+        "clean" => Action::Clean,
+        "test" => Action::Test,
+        "archive" => Action::Archive,
+        "build-for-testing" => Action::BuildForTesting,
+        other => return Err(Error::InvalidInput(format!("unknown --action `{other}`"))),
+    };
+    let mut xb = Xcodebuild::new(action);
+    if let Some(w) = o.get("workspace") {
+        xb = xb.workspace(w);
+    } else if let Some(p) = o.get("project") {
+        xb = xb.project(p);
+    }
+    if let Some(s) = o.get("scheme") {
+        xb = xb.scheme(s);
+    }
+    if let Some(c) = o.get("configuration") {
+        xb = xb.configuration(match c {
+            "Debug" => BuildConfiguration::Debug,
+            "Release" => BuildConfiguration::Release,
+            other => BuildConfiguration::Custom(other.to_string()),
+        });
+    }
+    if let Some(pf) = o.get("platform") {
+        let platform = Platform::from_sdk_family(pf)
+            .or_else(|| match pf {
+                "iOS" => Some(Platform::IOS),
+                "iOS Simulator" => Some(Platform::IOSSimulator),
+                _ => None,
+            })
+            .ok_or_else(|| Error::InvalidInput(format!("unknown --platform `{pf}`")))?;
+        xb = xb.destination(Destination::generic(platform));
+    }
+    xb.skip_signing = o.has("no-sign");
+
+    if o.has("dry-run") {
+        println!("{}", shell_join(&rx.xcodebuild_ssh_args(&xb)));
+        return Ok(());
+    }
+    rx.run_xcodebuild(&xb)
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -369,7 +440,14 @@ COMMANDS:
   xcode-sdks             List installed SDKs (parses `xcodebuild -showsdks`; Mac).
   xcode-identities       List code-signing identities (`security`; Mac).
   xcframework            Assemble a .xcframework from per-slice libs (any host).
+  remote-xcodebuild      Run xcodebuild on a remote Mac over SSH.
   help                   Show this help.
+
+REMOTE-XCODEBUILD OPTIONS:
+  --host <h>             Remote Mac hostname/IP           (required)
+  --user <u>  --port <n>  --identity <keyfile>  --insecure (no host-key check)
+  --workdir <dir>        Remote project directory         (default: ~)
+  (plus the XCODE-BUILD OPTIONS above; --dry-run prints the ssh command)
 
 XCFRAMEWORK OPTIONS:
   --name <n>             Output <n>.xcframework
