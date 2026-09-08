@@ -1674,12 +1674,45 @@ pub async fn upgrade_subscription(
     }))
 }
 
-/// Logout (invalidate session)
-pub async fn logout(_auth_user: AuthenticatedUser) -> HttpResponse {
-    // In a production system, you would:
-    // 1. Add the token to a blacklist
-    // 2. Remove the refresh token from the database
-    // 3. Clear any server-side session data
+/// Logout, invalidating the caller's tokens server-side.
+///
+/// This moves the user's `tokens_valid_after` forward, the same revocation
+/// point a password change uses, so both the access token and the refresh
+/// token presented up to now stop being accepted. Until this was wired up,
+/// logout only returned 200: the client dropped its copy of the token while
+/// the token itself stayed valid until expiry, so anyone who had captured it
+/// still had a working credential and "log out" was a false assurance.
+///
+/// Note the scope. `tokens_valid_after` is a single per-user instant, so this
+/// is a global sign-out: every session that user has, on every device, ends
+/// here. That is the honest behaviour for the primitive available -- `Claims`
+/// carries no `jti`, so there is nothing to revoke an individual token by.
+/// Per-device logout would need a token id in the claims plus somewhere to
+/// record which ones were withdrawn.
+///
+/// The `- 1`-style `now + 1` cut-off is the same same-second race guard as in
+/// `change_password`: a token minted in the same second as the logout
+/// (`iat == now`) must still be rejected, and `iat >= valid_after` is the
+/// accept test, so the cut-off sits one second ahead.
+pub async fn logout(
+    app_state: web::Data<crate::api::state::AppState>,
+    auth_user: AuthenticatedUser,
+) -> HttpResponse {
+    let now = Utc::now().timestamp();
+    let db = app_state.db.lock().unwrap();
+
+    if let Err(e) = db.conn.execute(
+        "UPDATE users SET tokens_valid_after = ?1 WHERE id = ?2",
+        rusqlite::params![now + 1, auth_user.user_id],
+    ) {
+        // Report the failure rather than answering 200. A client told its
+        // logout succeeded will discard the token and stop showing a signed-in
+        // state, which would leave a live credential behind with nobody aware.
+        return HttpResponse::InternalServerError().json(serde_json::json!({
+            "success": false,
+            "error": format!("Failed to invalidate session: {}", e)
+        }));
+    }
 
     HttpResponse::Ok().json(serde_json::json!({
         "success": true,
@@ -1750,6 +1783,54 @@ mod security_tests {
 
         // Unknown user -> current (reject-only guarantee).
         assert!(token_not_revoked(&conn, "nobody", 1));
+    }
+
+    /// Logout has to move the same cut-off a password change moves, and it has
+    /// to land *ahead* of a token minted in the same second.
+    ///
+    /// This is the regression guard for logout having been a no-op: it
+    /// answered 200 while the token it "invalidated" kept working until
+    /// expiry, so a captured credential survived the one action a user takes
+    /// to shut it down. The `now + 1` is what makes the same-second case fail
+    /// closed -- `iat >= valid_after` is the accept test, so writing `now`
+    /// would leave a token issued that same second still valid.
+    #[test]
+    fn logout_revokes_tokens_issued_up_to_and_including_that_second() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        init_auth_tables(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO users (id, email, display_name, password_hash, password_salt,
+                                created_at, updated_at, tokens_valid_after)
+             VALUES ('u1','u1@e.co','U','h','', 0, 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        let now = 1_000_000i64;
+        assert!(
+            token_not_revoked(&conn, "u1", now),
+            "token is current before logout"
+        );
+
+        // Exactly what the logout handler writes.
+        conn.execute(
+            "UPDATE users SET tokens_valid_after = ?1 WHERE id = ?2",
+            rusqlite::params![now + 1, "u1"],
+        )
+        .unwrap();
+
+        assert!(
+            !token_not_revoked(&conn, "u1", now - 60),
+            "token from before logout must be rejected"
+        );
+        assert!(
+            !token_not_revoked(&conn, "u1", now),
+            "token minted in the same second as logout must be rejected"
+        );
+        assert!(
+            token_not_revoked(&conn, "u1", now + 1),
+            "a token issued after logout must still work, or login is broken"
+        );
     }
 
     /// The login throttle blocks an address after its failure budget, and a
