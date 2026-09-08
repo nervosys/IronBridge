@@ -14,7 +14,7 @@ Programmatic video tutorials built with [Remotion](https://remotion.dev/), rende
 
 ## Building Videos
 
-The video source lives in the [`videos/`](https://github.com/nervosys/ironbridge/tree/master/videos) directory at the project root.
+The video source lives in the [`videos/`](https://github.com/nervosys/IronBridge/tree/master/videos) directory at the project root.
 
 ```bash
 cd videos

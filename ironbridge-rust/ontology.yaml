@@ -31,7 +31,7 @@ identity:
   min_rust: "1.75"
   license: AGPL-3.0-only
   author: Nervosys LLC
-  repository: https://github.com/nervosys/ironbridge
+  repository: https://github.com/nervosys/IronBridge
   description: >
     Universal chat session manager — harvest, merge, and analyze AI chat
     history from VS Code Copilot, Cursor, Claude Code, OpenCode, Gemini CLI,

@@ -207,7 +207,7 @@ ironbridge harvest init && ironbridge harvest run
 ironbridge harvest search "your query"
 ```
 
-⭐ GitHub: github.com/nervosys/ironbridge
+⭐ GitHub: github.com/nervosys/IronBridge
 📦 Crates.io: crates.io/crates/ironbridge-cli
 📄 License: AGPL-3.0 (commercial available)
 

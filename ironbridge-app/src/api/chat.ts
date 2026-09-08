@@ -246,7 +246,7 @@ export async function sendChatCompletion(
                     'Content-Type': 'application/json',
                     ...authHeaders,
                     ...(provider.type === 'openrouter' && {
-                        'HTTP-Referer': 'https://github.com/nervosys/ironbridge',
+                        'HTTP-Referer': 'https://github.com/nervosys/IronBridge',
                         'X-Title': 'IronBridge Mobile App',
                     }),
                 },

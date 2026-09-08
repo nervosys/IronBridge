@@ -1508,7 +1508,7 @@ Listening on https://localhost:8787")
           lang: "yaml",
           "services:
   ironbridge:
-    image: ghcr.io/nervosys/ironbridge
+    image: ghcr.io/nervosys/IronBridge
     ports:
       - \"8787:8787\"
     volumes:
@@ -1526,7 +1526,7 @@ Listening on https://localhost:8787")
         #code-block(
           lang: "bash",
           "$ helm install ironbridge \\
-    nervosys/ironbridge \\
+    nervosys/IronBridge \\
     --set replicas=3 \\
     --set sso.enabled=true",
         )

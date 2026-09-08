@@ -27,7 +27,7 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
    ```
 3. **Add the upstream remote**:
    ```bash
-   git remote add upstream https://github.com/nervosys/ironbridge.git
+   git remote add upstream https://github.com/nervosys/IronBridge.git
    ```
 
 ## How to Contribute
@@ -226,8 +226,8 @@ Signed-off-by: Your Name <your.email@example.com>
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/nervosys/ironbridge/discussions) for general questions
-- Check [existing issues](https://github.com/nervosys/ironbridge/issues) for known problems
+- Open a [GitHub Discussion](https://github.com/nervosys/IronBridge/discussions) for general questions
+- Check [existing issues](https://github.com/nervosys/IronBridge/issues) for known problems
 - Read the [documentation](https://docs.rs/ironbridge) for API details
 
 Thank you for contributing to IronBridge! 🎉

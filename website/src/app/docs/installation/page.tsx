@@ -19,7 +19,7 @@ export default function InstallationPage() {
 
       <h2>From Source</h2>
       <CodeBlock language="bash" filename="Terminal">
-{`git clone https://github.com/nervosys/ironbridge.git
+{`git clone https://github.com/nervosys/IronBridge.git
 cd ironbridge/ironbridge-rust
 cargo install --path .`}
       </CodeBlock>
@@ -27,7 +27,7 @@ cargo install --path .`}
       <h2>Pre-Built Binaries</h2>
       <p>
         Download from{' '}
-        <a href="https://github.com/nervosys/ironbridge/releases" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/nervosys/IronBridge/releases" target="_blank" rel="noopener noreferrer">
           GitHub Releases
         </a>:
       </p>
@@ -49,8 +49,8 @@ cargo install --path .`}
 
       <h2>Docker</h2>
       <CodeBlock language="bash">
-{`docker pull ghcr.io/nervosys/ironbridge:latest
-docker run -v ~/.ironbridge:/data ghcr.io/nervosys/ironbridge list workspaces`}
+{`docker pull ghcr.io/nervosys/IronBridge:latest
+docker run -v ~/.ironbridge:/data ghcr.io/nervosys/IronBridge list workspaces`}
       </CodeBlock>
 
       <h2>Verify Installation</h2>

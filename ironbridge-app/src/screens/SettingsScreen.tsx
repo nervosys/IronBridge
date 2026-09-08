@@ -103,7 +103,7 @@ export function SettingsScreen() {
     };
 
     const openDocs = () => {
-        Linking.openURL('https://github.com/nervosys/ironbridge');
+        Linking.openURL('https://github.com/nervosys/IronBridge');
     };
 
     const isLoading = statsLoading || providersLoading;

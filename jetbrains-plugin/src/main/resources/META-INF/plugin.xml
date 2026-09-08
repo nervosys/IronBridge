@@ -2,7 +2,7 @@
     <id>io.ironbridge.plugin</id>
     <name>IronBridge - Chat Session Manager</name>
     <version>1.0.0</version>
-    <vendor email="hello@nervosys.ai" url="https://github.com/nervosys/ironbridge">Nervosys LLC</vendor>
+    <vendor email="hello@nervosys.ai" url="https://github.com/nervosys/IronBridge">Nervosys LLC</vendor>
 
     <description><![CDATA[
     <h2>IronBridge - Universal Chat Session Manager</h2>

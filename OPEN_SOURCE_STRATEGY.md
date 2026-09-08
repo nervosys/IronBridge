@@ -29,18 +29,18 @@ ChatSessionManager/           # Single private repo
 
 ```bash
 # PUBLIC REPOSITORIES
-nervosys/ironbridge                # Open-source CLI + API (renamed)
-nervosys/ironbridge-vscode         # Open-source VS Code extension (optional)
+nervosys/IronBridge                # Open-source CLI + API (renamed)
+nervosys/IronBridge-vscode         # Open-source VS Code extension (optional)
 
 # PRIVATE REPOSITORIES  
-nervosys/ironbridge-web              # Proprietary web app
-nervosys/ironbridge-app              # Proprietary mobile app
-nervosys/ironbridge-cloud            # Future: hosted service infrastructure
+nervosys/IronBridge-web              # Proprietary web app
+nervosys/IronBridge-app              # Proprietary mobile app
+nervosys/IronBridge-cloud            # Future: hosted service infrastructure
 ```
 
 ### Migration Steps
 
-1. **Create new public repo**: `nervosys/ironbridge`
+1. **Create new public repo**: `nervosys/IronBridge`
 2. **Extract ironbridge-rust** with clean git history (no proprietary references)
 3. **Update imports/references** in private repos to use published crate
 4. **Set up CI/CD** for public releases
@@ -179,7 +179,7 @@ version = "1.0.0"
 edition = "2021"
 license = "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
 description = "Universal chat session manager - harvest, merge, and analyze AI chat history"
-repository = "https://github.com/nervosys/ironbridge"
+repository = "https://github.com/nervosys/IronBridge"
 documentation = "https://docs.rs/ironbridge"
 keywords = ["chat", "ai", "copilot", "session", "history"]
 categories = ["command-line-utilities", "database"]
@@ -194,7 +194,7 @@ categories = ["command-line-utilities", "database"]
 ### Container Images
 
 ```dockerfile
-# Published to ghcr.io/nervosys/ironbridge
+# Published to ghcr.io/nervosys/IronBridge
 FROM rust:alpine AS builder
 COPY . .
 RUN cargo build --release
@@ -347,7 +347,7 @@ ENTERPRISE (Custom)
 - [x] Remove proprietary references
 - [x] Finalize licensing (AGPL-3.0-only + commercial dual-license)
 - [x] Create public documentation
-- [x] Set up new public repository (nervosys/ironbridge-cli)
+- [x] Set up new public repository (nervosys/IronBridge-cli)
 
 ### Phase 2: Soft Launch (2 weeks) ✅
 
@@ -417,7 +417,7 @@ ENTERPRISE (Custom)
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 //
 // This file is part of IronBridge - Universal Chat Session Manager
-// https://github.com/nervosys/ironbridge
+// https://github.com/nervosys/IronBridge
 ```
 
 ## Appendix B: README Template
@@ -429,7 +429,7 @@ ENTERPRISE (Custom)
 
 [![Crates.io](https://img.shields.io/crates/v/ironbridge)](https://crates.io/crates/ironbridge)
 [![License](https://img.shields.io/badge/license-AGPL_3.0-blue.svg)](LICENSE)
-[![CI](https://github.com/nervosys/ironbridge/workflows/CI/badge.svg)](https://github.com/nervosys/ironbridge/actions)
+[![CI](https://github.com/nervosys/IronBridge/workflows/CI/badge.svg)](https://github.com/nervosys/IronBridge/actions)
 
 ## Features
 

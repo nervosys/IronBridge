@@ -680,7 +680,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/nervosys/ironbridge.git"
+        "url": "https://github.com/nervosys/IronBridge.git"
     },
     "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
 }

@@ -689,7 +689,7 @@ impl SsoService {
     <Organization>
         <OrganizationName xml:lang="en">IronBridge</OrganizationName>
         <OrganizationDisplayName xml:lang="en">IronBridge - Chat Session Manager</OrganizationDisplayName>
-        <OrganizationURL xml:lang="en">https://github.com/nervosys/ironbridge</OrganizationURL>
+        <OrganizationURL xml:lang="en">https://github.com/nervosys/IronBridge</OrganizationURL>
     </Organization>
 </EntityDescriptor>"#,
             entity_id = self.sp_config.entity_id,

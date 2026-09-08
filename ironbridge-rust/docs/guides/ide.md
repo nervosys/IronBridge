@@ -149,7 +149,7 @@ The IronBridge Vim plugin provides basic integration:
 
 ```vim
 " In your .vimrc
-Plug 'nervosys/ironbridge', { 'rtp': 'vim-plugin' }
+Plug 'nervosys/IronBridge', { 'rtp': 'vim-plugin' }
 
 " Commands
 :IronBridgeSearch <query>

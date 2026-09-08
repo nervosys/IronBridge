@@ -76,11 +76,11 @@ We may update this Privacy Policy from time to time. Changes will be reflected b
 
 The IronBridge browser extension is open source under the AGPL-3.0-only license. You can review the complete source code at:
 
-- **Repository:** [github.com/nervosys/ironbridge](https://github.com/nervosys/ironbridge)
+- **Repository:** [github.com/nervosys/IronBridge](https://github.com/nervosys/IronBridge)
 
 ## Contact
 
 If you have questions about this Privacy Policy, please contact:
 
 - **Email:** privacy@nervosys.com
-- **GitHub:** [github.com/nervosys/ironbridge/issues](https://github.com/nervosys/ironbridge/issues)
+- **GitHub:** [github.com/nervosys/IronBridge/issues](https://github.com/nervosys/IronBridge/issues)

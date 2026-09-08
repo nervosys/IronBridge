@@ -43,7 +43,7 @@ info:
   version: 2.0.0
   contact:
     name: Nervosys LLC
-    url: https://github.com/nervosys/ironbridge
+    url: https://github.com/nervosys/IronBridge
   license:
     name: AGPL-3.0-only
     url: https://www.gnu.org/licenses/agpl-3.0.html

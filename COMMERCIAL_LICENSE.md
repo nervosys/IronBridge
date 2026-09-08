@@ -79,7 +79,7 @@ For commercial licensing inquiries:
 
 - **Email:** [hello@nervosys.ai](mailto:hello@nervosys.ai)
 - **Web:** [nervosys.ai](https://nervosys.ai)
-- **GitHub:** [github.com/nervosys/ironbridge](https://github.com/nervosys/ironbridge)
+- **GitHub:** [github.com/nervosys/IronBridge](https://github.com/nervosys/IronBridge)
 
 ## FAQ
 
