@@ -57,6 +57,7 @@ fn run(args: &[String]) -> Result<()> {
         "export-options" => cmd_export_options(rest),
         "notarize" => cmd_notarize(rest),
         "xcresult" => cmd_xcresult(rest),
+        "swiftpm" => cmd_swiftpm(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -852,6 +853,53 @@ fn cmd_xcresult(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_swiftpm(args: &[String]) -> Result<()> {
+    use xcross_ios::swiftpm::Resolved;
+    let o = parse_opts(args)?;
+    let file = o.get("file").unwrap_or("Package.resolved");
+    let text = std::fs::read_to_string(file)
+        .map_err(|e| Error::io(format!("reading {file}"), e))?;
+    let resolved = Resolved::parse(&text)?;
+
+    println!("Package.resolved v{} — {} pin(s)", resolved.version, resolved.pins.len());
+    for p in &resolved.pins {
+        let anchor = match (&p.version, &p.branch) {
+            (Some(v), _) => format!("v{v}"),
+            (None, Some(b)) => format!("branch:{b}"),
+            (None, None) => "(no version)".to_string(),
+        };
+        let rev = p.revision.as_deref().unwrap_or("-");
+        let short = if rev.len() > 8 { &rev[..8] } else { rev };
+        println!("  {:<28} {:<16} {}  {}", p.identity, anchor, short, p.location);
+    }
+
+    // Audit view: flag pins that are not reproducible.
+    let branches = resolved.branch_pins();
+    let unanchored = resolved.unanchored_pins();
+    if !branches.is_empty() || !unanchored.is_empty() {
+        println!();
+        for p in &branches {
+            println!(
+                "  WARN {} tracks branch `{}` — not reproducible; a later resolve can pull new upstream code",
+                p.identity,
+                p.branch.as_deref().unwrap_or("?")
+            );
+        }
+        for p in &unanchored {
+            println!("  WARN {} has no recorded revision", p.identity);
+        }
+        if o.has("strict") {
+            return Err(Error::InvalidInput(format!(
+                "{} unreproducible pin(s)",
+                branches.len() + unanchored.len()
+            )));
+        }
+    } else {
+        println!("\nall pins are anchored to a version + revision.");
+    }
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -902,6 +950,10 @@ COMMANDS:
                          app-store|ad-hoc|enterprise|development, --team <id>,
                          --manual --certificate <c> --profiles bundle=name,…,
                          --out <file> (else stdout). Any host.
+  swiftpm                Read a SwiftPM Package.resolved (--file, default
+                         ./Package.resolved) and list dependency pins; warns on
+                         branch-tracking/unanchored pins. --strict exits
+                         non-zero on those. Any host.
   xcresult               Report test results. --file <summary.json> parses a
                          capture (any host); --path <x.xcresult> runs
                          xcresulttool on a Mac. Non-zero exit if tests failed.
