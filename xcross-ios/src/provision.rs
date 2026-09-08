@@ -39,6 +39,10 @@ pub struct ParsedProfile {
     pub xcode_managed: bool,
     /// The entitlement keys present, for a quick capabilities overview.
     pub entitlement_keys: Vec<String>,
+    /// The full `Entitlements` dict, for comparing an app's requested
+    /// entitlements against what this profile grants (see
+    /// [`crate::entitlements`]).
+    pub entitlements: Option<Plist>,
 }
 
 impl ParsedProfile {
@@ -102,6 +106,7 @@ impl ParsedProfile {
                 .and_then(Plist::as_bool)
                 .unwrap_or(false),
             entitlement_keys,
+            entitlements: entitlements.cloned(),
         })
     }
 

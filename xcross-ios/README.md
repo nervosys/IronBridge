@@ -204,6 +204,22 @@ Typed accessors: `bundle_identifier`, `full_product_name`, `executable_name`,
 `configuration_build_dir`, `built_products_dir`, and `product_path()` (joined
 with `/`, since these are Mac paths).
 
+## Entitlements vs. profile (`entitlements` module)
+
+The confusing "Provisioning profile doesn't include the … entitlement" /
+"application-identifier doesn't match" signing failures are pure comparisons of
+two plists — catch them **before** a build:
+
+```sh
+xcross-ios entitlements --app App.entitlements --profile Dev.mobileprovision
+#   OK, or a list of missing/mismatched entitlements + non-zero exit (for CI)
+```
+
+The rules mirror the OS: most entitlements must match exactly, but the
+identifier-shaped ones (`application-identifier`, `keychain-access-groups`, the
+application-groups array) let the profile carry a trailing `*` the app value
+prefix-matches. Arrays are covered element-wise.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
