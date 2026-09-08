@@ -340,6 +340,23 @@ failure's target, test name and message, and **exits non-zero when tests
 failed** so CI fails correctly. `is_success()` is decided by the failure *count*,
 not the verdict string, so an unexpected spelling can't mask a failure.
 
+## SwiftPM dependencies (`swiftpm` module)
+
+`Package.resolved` is the Swift analogue of `Cargo.lock` / `package-lock.json`.
+Reading it lets you audit an Apple project's supply chain from any host:
+
+```sh
+xcross-ios swiftpm --file Package.resolved --strict
+#   lists each pin (version | branch, short revision, URL) and WARNs on
+#   branch-tracking or unanchored pins; --strict exits non-zero on those
+```
+
+All three on-disk formats are handled (v1's `object.pins` + `package`/
+`repositoryURL`, and v2/v3's top-level `pins` + `identity`/`location`), including
+v1's `"branch": null`. `tracks_branch()` flags pins that follow a branch rather
+than a released version — not reproducible, since a later resolve can pull new
+upstream code under the same declaration.
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

@@ -54,6 +54,7 @@ pub mod remote;
 pub mod sdk;
 pub mod sign;
 pub mod simctl;
+pub mod swiftpm;
 pub mod target;
 pub mod toolchain;
 pub mod xcode;
