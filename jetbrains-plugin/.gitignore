@@ -1,0 +1,9 @@
+# Gradle build output and local caches.
+# Note: gradle/wrapper/ is deliberately NOT ignored -- the wrapper jar and its
+# properties are committed so the build is reproducible without a local Gradle.
+build/
+.gradle/
+out/
+
+# IntelliJ sandbox used by runIde
+.intellijPlatform/

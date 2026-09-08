@@ -27,9 +27,11 @@ class IronBridgeService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    // Settable: the settings panel points the service at a different server.
+    // isConnected below stays private-set because it is state this service
+    // derives itself, not configuration.
     var serverUrl: String = "http://localhost:8787"
-        private set
-    
+
     var isConnected: Boolean = false
         private set
 
@@ -238,7 +240,20 @@ data class HealthStatus(
     val status: String,
     val version: String?,
     val error: String?
-)
+) {
+    /**
+     * Whether the server reported itself as usable.
+     *
+     * `/api/health` answers `"ok"`; the richer status endpoint answers
+     * `"healthy"` or `"degraded"`. Both affirmative spellings are accepted so
+     * this keeps working whichever endpoint the service is pointed at. The
+     * failure paths in [IronBridgeService.checkHealth] construct `"unhealthy"`
+     * and `"error"`, which fall through to false.
+     */
+    val healthy: Boolean
+        get() = status.equals("ok", ignoreCase = true) ||
+            status.equals("healthy", ignoreCase = true)
+}
 
 data class Workspace(
     val id: String,

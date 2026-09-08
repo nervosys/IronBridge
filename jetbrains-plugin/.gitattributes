@@ -1,0 +1,6 @@
+# The Gradle wrapper script is executed by /bin/sh on Linux and macOS CI.
+# CRLF endings would break the shebang, so pin it to LF regardless of the
+# checkout platform or the user's core.autocrlf setting.
+gradlew        text eol=lf
+gradlew.bat    text eol=crlf
+*.jar          binary
