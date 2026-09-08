@@ -793,15 +793,40 @@ fn cmd_notarize(args: &[String]) -> Result<()> {
         "submit" => {
             let path = o.require("path")?;
             let wait = o.has("wait");
-            let argv = notarize::submit_args(path, &creds, wait);
+            let argv = notarize::with_json_output(notarize::submit_args(path, &creds, wait));
             if o.has("dry-run") {
                 // Redact any secret in the shown command.
                 println!("xcrun {}", shell_join(&notarize::redact(&argv)));
                 return Ok(());
             }
-            let (id, status) = notarize::submit(path, &creds, wait)?;
-            println!("submission id: {}", id.as_deref().unwrap_or("(unknown)"));
-            println!("status:        {:?}", status);
+            let info = notarize::submit(path, &creds, wait)?;
+            println!("submission id: {}", info.id.as_deref().unwrap_or("(unknown)"));
+            println!("status:        {:?}", info.status);
+            if let Some(m) = &info.message {
+                println!("message:       {m}");
+            }
+            Ok(())
+        }
+        "log" => {
+            // Parse a captured log (any host) or fetch it from Apple on a Mac.
+            let log = if let Some(file) = o.get("file") {
+                let text = std::fs::read_to_string(file)
+                    .map_err(|e| Error::io(format!("reading {file}"), e))?;
+                notarize::parse_log(&text)?
+            } else {
+                notarize::log(o.require("id")?, &creds)?
+            };
+            println!("status:  {:?}", log.status);
+            if let Some(s) = &log.status_summary {
+                println!("summary: {s}");
+            }
+            for i in &log.issues {
+                println!("\n  [{}] {}", i.severity, i.path);
+                println!("        {}", i.message);
+                if let Some(u) = &i.doc_url {
+                    println!("        see: {u}");
+                }
+            }
             Ok(())
         }
         "staple" => {
@@ -815,7 +840,7 @@ fn cmd_notarize(args: &[String]) -> Result<()> {
             Ok(())
         }
         other => Err(Error::InvalidInput(format!(
-            "unknown notarize subcommand `{other}` (submit|staple)"
+            "unknown notarize subcommand `{other}` (submit|log|staple)"
         ))),
     }
 }
@@ -957,9 +982,10 @@ COMMANDS:
   xcresult               Report test results. --file <summary.json> parses a
                          capture (any host); --path <x.xcresult> runs
                          xcresulttool on a Mac. Non-zero exit if tests failed.
-  notarize <sub>         Apple notarization. `submit --path <ipa> [--wait]` and
-                         `staple --path <ipa>` build `xcrun notarytool`/`stapler`
-                         commands (--dry-run, secrets redacted) or run on a Mac.
+  notarize <sub>         Apple notarization. `submit --path <ipa> [--wait]`,
+                         `log --id <id>|--file <log.json>` (why it was rejected),
+                         and `staple --path <ipa>`; build the commands
+                         (--dry-run, secrets redacted) or run on a Mac.
                          Creds: --keychain-profile | --key-id/--issuer/--key |
                          --apple-id/--team/--password.
   ship                   Orchestrate the whole release on a remote Mac:
