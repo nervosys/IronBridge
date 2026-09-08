@@ -13,35 +13,22 @@ import {
     ChatMessage,
     ChatSession,
     AgentConfig,
-    AgentCapability,
     ToolDefinition,
     ProviderConfig,
     TaskPlan,
-    PlanStep,
     AgentReflection,
-    ToolCall,
-    ToolResult,
     OrchestrationType,
     Swarm,
     SwarmAgent,
-    SwarmWorkflow,
     AgentRun,
-    AgentTask,
     AgentMessage,
     PanelState,
     WebviewMessage,
-    TokenUsage,
-    TaskStatus,
-    SwarmStatus,
-    AgentStatus,
-    AgentRole,
 } from './types';
 import {
     DEFAULT_PROVIDERS,
     DEFAULT_AGENTS,
-    ORCHESTRATION_MODES,
     AGENT_ROLES,
-    LIMITS,
 } from './constants';
 
 /**
@@ -219,7 +206,6 @@ export class IronBridgeChatPanel {
     }
 
     private _convertMessage(raw: any, index: number): ChatMessage {
-        const messages: ChatMessage[] = [];
 
         // User message
         if (raw.message?.text || raw.text) {
@@ -527,7 +513,7 @@ export class IronBridgeChatPanel {
         return undefined;
     }
 
-    private async _executeAgentTask(content: string, plan?: TaskPlan, maxIterations: number = 10): Promise<string> {
+    private async _executeAgentTask(content: string, plan?: TaskPlan, _maxIterations: number = 10): Promise<string> {
         // Execute based on orchestration mode
         switch (this._orchestrationMode) {
             case 'single':
@@ -597,7 +583,7 @@ export class IronBridgeChatPanel {
         return `**Parallel Execution Results:**\\n\\n${results.map((r, i) => `**Thread ${i + 1} (${plan.steps[i].description}):**\\n${r}`).join('\\n\\n---\\n\\n')}`;
     }
 
-    private async _executeSwarm(content: string, plan?: TaskPlan): Promise<string> {
+    private async _executeSwarm(content: string, _plan?: TaskPlan): Promise<string> {
         // Multi-agent swarm: each agent tackles the problem independently, then synthesize
         const agents = ['assistant', 'coder', 'researcher'].filter(a => this._agents.find(ag => ag.name === a));
 
@@ -617,7 +603,7 @@ export class IronBridgeChatPanel {
         return await this._getChatResponse(synthesisPrompt);
     }
 
-    private async _executeHierarchical(content: string, plan?: TaskPlan): Promise<string> {
+    private async _executeHierarchical(content: string, _plan?: TaskPlan): Promise<string> {
         // Coordinator delegates to specialized agents
         const coordinatorPrompt = `As a coordinator, analyze this task and delegate to specialized agents (coder, researcher, reviewer):\\n\\nTask: ${content}\\n\\nProvide delegation strategy.`;
 
@@ -821,7 +807,7 @@ export class IronBridgeChatPanel {
                 const vsCodeFormat = {
                     session_id: session.id,
                     title: session.title,
-                    requests: session.messages.filter(m => m.role === 'user').map((userMsg, i) => {
+                    requests: session.messages.filter(m => m.role === 'user').map((userMsg) => {
                         const assistantMsg = session.messages.find(
                             (m, j) => m.role === 'assistant' && j > session.messages.indexOf(userMsg)
                         );

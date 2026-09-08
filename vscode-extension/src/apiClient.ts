@@ -13,7 +13,6 @@ import {
     Workspace,
     Agent,
     Swarm,
-    AgentRun,
     Provider,
     ProviderHealth,
     Statistics,

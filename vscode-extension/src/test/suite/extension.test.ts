@@ -169,7 +169,6 @@ suite('Open in Chat History Logic Tests', () => {
     });
 
     test('chatSessions path construction is correct', () => {
-        const workspaceHash = '1234567890abcdef';
         const sessionFile = 'test-session-id.json';
         const expectedPath = `chatSessions/${sessionFile}`;
         const chatSessionsPath = `chatSessions/${sessionFile}`;
