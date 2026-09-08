@@ -709,7 +709,10 @@ fn scan_browser_cookies_with_copy_internal(
     if ff_wal.exists() {
         let _ = fs::copy(
             &ff_wal,
-            temp_dir.join(format!("ironbridge_cookies_{}.db-wal", uuid::Uuid::new_v4())),
+            temp_dir.join(format!(
+                "ironbridge_cookies_{}.db-wal",
+                uuid::Uuid::new_v4()
+            )),
         );
     }
 
@@ -938,7 +941,10 @@ fn extract_cookies_with_copy(
     domain: &str,
 ) -> Result<Vec<ExtractedCookie>> {
     let temp_dir = std::env::temp_dir();
-    let temp_path = temp_dir.join(format!("ironbridge_cookies_extract_{}.db", uuid::Uuid::new_v4()));
+    let temp_path = temp_dir.join(format!(
+        "ironbridge_cookies_extract_{}.db",
+        uuid::Uuid::new_v4()
+    ));
 
     fs::copy(cookies_path, &temp_path).context("Failed to copy cookie database")?;
 

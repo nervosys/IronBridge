@@ -377,9 +377,10 @@ impl OidcService {
             return Err("Provider is disabled".to_string());
         }
 
-        let client = ironbridge_sso::oidc::OidcClient::discover(provider.to_sso_config(), &self.http)
-            .await
-            .map_err(|e| format!("OIDC discovery failed: {}", e))?;
+        let client =
+            ironbridge_sso::oidc::OidcClient::discover(provider.to_sso_config(), &self.http)
+                .await
+                .map_err(|e| format!("OIDC discovery failed: {}", e))?;
 
         let auth = client.begin();
 
@@ -424,9 +425,10 @@ impl OidcService {
             return Err("Provider is disabled".to_string());
         }
 
-        let client = ironbridge_sso::oidc::OidcClient::discover(provider.to_sso_config(), &self.http)
-            .await
-            .map_err(|e| format!("OIDC discovery failed: {}", e))?;
+        let client =
+            ironbridge_sso::oidc::OidcClient::discover(provider.to_sso_config(), &self.http)
+                .await
+                .map_err(|e| format!("OIDC discovery failed: {}", e))?;
 
         // `ironbridge_sso` does the security-relevant part: it checks the token's
         // signature against the provider's JWKS, its issuer, audience, expiry

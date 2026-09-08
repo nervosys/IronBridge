@@ -1047,7 +1047,11 @@ pub fn recover_recursive(
             println!(
                 "\n{} Run {} to make them visible in VS Code",
                 "[i]".cyan(),
-                format!("ironbridge register recursive --force \"{}\"", root.display()).cyan()
+                format!(
+                    "ironbridge register recursive --force \"{}\"",
+                    root.display()
+                )
+                .cyan()
             );
         } else {
             println!(

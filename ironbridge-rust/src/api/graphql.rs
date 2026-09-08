@@ -859,7 +859,10 @@ impl MutationRoot {
 
     /// Trigger sync
     async fn sync(&self, _ctx: &Context<'_>) -> FieldResult<bool> {
-        Err("sync is not exposed over GraphQL; use `ironbridge sync` or the REST sync endpoints".into())
+        Err(
+            "sync is not exposed over GraphQL; use `ironbridge sync` or the REST sync endpoints"
+                .into(),
+        )
     }
 }
 

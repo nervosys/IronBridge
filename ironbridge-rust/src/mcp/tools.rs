@@ -218,7 +218,9 @@ pub fn list_tools() -> Vec<Tool> {
         // IRONBRIDGE Database Tools (for ironbridge-web integration)
         Tool {
             name: "ironbridge_db_list_workspaces".to_string(),
-            description: Some("List all workspaces from the IRONBRIDGE database (ironbridge-web)".to_string()),
+            description: Some(
+                "List all workspaces from the IRONBRIDGE database (ironbridge-web)".to_string(),
+            ),
             input_schema: json!({
                 "type": "object",
                 "properties": {},
@@ -227,7 +229,9 @@ pub fn list_tools() -> Vec<Tool> {
         },
         Tool {
             name: "ironbridge_db_list_sessions".to_string(),
-            description: Some("List chat sessions from the IRONBRIDGE database (ironbridge-web)".to_string()),
+            description: Some(
+                "List chat sessions from the IRONBRIDGE database (ironbridge-web)".to_string(),
+            ),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -284,7 +288,8 @@ pub fn list_tools() -> Vec<Tool> {
         Tool {
             name: "ironbridge_db_stats".to_string(),
             description: Some(
-                "Get statistics about the IRONBRIDGE database (session counts by provider)".to_string(),
+                "Get statistics about the IRONBRIDGE database (session counts by provider)"
+                    .to_string(),
             ),
             input_schema: json!({
                 "type": "object",

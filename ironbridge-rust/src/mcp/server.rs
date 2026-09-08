@@ -35,7 +35,10 @@ impl McpServer {
                 continue;
             }
 
-            eprintln!("[ironbridge-mcp] Received: {}", &line[..line.len().min(100)]);
+            eprintln!(
+                "[ironbridge-mcp] Received: {}",
+                &line[..line.len().min(100)]
+            );
 
             match serde_json::from_str::<JsonRpcRequest>(&line) {
                 Ok(request) => {

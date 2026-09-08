@@ -133,7 +133,12 @@ impl Default for ServerConfig {
             host: "127.0.0.1".to_string(), // Loopback only; opt into 0.0.0.0 explicitly.
             port: 8787,
             database_path: dirs::data_local_dir()
-                .map(|p| p.join("ironbridge").join("ironbridge.db").to_string_lossy().to_string())
+                .map(|p| {
+                    p.join("ironbridge")
+                        .join("ironbridge.db")
+                        .to_string_lossy()
+                        .to_string()
+                })
                 .unwrap_or_else(|| "ironbridge.db".to_string()),
             cors_origins: vec![
                 "http://localhost:5173".to_string(),
@@ -208,7 +213,10 @@ fn configure_routes(cfg: &mut web::ServiceConfig) {
             .route("/mcp/tools", web::get().to(list_mcp_tools))
             .route("/mcp/call", web::post().to(call_mcp_tool))
             .route("/mcp/batch", web::post().to(call_mcp_tools_batch))
-            .route("/mcp/system-prompt", web::get().to(get_ironbridge_system_prompt))
+            .route(
+                "/mcp/system-prompt",
+                web::get().to(get_ironbridge_system_prompt),
+            )
             // SWE routes
             .route("/swe/projects", web::get().to(handlers_swe::list_projects))
             .route(

@@ -91,7 +91,10 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     );
 
     let mut spans = vec![
-        Span::styled(" ◆ IronBridge TUI", Style::default().fg(Colors::ACCENT).bold()),
+        Span::styled(
+            " ◆ IronBridge TUI",
+            Style::default().fg(Colors::ACCENT).bold(),
+        ),
         Span::styled("  │  ", Style::default().fg(Colors::BORDER)),
         Span::styled(breadcrumb, Style::default().fg(Colors::TEXT)),
     ];

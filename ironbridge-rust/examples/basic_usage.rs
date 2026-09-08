@@ -48,7 +48,10 @@ fn main() -> anyhow::Result<()> {
         if let Some(path) = &first_ws.project_path {
             match find_workspace_by_path(path) {
                 Ok(Some((hash, _, _))) => {
-                    println!("   Found workspace: {}...", ironbridge::text::head(&hash, 16));
+                    println!(
+                        "   Found workspace: {}...",
+                        ironbridge::text::head(&hash, 16)
+                    );
                 }
                 Ok(None) => {
                     println!("   Workspace not found");

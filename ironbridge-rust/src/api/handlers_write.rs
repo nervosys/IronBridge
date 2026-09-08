@@ -1818,7 +1818,8 @@ fn ensure_embeddings_table(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 pub(crate) fn embedding_model() -> String {
-    std::env::var("IRONBRIDGE_EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".to_string())
+    std::env::var("IRONBRIDGE_EMBEDDING_MODEL")
+        .unwrap_or_else(|_| "text-embedding-3-small".to_string())
 }
 
 /// Little-endian f32 blob. SQLite has no vector type; this keeps the encoding

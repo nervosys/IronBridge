@@ -924,7 +924,12 @@ fn main() -> Result<()> {
                     port,
                     database_path: database.unwrap_or_else(|| {
                         dirs::data_local_dir()
-                            .map(|p| p.join("ironbridge").join("ironbridge.db").to_string_lossy().to_string())
+                            .map(|p| {
+                                p.join("ironbridge")
+                                    .join("ironbridge.db")
+                                    .to_string_lossy()
+                                    .to_string()
+                            })
                             .unwrap_or_else(|| "ironbridge.db".to_string())
                     }),
                     ..Default::default()

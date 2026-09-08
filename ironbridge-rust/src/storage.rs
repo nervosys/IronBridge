@@ -1546,7 +1546,10 @@ pub fn recover_from_json_bak(chat_sessions_dir: &Path) -> Result<usize> {
         // Write new JSONL kind:0
         let jsonl_obj = serde_json::json!({"kind": 0, "v": full_data});
         let jsonl_str = serde_json::to_string(&jsonl_obj).map_err(|e| {
-            IronBridgeError::InvalidSessionFormat(format!("Failed to serialize recovered session: {}", e))
+            IronBridgeError::InvalidSessionFormat(format!(
+                "Failed to serialize recovered session: {}",
+                e
+            ))
         })?;
         std::fs::write(&jsonl_path, format!("{}\n", jsonl_str))?;
 
@@ -2437,10 +2440,9 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
     }
 
     // Extract the session state from the "v" field
-    let mut state = first_entry
-        .get("v")
-        .cloned()
-        .ok_or_else(|| IronBridgeError::InvalidSessionFormat("kind:0 missing 'v' field".to_string()))?;
+    let mut state = first_entry.get("v").cloned().ok_or_else(|| {
+        IronBridgeError::InvalidSessionFormat("kind:0 missing 'v' field".to_string())
+    })?;
 
     // Replay all subsequent operations
     for line in lines {
@@ -2487,8 +2489,9 @@ pub fn compact_session_jsonl(path: &Path) -> Result<PathBuf> {
 
     // Write the compacted file: single kind:0 line with the final state
     let compact_entry = serde_json::json!({"kind": 0, "v": state});
-    let compact_content = serde_json::to_string(&compact_entry)
-        .map_err(|e| IronBridgeError::InvalidSessionFormat(format!("Failed to serialize: {}", e)))?;
+    let compact_content = serde_json::to_string(&compact_entry).map_err(|e| {
+        IronBridgeError::InvalidSessionFormat(format!("Failed to serialize: {}", e))
+    })?;
 
     // Backup the original file
     let backup_path = path.with_extension("jsonl.bak");
@@ -2574,8 +2577,9 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
         // Still strip bloated content even if not reducing request count
         strip_bloated_content(&mut entry);
 
-        let trimmed_content = serde_json::to_string(&entry)
-            .map_err(|e| IronBridgeError::InvalidSessionFormat(format!("Failed to serialize: {}", e)))?;
+        let trimmed_content = serde_json::to_string(&entry).map_err(|e| {
+            IronBridgeError::InvalidSessionFormat(format!("Failed to serialize: {}", e))
+        })?;
         let new_size = trimmed_content.len() as f64 / (1024.0 * 1024.0);
 
         // Only rewrite if we actually reduced size
@@ -2617,8 +2621,9 @@ pub fn trim_session_jsonl(path: &Path, keep: usize) -> Result<(usize, usize, f64
         ensure_vscode_compat_fields(v, session_id.as_deref());
     }
 
-    let trimmed_content = serde_json::to_string(&entry)
-        .map_err(|e| IronBridgeError::InvalidSessionFormat(format!("Failed to serialize: {}", e)))?;
+    let trimmed_content = serde_json::to_string(&entry).map_err(|e| {
+        IronBridgeError::InvalidSessionFormat(format!("Failed to serialize: {}", e))
+    })?;
 
     let new_size = trimmed_content.len() as f64 / (1024.0 * 1024.0);
 
@@ -3160,8 +3165,9 @@ pub fn convert_skeleton_json_to_jsonl(
     // Write the new .jsonl file
     std::fs::write(
         &jsonl_path,
-        serde_json::to_string(&jsonl_entry)
-            .map_err(|e| IronBridgeError::InvalidSessionFormat(format!("Serialize error: {}", e)))?,
+        serde_json::to_string(&jsonl_entry).map_err(|e| {
+            IronBridgeError::InvalidSessionFormat(format!("Serialize error: {}", e))
+        })?,
     )?;
 
     // Rename original to .json.corrupt (non-destructive)
@@ -3243,8 +3249,9 @@ pub fn fix_cancelled_model_state(path: &Path) -> Result<bool> {
             serde_json::json!({"value": 1, "completedAt": now}),
         );
 
-        let patched = serde_json::to_string(&entry)
-            .map_err(|e| IronBridgeError::InvalidSessionFormat(format!("Serialize error: {}", e)))?;
+        let patched = serde_json::to_string(&entry).map_err(|e| {
+            IronBridgeError::InvalidSessionFormat(format!("Serialize error: {}", e))
+        })?;
         // Trailing newline prevents concatenation if VS Code appends deltas
         std::fs::write(path, format!("{}\n", patched))?;
         return Ok(true);
@@ -3399,8 +3406,9 @@ pub fn repair_workspace_sessions(
                 let metadata = std::fs::metadata(&path)?;
                 let size_mb = metadata.len() / (1024 * 1024);
 
-                let raw_content = std::fs::read_to_string(&path)
-                    .map_err(|e| IronBridgeError::InvalidSessionFormat(format!("Read error: {}", e)))?;
+                let raw_content = std::fs::read_to_string(&path).map_err(|e| {
+                    IronBridgeError::InvalidSessionFormat(format!("Read error: {}", e))
+                })?;
 
                 // Pre-process: split concatenated JSON objects that lack newline
                 // separators. VS Code sometimes appends delta ops to line 0 without

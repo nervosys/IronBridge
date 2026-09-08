@@ -356,7 +356,10 @@ mod git_commands {
 
     #[test]
     fn test_git_init_help() {
-        ironbridge_cmd().args(["git", "init", "--help"]).assert().success();
+        ironbridge_cmd()
+            .args(["git", "init", "--help"])
+            .assert()
+            .success();
     }
 
     #[test]
@@ -410,6 +413,9 @@ mod error_handling {
 
     #[test]
     fn test_provider_info_missing_arg() {
-        ironbridge_cmd().args(["provider", "info"]).assert().failure();
+        ironbridge_cmd()
+            .args(["provider", "info"])
+            .assert()
+            .failure();
     }
 }

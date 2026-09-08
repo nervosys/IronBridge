@@ -197,7 +197,8 @@ mod error_message_tests {
 
     #[test]
     fn test_invalid_session_format_json_details() {
-        let err = IronBridgeError::InvalidSessionFormat("expected object at line 1 column 1".to_string());
+        let err =
+            IronBridgeError::InvalidSessionFormat("expected object at line 1 column 1".to_string());
         let msg = format!("{}", err);
         assert!(msg.contains("line 1 column 1"));
     }
@@ -356,7 +357,8 @@ mod edge_case_tests {
 
     #[test]
     fn test_error_with_special_chars() {
-        let err = IronBridgeError::SessionNotFound("session-with-\"quotes\"-and-<brackets>".to_string());
+        let err =
+            IronBridgeError::SessionNotFound("session-with-\"quotes\"-and-<brackets>".to_string());
         let msg = format!("{}", err);
         assert!(msg.contains("quotes"));
     }
@@ -402,8 +404,14 @@ mod error_comparison_tests {
 
     #[test]
     fn test_same_error_type_different_values() {
-        let err1 = format!("{}", IronBridgeError::WorkspaceNotFound("/path1".to_string()));
-        let err2 = format!("{}", IronBridgeError::WorkspaceNotFound("/path2".to_string()));
+        let err1 = format!(
+            "{}",
+            IronBridgeError::WorkspaceNotFound("/path1".to_string())
+        );
+        let err2 = format!(
+            "{}",
+            IronBridgeError::WorkspaceNotFound("/path2".to_string())
+        );
         assert_ne!(err1, err2);
         assert!(err1.contains("path1"));
         assert!(err2.contains("path2"));

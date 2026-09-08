@@ -1099,7 +1099,11 @@ mod tests {
         std::env::remove_var("IRONBRIDGE_DOWNLOAD_DIR");
         let root = download_root(Path::new("/var/lib/ironbridge/ironbridge.db"));
         assert!(root.ends_with("downloads"), "{}", root.display());
-        assert!(root.starts_with("/var/lib/ironbridge"), "{}", root.display());
+        assert!(
+            root.starts_with("/var/lib/ironbridge"),
+            "{}",
+            root.display()
+        );
     }
 
     #[test]
