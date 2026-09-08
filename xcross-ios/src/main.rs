@@ -48,6 +48,7 @@ fn run(args: &[String]) -> Result<()> {
         "xcode-identities" => cmd_xcode_identities(),
         "xcframework" => cmd_xcframework(rest),
         "remote-xcodebuild" => cmd_remote_xcodebuild(rest),
+        "provision" => cmd_provision(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -409,6 +410,31 @@ fn cmd_remote_xcodebuild(args: &[String]) -> Result<()> {
     rx.run_xcodebuild(&xb)
 }
 
+fn cmd_provision(args: &[String]) -> Result<()> {
+    use xcross_ios::provision::ParsedProfile;
+    let file = args
+        .first()
+        .filter(|a| !a.starts_with("--"))
+        .ok_or_else(|| Error::InvalidInput("usage: provision <file.mobileprovision>".into()))?;
+    let p = ParsedProfile::from_file(std::path::Path::new(file))?;
+    println!("Name:              {}", p.name);
+    println!("UUID:              {}", p.uuid);
+    println!("Team:              {} ({})", p.team_name.as_deref().unwrap_or("-"), p.team_ids.join(","));
+    println!("App ID name:       {}", p.app_id_name.as_deref().unwrap_or("-"));
+    println!("Platforms:         {}", p.platforms.join(", "));
+    println!("App identifier:    {}", p.application_identifier.as_deref().unwrap_or("-"));
+    println!("Created:           {}", p.creation_date.as_deref().unwrap_or("-"));
+    println!("Expires:           {}", p.expiration_date.as_deref().unwrap_or("-"));
+    println!("Xcode managed:     {}", p.xcode_managed);
+    println!(
+        "Type:              {}",
+        if p.is_distribution() { "distribution (no device list)" } else { "development" }
+    );
+    println!("Provisioned devices: {}", p.provisioned_devices.len());
+    println!("Entitlements ({}):  {}", p.entitlement_keys.len(), p.entitlement_keys.join(", "));
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -441,6 +467,7 @@ COMMANDS:
   xcode-identities       List code-signing identities (`security`; Mac).
   xcframework            Assemble a .xcframework from per-slice libs (any host).
   remote-xcodebuild      Run xcodebuild on a remote Mac over SSH.
+  provision <file>       Parse a .mobileprovision and print its fields (any host).
   help                   Show this help.
 
 REMOTE-XCODEBUILD OPTIONS:
