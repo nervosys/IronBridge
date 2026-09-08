@@ -26,7 +26,7 @@ const TUIScreen: React.FC<{
   });
 
   const workspaces = [
-    { name: "chasm", sessions: 14, msgs: 847 },
+    { name: "ironbridge", sessions: 14, msgs: 847 },
     { name: "my-webapp", sessions: 8, msgs: 312 },
     { name: "rust-api", sessions: 22, msgs: 1503 },
     { name: "mobile-app", sessions: 5, msgs: 89 },
@@ -66,7 +66,7 @@ const TUIScreen: React.FC<{
         }}
       >
         <span style={{ color: COLORS.primary, fontWeight: 700 }}>
-          ◆ Chasm TUI
+          ◆ IronBridge TUI
         </span>
         <span style={{ color: COLORS.textDim, fontSize: 14 }}>
           Press ? for help | q to quit
@@ -130,7 +130,7 @@ const TUIScreen: React.FC<{
                 marginBottom: 4,
               }}
             >
-              chasm/ → Sessions ({sessions.length})
+              ironbridge/ → Sessions ({sessions.length})
             </div>
             {sessions.map((s, i) => (
               <div

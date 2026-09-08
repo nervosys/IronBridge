@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import Link from 'next/link';
 import { Header } from '@/components/Nav';
@@ -11,7 +11,7 @@ export default function HomePage() {
       <Header />
       <main style={{ marginTop: 'var(--header-height)' }}>
         <section className="hero">
-          <h1>CHASM</h1>
+          <h1>IRONBRIDGE</h1>
           <p className="hero-subtitle">
             [ CHAT SESSION MANAGER ] Bridging the divide between AI providers.
           </p>
@@ -23,7 +23,7 @@ export default function HomePage() {
               CLI Reference
             </Link>
             <a
-              href="https://github.com/nervosys/chasm"
+              href="https://github.com/nervosys/ironbridge"
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"

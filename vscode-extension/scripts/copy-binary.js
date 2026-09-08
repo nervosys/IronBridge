@@ -1,9 +1,9 @@
-// Script to copy Chasm binary to extension bin folder
+// Script to copy IronBridge binary to extension bin folder
 const fs = require('fs');
 const path = require('path');
 
 const binDir = path.join(__dirname, '..', 'bin');
-const rustTargetDir = path.join(__dirname, '..', '..', 'chasm-rust', 'target', 'release');
+const rustTargetDir = path.join(__dirname, '..', '..', 'ironbridge-rust', 'target', 'release');
 
 // Create bin directory if it doesn't exist
 if (!fs.existsSync(binDir)) {
@@ -16,16 +16,16 @@ let sourceName, destName;
 
 switch (platform) {
     case 'win32':
-        sourceName = 'chasm.exe';
-        destName = 'chasm.exe';
+        sourceName = 'ironbridge.exe';
+        destName = 'ironbridge.exe';
         break;
     case 'darwin':
-        sourceName = 'chasm';
-        destName = 'chasm-darwin';
+        sourceName = 'ironbridge';
+        destName = 'ironbridge-darwin';
         break;
     default:
-        sourceName = 'chasm';
-        destName = 'chasm-linux';
+        sourceName = 'ironbridge';
+        destName = 'ironbridge-linux';
 }
 
 const sourcePath = path.join(rustTargetDir, sourceName);
@@ -41,5 +41,5 @@ if (fs.existsSync(sourcePath)) {
     }
 } else {
     console.warn(`Warning: Binary not found at ${sourcePath}`);
-    console.warn('Please build the Rust binary first: cd chasm-rust && cargo build --release');
+    console.warn('Please build the Rust binary first: cd ironbridge-rust && cargo build --release');
 }

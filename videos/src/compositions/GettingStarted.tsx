@@ -27,13 +27,13 @@ export const GettingStarted: React.FC = () => {
         >
           <Logo size={72} />
           <TitleSlide
-            title="Getting Started with Chasm"
+            title="Getting Started with IronBridge"
             subtitle="Unify your AI chat sessions across every provider"
           />
         </AbsoluteFill>
       </Sequence>
 
-      {/* Section 1: What is Chasm? */}
+      {/* Section 1: What is IronBridge? */}
       <Sequence from={4 * VIDEO_FPS} durationInFrames={6 * VIDEO_FPS}>
         <AbsoluteFill
           style={{
@@ -45,7 +45,7 @@ export const GettingStarted: React.FC = () => {
             padding: "0 100px",
           }}
         >
-          <SectionBadge number={1} label="What is Chasm?" />
+          <SectionBadge number={1} label="What is IronBridge?" />
           <div
             style={{
               display: "flex",
@@ -91,13 +91,13 @@ export const GettingStarted: React.FC = () => {
       <Sequence from={10 * VIDEO_FPS} durationInFrames={6 * VIDEO_FPS}>
         <AbsoluteFill>
           <Terminal
-            title="2. Installation — Install Chasm"
+            title="2. Installation — Install IronBridge"
             startFrame={10}
             fullScreen
             lines={[
-              { prompt: true, text: "cargo install chasm-cli", delay: 0 },
+              { prompt: true, text: "cargo install ironbridge-cli", delay: 0 },
               {
-                text: "    Compiling chasm-cli v1.3.2",
+                text: "    Compiling ironbridge-cli v1.3.2",
                 color: COLORS.textMuted,
                 delay: 30,
               },
@@ -107,12 +107,12 @@ export const GettingStarted: React.FC = () => {
                 delay: 50,
               },
               {
-                text: "   Installed chasm-cli v1.3.2",
+                text: "   Installed ironbridge-cli v1.3.2",
                 color: COLORS.success,
                 delay: 65,
               },
-              { prompt: true, text: "chasm --version", delay: 85 },
-              { text: "chasm 1.3.2", color: COLORS.primary, delay: 105 },
+              { prompt: true, text: "ironbridge --version", delay: 85 },
+              { text: "ironbridge 1.3.2", color: COLORS.primary, delay: 105 },
             ]}
           />
         </AbsoluteFill>
@@ -126,7 +126,7 @@ export const GettingStarted: React.FC = () => {
             startFrame={10}
             fullScreen
             lines={[
-              { prompt: true, text: "chasm list workspaces", delay: 0 },
+              { prompt: true, text: "ironbridge list workspaces", delay: 0 },
               {
                 text: "Found 42 workspaces across 3 providers",
                 color: COLORS.primary,
@@ -149,7 +149,7 @@ export const GettingStarted: React.FC = () => {
                 delay: 65,
               },
               { text: "", delay: 75 },
-              { prompt: true, text: "chasm doctor", delay: 85 },
+              { prompt: true, text: "ironbridge doctor", delay: 85 },
               {
                 text: "✓ System checks passed (13/13)",
                 color: COLORS.success,
@@ -170,7 +170,7 @@ export const GettingStarted: React.FC = () => {
             lines={[
               {
                 prompt: true,
-                text: 'chasm find session "authentication"',
+                text: 'ironbridge find session "authentication"',
                 delay: 0,
               },
               { text: "", delay: 25 },

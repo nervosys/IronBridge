@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { Card, Callout, Badge } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,7 +9,7 @@ export default function FeaturesPage() {
     <div className="content-wrapper">
       <h1>Features</h1>
       <p className="page-description">
-        A complete overview of Chasm&apos;s capabilities — from session harvesting
+        A complete overview of IronBridge&apos;s capabilities — from session harvesting
         to enterprise-grade collaboration.
       </p>
 
@@ -218,7 +218,7 @@ export default function FeaturesPage() {
       </div>
 
       <Callout type="tip" title="Self-Hosted">
-        Every feature runs entirely on your infrastructure. Chasm never sends
+        Every feature runs entirely on your infrastructure. IronBridge never sends
         data to external servers — your conversations remain fully private.
       </Callout>
 

@@ -89,12 +89,12 @@ ORDER BY last_session DESC;
 
 ```bash
 # List sessions sorted by workspace
-chasm harvest list --sort-by workspace
+ironbridge harvest list --sort-by workspace
 
 # Export for organization
-chasm harvest export --format json
+ironbridge harvest export --format json
 
 # Use git versioning to snapshot organized state
-chasm harvest git init
-chasm harvest git commit -m "Organized sessions"
+ironbridge harvest git init
+ironbridge harvest git commit -m "Organized sessions"
 ```

@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Browser Extension - ChatGPT Content Script
+// IronBridge Browser Extension - ChatGPT Content Script
 // Copyright 2025-2026 Nervosys LLC
 
 (() => {
@@ -59,7 +59,7 @@
 
             return { session };
         } catch (error) {
-            console.error('Chasm: Failed to extract session', error);
+            console.error('IronBridge: Failed to extract session', error);
             return { session: null, error: error.message };
         }
     }
@@ -180,10 +180,10 @@
 
     // Inject indicator (optional visual feedback)
     function injectIndicator() {
-        if (document.getElementById('chasm-indicator')) return;
+        if (document.getElementById('ironbridge-indicator')) return;
 
         const indicator = document.createElement('div');
-        indicator.id = 'chasm-indicator';
+        indicator.id = 'ironbridge-indicator';
         indicator.innerHTML = `
       <div style="
         position: fixed;
@@ -202,7 +202,7 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       ">
         <span>📋</span>
-        <span>Chasm Active</span>
+        <span>IronBridge Active</span>
       </div>
     `;
         document.body.appendChild(indicator);
@@ -210,5 +210,5 @@
 
     // Initialize
     injectIndicator();
-    console.log('Chasm: ChatGPT content script loaded');
+    console.log('IronBridge: ChatGPT content script loaded');
 })();

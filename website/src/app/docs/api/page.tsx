@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,14 +9,14 @@ export default function ApiPage() {
     <div className="content-wrapper">
       <h1>API Server</h1>
       <p className="page-description">
-        Chasm includes a full REST + GraphQL + WebSocket API server built with
+        IronBridge includes a full REST + GraphQL + WebSocket API server built with
         Actix-web for high-performance integrations.
       </p>
 
       <h2>Start the Server</h2>
       <CodeBlock language="bash">
-{`chasm api serve --port 8787
-chasm api serve --host 0.0.0.0 --port 8787  # Listen on all interfaces`}
+{`ironbridge api serve --port 8787
+ironbridge api serve --host 0.0.0.0 --port 8787  # Listen on all interfaces`}
       </CodeBlock>
 
       <h2>REST Endpoints</h2>

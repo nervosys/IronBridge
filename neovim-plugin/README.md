@@ -1,13 +1,13 @@
-# Chasm.nvim - Neovim Plugin for Chasm
+# IronBridge.nvim - Neovim Plugin for IronBridge
 
-A Neovim plugin for managing AI chat sessions with the Chasm system.
+A Neovim plugin for managing AI chat sessions with the IronBridge system.
 
 ## Features
 
 - 🔍 **Session Search**: Search and browse AI chat sessions with Telescope
 - 📥 **Harvest**: Collect sessions from AI providers
 - 📊 **Session Viewer**: View session details and messages
-- 🔄 **Sync**: Synchronize with Chasm server
+- 🔄 **Sync**: Synchronize with IronBridge server
 - ⌨️ **Commands**: Full command-line interface
 
 ## Requirements
@@ -15,7 +15,7 @@ A Neovim plugin for managing AI chat sessions with the Chasm system.
 - Neovim 0.8+
 - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
 - [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) (optional, for fuzzy search)
-- Chasm server running (default: localhost:8787)
+- IronBridge server running (default: localhost:8787)
 
 ## Installation
 
@@ -23,13 +23,13 @@ A Neovim plugin for managing AI chat sessions with the Chasm system.
 
 ```lua
 {
-  "nervosys/chasm.nvim",
+  "nervosys/ironbridge.nvim",
   dependencies = {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope.nvim", -- optional
   },
   config = function()
-    require("chasm").setup({
+    require("ironbridge").setup({
       server_url = "http://localhost:8787",
     })
   end,
@@ -40,13 +40,13 @@ A Neovim plugin for managing AI chat sessions with the Chasm system.
 
 ```lua
 use {
-  "nervosys/chasm.nvim",
+  "nervosys/ironbridge.nvim",
   requires = {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope.nvim",
   },
   config = function()
-    require("chasm").setup()
+    require("ironbridge").setup()
   end,
 }
 ```
@@ -56,13 +56,13 @@ use {
 ```vim
 Plug 'nvim-lua/plenary.nvim'
 Plug 'nvim-telescope/telescope.nvim'
-Plug 'nervosys/chasm.nvim'
+Plug 'nervosys/ironbridge.nvim'
 ```
 
 ## Configuration
 
 ```lua
-require("chasm").setup({
+require("ironbridge").setup({
   -- Server configuration
   server_url = "http://localhost:8787",
   
@@ -93,12 +93,12 @@ require("chasm").setup({
 
 | Command                | Description          |
 | ---------------------- | -------------------- |
-| `:ChasmSearch [query]` | Search sessions      |
-| `:ChasmHarvest`        | Harvest new sessions |
-| `:ChasmSync`           | Sync with server     |
-| `:ChasmView [id]`      | View session details |
-| `:ChasmStats`          | Show statistics      |
-| `:ChasmHealth`         | Check server health  |
+| `:IronBridgeSearch [query]` | Search sessions      |
+| `:IronBridgeHarvest`        | Harvest new sessions |
+| `:IronBridgeSync`           | Sync with server     |
+| `:IronBridgeView [id]`      | View session details |
+| `:IronBridgeStats`          | Show statistics      |
+| `:IronBridgeHealth`         | Check server health  |
 
 ## Keymaps
 
@@ -113,42 +113,42 @@ Default keymaps (configurable):
 
 ## Telescope Integration
 
-If telescope.nvim is installed, you can use the Chasm picker:
+If telescope.nvim is installed, you can use the IronBridge picker:
 
 ```lua
-:Telescope chasm sessions
-:Telescope chasm search query=your-query
+:Telescope ironbridge sessions
+:Telescope ironbridge search query=your-query
 ```
 
 Or via Lua:
 
 ```lua
-require("telescope").extensions.chasm.sessions()
-require("telescope").extensions.chasm.search({ query = "your query" })
+require("telescope").extensions.ironbridge.sessions()
+require("telescope").extensions.ironbridge.search({ query = "your query" })
 ```
 
 ## API
 
 ```lua
-local chasm = require("chasm")
+local ironbridge = require("ironbridge")
 
 -- Check health
-chasm.health()
+ironbridge.health()
 
 -- Search sessions
-chasm.search("query")
+ironbridge.search("query")
 
 -- Harvest sessions
-chasm.harvest()
+ironbridge.harvest()
 
 -- Get session by ID
-chasm.get_session("session-id")
+ironbridge.get_session("session-id")
 
 -- Get all sessions
-chasm.get_sessions()
+ironbridge.get_sessions()
 
 -- Get statistics
-chasm.stats()
+ironbridge.stats()
 ```
 
 ## License

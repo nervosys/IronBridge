@@ -54,16 +54,16 @@ ollama pull llama3.2
 ollama serve
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure Ollama provider
-chasm provider config ollama --endpoint http://localhost:11434
+ironbridge provider config ollama --endpoint http://localhost:11434
 
 # Test connection
-chasm provider test ollama
+ironbridge provider test ollama
 
 # Import demo sessions
-chasm provider import ollama --source examples/ollama/sessions
+ironbridge provider import ollama --source examples/ollama/sessions
 ```
 

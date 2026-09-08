@@ -12,7 +12,7 @@ import {
 import { COLORS, VIDEO_FPS } from "../constants";
 
 /**
- * CLIUsage — A concise usage video for the chasm-cli README.
+ * CLIUsage — A concise usage video for the ironbridge-cli README.
  *
  * Scenes (total ≈ 60s):
  *   0–4s    Intro / title
@@ -40,7 +40,7 @@ export const CLIUsage: React.FC = () => {
         >
           <Logo size={72} />
           <TitleSlide
-            title="Chasm CLI Usage"
+            title="IronBridge CLI Usage"
             subtitle="Never lose an AI conversation again"
           />
         </AbsoluteFill>
@@ -62,26 +62,26 @@ export const CLIUsage: React.FC = () => {
             title="bash — Install & verify"
             startFrame={10}
             lines={[
-              { prompt: true, text: "cargo install chasm-cli", delay: 0 },
+              { prompt: true, text: "cargo install ironbridge-cli", delay: 0 },
               {
-                text: "  Installing chasm-cli v1.3.2",
+                text: "  Installing ironbridge-cli v1.3.2",
                 color: COLORS.textMuted,
                 delay: 20,
               },
               {
-                text: "  Compiling chasm-cli v1.3.2",
+                text: "  Compiling ironbridge-cli v1.3.2",
                 color: COLORS.textMuted,
                 delay: 35,
               },
               {
-                text: "   Installed chasm-cli v1.3.2",
+                text: "   Installed ironbridge-cli v1.3.2",
                 color: COLORS.success,
                 delay: 55,
               },
               { text: "", delay: 65 },
-              { prompt: true, text: "chasm --version", delay: 70 },
+              { prompt: true, text: "ironbridge --version", delay: 70 },
               {
-                text: "chasm 1.3.2",
+                text: "ironbridge 1.3.2",
                 color: COLORS.primary,
                 delay: 90,
               },
@@ -106,7 +106,7 @@ export const CLIUsage: React.FC = () => {
             title="bash — Find workspaces & sessions"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm list workspaces", delay: 0 },
+              { prompt: true, text: "ironbridge list workspaces", delay: 0 },
               {
                 text: "┌────────────────────────┬──────────────────┬──────────┐",
                 color: COLORS.textDim,
@@ -143,7 +143,7 @@ export const CLIUsage: React.FC = () => {
                 delay: 32,
               },
               { text: "", delay: 45 },
-              { prompt: true, text: "chasm show path .", delay: 55 },
+              { prompt: true, text: "ironbridge show path .", delay: 55 },
               {
                 text: "Current project: 9 sessions, 249 messages",
                 color: COLORS.primary,
@@ -170,7 +170,7 @@ export const CLIUsage: React.FC = () => {
             title="bash — Collect from all providers"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm harvest scan", delay: 0 },
+              { prompt: true, text: "ironbridge harvest scan", delay: 0 },
               {
                 text: "Detected providers:",
                 color: COLORS.textMuted,
@@ -202,7 +202,7 @@ export const CLIUsage: React.FC = () => {
                 delay: 56,
               },
               { text: "", delay: 68 },
-              { prompt: true, text: "chasm harvest run", delay: 78 },
+              { prompt: true, text: "ironbridge harvest run", delay: 78 },
               {
                 text: "Harvesting ████████████████████ 100%",
                 color: COLORS.accent,
@@ -216,7 +216,7 @@ export const CLIUsage: React.FC = () => {
               { text: "", delay: 130 },
               {
                 prompt: true,
-                text: "chasm harvest search \"authentication flow\"",
+                text: "ironbridge harvest search \"authentication flow\"",
                 delay: 140,
               },
               {
@@ -247,7 +247,7 @@ export const CLIUsage: React.FC = () => {
             lines={[
               {
                 prompt: true,
-                text: "chasm detect orphaned /proj/IronWorks",
+                text: "ironbridge detect orphaned /proj/IronWorks",
                 delay: 0,
               },
               {
@@ -258,7 +258,7 @@ export const CLIUsage: React.FC = () => {
               { text: "", delay: 38 },
               {
                 prompt: true,
-                text: "chasm detect orphaned --recover /proj/IronWorks",
+                text: "ironbridge detect orphaned --recover /proj/IronWorks",
                 delay: 48,
               },
               {
@@ -269,7 +269,7 @@ export const CLIUsage: React.FC = () => {
               { text: "", delay: 88 },
               {
                 prompt: true,
-                text: "chasm register all --path /proj/IronWorks --close-vscode --reopen",
+                text: "ironbridge register all --path /proj/IronWorks --close-vscode --reopen",
                 delay: 98,
               },
               {
@@ -310,7 +310,7 @@ export const CLIUsage: React.FC = () => {
             lines={[
               {
                 prompt: true,
-                text: "chasm export session ac554459 --format markdown",
+                text: "ironbridge export session ac554459 --format markdown",
                 delay: 0,
               },
               {
@@ -321,7 +321,7 @@ export const CLIUsage: React.FC = () => {
               { text: "", delay: 40 },
               {
                 prompt: true,
-                text: "chasm export batch ./backup /proj1 /proj2",
+                text: "ironbridge export batch ./backup /proj1 /proj2",
                 delay: 50,
               },
               {
@@ -330,7 +330,7 @@ export const CLIUsage: React.FC = () => {
                 delay: 78,
               },
               { text: "", delay: 90 },
-              { prompt: true, text: "chasm harvest status", delay: 100 },
+              { prompt: true, text: "ironbridge harvest status", delay: 100 },
               {
                 text: "Database: chat_sessions.db (23 MB)",
                 color: COLORS.text,

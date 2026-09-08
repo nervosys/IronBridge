@@ -1,14 +1,14 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Chat Panel - Unified Chat Interface with Agent Support
+// IronBridge Chat Panel - Unified Chat Interface with Agent Support
 // A comprehensive chat interface that rivals Google Agency's Antigravity
-// Types aligned with chasm-shared and chasm-rust Agency
+// Types aligned with ironbridge-shared and ironbridge-rust Agency
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ChasmExecutor } from './chasmExecutor';
+import { IronBridgeExecutor } from './ironbridgeExecutor';
 import {
     ChatMessage,
     ChatSession,
@@ -45,13 +45,13 @@ import {
 } from './constants';
 
 /**
- * Chasm Chat Panel - A unified chat interface with multi-provider and agent support
+ * IronBridge Chat Panel - A unified chat interface with multi-provider and agent support
  */
-export class ChasmChatPanel {
-    public static currentPanel: ChasmChatPanel | undefined;
+export class IronBridgeChatPanel {
+    public static currentPanel: IronBridgeChatPanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
-    private readonly _executor: ChasmExecutor;
+    private readonly _executor: IronBridgeExecutor;
     private readonly _outputChannel: vscode.OutputChannel;
     private _disposables: vscode.Disposable[] = [];
 
@@ -70,14 +70,14 @@ export class ChasmChatPanel {
     private _enableReflection: boolean = true;
     private _maxAgentIterations: number = 10;
 
-    // Swarm state (aligned with chasm-shared Swarm types)
+    // Swarm state (aligned with ironbridge-shared Swarm types)
     private _swarms: Swarm[] = [];
     private _currentSwarm: Swarm | null = null;
     private _activeRun: AgentRun | null = null;
 
     public static createOrShow(
         extensionUri: vscode.Uri,
-        executor: ChasmExecutor,
+        executor: IronBridgeExecutor,
         outputChannel: vscode.OutputChannel
     ) {
         const column = vscode.window.activeTextEditor
@@ -85,15 +85,15 @@ export class ChasmChatPanel {
             : undefined;
 
         // If we already have a panel, show it
-        if (ChasmChatPanel.currentPanel) {
-            ChasmChatPanel.currentPanel._panel.reveal(column);
+        if (IronBridgeChatPanel.currentPanel) {
+            IronBridgeChatPanel.currentPanel._panel.reveal(column);
             return;
         }
 
         // Create a new panel
         const panel = vscode.window.createWebviewPanel(
-            'chasmChat',
-            'Chasm Chat',
+            'ironbridgeChat',
+            'IronBridge Chat',
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -105,13 +105,13 @@ export class ChasmChatPanel {
             }
         );
 
-        ChasmChatPanel.currentPanel = new ChasmChatPanel(panel, extensionUri, executor, outputChannel);
+        IronBridgeChatPanel.currentPanel = new IronBridgeChatPanel(panel, extensionUri, executor, outputChannel);
     }
 
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
-        executor: ChasmExecutor,
+        executor: IronBridgeExecutor,
         outputChannel: vscode.OutputChannel
     ) {
         this._panel = panel;
@@ -139,7 +139,7 @@ export class ChasmChatPanel {
     }
 
     private async _initializeState() {
-        // Load providers from chasm
+        // Load providers from ironbridge
         await this._loadProviders();
 
         // Load saved sessions
@@ -162,7 +162,7 @@ export class ChasmChatPanel {
             this._outputChannel.appendLine(`Error loading providers: ${e}`);
         }
 
-        // Default providers from shared constants if Chasm doesn't return any
+        // Default providers from shared constants if IronBridge doesn't return any
         if (this._providers.length === 0) {
             this._providers = DEFAULT_PROVIDERS.map(p => ({
                 name: p.id,
@@ -691,7 +691,7 @@ export class ChasmChatPanel {
             }
         }
 
-        // Use Chasm API if available, otherwise use VS Code's chat API
+        // Use IronBridge API if available, otherwise use VS Code's chat API
         try {
             // Try VS Code's language model API (Copilot)
             const models = await vscode.lm.selectChatModels({
@@ -736,7 +736,7 @@ export class ChasmChatPanel {
             this._outputChannel.appendLine(`Language model error: ${e}`);
         }
 
-        // Fallback: use Chasm API server if running
+        // Fallback: use IronBridge API server if running
         try {
             const response = await fetch('http://localhost:3000/api/chat', {
                 method: 'POST',
@@ -756,7 +756,7 @@ export class ChasmChatPanel {
                 return data.response || data.content || 'No response';
             }
         } catch (e) {
-            // Chasm API not available
+            // IronBridge API not available
         }
 
         return 'Unable to get response. Please ensure a language model provider is configured.';
@@ -800,13 +800,13 @@ export class ChasmChatPanel {
     }
 
     private async _saveSession(session: ChatSession) {
-        // Save to workspace storage via chasm
+        // Save to workspace storage via ironbridge
         try {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (workspaceFolder) {
                 const sessionPath = path.join(
                     workspaceFolder.uri.fsPath,
-                    '.chasm',
+                    '.ironbridge',
                     'sessions',
                     `${session.id}.json`
                 );
@@ -966,7 +966,7 @@ export class ChasmChatPanel {
     }
 
     // =========================================================================
-    // Swarm Management (aligned with chasm-shared and chasm-rust Agency)
+    // Swarm Management (aligned with ironbridge-shared and ironbridge-rust Agency)
     // =========================================================================
 
     private async _createSwarm(name: string, description: string, agentIds: string[]) {
@@ -1284,7 +1284,7 @@ Provide a comprehensive final response that combines all contributions.`;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:*;">
-    <title>Chasm Chat</title>
+    <title>IronBridge Chat</title>
     <style>
         :root {
             --bg-primary: var(--vscode-editor-background);
@@ -1873,7 +1873,7 @@ Provide a comprehensive final response that combines all contributions.`;
 
         <div class="messages" id="messages">
             <div class="empty-state">
-                <h3>Welcome to Chasm Chat</h3>
+                <h3>Welcome to IronBridge Chat</h3>
                 <p>Start a conversation with AI. Select a provider, model, and optionally an agent.</p>
             </div>
         </div>
@@ -2046,7 +2046,7 @@ Provide a comprehensive final response that combines all contributions.`;
             if (!state.currentSession || state.currentSession.messages.length === 0) {
                 container.innerHTML = \`
                     <div class="empty-state">
-                        <h3>Welcome to Chasm Chat</h3>
+                        <h3>Welcome to IronBridge Chat</h3>
                         <p>Start a conversation with AI. Select a provider, model, and optionally an agent.</p>
                     </div>
                 \`;
@@ -2193,7 +2193,7 @@ Provide a comprehensive final response that combines all contributions.`;
     }
 
     public dispose() {
-        ChasmChatPanel.currentPanel = undefined;
+        IronBridgeChatPanel.currentPanel = undefined;
 
         this._panel.dispose();
 

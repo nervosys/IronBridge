@@ -27,28 +27,28 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: chasm
-            asset_name: chasm-linux-x86_64
+            artifact_name: ironbridge
+            asset_name: ironbridge-linux-x86_64
 
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact_name: chasm
-            asset_name: chasm-linux-aarch64
+            artifact_name: ironbridge
+            asset_name: ironbridge-linux-aarch64
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: chasm.exe
-            asset_name: chasm-windows-x86_64.exe
+            artifact_name: ironbridge.exe
+            asset_name: ironbridge-windows-x86_64.exe
 
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: chasm
-            asset_name: chasm-macos-x86_64
+            artifact_name: ironbridge
+            asset_name: ironbridge-macos-x86_64
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: chasm
-            asset_name: chasm-macos-aarch64
+            artifact_name: ironbridge
+            asset_name: ironbridge-macos-aarch64
 
     steps:
       - name: Checkout repository
@@ -65,19 +65,19 @@ jobs:
 
       - name: Build release binary (native)
         if: matrix.target != 'aarch64-unknown-linux-gnu'
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build release binary (cross-compile ARM64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: chasm-rust/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          path: ironbridge-rust/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
   # ==========================================================================
   # Create GitHub Release
@@ -104,26 +104,26 @@ jobs:
           mkdir -p release
 
           # Every expected binary must exist. These steps used to be wrapped in
-          # `if [ -f ... ]`, so renaming the cargo bin target (csm -> chasm)
+          # `if [ -f ... ]`, so renaming the cargo bin target (ironbridge -> ironbridge)
           # silently produced green runs with empty releases -- v0.2.1 shipped
           # zero assets this way.
-          for asset in chasm-linux-x86_64 chasm-linux-aarch64 \
-                       chasm-macos-x86_64 chasm-macos-aarch64; do
-            src="artifacts/$asset/chasm"
+          for asset in ironbridge-linux-x86_64 ironbridge-linux-aarch64 \
+                       ironbridge-macos-x86_64 ironbridge-macos-aarch64; do
+            src="artifacts/$asset/ironbridge"
             if [ ! -f "$src" ]; then
               echo "::error::missing build artifact: $src" >&2
               exit 1
             fi
             chmod +x "$src"
-            tar -czvf "release/$asset.tar.gz" -C "artifacts/$asset" chasm
+            tar -czvf "release/$asset.tar.gz" -C "artifacts/$asset" ironbridge
           done
 
-          win="artifacts/chasm-windows-x86_64.exe/chasm.exe"
+          win="artifacts/ironbridge-windows-x86_64.exe/ironbridge.exe"
           if [ ! -f "$win" ]; then
             echo "::error::missing build artifact: $win" >&2
             exit 1
           fi
-          cp "$win" release/chasm-windows-x86_64.exe
+          cp "$win" release/ironbridge-windows-x86_64.exe
 
           ls -la release/
 
@@ -146,36 +146,36 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: CSM ${{ steps.version.outputs.version }}
+          name: IRONBRIDGE ${{ steps.version.outputs.version }}
           draft: true
           prerelease: false
           files: |
             release/*
           body: |
-            ## Chat System Manager (CSM) ${{ steps.version.outputs.version }}
+            ## Chat System Manager (IRONBRIDGE) ${{ steps.version.outputs.version }}
 
             ### Downloads
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | Linux | x86_64 | [chasm-linux-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-linux-x86_64.tar.gz) |
-            | Linux | ARM64 | [chasm-linux-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-linux-aarch64.tar.gz) |
-            | macOS | x86_64 (Intel) | [chasm-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-macos-x86_64.tar.gz) |
-            | macOS | ARM64 (Apple Silicon) | [chasm-macos-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-macos-aarch64.tar.gz) |
-            | Windows | x86_64 | [chasm-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/chasm-windows-x86_64.exe) |
+            | Linux | x86_64 | [ironbridge-linux-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-linux-x86_64.tar.gz) |
+            | Linux | ARM64 | [ironbridge-linux-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-linux-aarch64.tar.gz) |
+            | macOS | x86_64 (Intel) | [ironbridge-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-macos-x86_64.tar.gz) |
+            | macOS | ARM64 (Apple Silicon) | [ironbridge-macos-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-macos-aarch64.tar.gz) |
+            | Windows | x86_64 | [ironbridge-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-windows-x86_64.exe) |
 
             ### Installation
 
             #### Linux/macOS
             ```bash
             # Download and extract
-            tar -xzf chasm-linux-x86_64.tar.gz
-            chmod +x chasm
-            sudo mv chasm /usr/local/bin/
+            tar -xzf ironbridge-linux-x86_64.tar.gz
+            chmod +x ironbridge
+            sudo mv ironbridge /usr/local/bin/
             ```
 
             #### Windows
-            Download `chasm-windows-x86_64.exe` and add to your PATH.
+            Download `ironbridge-windows-x86_64.exe` and add to your PATH.
 
             ### Changelog
 

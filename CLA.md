@@ -1,8 +1,8 @@
 # Contributor License Agreement (CLA)
 
-## Chasm — Nervosys LLC
+## IronBridge — Nervosys LLC
 
-Thank you for your interest in contributing to **Chasm** ("the Project"),
+Thank you for your interest in contributing to **IronBridge** ("the Project"),
 maintained by **Nervosys LLC** ("the Company"). This Contributor License
 Agreement ("Agreement") clarifies the intellectual property rights granted
 with Contributions from any person or entity.
@@ -97,9 +97,9 @@ with the subject line "CLA Signature — [Your Name]".
 
 ---
 
-**Project:** Chasm — Universal Chat Session Manager
+**Project:** IronBridge — Universal Chat Session Manager
 **Company:** Nervosys LLC
 **Contact:** [hello@nervosys.ai](mailto:hello@nervosys.ai)
-**Repository:** [github.com/nervosys/chasm](https://github.com/nervosys/chasm)
+**Repository:** [github.com/nervosys/ironbridge](https://github.com/nervosys/ironbridge)
 
 Copyright 2024-2026 Nervosys LLC. All rights reserved.

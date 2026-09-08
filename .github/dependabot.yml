@@ -2,7 +2,7 @@ version: 2
 updates:
   # Rust dependencies
   - package-ecosystem: "cargo"
-    directory: "/csm-rust"
+    directory: "/ironbridge-rust"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

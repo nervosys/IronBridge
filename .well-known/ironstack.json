@@ -1,7 +1,7 @@
 {
   "ironstack": "1",
-  "id": "chasm",
-  "product": "Chasm",
+  "id": "ironbridge",
+  "product": "IronBridge",
   "layer": "tools",
   "role": "Chat session capture and recovery across AI providers: workspace discovery, orphaned-session recovery, chronological merging, and full-text search over a harvested store. The one tool in the stack whose subject is the agent transcript itself, which is what makes an agent's own history durable rather than a side effect of whichever editor produced it.",
   "surfaces": [
@@ -11,8 +11,8 @@
     "mcp"
   ],
   "ontology": {
-    "command": "chasm schema ontology --json",
-    "document": "chasm-rust/ontology.yaml",
+    "command": "ironbridge schema ontology --json",
+    "document": "ironbridge-rust/ontology.yaml",
     "schema": 1
   },
   "capabilities": [

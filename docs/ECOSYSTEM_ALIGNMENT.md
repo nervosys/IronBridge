@@ -1,23 +1,23 @@
-# CSM Ecosystem Alignment
+# IRONBRIDGE Ecosystem Alignment
 
-This document describes how the CSM (Chat Session Manager) ecosystem maintains consistency across all modules.
+This document describes how the IRONBRIDGE (Chat Session Manager) ecosystem maintains consistency across all modules.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        CSM Ecosystem                             │
+│                        IRONBRIDGE Ecosystem                             │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │   csm-web    │    │   csm-app    │    │  vscode-ext  │       │
+│  │   ironbridge-web    │    │   ironbridge-app    │    │  vscode-ext  │       │
 │  │  (React)     │    │ (RN Mobile)  │    │  (VS Code)   │       │
 │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘       │
 │         │                   │                   │                │
 │         └─────────┬─────────┴─────────┬─────────┘                │
 │                   │                   │                          │
 │           ┌───────▼───────┐   ┌───────▼───────┐                 │
-│           │  csm-shared   │   │   csm-rust    │                 │
+│           │  ironbridge-shared   │   │   ironbridge-rust    │                 │
 │           │  (TypeScript) │   │    (Rust)     │                 │
 │           └───────────────┘   └───────────────┘                 │
 │                                                                  │
@@ -26,36 +26,36 @@ This document describes how the CSM (Chat Session Manager) ecosystem maintains c
 
 ## Module Responsibilities
 
-### csm-rust (Rust Backend)
-- **Location**: `csm-rust/`
+### ironbridge-rust (Rust Backend)
+- **Location**: `ironbridge-rust/`
 - **Purpose**: High-performance backend with Agency (Agent Development Kit)
 - **Key Features**:
-  - CLI tool (`csm`, `chasm`)
+  - CLI tool (`ironbridge`, `ironbridge`)
   - Agent orchestration (Sequential, Parallel, Loop, Hierarchical, Swarm)
   - Multi-provider support (12+ providers)
   - SQLite session storage
   - MCP server integration
 
-### csm-shared (TypeScript Shared Library)
-- **Location**: `csm-shared/`
+### ironbridge-shared (TypeScript Shared Library)
+- **Location**: `ironbridge-shared/`
 - **Purpose**: Shared types, constants, and utilities
 - **Key Exports**:
   - `types/` - Core interfaces (Session, Message, Agent, Swarm, etc.)
   - `constants/` - Provider configs, agent roles, orchestration modes
-  - `api/` - API client for csm-rust backend
+  - `api/` - API client for ironbridge-rust backend
   - `utils/` - Common utilities
 
-### csm-web (React Web App)
-- **Location**: `csm-web/`
+### ironbridge-web (React Web App)
+- **Location**: `ironbridge-web/`
 - **Purpose**: Web-based chat interface
-- **Uses from csm-shared**:
+- **Uses from ironbridge-shared**:
   - `PROVIDERS`, `AGENT_ROLES`, `ORCHESTRATION_MODES`
   - All core types
 
-### csm-app (React Native Mobile App)
-- **Location**: `csm-app/`
+### ironbridge-app (React Native Mobile App)
+- **Location**: `ironbridge-app/`
 - **Purpose**: Mobile chat interface
-- **Uses from csm-shared**:
+- **Uses from ironbridge-shared**:
   - `AGENT_ROLES`, `SWARM_TEMPLATES`
   - Provider and session types
 
@@ -63,8 +63,8 @@ This document describes how the CSM (Chat Session Manager) ecosystem maintains c
 - **Location**: `vscode-extension/`
 - **Purpose**: VS Code integrated chat panel
 - **Uses**:
-  - Own `constants.ts` (mirrors csm-shared for VS Code compatibility)
-  - Bundles `csm-rust` binary for CLI operations
+  - Own `constants.ts` (mirrors ironbridge-shared for VS Code compatibility)
+  - Bundles `ironbridge-rust` binary for CLI operations
 
 ## Aligned Constants
 
@@ -98,14 +98,14 @@ pending | in_progress | completed | failed | cancelled
 ## Type Alignment
 
 ### Session Types
-| TypeScript (csm-shared) | Rust (csm-rust) |
+| TypeScript (ironbridge-shared) | Rust (ironbridge-rust) |
 | ----------------------- | --------------- |
 | `Session`               | `ChatSession`   |
 | `Message`               | `ChatMessage`   |
 | `Workspace`             | `Workspace`     |
 
 ### Agent Types
-| TypeScript (csm-shared) | Rust (csm-rust) |
+| TypeScript (ironbridge-shared) | Rust (ironbridge-rust) |
 | ----------------------- | --------------- |
 | `Agent`                 | `Agent`         |
 | `AgentTask`             | `Task`          |
@@ -113,7 +113,7 @@ pending | in_progress | completed | failed | cancelled
 | `Pipeline`              | `Pipeline`      |
 
 ### Agency Event Types
-| TypeScript (csm-shared) | Rust (csm-rust)      |
+| TypeScript (ironbridge-shared) | Rust (ironbridge-rust)      |
 | ----------------------- | -------------------- |
 | `AgencyEvent`              | `AgencyEvent`           |
 | `AgencyEventType`          | `EventType`          |
@@ -147,20 +147,20 @@ const API_ENDPOINTS = {
 
 | Module           | Build Command           | Status        |
 | ---------------- | ----------------------- | ------------- |
-| csm-rust         | `cargo build --release` | ✅ 36/36 tests |
-| csm-shared       | `npm run build`         | ✅ ESM+CJS+DTS |
-| csm-web          | `npm run build`         | ✅ ~2MB bundle |
-| csm-app          | `npx tsc --noEmit`      | ✅ Type-checks |
+| ironbridge-rust         | `cargo build --release` | ✅ 36/36 tests |
+| ironbridge-shared       | `npm run build`         | ✅ ESM+CJS+DTS |
+| ironbridge-web          | `npm run build`         | ✅ ~2MB bundle |
+| ironbridge-app          | `npx tsc --noEmit`      | ✅ Type-checks |
 | vscode-extension | `npx vsce package`      | ✅ 4.22MB VSIX |
 
 ## Adding New Features
 
 When adding a new feature (e.g., new agent role):
 
-1. **csm-rust**: Add to `AgentRole` enum in `Agency/agent.rs`
-2. **csm-shared**: Add to `AgentRole` type and `AGENT_ROLES` constant
-3. **csm-web**: Will automatically get from csm-shared
-4. **csm-app**: Add to `ROLE_ICONS`, `ROLE_COLORS` in screens
+1. **ironbridge-rust**: Add to `AgentRole` enum in `Agency/agent.rs`
+2. **ironbridge-shared**: Add to `AgentRole` type and `AGENT_ROLES` constant
+3. **ironbridge-web**: Will automatically get from ironbridge-shared
+4. **ironbridge-app**: Add to `ROLE_ICONS`, `ROLE_COLORS` in screens
 5. **vscode-extension**: Add to `AGENT_ROLES` in `constants.ts`
 
 ## Swarm Management UI

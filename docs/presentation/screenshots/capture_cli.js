@@ -1,4 +1,4 @@
-console.log("Chasm CLI Screenshot Capture Script");
+console.log("IronBridge CLI Screenshot Capture Script");
 console.log("===================================\n");
 
 const { chromium } = require('playwright');
@@ -138,14 +138,14 @@ function createTerminalHtml(title, output, width = 900, height = 500) {
 }
 
 async function main() {
-    const cliPath = path.resolve(__dirname, '../../../chasm-rust/target/release/chasm.exe');
+    const cliPath = path.resolve(__dirname, '../../../ironbridge-rust/target/release/ironbridge.exe');
     const capturedFiles = [];
 
     // Check if CLI exists
     if (!fs.existsSync(cliPath)) {
         console.log('Building CLI...');
         execSync('cargo build --release', {
-            cwd: path.resolve(__dirname, '../../../chasm-rust'),
+            cwd: path.resolve(__dirname, '../../../ironbridge-rust'),
             stdio: 'inherit'
         });
     }
@@ -157,14 +157,14 @@ async function main() {
     const cliCommands = [
         {
             name: 'cli_list',
-            title: 'chasm — List Workspaces',
+            title: 'ironbridge — List Workspaces',
             cmd: 'list workspaces',
             width: 1100,
             height: 600,
         },
         {
             name: 'cli_agency',
-            title: 'chasm — Agency ADK',
+            title: 'ironbridge — Agency ADK',
             cmd: 'agency list',
             width: 800,
             height: 450,
@@ -189,7 +189,7 @@ async function main() {
             }
 
             // Add prompt line at the top
-            const fullOutput = `<span class="prompt">$</span> <span class="cmd">chasm ${command.cmd}</span>\n\n${output}`;
+            const fullOutput = `<span class="prompt">$</span> <span class="cmd">ironbridge ${command.cmd}</span>\n\n${output}`;
 
             // Create HTML
             const html = createTerminalHtml(command.title, fullOutput, command.width, command.height);
@@ -205,7 +205,7 @@ async function main() {
             await page.goto(`file://${tempHtml}`);
             await page.waitForTimeout(500);
 
-            const filename = `chasm_${command.name}.png`;
+            const filename = `ironbridge_${command.name}.png`;
             await page.screenshot({ path: filename, fullPage: false });
             console.log(`✓ ${filename}`);
             capturedFiles.push(filename);
@@ -213,7 +213,7 @@ async function main() {
             await page.close();
             fs.unlinkSync(tempHtml);
         } catch (e) {
-            console.log(`✗ chasm_${command.name}.png - ${e.message}`);
+            console.log(`✗ ironbridge_${command.name}.png - ${e.message}`);
         }
     }
 

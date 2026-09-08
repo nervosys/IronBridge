@@ -1,0 +1,564 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
+//! OpenAI-compatible provider support
+//!
+//! Supports servers that implement the OpenAI Chat Completions API:
+//! - vLLM
+//! - LM Studio
+//! - LocalAI
+//! - Text Generation WebUI
+//! - Jan.ai
+//! - GPT4All
+//! - Llamafile
+//! - Azure AI Foundry (Foundry Local)
+//! - Any custom OpenAI-compatible endpoint
+
+#![allow(dead_code)]
+
+use super::{ChatProvider, ProviderType};
+use crate::models::{ChatMessage, ChatRequest, ChatSession};
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+/// OpenAI-compatible API provider
+pub struct OpenAICompatProvider {
+    /// Provider type
+    provider_type: ProviderType,
+    /// Display name
+    name: String,
+    /// API endpoint URL
+    endpoint: String,
+    /// API key (if required)
+    api_key: Option<String>,
+    /// Default model
+    model: Option<String>,
+    /// Local data path (if any)
+    data_path: Option<PathBuf>,
+}
+
+/// OpenAI chat message format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAIChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+/// OpenAI chat completion request
+#[derive(Debug, Serialize)]
+pub struct OpenAIChatRequest {
+    pub model: String,
+    pub messages: Vec<OpenAIChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+}
+
+/// OpenAI chat completion response
+#[derive(Debug, Deserialize)]
+pub struct OpenAIChatResponse {
+    pub id: String,
+    pub choices: Vec<OpenAIChatChoice>,
+    #[allow(dead_code)]
+    pub model: String,
+}
+
+/// OpenAI chat completion choice
+#[derive(Debug, Deserialize)]
+pub struct OpenAIChatChoice {
+    pub message: OpenAIChatMessage,
+    #[allow(dead_code)]
+    pub finish_reason: Option<String>,
+}
+
+impl OpenAICompatProvider {
+    /// Create a new OpenAI-compatible provider
+    pub fn new(
+        provider_type: ProviderType,
+        name: impl Into<String>,
+        endpoint: impl Into<String>,
+    ) -> Self {
+        Self {
+            provider_type,
+            name: name.into(),
+            endpoint: endpoint.into(),
+            api_key: None,
+            model: None,
+            data_path: None,
+        }
+    }
+
+    /// Set API key
+    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.api_key = Some(api_key.into());
+        self
+    }
+
+    /// Set default model
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+
+    /// Set local data path
+    pub fn with_data_path(mut self, path: PathBuf) -> Self {
+        self.data_path = Some(path);
+        self
+    }
+
+    /// Whether something is listening at this provider's endpoint.
+    ///
+    /// Was a stored `available` field set from `!endpoint.is_empty()`, which is
+    /// true of every endpoint this module builds -- each has a hard-coded
+    /// localhost default. The effect was that
+    /// `discover_openai_compatible_providers` reported vLLM, LM Studio,
+    /// LocalAI, Text Generation WebUI, Jan, GPT4All, Foundry and Llamafile all
+    /// running, on every machine, installed or not.
+    /// `ProviderRegistry::available_providers` filters on exactly this, so the
+    /// filter passed everything.
+    ///
+    /// Answered on demand rather than cached in a field, so a provider built
+    /// directly through [`Self::new`] reports the truth without the caller
+    /// having to know to refresh it. Repeat calls are cheap: see
+    /// [`super::endpoint_is_listening`], which memoises per endpoint and also
+    /// documents the limits of what a TCP probe establishes.
+    pub fn check_availability(&self) -> bool {
+        super::endpoint_is_listening(&self.endpoint)
+    }
+
+    /// Convert IRONBRIDGE session to OpenAI message format
+    pub fn session_to_messages(session: &ChatSession) -> Vec<OpenAIChatMessage> {
+        let mut messages = Vec::new();
+
+        for request in &session.requests {
+            // Add user message
+            if let Some(msg) = &request.message {
+                if let Some(text) = &msg.text {
+                    messages.push(OpenAIChatMessage {
+                        role: "user".to_string(),
+                        content: text.clone(),
+                    });
+                }
+            }
+
+            // Add assistant response
+            if let Some(response) = &request.response {
+                if let Some(text) = extract_response_text(response) {
+                    messages.push(OpenAIChatMessage {
+                        role: "assistant".to_string(),
+                        content: text,
+                    });
+                }
+            }
+        }
+
+        messages
+    }
+
+    /// Convert OpenAI messages to IRONBRIDGE session
+    pub fn messages_to_session(
+        messages: Vec<OpenAIChatMessage>,
+        model: &str,
+        provider_name: &str,
+    ) -> ChatSession {
+        let now = chrono::Utc::now().timestamp_millis();
+        let session_id = uuid::Uuid::new_v4().to_string();
+
+        let mut requests = Vec::new();
+        let mut user_msg: Option<String> = None;
+
+        for msg in messages {
+            match msg.role.as_str() {
+                "user" => {
+                    user_msg = Some(msg.content);
+                }
+                "assistant" => {
+                    if let Some(user_text) = user_msg.take() {
+                        requests.push(ChatRequest {
+                            timestamp: Some(now),
+                            message: Some(ChatMessage {
+                                text: Some(user_text),
+                                parts: None,
+                            }),
+                            response: Some(serde_json::json!({
+                                "value": [{"value": msg.content}]
+                            })),
+                            variable_data: None,
+                            request_id: Some(uuid::Uuid::new_v4().to_string()),
+                            response_id: Some(uuid::Uuid::new_v4().to_string()),
+                            model_id: Some(model.to_string()),
+                            agent: None,
+                            result: None,
+                            followups: None,
+                            is_canceled: Some(false),
+                            content_references: None,
+                            code_citations: None,
+                            response_markdown_info: None,
+                            source_session: None,
+                            model_state: None,
+                            time_spent_waiting: None,
+                        });
+                    }
+                }
+                "system" => {
+                    // System messages could be stored as metadata
+                }
+                _ => {}
+            }
+        }
+
+        ChatSession {
+            version: 3,
+            session_id: Some(session_id),
+            creation_date: now,
+            last_message_date: now,
+            is_imported: true,
+            initial_location: "api".to_string(),
+            custom_title: Some(format!("{} Chat", provider_name)),
+            requester_username: Some("user".to_string()),
+            requester_avatar_icon_uri: None,
+            responder_username: Some(format!("{}/{}", provider_name, model)),
+            responder_avatar_icon_uri: None,
+            requests,
+        }
+    }
+}
+
+impl ChatProvider for OpenAICompatProvider {
+    fn provider_type(&self) -> ProviderType {
+        self.provider_type
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn is_available(&self) -> bool {
+        self.check_availability()
+    }
+
+    fn sessions_path(&self) -> Option<PathBuf> {
+        self.data_path.clone()
+    }
+
+    fn list_sessions(&self) -> Result<Vec<ChatSession>> {
+        // OpenAI-compatible APIs don't persist sessions
+        // This would need a local history storage layer
+        Ok(Vec::new())
+    }
+
+    fn import_session(&self, _session_id: &str) -> Result<ChatSession> {
+        anyhow::bail!("{} does not persist chat sessions", self.name)
+    }
+
+    /// Always an error, and not for want of effort.
+    ///
+    /// The Chat Completions API is stateless: there is no endpoint that stores
+    /// a conversation, so there is nowhere for an exported session to go.
+    /// Replaying the messages as completions would burn tokens and produce new
+    /// assistant replies, which is not an export of anything. `import_session`
+    /// refuses for the same reason.
+    fn export_session(&self, _session: &ChatSession) -> Result<()> {
+        anyhow::bail!(
+            "{} is a stateless inference endpoint and does not store conversations, \
+             so there is nothing to export into; export to a file instead",
+            self.name
+        )
+    }
+}
+
+/// Discover available OpenAI-compatible providers
+pub fn discover_openai_compatible_providers() -> Vec<OpenAICompatProvider> {
+    let mut providers = Vec::new();
+
+    // vLLM (default port 8000)
+    if let Some(provider) = discover_vllm() {
+        providers.push(provider);
+    }
+
+    // LM Studio (default port 1234)
+    if let Some(provider) = discover_lm_studio() {
+        providers.push(provider);
+    }
+
+    // LocalAI (default port 8080)
+    if let Some(provider) = discover_localai() {
+        providers.push(provider);
+    }
+
+    // Text Generation WebUI (default port 5000)
+    if let Some(provider) = discover_text_gen_webui() {
+        providers.push(provider);
+    }
+
+    // Jan.ai (default port 1337)
+    if let Some(provider) = discover_jan() {
+        providers.push(provider);
+    }
+
+    // GPT4All (default port 4891)
+    if let Some(provider) = discover_gpt4all() {
+        providers.push(provider);
+    }
+
+    // Azure AI Foundry / Foundry Local (default port 5272)
+    if let Some(provider) = discover_foundry() {
+        providers.push(provider);
+    }
+
+    // Llamafile (default port 8080 on its own `--server` mode)
+    if let Some(provider) = discover_llamafile() {
+        providers.push(provider);
+    }
+
+    // Warm the probe cache concurrently. Construction does no I/O, so without
+    // this the first caller to ask each provider whether it is available pays
+    // the timeouts one after another -- the sum of eight, rather than the
+    // longest of them. On a machine running none of these that is the
+    // difference between roughly half a second and four.
+    use rayon::prelude::*;
+    providers.par_iter().for_each(|provider| {
+        let _ = super::endpoint_is_listening(&provider.endpoint);
+    });
+
+    providers
+}
+
+fn discover_vllm() -> Option<OpenAICompatProvider> {
+    let endpoint =
+        std::env::var("VLLM_ENDPOINT").unwrap_or_else(|_| "http://localhost:8000/v1".to_string());
+
+    Some(OpenAICompatProvider::new(
+        ProviderType::Vllm,
+        "vLLM",
+        endpoint,
+    ))
+}
+
+fn discover_lm_studio() -> Option<OpenAICompatProvider> {
+    let endpoint = std::env::var("LM_STUDIO_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:1234/v1".to_string());
+
+    // Check for LM Studio data directory
+    let data_path = find_lm_studio_data();
+
+    let mut provider = OpenAICompatProvider::new(ProviderType::LmStudio, "LM Studio", endpoint);
+
+    if let Some(path) = data_path {
+        provider = provider.with_data_path(path);
+    }
+
+    Some(provider)
+}
+
+fn discover_localai() -> Option<OpenAICompatProvider> {
+    let endpoint = std::env::var("LOCALAI_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:8080/v1".to_string());
+
+    Some(OpenAICompatProvider::new(
+        ProviderType::LocalAI,
+        "LocalAI",
+        endpoint,
+    ))
+}
+
+fn discover_text_gen_webui() -> Option<OpenAICompatProvider> {
+    let endpoint = std::env::var("TEXT_GEN_WEBUI_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:5000/v1".to_string());
+
+    Some(OpenAICompatProvider::new(
+        ProviderType::TextGenWebUI,
+        "Text Generation WebUI",
+        endpoint,
+    ))
+}
+
+fn discover_jan() -> Option<OpenAICompatProvider> {
+    let endpoint =
+        std::env::var("JAN_ENDPOINT").unwrap_or_else(|_| "http://localhost:1337/v1".to_string());
+
+    // Check for Jan data directory
+    let data_path = find_jan_data();
+
+    let mut provider = OpenAICompatProvider::new(ProviderType::Jan, "Jan.ai", endpoint);
+
+    if let Some(path) = data_path {
+        provider = provider.with_data_path(path);
+    }
+
+    Some(provider)
+}
+
+fn discover_gpt4all() -> Option<OpenAICompatProvider> {
+    let endpoint = std::env::var("GPT4ALL_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:4891/v1".to_string());
+
+    // Check for GPT4All data directory
+    let data_path = find_gpt4all_data();
+
+    let mut provider = OpenAICompatProvider::new(ProviderType::Gpt4All, "GPT4All", endpoint);
+
+    if let Some(path) = data_path {
+        provider = provider.with_data_path(path);
+    }
+
+    Some(provider)
+}
+
+fn discover_llamafile() -> Option<OpenAICompatProvider> {
+    // Llamafile serves the OpenAI API on 8080 by default, the same port
+    // LocalAI uses. Both are registered; whichever is actually listening
+    // answers, and `is_available` is what decides.
+    let endpoint = std::env::var("LLAMAFILE_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:8080/v1".to_string());
+
+    Some(OpenAICompatProvider::new(
+        ProviderType::Llamafile,
+        "Llamafile",
+        endpoint,
+    ))
+}
+
+fn discover_foundry() -> Option<OpenAICompatProvider> {
+    // Azure AI Foundry Local / Foundry Local
+    let endpoint = std::env::var("FOUNDRY_LOCAL_ENDPOINT")
+        .or_else(|_| std::env::var("AI_FOUNDRY_ENDPOINT"))
+        .unwrap_or_else(|_| "http://localhost:5272/v1".to_string());
+
+    Some(OpenAICompatProvider::new(
+        ProviderType::Foundry,
+        "Azure AI Foundry",
+        endpoint,
+    ))
+}
+
+// Helper functions to find application data directories
+
+fn find_lm_studio_data() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let home = dirs::home_dir()?;
+        let path = home.join(".cache").join("lm-studio");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let home = dirs::home_dir()?;
+        let path = home.join(".cache").join("lm-studio");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(cache_dir) = dirs::cache_dir() {
+            let path = cache_dir.join("lm-studio");
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn find_jan_data() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let home = dirs::home_dir()?;
+        let path = home.join("jan");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let home = dirs::home_dir()?;
+        let path = home.join("jan");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let home = dirs::home_dir()?;
+        let path = home.join("jan");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+fn find_gpt4all_data() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let local_app_data = dirs::data_local_dir()?;
+        let path = local_app_data.join("nomic.ai").join("GPT4All");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let home = dirs::home_dir()?;
+        let path = home
+            .join("Library")
+            .join("Application Support")
+            .join("nomic.ai")
+            .join("GPT4All");
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(data_dir) = dirs::data_dir() {
+            let path = data_dir.join("nomic.ai").join("GPT4All");
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Extract text from various response formats
+fn extract_response_text(response: &serde_json::Value) -> Option<String> {
+    // Try direct text field
+    if let Some(text) = response.get("text").and_then(|v| v.as_str()) {
+        return Some(text.to_string());
+    }
+
+    // Try value array format (VS Code Copilot format)
+    if let Some(value) = response.get("value").and_then(|v| v.as_array()) {
+        let parts: Vec<String> = value
+            .iter()
+            .filter_map(|v| v.get("value").and_then(|v| v.as_str()))
+            .map(String::from)
+            .collect();
+        if !parts.is_empty() {
+            return Some(parts.join("\n"));
+        }
+    }
+
+    // Try content field (OpenAI format)
+    if let Some(content) = response.get("content").and_then(|v| v.as_str()) {
+        return Some(content.to_string());
+    }
+
+    None
+}

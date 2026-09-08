@@ -1,13 +1,13 @@
-# Chasm JetBrains Plugin
+# IronBridge JetBrains Plugin
 
-A plugin for JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, etc.) that integrates with the Chasm AI session management system.
+A plugin for JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, etc.) that integrates with the IronBridge AI session management system.
 
 ## Features
 
 - **Session Management**: Browse, search, and manage AI chat sessions directly from your IDE
 - **Harvest Sessions**: Collect sessions from various AI providers (GitHub Copilot, Cursor, etc.)
 - **Search**: Full-text search across all your AI sessions
-- **Auto-Sync**: Automatic synchronization with the Chasm server
+- **Auto-Sync**: Automatic synchronization with the IronBridge server
 - **Code Integration**: Save selected code to sessions for context preservation
 
 ## Installation
@@ -16,7 +16,7 @@ A plugin for JetBrains IDEs (IntelliJ IDEA, PyCharm, WebStorm, etc.) that integr
 
 1. Open your JetBrains IDE
 2. Go to **Settings/Preferences** → **Plugins** → **Marketplace**
-3. Search for "Chasm"
+3. Search for "IronBridge"
 4. Click **Install**
 
 ### From Source
@@ -30,7 +30,7 @@ The plugin ZIP will be in `build/distributions/`.
 
 ## Configuration
 
-1. Go to **Settings/Preferences** → **Tools** → **Chasm**
+1. Go to **Settings/Preferences** → **Tools** → **IronBridge**
 2. Set the **Server URL** (default: `http://localhost:8787`)
 3. Click **Test Connection** to verify
 4. Configure additional options:
@@ -42,9 +42,9 @@ The plugin ZIP will be in `build/distributions/`.
 
 ### Tool Window
 
-The Chasm tool window provides a central interface for managing sessions:
+The IronBridge tool window provides a central interface for managing sessions:
 
-1. Open **View** → **Tool Windows** → **Chasm**
+1. Open **View** → **Tool Windows** → **IronBridge**
 2. Browse your sessions in the list
 3. Use the search bar to filter sessions
 4. Click **Harvest** to collect new sessions
@@ -52,8 +52,8 @@ The Chasm tool window provides a central interface for managing sessions:
 
 ### Actions
 
-Access Chasm actions from:
-- **Tools** → **Chasm** menu
+Access IronBridge actions from:
+- **Tools** → **IronBridge** menu
 - Right-click context menu (for code-related actions)
 - Keyboard shortcuts (customizable)
 
@@ -61,17 +61,17 @@ Available actions:
 - **Harvest Sessions**: Collect sessions from AI providers
 - **Search Sessions**: Open search dialog
 - **Sync Sessions**: Synchronize with server
-- **Settings**: Open Chasm settings
+- **Settings**: Open IronBridge settings
 - **Save to Session**: Save selected code to a session
 
 ### Keyboard Shortcuts
 
-Configure shortcuts in **Settings** → **Keymap** → search for "Chasm"
+Configure shortcuts in **Settings** → **Keymap** → search for "IronBridge"
 
 ## Requirements
 
 - JetBrains IDE 2023.3 or later
-- Chasm server running (default: localhost:8787)
+- IronBridge server running (default: localhost:8787)
 - Java 17 or later
 
 ## Development
@@ -98,7 +98,7 @@ Configure shortcuts in **Settings** → **Keymap** → search for "Chasm"
 
 ```
 jetbrains-plugin/
-├── src/main/kotlin/io/chasm/plugin/
+├── src/main/kotlin/io/ironbridge/plugin/
 │   ├── actions/           # Action handlers
 │   │   ├── HarvestAction.kt
 │   │   ├── SearchAction.kt
@@ -106,14 +106,14 @@ jetbrains-plugin/
 │   │   ├── OpenSettingsAction.kt
 │   │   └── SaveToSessionAction.kt
 │   ├── services/          # Application and project services
-│   │   ├── ChasmService.kt        # HTTP client
-│   │   └── ChasmProjectService.kt # Project-level service
+│   │   ├── IronBridgeService.kt        # HTTP client
+│   │   └── IronBridgeProjectService.kt # Project-level service
 │   ├── settings/          # Plugin settings
-│   │   ├── ChasmSettings.kt
-│   │   └── ChasmSettingsConfigurable.kt
+│   │   ├── IronBridgeSettings.kt
+│   │   └── IronBridgeSettingsConfigurable.kt
 │   └── ui/               # UI components
-│       ├── ChasmToolWindowFactory.kt
-│       └── ChasmToolWindowPanel.kt
+│       ├── IronBridgeToolWindowFactory.kt
+│       └── IronBridgeToolWindowPanel.kt
 ├── src/main/resources/
 │   └── META-INF/
 │       └── plugin.xml    # Plugin descriptor
@@ -122,7 +122,7 @@ jetbrains-plugin/
 
 ## API Integration
 
-The plugin communicates with the Chasm server via HTTP REST API:
+The plugin communicates with the IronBridge server via HTTP REST API:
 
 | Endpoint             | Method | Description         |
 | -------------------- | ------ | ------------------- |

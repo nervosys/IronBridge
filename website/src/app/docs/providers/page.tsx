@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { Card } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,7 +9,7 @@ export default function ProvidersPage() {
         <div className="content-wrapper">
             <h1>Supported Providers</h1>
             <p className="page-description">
-                Chasm harvests sessions from 30+ AI providers across editors, local LLMs,
+                IronBridge harvests sessions from 30+ AI providers across editors, local LLMs,
                 and cloud services.
             </p>
 

@@ -1,6 +1,6 @@
 // Copyright (c) 2024-2027 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
-package io.chasm.plugin.actions
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
+package io.ironbridge.plugin.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -15,17 +15,17 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
-import io.chasm.plugin.services.ChasmService
-import io.chasm.plugin.settings.ChasmSettings
+import io.ironbridge.plugin.services.IronBridgeService
+import io.ironbridge.plugin.settings.IronBridgeSettings
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.JComponent
 import javax.swing.JPanel
 
 /**
- * Action to save selected text to a Chasm session.
+ * Action to save selected text to a IronBridge session.
  */
-class SaveToSessionAction : AnAction("Save to Chasm Session", "Save selected text to a Chasm session", null) {
+class SaveToSessionAction : AnAction("Save to IronBridge Session", "Save selected text to a IronBridge session", null) {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -55,9 +55,9 @@ class SaveToSessionAction : AnAction("Save to Chasm Session", "Save selected tex
         // TODO: Implement API call to save to session
         // For now, just show success notification
         ApplicationManager.getApplication().invokeLater {
-            if (ChasmSettings.getInstance().showNotifications) {
+            if (IronBridgeSettings.getInstance().showNotifications) {
                 NotificationGroupManager.getInstance()
-                    .getNotificationGroup("Chasm Notifications")
+                    .getNotificationGroup("IronBridge Notifications")
                     .createNotification(
                         "Saved to Session",
                         "Content saved to session: $title",
@@ -87,7 +87,7 @@ class SaveToSessionDialog(
         get() = contentArea.text
 
     init {
-        title = "Save to Chasm Session"
+        title = "Save to IronBridge Session"
         init()
     }
 

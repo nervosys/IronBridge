@@ -1,0 +1,25 @@
+# cargo-audit configuration.
+#
+# The advisories below are risk-accepted after analysis in the security audit.
+# Each has NO applicable upgrade path today; the reachability rationale is
+# recorded here so the acceptance is auditable rather than silent. Revisit when
+# the upstream majors land (h2 0.4 via actix-web on hyper 1.x; an `rsa` release
+# with constant-time private-key operations).
+[advisories]
+ignore = [
+    # h2 0.3.27 -- "unbounded empty DATA frames" HTTP/2 DoS.
+    # Not reachable: the server binds plain HTTP (`.bind(...)`, no TLS), so
+    # actix-web serves HTTP/1.1 only -- HTTP/2 is negotiated solely over TLS
+    # ALPN, which this process never does. h2 0.3.x is pinned by the entire
+    # actix-web 4.x stack (actix-http 3.x); the fix exists only in h2 >=0.4.16,
+    # which requires hyper 1.x -- no actix-web release uses it yet.
+    "RUSTSEC-2026-0258",
+
+    # rsa 0.9.10 -- "Marvin Attack" key recovery via timing side-channel.
+    # No fixed upgrade is available upstream. The classic attack needs an RSA
+    # *decryption* (padding) oracle; ironbridge-sso performs no RSA decryption -- it
+    # only verifies IdP signatures (public-key ops, unaffected) and signs its
+    # own requests/metadata. Exposure is limited to a very-high-bar signing-
+    # timing vector with no available remediation.
+    "RUSTSEC-2023-0071",
+]

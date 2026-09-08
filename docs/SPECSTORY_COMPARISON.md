@@ -1,45 +1,45 @@
-# Chasm vs SpecStory: Competitive Analysis
+# IronBridge vs SpecStory: Competitive Analysis
 
 > **Date:** 2026-02-06
-> **Chasm Version:** 1.3.2 | **SpecStory Version:** 1.5.0
-> **Verdict:** Chasm is a strict superset of SpecStory in every dimension
+> **IronBridge Version:** 1.3.2 | **SpecStory Version:** 1.5.0
+> **Verdict:** IronBridge is a strict superset of SpecStory in every dimension
 
 ---
 
 ## Executive Summary
 
 SpecStory captures AI coding conversations from 5 terminal agents and 2 IDE
-extensions, saving them as Markdown files with optional cloud sync. Chasm captures
+extensions, saving them as Markdown files with optional cloud sync. IronBridge captures
 conversations from **30+ providers** across local APIs, cloud APIs, web interfaces,
 terminal agents, and IDE extensions — normalizing everything into a unified SQLite
 database with full API, desktop, mobile, web, and browser access.
 
-| Dimension | SpecStory | Chasm | Winner |
+| Dimension | SpecStory | IronBridge | Winner |
 |-----------|-----------|-------|--------|
-| Provider count | 5 CLI + 2 IDE | 30+ local/cloud/web/IDE | **Chasm 6x** |
-| Storage format | Markdown files | SQLite + export to JSON/JSONL/MD | **Chasm** |
-| Search | Cloud-only FTS | Local FTS5 + semantic search | **Chasm** |
-| API server | None (cloud SaaS) | REST + GraphQL + WebSocket | **Chasm** |
-| Desktop app | None | Tauri (~10MB) | **Chasm** |
-| Mobile app | None | React Native (iOS/Android) | **Chasm** |
-| Web dashboard | Cloud SaaS only | Self-hosted React + Vite | **Chasm** |
-| Browser extension | None | Chrome + Firefox | **Chasm** |
-| VS Code extension | 2 (Cursor + Copilot) | 30+ commands, 10 recording providers | **Chasm** |
-| Agent SDK | Agent Skills (md) | Agency ADK (orchestration) | **Chasm** |
-| Git versioning | None | Full (init/track/diff/restore) | **Chasm** |
-| Recovery tools | None | 8 recovery modes | **Chasm** |
-| Multi-agent | None | Swarms, protocols, orchestration | **Chasm** |
-| MCP server | None | 14+ tools | **Chasm** |
-| Enterprise | None | Compliance, RBAC, multitenancy | **Chasm** |
-| Telemetry | PostHog (cloud) | Self-hosted structured events | **Chasm** |
-| Privacy | Local-first + cloud opt-in | 100% self-hosted | **Chasm** |
-| Terminal agent wrapping | `specstory run <agent>` | `chasm run <agent>` (auto-save) | **Chasm** |
-| Agent listing | `specstory check` | `chasm list agents` | **Chasm** |
-| Agent detection | — | `detect` (workspace, providers, sessions, orphaned) | **Chasm** |
+| Provider count | 5 CLI + 2 IDE | 30+ local/cloud/web/IDE | **IronBridge 6x** |
+| Storage format | Markdown files | SQLite + export to JSON/JSONL/MD | **IronBridge** |
+| Search | Cloud-only FTS | Local FTS5 + semantic search | **IronBridge** |
+| API server | None (cloud SaaS) | REST + GraphQL + WebSocket | **IronBridge** |
+| Desktop app | None | Tauri (~10MB) | **IronBridge** |
+| Mobile app | None | React Native (iOS/Android) | **IronBridge** |
+| Web dashboard | Cloud SaaS only | Self-hosted React + Vite | **IronBridge** |
+| Browser extension | None | Chrome + Firefox | **IronBridge** |
+| VS Code extension | 2 (Cursor + Copilot) | 30+ commands, 10 recording providers | **IronBridge** |
+| Agent SDK | Agent Skills (md) | Agency ADK (orchestration) | **IronBridge** |
+| Git versioning | None | Full (init/track/diff/restore) | **IronBridge** |
+| Recovery tools | None | 8 recovery modes | **IronBridge** |
+| Multi-agent | None | Swarms, protocols, orchestration | **IronBridge** |
+| MCP server | None | 14+ tools | **IronBridge** |
+| Enterprise | None | Compliance, RBAC, multitenancy | **IronBridge** |
+| Telemetry | PostHog (cloud) | Self-hosted structured events | **IronBridge** |
+| Privacy | Local-first + cloud opt-in | 100% self-hosted | **IronBridge** |
+| Terminal agent wrapping | `specstory run <agent>` | `ironbridge run <agent>` (auto-save) | **IronBridge** |
+| Agent listing | `specstory check` | `ironbridge list agents` | **IronBridge** |
+| Agent detection | — | `detect` (workspace, providers, sessions, orphaned) | **IronBridge** |
 | Cloud SaaS | cloud.specstory.com | Not applicable (self-hosted) | SpecStory* |
-| Windows support | No | Yes | **Chasm** |
+| Windows support | No | Yes | **IronBridge** |
 
-*\*SpecStory's cloud SaaS is a different model; Chasm's self-hosted approach is
+*\*SpecStory's cloud SaaS is a different model; IronBridge's self-hosted approach is
 superior for privacy, enterprise, and sovereignty.*
 
 ---
@@ -49,21 +49,21 @@ superior for privacy, enterprise, and sovereignty.*
 ### 1. Provider Coverage
 
 #### Terminal CLI Agents
-| Agent | SpecStory | Chasm |
+| Agent | SpecStory | IronBridge |
 |-------|-----------|-------|
-| Claude Code CLI | ✅ JSONL `~/.claude/projects/` | ✅ Provider + `chasm run claude` (auto-save) |
-| Codex CLI | ✅ JSONL `~/.codex/sessions/` | ✅ Provider + `chasm run codex` (auto-save) |
-| Cursor CLI | ✅ SQLite `~/.cursor/chats/` | ✅ Provider + `chasm run cursor` (auto-save) |
-| Droid CLI | ✅ JSONL `~/.factory/sessions/` | ✅ Provider + `chasm run droid` (auto-save) |
-| Gemini CLI | ✅ JSON `~/.gemini/tmp/` | ✅ Provider + `chasm run gemini` (auto-save) |
-| OpenCode | ❌ | ✅ Provider + `chasm run open` (auto-save) |
-| OpenClaw | ❌ | ✅ Provider + `chasm run claw` (auto-save) |
+| Claude Code CLI | ✅ JSONL `~/.claude/projects/` | ✅ Provider + `ironbridge run claude` (auto-save) |
+| Codex CLI | ✅ JSONL `~/.codex/sessions/` | ✅ Provider + `ironbridge run codex` (auto-save) |
+| Cursor CLI | ✅ SQLite `~/.cursor/chats/` | ✅ Provider + `ironbridge run cursor` (auto-save) |
+| Droid CLI | ✅ JSONL `~/.factory/sessions/` | ✅ Provider + `ironbridge run droid` (auto-save) |
+| Gemini CLI | ✅ JSON `~/.gemini/tmp/` | ✅ Provider + `ironbridge run gemini` (auto-save) |
+| OpenCode | ❌ | ✅ Provider + `ironbridge run open` (auto-save) |
+| OpenClaw | ❌ | ✅ Provider + `ironbridge run claw` (auto-save) |
 | Antigravity | ❌ | ✅ Recording |
 | Windsurf | ❌ | ✅ Recording |
 | Zed | ❌ | ✅ Recording |
 
 #### IDE Extensions (Recording)
-| IDE/Extension | SpecStory | Chasm |
+| IDE/Extension | SpecStory | IronBridge |
 |---------------|-----------|-------|
 | VS Code Copilot | ✅ Extension | ✅ Extension + recording |
 | Cursor IDE | ✅ Extension | ✅ Recording |
@@ -71,7 +71,7 @@ superior for privacy, enterprise, and sovereignty.*
 | Codespaces | ❌ | ✅ Recording |
 
 #### Local API Servers
-| Provider | SpecStory | Chasm |
+| Provider | SpecStory | IronBridge |
 |----------|-----------|-------|
 | Ollama | ❌ | ✅ |
 | vLLM | ❌ | ✅ |
@@ -84,7 +84,7 @@ superior for privacy, enterprise, and sovereignty.*
 | Azure AI Foundry | ❌ | ✅ |
 
 #### Cloud APIs
-| Provider | SpecStory | Chasm |
+| Provider | SpecStory | IronBridge |
 |----------|-----------|-------|
 | OpenAI / ChatGPT | ❌ | ✅ |
 | Anthropic Claude | ❌ | ✅ |
@@ -104,7 +104,7 @@ superior for privacy, enterprise, and sovereignty.*
 | Custom | ❌ | ✅ |
 
 #### Web Interface Harvesting
-| Provider | SpecStory | Chasm |
+| Provider | SpecStory | IronBridge |
 |----------|-----------|-------|
 | ChatGPT | ❌ | ✅ Browser extension |
 | Claude | ❌ | ✅ Browser extension |
@@ -116,7 +116,7 @@ superior for privacy, enterprise, and sovereignty.*
 
 ### 2. CLI Commands
 
-| Command Category | SpecStory | Chasm |
+| Command Category | SpecStory | IronBridge |
 |-----------------|-----------|-------|
 | **Agent execution** | `run`, `watch` | `run <agent>` (7 agents with auto-save), `watch` (debounced auto-harvest) |
 | **Agent listing** | `check` | `list agents` (with installation status) |
@@ -147,7 +147,7 @@ superior for privacy, enterprise, and sovereignty.*
 
 ### 3. Data Architecture
 
-| Aspect | SpecStory | Chasm |
+| Aspect | SpecStory | IronBridge |
 |--------|-----------|-------|
 | **Primary storage** | Markdown files in `.specstory/history/` | SQLite with FTS5 indexes |
 | **Schema** | Unstructured (Markdown) | Normalized (workspaces, sessions, messages, tool_invocations, file_changes) |
@@ -160,7 +160,7 @@ superior for privacy, enterprise, and sovereignty.*
 
 ### 4. Agent & Multi-Agent Capabilities
 
-| Feature | SpecStory | Chasm |
+| Feature | SpecStory | IronBridge |
 |---------|-----------|-------|
 | **Agent Skills/Templates** | 6 Markdown skills | 5 agent skills + Agency ADK with 8 templates (coordinator, researcher, coder, reviewer, executor, writer, tester, custom) |
 | **Orchestration** | None | Single, sequential, parallel, swarm modes |
@@ -171,7 +171,7 @@ superior for privacy, enterprise, and sovereignty.*
 
 ### 5. User Interfaces
 
-| Interface | SpecStory | Chasm |
+| Interface | SpecStory | IronBridge |
 |-----------|-----------|-------|
 | **CLI** | Go binary | Rust binary (faster, safer) |
 | **VS Code Extension** | 2 extensions (Cursor + Copilot) | 1 extension, 30+ commands, 10 providers |
@@ -183,7 +183,7 @@ superior for privacy, enterprise, and sovereignty.*
 
 ### 6. Enterprise & Security
 
-| Feature | SpecStory | Chasm |
+| Feature | SpecStory | IronBridge |
 |---------|-----------|-------|
 | **Privacy model** | Local-first + optional cloud | 100% self-hosted |
 | **Encryption** | Cloud TLS | AES-GCM + DPAPI (Windows) |
@@ -199,8 +199,8 @@ superior for privacy, enterprise, and sovereignty.*
 
 ### ~~Priority 1: Terminal CLI Agent File Harvesting~~ ✅ COMPLETED
 
-All 5 of SpecStory's terminal agents are now fully supported as chasm providers
-with dedicated `chasm run <agent>` launcher commands and auto-save:
+All 5 of SpecStory's terminal agents are now fully supported as ironbridge providers
+with dedicated `ironbridge run <agent>` launcher commands and auto-save:
 
 | Agent | Format | Path | Status |
 |-------|--------|------|--------|
@@ -210,36 +210,36 @@ with dedicated `chasm run <agent>` launcher commands and auto-save:
 | Droid CLI | JSONL | `~/.factory/sessions/` | ✅ Provider + `run droid` |
 | Gemini CLI | JSON | `~/.gemini/tmp/` | ✅ Provider + `run gemini` |
 
-Chasm goes further with 2 additional agents SpecStory doesn't support:
+IronBridge goes further with 2 additional agents SpecStory doesn't support:
 OpenCode (`run open`) and OpenClaw (`run claw`).
 
 ### ~~Priority 2: Agent Skills / Knowledge Templates~~ ✅ COMPLETED
 
-5 agent skills created in `skills/`, each leveraging chasm's richer data model:
+5 agent skills created in `skills/`, each leveraging ironbridge's richer data model:
 
-| Chasm Skill | SpecStory Equivalent | Advantage |
+| IronBridge Skill | SpecStory Equivalent | Advantage |
 |-------------|---------------------|----------|
 | `session-summary.md` | `specstory-session-summary` | Uses SQLite queries + tool invocation data |
 | `yak-detector.md` | `specstory-yak` | Deeper scope analysis via file_changes table |
 | `session-organizer.md` | `specstory-organize` | Organizes across all providers, not just Markdown |
 | `link-trail.md` | `specstory-link-trail` | Tracks URLs from structured message content |
 | `code-insight.md` | `specstory-project-stats` | Leverages tool_invocations + file_changes for real code quality metrics |
-| *(no equivalent needed)* | `specstory-guard` | Chasm's pre-commit hooks handle secret scanning natively |
+| *(no equivalent needed)* | `specstory-guard` | IronBridge's pre-commit hooks handle secret scanning natively |
 
 ### Priority 3: File-Based Watch Mode ✅ COMPLETED
 
 SpecStory's `specstory watch` monitors a directory for agent file changes
-without launching the agent. Chasm's `chasm watch` command provides this same
+without launching the agent. IronBridge's `ironbridge watch` command provides this same
 capability with cross-platform `notify` file-system events, debounced
 auto-harvesting, per-agent or custom-path filtering, and dry-run mode.
-Combined with `chasm run <agent>` auto-save, chasm covers both the
+Combined with `ironbridge run <agent>` auto-save, ironbridge covers both the
 launch-and-capture and watch-only workflows.
 
 ---
 
 ## Remaining Gaps
 
-| Gap | SpecStory | Chasm | Priority |
+| Gap | SpecStory | IronBridge | Priority |
 |-----|-----------|-------|----------|
 
 | Cloud SaaS | cloud.specstory.com | Self-hosted (by design) | N/A |
@@ -247,15 +247,15 @@ launch-and-capture and watch-only workflows.
 
 ---
 
-## 10x Advantages: Where Chasm Already Dominates
+## 10x Advantages: Where IronBridge Already Dominates
 
 1. **7x Provider Coverage** — 30+ vs 5 providers (plus 7 agent launchers)
 2. **Structured Data** — SQLite with relations vs flat Markdown files
 3. **Full API Server** — REST + GraphQL + WebSocket vs no API
 4. **4 Native Clients** — Desktop + Mobile + Web + Browser vs CLI only
 5. **Agent Development Kit** — Multi-agent orchestration vs none
-6. **Agent Launcher** — `chasm run <agent>` with auto-save vs simple process wrapping
-7. **File-System Watch** — `chasm watch` with debounced auto-harvest vs directory-only polling
+6. **Agent Launcher** — `ironbridge run <agent>` with auto-save vs simple process wrapping
+7. **File-System Watch** — `ironbridge watch` with debounced auto-harvest vs directory-only polling
 8. **Git Versioning** — Session history tracking vs none
 9. **Recovery Tools** — 8 recovery modes vs none
 10. **Privacy** — 100% self-hosted vs cloud dependency
@@ -276,7 +276,7 @@ launch-and-capture and watch-only workflows.
 - [x] Update provider documentation
 
 ### Phase 2: Agent Skills ✅ COMPLETED
-- [x] Create `skills/` directory with chasm-specific agent skills
+- [x] Create `skills/` directory with ironbridge-specific agent skills
 - [x] Session summary skill (standup format)
 - [x] Yak-shaving detector skill
 - [x] Session organizer skill
@@ -284,11 +284,11 @@ launch-and-capture and watch-only workflows.
 - [x] Code quality insight skill (leverages tool_invocations + file_changes)
 
 ### Phase 2.5: Agent Launcher ✅ COMPLETED
-- [x] Add `chasm run <agent>` for 7 terminal agents with auto-save
+- [x] Add `ironbridge run <agent>` for 7 terminal agents with auto-save
 - [x] Cross-platform binary discovery (Windows + Unix)
 - [x] Session file snapshotting + diff-based new session detection
 - [x] Auto-harvest into SQLite database on agent exit
-- [x] `chasm list agents` for installation status
+- [x] `ironbridge list agents` for installation status
 
 ### Phase 2.6: Search Optimization ✅ COMPLETED
 - [x] FTS5 `snippet()` + `rank` ordering with session deduplication
@@ -298,7 +298,7 @@ launch-and-capture and watch-only workflows.
 - [x] FTS5 content-sync mode for reduced storage duplication
 
 ### Phase 3: Watch Command ✅ COMPLETED
-- [x] Add `chasm watch` for file-system monitoring (notify crate, cross-platform)
+- [x] Add `ironbridge watch` for file-system monitoring (notify crate, cross-platform)
 - [x] Auto-detect terminal agent file changes (all 7 agents)
 - [x] Auto-harvest new/modified sessions (debounced, with dry-run mode)
 - [x] Per-agent filtering (`--agent`) and custom path (`--path`) support
@@ -312,16 +312,16 @@ launch-and-capture and watch-only workflows.
 
 ## Conclusion
 
-Chasm is a **strict superset** of SpecStory. Every SpecStory feature has a
-corresponding chasm feature that is equal or superior:
+IronBridge is a **strict superset** of SpecStory. Every SpecStory feature has a
+corresponding ironbridge feature that is equal or superior:
 
-- All 5 of SpecStory's terminal agents → chasm providers with `run <agent>` auto-save
-- SpecStory's `watch` → `chasm watch` with debounced auto-harvest + per-agent filtering
-- SpecStory's 6 agent skills → 5 chasm skills leveraging richer SQLite data model
-- SpecStory's `check` → `chasm list agents` + `chasm detect`
-- SpecStory's cloud SaaS → chasm's self-hosted REST + GraphQL + WebSocket API
+- All 5 of SpecStory's terminal agents → ironbridge providers with `run <agent>` auto-save
+- SpecStory's `watch` → `ironbridge watch` with debounced auto-harvest + per-agent filtering
+- SpecStory's 6 agent skills → 5 ironbridge skills leveraging richer SQLite data model
+- SpecStory's `check` → `ironbridge list agents` + `ironbridge detect`
+- SpecStory's cloud SaaS → ironbridge's self-hosted REST + GraphQL + WebSocket API
 
-Beyond parity, chasm offers **15 major advantages** including 30+ providers,
+Beyond parity, ironbridge offers **15 major advantages** including 30+ providers,
 4 native clients (desktop/mobile/web/browser), multi-agent orchestration,
 git versioning, 8 recovery modes, MCP server, enterprise features, and
 complete privacy sovereignty.

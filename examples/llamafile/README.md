@@ -54,16 +54,16 @@ Find pre-built llamafiles at:
 llamafile-convert model.gguf -o my-model.llamafile
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure Llamafile provider
-chasm provider config llamafile --endpoint http://localhost:8080/v1
+ironbridge provider config llamafile --endpoint http://localhost:8080/v1
 
 # Test connection
-chasm provider test llamafile
+ironbridge provider test llamafile
 
 # Import demo sessions
-chasm provider import llamafile --source examples/llamafile/sessions
+ironbridge provider import llamafile --source examples/llamafile/sessions
 ```
 

@@ -114,7 +114,7 @@ export const Logo: React.FC<{ size?: number }> = ({ size = 48 }) => {
           WebkitTextFillColor: "transparent",
         }}
       >
-        CHASM
+        IRONBRIDGE
       </span>
     </div>
   );
@@ -494,10 +494,10 @@ export const OutroSlide: React.FC<{ startFrame?: number }> = ({
           color: COLORS.primary,
         }}
       >
-        cargo install chasm-cli
+        cargo install ironbridge-cli
       </div>
       <div style={{ fontSize: 20, color: COLORS.textMuted }}>
-        github.com/nervosys/chasm
+        github.com/nervosys/ironbridge
       </div>
     </AbsoluteFill>
   );

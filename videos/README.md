@@ -1,6 +1,6 @@
-# Chasm Video Tutorials
+# IronBridge Video Tutorials
 
-Programmatic video tutorials for [Chasm](https://github.com/nervosys/chasm), built with [Remotion](https://remotion.dev/).
+Programmatic video tutorials for [IronBridge](https://github.com/nervosys/ironbridge), built with [Remotion](https://remotion.dev/).
 
 ## Videos
 
@@ -59,4 +59,4 @@ src/
 
 ## Customization
 
-Each video is a React component. Edit compositions in `src/compositions/` to update content, timing, or styling. The shared theme in `src/constants.ts` matches the Chasm MkDocs Abyss dark theme.
+Each video is a React component. Edit compositions in `src/compositions/` to update content, timing, or styling. The shared theme in `src/constants.ts` matches the IronBridge MkDocs Abyss dark theme.

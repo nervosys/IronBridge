@@ -68,13 +68,13 @@ The path can be overridden via the `CONTINUE_GLOBAL_DIR` environment variable.
 
 ```bash
 # Import Continue.dev sessions
-chasm provider import continuedev --source examples/continuedev/sessions
+ironbridge provider import continuedev --source examples/continuedev/sessions
 
 # List imported sessions
-chasm list sessions --provider continuedev
+ironbridge list sessions --provider continuedev
 
 # View a specific session
-chasm show session <session-id>
+ironbridge show session <session-id>
 ```
 
 ## Features Supported

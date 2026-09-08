@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+
+{% block hero %}
+{% if page and page.is_homepage %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;800;900&family=Exo+2:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  .ironbridge-hero {
+    position: relative;
+    min-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #010408 0%, #0a0e17 40%, #111827 100%);
+    overflow: hidden;
+    padding: 2rem;
+  }
+
+  .ironbridge-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(0, 212, 255, 0.06) 0%, transparent 60%),
+      radial-gradient(circle at 20% 80%, rgba(124, 58, 237, 0.04) 0%, transparent 50%),
+      radial-gradient(circle at 80% 60%, rgba(0, 201, 167, 0.04) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  /* Stars */
+  .ironbridge-hero .stars {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .ironbridge-hero .star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 0;
+    animation: twinkle 4s ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.6; }
+  }
+
+  .ironbridge-hero__content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    max-width: 800px;
+  }
+
+  .ironbridge-hero__logo {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1.5rem;
+  }
+
+  .ironbridge-hero__title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 4.5rem;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    background: linear-gradient(135deg, #00d4ff 0%, #00c9a7 50%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0 0 0.5rem;
+    line-height: 1.1;
+  }
+
+  .ironbridge-hero__subtitle {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 300;
+    color: #94a3b8;
+    margin: 0 0 1rem;
+    letter-spacing: 0.06em;
+  }
+
+  .ironbridge-hero__tagline {
+    font-size: 1rem;
+    color: #64748b;
+    margin-bottom: 2rem;
+  }
+
+  .ironbridge-hero__cta {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .ironbridge-hero__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .ironbridge-hero__btn--primary {
+    background: linear-gradient(135deg, #00d4ff 0%, #00c9a7 100%);
+    color: #010408;
+  }
+  .ironbridge-hero__btn--primary:hover {
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .ironbridge-hero__btn--secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+  }
+  .ironbridge-hero__btn--secondary:hover {
+    border-color: #00d4ff;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .ironbridge-hero__status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #00c9a7;
+    letter-spacing: 0.08em;
+    margin-bottom: 3rem;
+  }
+
+  /* Stats bar */
+  .ironbridge-hero__stats {
+    display: flex;
+    gap: 3rem;
+    justify-content: center;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+  }
+
+  .ironbridge-hero__stat {
+    text-align: center;
+  }
+
+  .ironbridge-hero__stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #00d4ff;
+    display: block;
+  }
+
+  .ironbridge-hero__stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #64748b;
+    margin-top: 0.25rem;
+    display: block;
+  }
+
+  /* Features grid */
+  .ironbridge-hero__features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    max-width: 800px;
+    margin-bottom: 3rem;
+  }
+
+  .ironbridge-hero__feature {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 1.2rem;
+    text-align: left;
+    transition: all 0.3s ease;
+  }
+
+  .ironbridge-hero__feature:hover {
+    border-color: #00d4ff;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.08);
+    transform: translateY(-2px);
+  }
+
+  .ironbridge-hero__feature-icon {
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .ironbridge-hero__feature-title {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #e2e8f0;
+    margin-bottom: 0.3rem;
+  }
+
+  .ironbridge-hero__feature-desc {
+    font-size: 0.78rem;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  /* Terminal preview */
+  .ironbridge-hero__terminal {
+    background: #0a0e17;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    max-width: 650px;
+    width: 100%;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  .ironbridge-hero__terminal-bar {
+    background: #111827;
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #1e293b;
+  }
+
+  .ironbridge-hero__terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .ironbridge-hero__terminal-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-left: 0.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .ironbridge-hero__terminal-body {
+    padding: 1rem 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+
+  .t-prompt { color: #00c9a7; }
+  .t-cmd { color: #e2e8f0; }
+  .t-flag { color: #7c3aed; }
+  .t-path { color: #f59e0b; }
+  .t-ok { color: #22c55e; }
+  .t-dim { color: #475569; }
+  .t-cyan { color: #00d4ff; }
+
+  @media (max-width: 768px) {
+    .ironbridge-hero__title { font-size: 2.8rem; }
+    .ironbridge-hero__features { grid-template-columns: repeat(2, 1fr); }
+    .ironbridge-hero__stats { gap: 1.5rem; }
+  }
+
+  @media (max-width: 480px) {
+    .ironbridge-hero__features { grid-template-columns: 1fr; }
+  }
+</style>
+
+<section class="ironbridge-hero">
+  <!-- Stars -->
+  <div class="stars">
+    <div class="star" style="top:8%;left:15%;animation-delay:0s"></div>
+    <div class="star" style="top:12%;left:65%;animation-delay:1.2s"></div>
+    <div class="star" style="top:25%;left:30%;animation-delay:0.5s"></div>
+    <div class="star" style="top:35%;left:80%;animation-delay:2s"></div>
+    <div class="star" style="top:5%;left:45%;animation-delay:1.8s"></div>
+    <div class="star" style="top:50%;left:10%;animation-delay:0.8s"></div>
+    <div class="star" style="top:45%;left:90%;animation-delay:3s"></div>
+    <div class="star" style="top:60%;left:55%;animation-delay:1.5s"></div>
+    <div class="star" style="top:70%;left:20%;animation-delay:2.5s"></div>
+    <div class="star" style="top:80%;left:70%;animation-delay:0.3s"></div>
+  </div>
+
+  <div class="ironbridge-hero__content">
+    <!-- Logo SVG -->
+    <svg class="ironbridge-hero__logo" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#00d4ff"/>
+          <stop offset="50%" stop-color="#00c9a7"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+      </defs>
+      <!-- Bridge arch -->
+      <path d="M15 85 Q60 20 105 85" stroke="url(#g1)" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <!-- Void below -->
+      <path d="M35 85 L45 105 M55 85 L60 110 M75 85 L70 105 M85 85 L80 100" stroke="#1e293b" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+      <!-- Pillars -->
+      <line x1="30" y1="65" x2="30" y2="85" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+      <line x1="90" y1="65" x2="90" y2="85" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+      <!-- Data nodes -->
+      <circle cx="30" cy="60" r="5" fill="#00d4ff" opacity="0.8"/>
+      <circle cx="60" cy="35" r="5" fill="#00c9a7" opacity="0.8"/>
+      <circle cx="90" cy="60" r="5" fill="#7c3aed" opacity="0.8"/>
+      <!-- Connection lines -->
+      <line x1="35" y1="58" x2="55" y2="37" stroke="#00d4ff" stroke-width="1" opacity="0.3"/>
+      <line x1="65" y1="37" x2="85" y2="58" stroke="#7c3aed" stroke-width="1" opacity="0.3"/>
+    </svg>
+
+    <h1 class="ironbridge-hero__title">IRONBRIDGE</h1>
+    <p class="ironbridge-hero__subtitle">Chat Session Manager</p>
+    <p class="ironbridge-hero__tagline">Bridging the divide between AI providers</p>
+
+    <div class="ironbridge-hero__cta">
+      <a href="/getting-started/quickstart/" class="ironbridge-hero__btn ironbridge-hero__btn--primary">
+        ⚡ Quick Start
+      </a>
+      <a href="https://github.com/nervosys/ironbridge" target="_blank" rel="noopener" class="ironbridge-hero__btn ironbridge-hero__btn--secondary">
+        ⬡ GitHub
+      </a>
+    </div>
+
+    <div class="ironbridge-hero__status">
+      v1.3.2 • 831 TESTS PASSING • AGPL-3.0
+    </div>
+
+    <!-- Stats -->
+    <div class="ironbridge-hero__stats">
+      <div class="ironbridge-hero__stat">
+        <span class="ironbridge-hero__stat-value">20+</span>
+        <span class="ironbridge-hero__stat-label">AI Providers</span>
+      </div>
+      <div class="ironbridge-hero__stat">
+        <span class="ironbridge-hero__stat-value">831</span>
+        <span class="ironbridge-hero__stat-label">Tests Passing</span>
+      </div>
+      <div class="ironbridge-hero__stat">
+        <span class="ironbridge-hero__stat-value">6</span>
+        <span class="ironbridge-hero__stat-label">Orchestration Modes</span>
+      </div>
+      <div class="ironbridge-hero__stat">
+        <span class="ironbridge-hero__stat-value">0</span>
+        <span class="ironbridge-hero__stat-label">Vendor Lock-in</span>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="ironbridge-hero__features">
+      <div class="ironbridge-hero__feature">
+        <div class="ironbridge-hero__feature-icon">🔄</div>
+        <div class="ironbridge-hero__feature-title">Session Recovery</div>
+        <div class="ironbridge-hero__feature-desc">Recover lost VS Code chat sessions after updates, crashes, or workspace changes.</div>
+      </div>
+      <div class="ironbridge-hero__feature">
+        <div class="ironbridge-hero__feature-icon">🔍</div>
+        <div class="ironbridge-hero__feature-title">Harvest & Search</div>
+        <div class="ironbridge-hero__feature-desc">Full-text search across all your AI conversations from every provider.</div>
+      </div>
+      <div class="ironbridge-hero__feature">
+        <div class="ironbridge-hero__feature-icon">▶️</div>
+        <div class="ironbridge-hero__feature-title">Run & Record</div>
+        <div class="ironbridge-hero__feature-desc">Chat with any provider. Real-time recording ensures nothing is lost.</div>
+      </div>
+      <div class="ironbridge-hero__feature">
+        <div class="ironbridge-hero__feature-icon">🤖</div>
+        <div class="ironbridge-hero__feature-title">Agentic Coding</div>
+        <div class="ironbridge-hero__feature-desc">Multi-agent orchestration — sequential, parallel, swarm, and more.</div>
+      </div>
+      <div class="ironbridge-hero__feature">
+        <div class="ironbridge-hero__feature-icon">🔀</div>
+        <div class="ironbridge-hero__feature-title">Merge & Consolidate</div>
+        <div class="ironbridge-hero__feature-desc">Combine sessions across workspaces and time periods into one timeline.</div>
+      </div>
+      <div class="ironbridge-hero__feature">
+        <div class="ironbridge-hero__feature-icon">⏺️</div>
+        <div class="ironbridge-hero__feature-title">Real-time Recording</div>
+        <div class="ironbridge-hero__feature-desc">WebSocket + REST recording captures every conversation as it happens.</div>
+      </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="ironbridge-hero__terminal">
+      <div class="ironbridge-hero__terminal-bar">
+        <div class="ironbridge-hero__terminal-dot" style="background:#ff5f57"></div>
+        <div class="ironbridge-hero__terminal-dot" style="background:#febc2e"></div>
+        <div class="ironbridge-hero__terminal-dot" style="background:#28c840"></div>
+        <span class="ironbridge-hero__terminal-title">▸ IRONBRIDGE TERMINAL</span>
+      </div>
+      <div class="ironbridge-hero__terminal-body">
+        <span class="t-prompt">$</span> <span class="t-cmd">cargo install ironbridge</span><br>
+        <span class="t-dim">  Installing ironbridge v1.3.2...</span><br>
+        <span class="t-ok">  ✓ Installed</span><br><br>
+        <span class="t-prompt">$</span> <span class="t-cmd">ironbridge harvest run</span><br>
+        <span class="t-dim">  Scanning providers...</span><br>
+        <span class="t-ok">  ✓ Copilot</span> <span class="t-dim">— 47 sessions</span><br>
+        <span class="t-ok">  ✓ Cursor</span> <span class="t-dim">— 12 sessions</span><br>
+        <span class="t-ok">  ✓ Claude Code</span> <span class="t-dim">— 8 sessions</span><br>
+        <span class="t-cyan">  Harvested: 67 sessions, 3,841 messages</span><br><br>
+        <span class="t-prompt">$</span> <span class="t-cmd">ironbridge harvest search</span> <span class="t-flag">"authentication"</span><br>
+        <span class="t-cyan">  Found 5 matching sessions ▸</span>
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

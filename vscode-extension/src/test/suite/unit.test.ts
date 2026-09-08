@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 // Unit Tests for Parsing Logic
 // These tests can run without VS Code extension host
@@ -232,28 +232,28 @@ suite('Parsing Logic Unit Tests', () => {
         }
 
         test('builds simple command', () => {
-            const cmd = buildCommand('chasm', ['ls']);
-            assert.strictEqual(cmd, '"chasm" ls');
+            const cmd = buildCommand('ironbridge', ['ls']);
+            assert.strictEqual(cmd, '"ironbridge" ls');
         });
 
         test('builds command with quoted path', () => {
-            const cmd = buildCommand('chasm', ['find', '"my project"']);
-            assert.strictEqual(cmd, '"chasm" find "my project"');
+            const cmd = buildCommand('ironbridge', ['find', '"my project"']);
+            assert.strictEqual(cmd, '"ironbridge" find "my project"');
         });
 
         test('builds complex command', () => {
-            const cmd = buildCommand('chasm', ['history', 'merge', '"/path/to/project"', '--force']);
-            assert.strictEqual(cmd, '"chasm" history merge "/path/to/project" --force');
+            const cmd = buildCommand('ironbridge', ['history', 'merge', '"/path/to/project"', '--force']);
+            assert.strictEqual(cmd, '"ironbridge" history merge "/path/to/project" --force');
         });
 
         test('handles empty args', () => {
-            const cmd = buildCommand('chasm', []);
-            assert.strictEqual(cmd, '"chasm" ');
+            const cmd = buildCommand('ironbridge', []);
+            assert.strictEqual(cmd, '"ironbridge" ');
         });
 
         test('handles path with spaces', () => {
-            const cmd = buildCommand('C:\\Program Files\\chasm\\chasm.exe', ['ls']);
-            assert.strictEqual(cmd, '"C:\\Program Files\\chasm\\chasm.exe" ls');
+            const cmd = buildCommand('C:\\Program Files\\ironbridge\\ironbridge.exe', ['ls']);
+            assert.strictEqual(cmd, '"C:\\Program Files\\ironbridge\\ironbridge.exe" ls');
         });
     });
 });

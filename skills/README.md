@@ -1,11 +1,11 @@
-# Agent Skills for Chasm
+# Agent Skills for IronBridge
 
-A collection of AI agent skills for working with [Chasm](https://github.com/nervosys/chasm-cli)
+A collection of AI agent skills for working with [IronBridge](https://github.com/nervosys/ironbridge-cli)
 session histories. These skills give AI coding agents (Claude Code, Codex CLI,
 Cursor, Copilot, Gemini CLI, etc.) specialized knowledge for analyzing,
 organizing, and extracting insights from AI-assisted coding sessions.
 
-Unlike simple markdown-file skills, Chasm skills leverage a **structured SQLite
+Unlike simple markdown-file skills, IronBridge skills leverage a **structured SQLite
 database** with normalized tables (sessions, messages, tool_invocations,
 file_changes), **FTS5 full-text search**, and a **REST/GraphQL API** — making
 them far more powerful than flat file analysis.
@@ -32,35 +32,35 @@ cp -r skills/ .cursor/skills/     # Cursor
 cp -r skills/ .agents/skills/     # Generic
 ```
 
-### Option 2: Reference from chasm
+### Option 2: Reference from ironbridge
 
-Skills are bundled with chasm and can be listed via:
+Skills are bundled with ironbridge and can be listed via:
 
 ```bash
-chasm agency templates
+ironbridge agency templates
 ```
 
 ## Prerequisites
 
-These skills work with the chasm harvest database. Run the following to set up:
+These skills work with the ironbridge harvest database. Run the following to set up:
 
 ```bash
 # Initialize the harvest database
-chasm harvest init
+ironbridge harvest init
 
 # Scan for providers and sessions
-chasm harvest scan
+ironbridge harvest scan
 
 # Harvest all sessions into the database
-chasm harvest run
+ironbridge harvest run
 ```
 
 Once harvested, skills can query the database directly via SQL or through the
-chasm API server.
+ironbridge API server.
 
 ## Usage
 
-Ask your AI coding agent to help with chasm-related tasks:
+Ask your AI coding agent to help with ironbridge-related tasks:
 
 ```
 "Summarize my coding sessions from this week"
@@ -84,4 +84,4 @@ Ask your AI coding agent to help with chasm-related tasks:
 
 ## License
 
-[AGPL-3.0](../LICENSE) with [commercial dual-license](../COMMERCIAL_LICENSE.md) — same as the chasm ecosystem.
+[AGPL-3.0](../LICENSE) with [commercial dual-license](../COMMERCIAL_LICENSE.md) — same as the ironbridge ecosystem.

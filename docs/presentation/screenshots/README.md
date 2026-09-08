@@ -1,4 +1,4 @@
-# Screenshots for Chasm Sales Presentation
+# Screenshots for IronBridge Sales Presentation
 
 Place the following screenshots in this directory:
 
@@ -6,24 +6,24 @@ Place the following screenshots in this directory:
 
 | Filename                | Description                          | Source                     | Dimensions |
 | ----------------------- | ------------------------------------ | -------------------------- | ---------- |
-| `cli-output.png`        | CLI showing `chasm show path` output | Terminal                   | 1200x600   |
-| `web-dashboard.png`     | Web app dashboard with sessions      | chasm-web (localhost:5173) | 1200x700   |
-| `desktop-app.png`       | Desktop app window                   | chasm-desktop              | 1200x700   |
-| `mobile-workspaces.png` | Mobile app workspaces screen         | chasm-app / Expo           | 400x800    |
-| `mobile-search.png`     | Mobile app search screen             | chasm-app / Expo           | 400x800    |
-| `vscode-sidebar.png`    | VS Code with Chasm sidebar           | VS Code                    | 1200x700   |
+| `cli-output.png`        | CLI showing `ironbridge show path` output | Terminal                   | 1200x600   |
+| `web-dashboard.png`     | Web app dashboard with sessions      | ironbridge-web (localhost:5173) | 1200x700   |
+| `desktop-app.png`       | Desktop app window                   | ironbridge-desktop              | 1200x700   |
+| `mobile-workspaces.png` | Mobile app workspaces screen         | ironbridge-app / Expo           | 400x800    |
+| `mobile-search.png`     | Mobile app search screen             | ironbridge-app / Expo           | 400x800    |
+| `vscode-sidebar.png`    | VS Code with IronBridge sidebar           | VS Code                    | 1200x700   |
 
 ## Capture Instructions
 
 ### CLI Screenshot
 ```bash
 # Run this command and screenshot the terminal
-chasm show path /project/example
+ironbridge show path /project/example
 ```
 
 ### Web App
 ```bash
-cd chasm-web
+cd ironbridge-web
 pnpm dev
 # Navigate to http://localhost:5173
 # Screenshot the dashboard
@@ -31,14 +31,14 @@ pnpm dev
 
 ### Desktop App  
 ```bash
-cd chasm-desktop
+cd ironbridge-desktop
 pnpm tauri dev
 # Screenshot the main window
 ```
 
 ### Mobile App
 ```bash
-cd chasm-app
+cd ironbridge-app
 npx expo start
 # Use iOS Simulator or Android Emulator
 # Screenshot workspaces and search screens
@@ -46,7 +46,7 @@ npx expo start
 
 ### VS Code Extension
 1. Install the extension in VS Code
-2. Open the Chasm sidebar
+2. Open the IronBridge sidebar
 3. Screenshot the full window
 
 ## Image Requirements

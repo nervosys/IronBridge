@@ -1,10 +1,10 @@
-# Chasm Browser Extension
+# IronBridge Browser Extension
 
 A Chrome/Firefox extension for capturing and managing AI chat sessions from web-based AI tools.
 
 ## Features
 
-- **One-click export** - Export current chat session to Chasm
+- **One-click export** - Export current chat session to IronBridge
 - **Multi-provider support** - Works with ChatGPT, Claude, Gemini, Copilot, Poe, Perplexity
 - **Context menu integration** - Right-click to export or save selections
 - **Auto-harvest** - Optionally auto-sync sessions on a schedule
@@ -55,25 +55,25 @@ A Chrome/Firefox extension for capturing and managing AI chat sessions from web-
 
 ### Quick Export
 1. Navigate to a supported AI chat (e.g., chat.openai.com)
-2. Click the Chasm extension icon in your toolbar
+2. Click the IronBridge extension icon in your toolbar
 3. Click "Export Current" to save the conversation
 
 ### Context Menu
-- Right-click on any AI chat page and select "Export to Chasm"
-- Select text and right-click to "Save selection to Chasm"
+- Right-click on any AI chat page and select "Export to IronBridge"
+- Select text and right-click to "Save selection to IronBridge"
 - Select text and right-click to "Copy as Markdown"
 
 ### Settings
 Click the gear icon in the popup or right-click the extension icon and select "Options" to configure:
 
-- **API URL** - Your Chasm server address (default: http://localhost:8787)
+- **API URL** - Your IronBridge server address (default: http://localhost:8787)
 - **Auto Harvest** - Enable periodic session syncing
 - **Notifications** - Toggle browser notifications
 - **Providers** - Select which AI providers to monitor
 
 ## Requirements
 
-- Chasm API server running (default: http://localhost:8787)
+- IronBridge API server running (default: http://localhost:8787)
 - Chrome 88+ or Firefox 89+ (Manifest V3 support)
 
 ## Development
@@ -112,8 +112,8 @@ browser-extension/
 │   ├── icon48.png             # 48×48 (generated)
 │   └── icon128.png            # 128×128 (generated)
 └── dist/                      # Build output (gitignored)
-    ├── chasm-chrome.zip
-    └── chasm-firefox.zip
+    ├── ironbridge-chrome.zip
+    └── ironbridge-firefox.zip
 ```
 
 ## Building for Store Submission
@@ -135,8 +135,8 @@ browser-extension/
    ```
 
 Output files:
-- `dist/chasm-chrome.zip` — Upload to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-- `dist/chasm-firefox.zip` — Upload to [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
+- `dist/ironbridge-chrome.zip` — Upload to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+- `dist/ironbridge-firefox.zip` — Upload to [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
 
 ## Permissions
 
@@ -151,7 +151,7 @@ This extension requires the following permissions:
 
 ## Privacy
 
-- All data is stored locally or sent to your self-hosted Chasm server
+- All data is stored locally or sent to your self-hosted IronBridge server
 - No data is sent to third parties
 - No analytics or tracking
 - See [PRIVACY_POLICY.md](PRIVACY_POLICY.md) for the full privacy policy

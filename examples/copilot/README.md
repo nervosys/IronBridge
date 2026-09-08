@@ -35,9 +35,9 @@ VS Code Copilot stores chat sessions in JSON files with this structure:
 
 ```bash
 # List Copilot sessions
-chasm list sessions
+ironbridge list sessions
 
 # Import these demo sessions
-chasm provider import copilot --source examples/copilot/chatSessions
+ironbridge provider import copilot --source examples/copilot/chatSessions
 ```
 

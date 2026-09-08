@@ -1,0 +1,51 @@
+[package]
+name = "ironbridge-sso"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Enterprise single sign-on for IronBridge: OIDC and SAML, without native dependencies"
+authors = ["Nervosys LLC <hello@nervosys.ai>"]
+license = "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
+repository = "https://github.com/nervosys/ironbridge"
+
+[features]
+default = ["http"]
+# HTTP is optional so the verification logic can be used against responses
+# fetched by the caller -- useful in tests, and in hosts that already own an
+# HTTP client and its proxy/TLS configuration.
+http = ["dep:reqwest"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+base64 = "0.21"
+# `oid` is required: RSA PKCS#1 v1.5 prefixes the hash with a DigestInfo
+# structure identifying the algorithm, and that identifier comes from
+# AssociatedOid. Without the feature the signature types will not build.
+sha2 = { version = "0.10", features = ["oid"] }
+rand = "0.8"
+url = "2"
+chrono = "0.4"
+
+# OIDC: ID tokens are JWTs, so this is the whole signature story.
+jsonwebtoken = "9.3"
+
+# SAML: XML plus RSA signature verification, all pure Rust.
+roxmltree = "0.20"
+rsa = "0.9"
+x509-parser = "0.16"
+
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+roxmltree = "0.20"
+rand = "0.8"
+rsa = { version = "0.9", features = ["sha2"] }
+sha2 = { version = "0.10", features = ["oid"] }
+chrono = "0.4"
+base64 = "0.21"

@@ -1,9 +1,9 @@
 {
-  "name": "chasm-docs",
+  "name": "ironbridge-docs",
   "version": "1.0.0",
-  "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial",
+  "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial",
   "private": true,
-  "description": "Chasm documentation website",
+  "description": "IronBridge documentation website",
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",

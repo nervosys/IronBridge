@@ -88,7 +88,7 @@ export const SessionRecovery: React.FC = () => {
             lines={[
               {
                 prompt: true,
-                text: "chasm detect orphaned /path/to/project",
+                text: "ironbridge detect orphaned /path/to/project",
                 delay: 0,
               },
               { text: "", delay: 25 },
@@ -146,7 +146,7 @@ export const SessionRecovery: React.FC = () => {
             lines={[
               {
                 prompt: true,
-                text: "chasm detect orphaned --recover /path/to/project",
+                text: "ironbridge detect orphaned --recover /path/to/project",
                 delay: 0,
               },
               {
@@ -162,7 +162,7 @@ export const SessionRecovery: React.FC = () => {
               { text: "", delay: 65 },
               {
                 prompt: true,
-                text: "chasm register all --force --path /path/to/project",
+                text: "ironbridge register all --force --path /path/to/project",
                 delay: 75,
               },
               {

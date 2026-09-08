@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 // Provider Mock Tests
 // Tests for WorkspaceProvider and SessionProvider with mocked executor
@@ -21,7 +21,7 @@ interface MockSessionInfo {
     messages: number;
 }
 
-interface MockChasmResult {
+interface MockIronBridgeResult {
     success: boolean;
     output: string;
     error?: string;
@@ -125,7 +125,7 @@ suite('Provider Mock Tests', () => {
     });
 
     suite('Error Handling Logic', () => {
-        function handleResult(result: MockChasmResult): { data: string | null; error: string | null } {
+        function handleResult(result: MockIronBridgeResult): { data: string | null; error: string | null } {
             if (result.success) {
                 return { data: result.output, error: null };
             } else {
@@ -134,21 +134,21 @@ suite('Provider Mock Tests', () => {
         }
 
         test('handles successful result', () => {
-            const result: MockChasmResult = { success: true, output: 'test output' };
+            const result: MockIronBridgeResult = { success: true, output: 'test output' };
             const handled = handleResult(result);
             assert.strictEqual(handled.data, 'test output');
             assert.strictEqual(handled.error, null);
         });
 
         test('handles failed result with error message', () => {
-            const result: MockChasmResult = { success: false, output: '', error: 'Command failed' };
+            const result: MockIronBridgeResult = { success: false, output: '', error: 'Command failed' };
             const handled = handleResult(result);
             assert.strictEqual(handled.data, null);
             assert.strictEqual(handled.error, 'Command failed');
         });
 
         test('handles failed result without error message', () => {
-            const result: MockChasmResult = { success: false, output: '' };
+            const result: MockIronBridgeResult = { success: false, output: '' };
             const handled = handleResult(result);
             assert.strictEqual(handled.data, null);
             assert.strictEqual(handled.error, 'Unknown error');

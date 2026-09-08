@@ -1,7 +1,7 @@
 -- Copyright (c) 2024-2027 Nervosys LLC
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+-- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 --
--- Chasm.nvim - Neovim plugin for AI chat session management
+-- IronBridge.nvim - Neovim plugin for AI chat session management
 --
 
 local M = {}
@@ -40,7 +40,7 @@ end
 local function request(method, path, opts)
   local c = get_curl()
   if not c then
-    vim.notify("chasm.nvim requires plenary.nvim", vim.log.levels.ERROR)
+    vim.notify("ironbridge.nvim requires plenary.nvim", vim.log.levels.ERROR)
     return nil
   end
 
@@ -82,12 +82,12 @@ function M.health()
   local data, err = request("GET", "/health")
   if data then
     vim.notify(
-      string.format("Chasm server: %s (v%s)", data.status or "ok", data.version or "unknown"),
+      string.format("IronBridge server: %s (v%s)", data.status or "ok", data.version or "unknown"),
       vim.log.levels.INFO
     )
     return data
   else
-    vim.notify("Chasm server unreachable: " .. tostring(err), vim.log.levels.ERROR)
+    vim.notify("IronBridge server unreachable: " .. tostring(err), vim.log.levels.ERROR)
     return nil
   end
 end
@@ -301,7 +301,7 @@ function M.telescope_search(query)
 
   pickers
     .new({}, {
-      prompt_title = query and ("Search: " .. query) or "Chasm Sessions",
+      prompt_title = query and ("Search: " .. query) or "IronBridge Sessions",
       finder = finders.new_table({
         results = sessions,
         entry_maker = function(session)
@@ -336,40 +336,40 @@ end
 local function setup_keymaps()
   local km = M.config.keymaps
   if km.search then
-    vim.keymap.set("n", km.search, M.search_ui, { desc = "Chasm: Search sessions" })
+    vim.keymap.set("n", km.search, M.search_ui, { desc = "IronBridge: Search sessions" })
   end
   if km.harvest then
-    vim.keymap.set("n", km.harvest, M.harvest, { desc = "Chasm: Harvest sessions" })
+    vim.keymap.set("n", km.harvest, M.harvest, { desc = "IronBridge: Harvest sessions" })
   end
   if km.view then
     vim.keymap.set("n", km.view, function()
       M.telescope_search()
-    end, { desc = "Chasm: View sessions" })
+    end, { desc = "IronBridge: View sessions" })
   end
   if km.sync then
-    vim.keymap.set("n", km.sync, M.sync, { desc = "Chasm: Sync with server" })
+    vim.keymap.set("n", km.sync, M.sync, { desc = "IronBridge: Sync with server" })
   end
 end
 
 -- Setup commands
 local function setup_commands()
-  vim.api.nvim_create_user_command("ChasmHealth", function()
+  vim.api.nvim_create_user_command("IronBridgeHealth", function()
     M.health()
-  end, { desc = "Check Chasm server health" })
+  end, { desc = "Check IronBridge server health" })
 
-  vim.api.nvim_create_user_command("ChasmHarvest", function()
+  vim.api.nvim_create_user_command("IronBridgeHarvest", function()
     M.harvest()
   end, { desc = "Harvest AI sessions" })
 
-  vim.api.nvim_create_user_command("ChasmSync", function()
+  vim.api.nvim_create_user_command("IronBridgeSync", function()
     M.sync()
-  end, { desc = "Sync with Chasm server" })
+  end, { desc = "Sync with IronBridge server" })
 
-  vim.api.nvim_create_user_command("ChasmStats", function()
+  vim.api.nvim_create_user_command("IronBridgeStats", function()
     M.stats()
-  end, { desc = "Show Chasm statistics" })
+  end, { desc = "Show IronBridge statistics" })
 
-  vim.api.nvim_create_user_command("ChasmSearch", function(opts)
+  vim.api.nvim_create_user_command("IronBridgeSearch", function(opts)
     if opts.args and opts.args ~= "" then
       local results = M.search(opts.args)
       if M.config.telescope.enabled then
@@ -378,15 +378,15 @@ local function setup_commands()
     else
       M.search_ui()
     end
-  end, { nargs = "?", desc = "Search Chasm sessions" })
+  end, { nargs = "?", desc = "Search IronBridge sessions" })
 
-  vim.api.nvim_create_user_command("ChasmView", function(opts)
+  vim.api.nvim_create_user_command("IronBridgeView", function(opts)
     if opts.args and opts.args ~= "" then
       M.view_session(opts.args)
     else
       M.telescope_search()
     end
-  end, { nargs = "?", desc = "View Chasm session" })
+  end, { nargs = "?", desc = "View IronBridge session" })
 end
 
 -- Setup function

@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout, Badge } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -10,7 +10,7 @@ export default function AgentsPage() {
       <h1>Agent Launcher</h1>
       <p className="page-description">
         Launch terminal AI coding agents with automatic session capture and
-        harvesting via <code>chasm run &lt;agent&gt;</code>.
+        harvesting via <code>ironbridge run &lt;agent&gt;</code>.
       </p>
 
       <h2>Supported Agents</h2>
@@ -32,29 +32,29 @@ export default function AgentsPage() {
       <h2>Usage</h2>
       <CodeBlock language="bash">
 {`# Launch with default (Claude Code)
-chasm run claude
+ironbridge run claude
 
 # Launch Gemini CLI with extra arguments
-chasm run gemini -- --model gemini-2.0-flash
+ironbridge run gemini -- --model gemini-2.0-flash
 
 # Skip auto-save
-chasm run codex --no-save
+ironbridge run codex --no-save
 
 # With verbose output
-chasm run droid --verbose`}
+ironbridge run droid --verbose`}
       </CodeBlock>
 
       <h2>How It Works</h2>
       <ol>
-        <li><strong>Snapshot</strong> — Before launch, Chasm snapshots the agent&apos;s session directory (file list + timestamps).</li>
+        <li><strong>Snapshot</strong> — Before launch, IronBridge snapshots the agent&apos;s session directory (file list + timestamps).</li>
         <li><strong>Launch</strong> — The agent binary is executed with inherited stdio for interactive use.</li>
-        <li><strong>Detect</strong> — When the agent exits, Chasm diffs the snapshot to find new/modified session files.</li>
+        <li><strong>Detect</strong> — When the agent exits, IronBridge diffs the snapshot to find new/modified session files.</li>
         <li><strong>Harvest</strong> — New sessions are automatically ingested into the harvest database.</li>
       </ol>
 
       <h2>Check Agent Status</h2>
       <CodeBlock language="bash">
-        {`chasm list agents`}
+        {`ironbridge list agents`}
       </CodeBlock>
       <p>Shows all agents with their installation status (<Badge variant="stable">installed</Badge> or missing) and storage paths.</p>
 

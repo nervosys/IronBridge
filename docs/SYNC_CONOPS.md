@@ -1,15 +1,15 @@
-# CSM Data Synchronization - Concept of Operations (CONOPS)
+# IRONBRIDGE Data Synchronization - Concept of Operations (CONOPS)
 
 ## Overview
 
-The Chat System Manager (CSM) uses a **hub-and-spoke architecture** where `csm-rust` serves as the **single source of truth** for all data. Both `csm-web` (React web app) and `csm-app` (React Native mobile app) synchronize their state with the backend using:
+The Chat System Manager (IRONBRIDGE) uses a **hub-and-spoke architecture** where `ironbridge-rust` serves as the **single source of truth** for all data. Both `ironbridge-web` (React web app) and `ironbridge-app` (React Native mobile app) synchronize their state with the backend using:
 
 - **Server-Sent Events (SSE)**: For receiving real-time updates from the server
 - **REST API**: For sending data changes to the server
 
 ```
                     ┌─────────────────┐
-                    │    csm-rust     │
+                    │    ironbridge-rust     │
                     │  (Backend API)  │
                     │                 │
                     │  SQLite DB      │
@@ -20,14 +20,14 @@ The Chat System Manager (CSM) uses a **hub-and-spoke architecture** where `csm-r
               │              │              │
               ▼              ▼              ▼
        ┌──────────┐   ┌──────────┐   ┌──────────┐
-       │ csm-web  │   │ csm-app  │   │ csm-app  │
+       │ ironbridge-web  │   │ ironbridge-app  │   │ ironbridge-app  │
        │ (React)  │   │(iOS/And) │   │(2nd dev) │
        └──────────┘   └──────────┘   └──────────┘
 ```
 
 ## Architecture Components
 
-### 1. csm-rust (Backend Server)
+### 1. ironbridge-rust (Backend Server)
 
 **Role**: Central authority and data persistence layer
 
@@ -45,7 +45,7 @@ The Chat System Manager (CSM) uses a **hub-and-spoke architecture** where `csm-r
 - `POST /sync/event` - Push a single sync event
 - `POST /sync/batch` - Push multiple sync events
 
-### 2. csm-shared (Shared Library)
+### 2. ironbridge-shared (Shared Library)
 
 **Role**: Cross-platform synchronization infrastructure
 
@@ -54,7 +54,7 @@ The Chat System Manager (CSM) uses a **hub-and-spoke architecture** where `csm-r
 - **SyncProvider**: React context for sync state
 - **Type Definitions**: Shared TypeScript interfaces
 
-### 3. csm-web / csm-app (Frontend Clients)
+### 3. ironbridge-web / ironbridge-app (Frontend Clients)
 
 **Role**: User interfaces that consume and update data
 
@@ -139,8 +139,8 @@ The sync system handles these entity types:
 ### Wrap App with SyncProvider
 
 ```tsx
-// csm-web/src/App.tsx
-import { SyncProvider } from '@csm/shared';
+// ironbridge-web/src/App.tsx
+import { SyncProvider } from '@ironbridge/shared';
 
 function App() {
   return (
@@ -160,8 +160,8 @@ function App() {
 ### Use Synced State Hook
 
 ```tsx
-// csm-web/src/pages/Agents.tsx
-import { useSyncContext, useSyncedAgents } from '@csm/shared';
+// ironbridge-web/src/pages/Agents.tsx
+import { useSyncContext, useSyncedAgents } from '@ironbridge/shared';
 
 function AgentsPage() {
   const { isConnected, isSyncing } = useSyncContext();
@@ -197,7 +197,7 @@ function AgentsPage() {
 ### Subscribe to Sync Events
 
 ```tsx
-import { useSyncSubscription, useSyncContext } from '@csm/shared';
+import { useSyncSubscription, useSyncContext } from '@ironbridge/shared';
 
 function NotificationHandler() {
   const { sync } = useSyncContext();

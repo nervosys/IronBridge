@@ -1,6 +1,6 @@
 // Copyright (c) 2024-2027 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
-package io.chasm.plugin.actions
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
+package io.ironbridge.plugin.actions
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -11,8 +11,8 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
-import io.chasm.plugin.services.ChasmService
-import io.chasm.plugin.services.Session
+import io.ironbridge.plugin.services.IronBridgeService
+import io.ironbridge.plugin.services.Session
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.*
@@ -20,7 +20,7 @@ import javax.swing.*
 /**
  * Action to search sessions.
  */
-class SearchAction : AnAction("Search Sessions", "Search across all Chasm sessions", null) {
+class SearchAction : AnAction("Search Sessions", "Search across all IronBridge sessions", null) {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -125,7 +125,7 @@ class SearchDialog : DialogWrapper(null) {
         resultsListModel.clear()
 
         SwingUtilities.invokeLater {
-            val results = ChasmService.getInstance().searchSessions(query)
+            val results = IronBridgeService.getInstance().searchSessions(query)
             resultsListModel.clear()
             results.forEach { resultsListModel.addElement(it) }
             statusLabel.text = "Found ${results.size} sessions"

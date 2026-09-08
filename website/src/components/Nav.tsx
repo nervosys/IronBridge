@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 'use client';
 
@@ -12,14 +12,14 @@ export function Header() {
         <header className="header">
             <Link href="/" className="header-logo">
                 <span className="logo-icon">◈</span>
-                <span>CHASM</span>
+                <span>IRONBRIDGE</span>
             </Link>
             <nav className="header-nav">
                 <Link href="/docs">Docs</Link>
                 <Link href="/docs/features">Features</Link>
                 <Link href="/docs/api">API</Link>
                 <a
-                    href="https://github.com/nervosys/chasm"
+                    href="https://github.com/nervosys/ironbridge"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="header-github"

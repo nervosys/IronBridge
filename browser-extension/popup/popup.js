@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Browser Extension - Popup Script
+// IronBridge Browser Extension - Popup Script
 // Copyright 2025-2026 Nervosys LLC
 
 const API_BASE = 'http://localhost:8787';
@@ -50,7 +50,7 @@ async function checkConnection() {
         if (response.ok) {
             statusDot.classList.add('connected');
             statusDot.classList.remove('disconnected');
-            statusText.textContent = 'Connected to Chasm';
+            statusText.textContent = 'Connected to IronBridge';
             harvestBtn.disabled = false;
         } else {
             throw new Error('API not healthy');
@@ -58,7 +58,7 @@ async function checkConnection() {
     } catch (error) {
         statusDot.classList.add('disconnected');
         statusDot.classList.remove('connected');
-        statusText.textContent = 'Not connected - Start Chasm API';
+        statusText.textContent = 'Not connected - Start IronBridge API';
         harvestBtn.disabled = true;
     }
 }

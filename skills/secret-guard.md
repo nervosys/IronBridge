@@ -101,7 +101,7 @@ ORDER BY s.created_at DESC;
 1. Rotate any exposed keys immediately
 2. Add patterns to .gitignore to prevent session file commits
 3. Consider using environment variables instead of hardcoded values
-4. Run `chasm harvest git commit` to checkpoint before cleanup
+4. Run `ironbridge harvest git commit` to checkpoint before cleanup
 ```
 
 ## Pre-Commit Hook Setup
@@ -114,7 +114,7 @@ Create `.git/hooks/pre-commit`:
 if git diff --cached --name-only | grep -q '.specstory\|chatSessions'; then
     echo "⚠️  Session history files staged for commit"
     echo "Running secret scan..."
-    chasm harvest search --query "password OR secret OR token OR api_key" --limit 5
+    ironbridge harvest search --query "password OR secret OR token OR api_key" --limit 5
     if [ $? -eq 0 ]; then
         echo "⚠️  Potential secrets found. Review before committing."
         echo "Use 'git commit --no-verify' to skip this check."
@@ -127,8 +127,8 @@ fi
 
 ```bash
 # Quick search for secret patterns
-chasm harvest search --query "api_key OR password OR token OR secret"
+ironbridge harvest search --query "api_key OR password OR token OR secret"
 
 # Full-text search
-chasm harvest search --query "sk- OR ghp_ OR AKIA"
+ironbridge harvest search --query "sk- OR ghp_ OR AKIA"
 ```

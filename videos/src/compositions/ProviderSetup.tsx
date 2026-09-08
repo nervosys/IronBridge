@@ -103,7 +103,7 @@ export const ProviderSetup: React.FC = () => {
             title="bash — Provider management"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm provider list", delay: 0 },
+              { prompt: true, text: "ironbridge provider list", delay: 0 },
               { text: "", delay: 20 },
               {
                 text: "  ✓ copilot     VS Code Copilot Chat",
@@ -133,7 +133,7 @@ export const ProviderSetup: React.FC = () => {
               { text: "", delay: 65 },
               {
                 prompt: true,
-                text: "chasm provider test ollama",
+                text: "ironbridge provider test ollama",
                 delay: 75,
               },
               {

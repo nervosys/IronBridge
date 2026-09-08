@@ -1,8 +1,8 @@
-# Chasm Roadmap
+# IronBridge Roadmap
 
 > **Last Updated:** August 4, 2026
 
-This document tracks the development progress and future plans for Chasm (Chat Session Manager).
+This document tracks the development progress and future plans for IronBridge (Chat Session Manager).
 
 > **Reading the checkboxes.** A `[x]` below means the feature was built, not
 > necessarily that it is wired up and usable. Items marked `[~]` are present in
@@ -28,7 +28,7 @@ handed down:
 
 ### Why sharing is local-only
 
-Chasm holds a person's entire chat history on their own machine. Making
+IronBridge holds a person's entire chat history on their own machine. Making
 "share" mean "transmit a conversation to a third party" has privacy
 consequences that belong to whoever runs it, not to whoever wrote the code, so
 the implementation does the useful thing that cannot leak: a revocable,
@@ -80,13 +80,13 @@ Verified against the tree as of August 4, 2026:
 | --- | --- |
 | GraphQL API | Mounted and backed by the database. `harvest` and `sync` mutations return errors by design (use the CLI or REST). `tags` is rejected on session updates -- no column exists for it. |
 | REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted. The served API is 92 routes across `api/mod.rs` and `api/handlers_write.rs`, plus the root-mounted auth, sync, recording, webhook and websocket scopes. (This said 47 until the write handlers landed; the count is now asserted by `openapi.yaml` and its route test rather than kept by hand.) |
-| SSO/OIDC | Authorization code + PKCE, served at `/oidc`. ID tokens are verified against the provider's JWKS by `chasm-sso`. The `state` is consumed atomically (`DELETE ... RETURNING`), so a replayed callback is refused; an unverified email claim is refused too. The client secret is stored in plaintext — never returned over HTTP, but readable by anyone with the database file. |
-| SSO/SAML | Signature verification is implemented in pure Rust (`chasm-sso`) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Builds on every platform; no native dependencies. |
+| SSO/OIDC | Authorization code + PKCE, served at `/oidc`. ID tokens are verified against the provider's JWKS by `ironbridge-sso`. The `state` is consumed atomically (`DELETE ... RETURNING`), so a replayed callback is refused; an unverified email claim is refused too. The client secret is stored in plaintext — never returned over HTTP, but readable by anyone with the database file. |
+| SSO/SAML | Signature verification is implemented in pure Rust (`ironbridge-sso`) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Builds on every platform; no native dependencies. |
 | Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
 | Enterprise scopes actually served | Fixed. `/audit`, `/retention` and `/sso` were never registered in `start_server`, so all 18 of their operations answered 404 on every enterprise build; the spec test mounted them itself and so never noticed. Both now go through one `EnterpriseServices::configure`, and the response bodies are documented from observed responses. |
-| AI & Intelligence | Model-backed via `chasm analyze`, against any OpenAI-compatible endpoint. Falls back to the old heuristics without a key, and every result states which produced it. |
+| AI & Intelligence | Model-backed via `ironbridge analyze`, against any OpenAI-compatible endpoint. Falls back to the old heuristics without a key, and every result states which produced it. |
 | Embeddings / semantic search | Implemented against the OpenAI embeddings API, with index-order and dimension validation, and verified end to end against a local endpoint implementing that API. Requires an API key; without one, embedding calls error rather than returning zeros. |
-| Desktop application | Runs the API server in-process, so it works standalone. The UI is chasm-web; there is no desktop-specific interface. |
+| Desktop application | Runs the API server in-process, so it works standalone. The UI is ironbridge-web; there is no desktop-specific interface. |
 | Agent inbox | Backed by `/api/inbox`. The agency runtime emits run and message events; permission requests expire rather than lingering as approvable. |
 
 ### REST surface removed from the spec in 2.0.0
@@ -110,12 +110,12 @@ had never been documented at all: `GET` and `POST /sessions/{id}/checkpoints`,
 | Removed | Methods | Note |
 | --- | --- | --- |
 | `/system/vacuum`, `/system/cache/clear` | POST | No maintenance endpoints exist. |
-| `/workspaces/discover`, `/workspaces/{id}/refresh` | POST | Discovery is CLI-only (`chasm detect`). |
+| `/workspaces/discover`, `/workspaces/{id}/refresh` | POST | Discovery is CLI-only (`ironbridge detect`). |
 | `/sessions/merge`, `/sessions/{id}/archive`, `/sessions/{id}/fork` | POST | Merge exists as a library and CLI capability, not over REST. |
 | `/sessions/{id}/export` | GET | Export is CLI-only. |
 | `/sessions/{id}/messages` | GET | GET stays out; messages come back embedded in `GET /sessions/{id}`. **POST is now implemented.** |
 | `/providers/{id}`, `/providers/{id}/health`, `/providers/{id}/models` | GET, PUT, DELETE | Only `GET /providers` and `GET /system/providers/health` are served. **`POST /providers/{id}/test` is now implemented.** |
-| `/chat/completions` | POST | **Now implemented** as a proxy to a configured OpenAI-compatible endpoint. Chasm still hosts no inference of its own. |
+| `/chat/completions` | POST | **Now implemented** as a proxy to a configured OpenAI-compatible endpoint. IronBridge still hosts no inference of its own. |
 | `/sync` | POST | Served as `/sync/*` subroutes, never as bare `POST /sync`. |
 | `/harvest` | POST | **Now implemented** -- runs the incremental CLI harvest. |
 | `/search/sessions`, `/search/semantic` | GET | Semantic search remains a library capability with no REST route. **`GET /search` is now implemented** as substring matching. |
@@ -165,14 +165,14 @@ stream and `/recording/ws` is a WebSocket upgrade.
 The enterprise scopes are documented too, with a caveat that is stated in the
 spec itself. `/audit`, `/retention` and `/sso` are `#[cfg(feature =
 "enterprise")]`, so a default build does not route them. Each is marked
-`x-chasm-feature: enterprise`; the spec tests skip a marked path when the
+`x-ironbridge-feature: enterprise`; the spec tests skip a marked path when the
 feature is off and probe it normally when it is on, so an enterprise build
 verifies them. On a default build the route test prints how many it skipped
 rather than passing silently, and asserts the marking has not drifted onto a
 path outside those three scopes.
 
 **The build obstacle is now gone.** `samael` was replaced by the pure-Rust
-`chasm-sso`, so the enterprise feature has no native dependencies and builds
+`ironbridge-sso`, so the enterprise feature has no native dependencies and builds
 anywhere cargo does. All 25 enterprise operations (SAML, OIDC, audit, retention) are verified as routed on
 every platform, and 39 tests that had never run on Windows now execute.
 
@@ -192,7 +192,7 @@ vcpkg port on Windows and no environment-variable equivalent. Past that point
 you need MSYS2 or a source build of xmlsec1.
 
 Build enterprise on Linux, which is what CI does.
-`chasm-rust/docs/api/rest.md` records the exact steps for 1 and 2 so nobody
+`ironbridge-rust/docs/api/rest.md` records the exact steps for 1 and 2 so nobody
 repeats the search believing OpenSSL is the problem. Every other schema in the
 document was read off a running server. Guessing these would have undone that,
 so each says "body not modelled" instead. Paths and methods come from the
@@ -234,7 +234,7 @@ not to describe what the server ought to be.
 
 ### Web UI calling endpoints that do not exist
 
-Auditing `chasm-web/src/api/client.ts` against the route registrations found 51
+Auditing `ironbridge-web/src/api/client.ts` against the route registrations found 51
 client methods aimed at endpoints the server does not route. Of those, 38 had no
 consumer anywhere and were deleted along with their 24 hooks; one was a wrong
 path against an endpoint that does exist (`/api/providers/health`, served as
@@ -272,7 +272,7 @@ Four bugs surfaced while building this, all pre-existing:
   `sqlite_master`/`pragma_table_info` instead of probing for rows.
 - The API server never ensured the harvest schema existed. Every read handler
   parses `sessions.session_json`, which only that schema has, so on a machine
-  that had never run `chasm harvest` the session endpoints failed on a missing
+  that had never run `ironbridge harvest` the session endpoints failed on a missing
   column. `start_server` now creates the harvest tables before opening.
 - The harvest schema has no `workspaces` table, but `GET /api/workspaces`
   joins one -- so that endpoint answered `500` against every harvested
@@ -323,7 +323,7 @@ in the 880–960 range double-counted: `main.rs` re-declared modules that
 
 ## Overview
 
-Chasm is a unified platform for harvesting, managing, and analyzing AI chat sessions across multiple providers and tools.
+IronBridge is a unified platform for harvesting, managing, and analyzing AI chat sessions across multiple providers and tools.
 
 ---
 
@@ -331,11 +331,11 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 | Component             | Status   | Description                              |
 | --------------------- | -------- | ---------------------------------------- |
-| **chasm-rust**        | 🟢 Active | Core Rust CLI, library, and API server   |
-| **chasm-web**         | 🟢 Active | React web application                    |
-| **chasm-app**         | 🟢 Active | React Native mobile app                  |
-| **chasm-shared**      | 🟢 Active | Shared TypeScript types and utilities    |
-| **chasm-desktop**     | 🟢 Active | Tauri app wrapping chasm-web             |
+| **ironbridge-rust**        | 🟢 Active | Core Rust CLI, library, and API server   |
+| **ironbridge-web**         | 🟢 Active | React web application                    |
+| **ironbridge-app**         | 🟢 Active | React Native mobile app                  |
+| **ironbridge-shared**      | 🟢 Active | Shared TypeScript types and utilities    |
+| **ironbridge-desktop**     | 🟢 Active | Tauri app wrapping ironbridge-web             |
 | **vscode-extension**  | 🟢 Active | VS Code extension for session management |
 | **browser-extension** | 🟢 Active | Chrome/Firefox extension for web AI chat |
 | **jetbrains-plugin**  | 🟢 Active | IntelliJ/JetBrains IDE plugin            |
@@ -413,9 +413,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Open Source Strategy documentation
 
 ### Recent Features (February 2026)
-- [x] `chasm watch` — File-system monitoring for auto-harvest
-- [x] `chasm run` — Agent launcher with auto-save
-- [x] `chasm sync` — Bidirectional session backup/restore
+- [x] `ironbridge watch` — File-system monitoring for auto-harvest
+- [x] `ironbridge run` — Agent launcher with auto-save
+- [x] `ironbridge sync` — Bidirectional session backup/restore
 - [x] Real-time session recording API (crash recovery)
 - [x] Codex CLI, Droid CLI, Gemini CLI provider support
 - [x] Agent skills framework
@@ -440,9 +440,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 #### CLI Polish
 - [x] Shell completions (Bash, Zsh, Fish, PowerShell, Elvish)
-- [x] `chasm doctor` — Environment diagnostics command (13+ checks)
-- [x] `chasm provider` — Provider management commands
-- [x] `chasm watch` — File-system monitoring with auto-harvest
+- [x] `ironbridge doctor` — Environment diagnostics command (13+ checks)
+- [x] `ironbridge provider` — Provider management commands
+- [x] `ironbridge watch` — File-system monitoring with auto-harvest
 - [x] Interactive TUI improvements (session browsing, export, filtering)
 - [x] CLI reference documentation (watch, provider, completions, doctor)
 
@@ -462,7 +462,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Multi-user collaboration
 - [x] Team workspaces
 - [x] Session sharing with permissions
-- [x] AI-powered session summarization — `chasm analyze`, model-backed with a heuristic fallback
+- [x] AI-powered session summarization — `ironbridge analyze`, model-backed with a heuristic fallback
 - [x] Semantic search across sessions — backed by the OpenAI embeddings API; requires an API key
 - [x] Custom tagging and organization
 
@@ -477,8 +477,8 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - [x] Local LLM providers (Ollama, LM Studio, etc.)
 
 #### Platform
-- [x] Desktop application (Tauri) — wraps chasm-web with an in-process API server
-- [x] CLI tool for automation (chasm-cli v1.3.2 on crates.io)
+- [x] Desktop application (Tauri) — wraps ironbridge-web with an in-process API server
+- [x] CLI tool for automation (ironbridge-cli v1.3.2 on crates.io)
 - [x] Browser extension for web-based AI tools (Chrome/Firefox Manifest V3)
 
 ### Q3 2026
@@ -625,9 +625,9 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - Dark mode default, homepage hero with project stats
 
 #### New CLI Commands
-- `chasm watch` — File-system monitoring with auto-harvest on session changes
-- `chasm run` — Agent launcher with auto-save capabilities
-- `chasm sync` — Bidirectional session backup/restore
+- `ironbridge watch` — File-system monitoring with auto-harvest on session changes
+- `ironbridge run` — Agent launcher with auto-save capabilities
+- `ironbridge sync` — Bidirectional session backup/restore
 
 #### New Providers
 - Codex CLI (OpenAI) — JSONL sessions in `~/.codex/sessions/`
@@ -646,25 +646,25 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ### February 2026 (v1.1.0 Multi-Provider Forensics)
 
-#### Multi-Provider Session Forensics (chasm-rust)
+#### Multi-Provider Session Forensics (ironbridge-rust)
 - Added cross-provider session discovery and analysis
 - New providers: ClaudeCode, OpenCode, OpenClaw, Antigravity
 - Commands support `--provider` and `--all-providers` flags:
-  - `chasm list sessions` - List sessions from specific or all providers
-  - `chasm list agents` - List agent mode sessions across providers
-  - `chasm show timeline` - Aggregate timeline visualization
-  - `chasm find session` - Search across all providers
+  - `ironbridge list sessions` - List sessions from specific or all providers
+  - `ironbridge list agents` - List agent mode sessions across providers
+  - `ironbridge show timeline` - Aggregate timeline visualization
+  - `ironbridge find session` - Search across all providers
 - Cross-platform storage detection (Windows, macOS, Linux)
 - Provider aliases: `claudecode`/`claude`, `opencode`, `openclaw`/`claw`, `antigravity`/`ag`
 
-#### JSONL Format Support (chasm-rust)
+#### JSONL Format Support (ironbridge-rust)
 - Handle VS Code 1.109.0+ event-sourced session format
 - Automatic detection and parsing of `.jsonl` session files  
 - Session state reconstruction from event streams
 
 ### February 2027 (Q2 2027 AI Agents and Ecosystem)
 
-#### Autonomous Agents (chasm-rust)
+#### Autonomous Agents (ironbridge-rust)
 - Created archival.rs (~521 lines) - Autonomous session archival agent
   - ArchivalPolicy with configurable inactivity thresholds, message counts, provider filters
   - ArchivalCandidate for session evaluation with priority scoring
@@ -678,7 +678,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 #### JetBrains Plugin (jetbrains-plugin)
 - Created Kotlin/IntelliJ plugin with Gradle build
-- Implemented ChasmService for server communication
+- Implemented IronBridgeService for server communication
 - Added actions: Harvest, Sync, Search, SaveToSession, OpenSettings
 - Created tool window panel with session browser
 - Settings configurable for server URL and sync options
@@ -686,13 +686,13 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 #### Vim Plugin (vim-plugin)
 - Created vim-plug/Vundle/Pathogen compatible plugin
 - Autoload functions for HTTP requests via curl
-- Commands: ChasmHealth, ChasmHarvest, ChasmSync, ChasmStats, ChasmSearch, ChasmSessions, ChasmView
+- Commands: IronBridgeHealth, IronBridgeHarvest, IronBridgeSync, IronBridgeStats, IronBridgeSearch, IronBridgeSessions, IronBridgeView
 - Quickfix list integration for session browsing
 - Configurable keymaps with leader prefix
 
 ### February 2028 (Q1 2028 Performance & Developer Experience)
 
-#### Mobile Enhancements (chasm-app)
+#### Mobile Enhancements (ironbridge-app)
 - Created backgroundSync.ts (~450 lines) - Battery-optimized background sync
   - SyncConfig with WiFi-only, charging-only, battery level, quiet hours settings
   - SyncQueueItem with priority levels (high/normal/low) and retry tracking
@@ -703,7 +703,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
   - WidgetConfig with refresh intervals and theme support
   - Native module integration for widget updates and interactions
 
-#### Database Scaling (chasm-rust)
+#### Database Scaling (ironbridge-rust)
 - Created scaling.rs (~500 lines) - Sharding and read replica support
   - ShardingStrategy: Hash, Range, Tenant, Geographic, RoundRobin, Custom
   - ConsistentHashRing for distributed key routing
@@ -711,7 +711,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
   - ReplicaManager with health checking and lag monitoring
   - ScalingManager for unified read/write connection routing
 
-#### Edge Caching (chasm-rust)
+#### Edge Caching (ironbridge-rust)
 - Created api/caching.rs (~500 lines) - CDN and caching layer
   - CacheBackend: Memory, Redis, Memcached, File
   - CDN integration: Cloudflare, Fastly, CloudFront, Akamai, BunnyCDN
@@ -719,7 +719,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
   - CacheMiddleware for API response caching
   - Pattern-based invalidation and CDN purge
 
-#### SDK Generator (chasm-rust)
+#### SDK Generator (ironbridge-rust)
 - Created api/sdk.rs (~700 lines) - Multi-language SDK generation
   - Supported languages: Python, Node.js, Go, Rust, Java, C#, Ruby, PHP
   - Python SDK with async/sync clients, Pydantic types, httpx
@@ -728,13 +728,13 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
   - API endpoint and type definitions for code generation
 ### February 2026 (Q4 2026 Platform Maturity)
 
-#### Sync Engine (chasm-rust)
+#### Sync Engine (ironbridge-rust)
 - Created bidirectional sync module with conflict resolution
 - Implemented SessionSyncState tracking with hash-based change detection
 - Added conflict strategies: LocalWins, RemoteWins, MostRecent, KeepBoth, Manual
 - Created VSCodeSyncAdapter for Copilot Chat sessions
 
-#### AI Intelligence (chasm-rust)
+#### AI Intelligence (ironbridge-rust)
 - Created intelligence module with AI-powered analysis
 - Implemented TopicExtractor for keyword-based topic detection
 - Added InsightsGenerator for conversation key points
@@ -742,21 +742,21 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 - Implemented QualityScorer for session quality metrics
 - Added SimilarityDetector using Jaccard similarity
 
-#### Plugin System (chasm-rust)
+#### Plugin System (ironbridge-rust)
 - Created extensible plugin architecture (~650 lines)
 - Implemented PluginManifest with permissions and metadata
 - Added PluginManager for lifecycle management
 - Created event hook system with priority ordering
 - Implemented PluginRegistry for discovery
 
-#### Workflow Automation (chasm-rust)
+#### Workflow Automation (ironbridge-rust)
 - Created automation engine (~960 lines)
 - Implemented triggers: Event, Schedule, Interval, Manual
 - Added conditions: And, Or, Not, Compare, TimeWindow, Matches
 - Created actions: Export, Archive, Sync, Harvest, Notify, Shell, Http
 - Added workflow execution engine with run tracking
 
-#### Provider Expansion (chasm-rust)
+#### Provider Expansion (ironbridge-rust)
 - Enhanced GPT4All provider with session harvesting
 - Enhanced Jan provider with session harvesting
 - Enhanced LM Studio provider with session harvesting
@@ -765,7 +765,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ### February 2026 (Q2 2026 Provider Sprint)
 
-#### Providers (chasm-rust)
+#### Providers (ironbridge-rust)
 - Verified Cursor IDE provider implementation
 - Verified ChatGPT cloud provider implementation
 - Verified Ollama local LLM provider implementation
@@ -774,12 +774,12 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ### January 2026 (Q2 2026 Features Sprint)
 
-#### Shared Types (chasm-shared)
+#### Shared Types (ironbridge-shared)
 - Created collaboration types: users, teams, presence, cursors, permissions
 - Created summarization types: AI providers, templates, session summaries
 - Created semantic search types: embeddings, vector stores, hybrid search
 
-#### Web Application (chasm-web)
+#### Web Application (ironbridge-web)
 - Added PresenceIndicator component for real-time user presence
 - Added TeamWorkspacePanel for team management with invitations and roles
 - Added ShareSessionModal for session sharing with granular permissions
@@ -821,7 +821,7 @@ Chasm is a unified platform for harvesting, managing, and analyzing AI chat sess
 
 ## Contributing
 
-See [CONTRIBUTING.md](chasm-rust/CONTRIBUTING.md) for guidelines on contributing to this project. All contributors must agree to the [CLA](CLA.md).
+See [CONTRIBUTING.md](ironbridge-rust/CONTRIBUTING.md) for guidelines on contributing to this project. All contributors must agree to the [CLA](CLA.md).
 
 ## License
 

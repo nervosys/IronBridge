@@ -4,12 +4,12 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'chasm-rust/**'
+      - 'ironbridge-rust/**'
       - '.github/workflows/rust-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'chasm-rust/**'
+      - 'ironbridge-rust/**'
       - '.github/workflows/rust-ci.yml'
   workflow_dispatch:
 
@@ -54,8 +54,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -63,33 +63,33 @@ jobs:
       # SAML signature verification, which is covered by the Linux-only
       # `enterprise` job below rather than installed on all three runners.
       - name: Build
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo build --release
 
       - name: Run unit tests
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo test --release -- --nocapture
 
       - name: Run CLI integration tests
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo test --test cli_integration_tests --release -- --nocapture
 
       - name: Run browser tests
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo test --test browser_tests --release -- --nocapture
         continue-on-error: true  # May have different browser availability
 
       - name: Run harvest tests
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo test --test harvest_tests --release -- --nocapture
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chasm-${{ matrix.os }}
+          name: ironbridge-${{ matrix.os }}
           path: |
-            chasm-rust/target/release/chasm
-            chasm-rust/target/release/chasm.exe
+            ironbridge-rust/target/release/ironbridge
+            ironbridge-rust/target/release/ironbridge.exe
           if-no-files-found: ignore
 
   # ==========================================================================
@@ -128,21 +128,21 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-enterprise-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-enterprise-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-enterprise-
 
       - name: Build
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo build --all-features
 
       - name: Run tests
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo test --all-features -- --nocapture
 
       - name: Run Clippy
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo clippy --all-features --all-targets -- -D warnings
 
   # ==========================================================================
@@ -161,13 +161,13 @@ jobs:
           components: rustfmt, clippy
 
       - name: Check formatting
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo fmt --all -- --check
 
       # Default features here; --all-features is linted in the enterprise job,
       # which has the native XML libraries installed.
       - name: Run Clippy
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo clippy --all-targets -- -D warnings
 
   # ==========================================================================
@@ -192,38 +192,38 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
 
       - name: Build all examples
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo build --examples
 
       - name: Run local_providers example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example local_providers
         continue-on-error: true  # May fail if no VS Code data
 
       - name: Run cloud_providers example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example cloud_providers
 
       - name: Run basic_usage example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example basic_usage
         continue-on-error: true
 
       - name: Run session_operations example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example session_operations
         continue-on-error: true
 
       - name: Run history_management example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example history_management
         continue-on-error: true
 
       - name: Run storage_operations example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example storage_operations
         continue-on-error: true

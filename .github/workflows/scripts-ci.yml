@@ -4,12 +4,12 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'chasm-rust/examples/**'
+      - 'ironbridge-rust/examples/**'
       - '.github/workflows/scripts-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'chasm-rust/examples/**'
+      - 'ironbridge-rust/examples/**'
       - '.github/workflows/scripts-ci.yml'
   workflow_dispatch:
 
@@ -63,11 +63,11 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
 
-      - name: Build CSM binary
-        working-directory: chasm-rust
+      - name: Build IRONBRIDGE binary
+        working-directory: ironbridge-rust
         run: cargo build --release
 
       - name: Create mock VS Code data directory
@@ -89,7 +89,7 @@ jobs:
 
       - name: Test local_providers.ps1
         shell: pwsh
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           Write-Host "Testing local_providers.ps1..."
           try {
@@ -102,7 +102,7 @@ jobs:
 
       - name: Test cloud_providers.ps1
         shell: pwsh
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           Write-Host "Testing cloud_providers.ps1..."
           ./cloud_providers.ps1
@@ -110,7 +110,7 @@ jobs:
 
       - name: Verify generated JSON files
         shell: pwsh
-        working-directory: chasm-rust/examples
+        working-directory: ironbridge-rust/examples
         run: |
           $tempDir = "./temp"
           if (Test-Path $tempDir) {
@@ -134,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-json-${{ matrix.os }}
-          path: chasm-rust/examples/temp/*.json
+          path: ironbridge-rust/examples/temp/*.json
           if-no-files-found: ignore
 
   # ==========================================================================
@@ -179,11 +179,11 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
 
-      - name: Build CSM binary
-        working-directory: chasm-rust
+      - name: Build IRONBRIDGE binary
+        working-directory: ironbridge-rust
         run: cargo build --release
 
       - name: Create mock VS Code data directory
@@ -198,11 +198,11 @@ jobs:
           echo "Created mock VS Code directory: $VSCODE_PATH"
 
       - name: Make scripts executable
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: chmod +x *.sh
 
       - name: Test local_providers.sh
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           echo "Testing local_providers.sh..."
           ./local_providers.sh || {
@@ -212,14 +212,14 @@ jobs:
           echo "✓ local_providers.sh completed successfully"
 
       - name: Test cloud_providers.sh
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           echo "Testing cloud_providers.sh..."
           ./cloud_providers.sh
           echo "✓ cloud_providers.sh completed successfully"
 
       - name: Verify generated JSON files
-        working-directory: chasm-rust/examples
+        working-directory: ironbridge-rust/examples
         run: |
           if [ -d "./temp" ]; then
             echo "Generated files in temp/:"
@@ -244,7 +244,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-json-bash-${{ matrix.os }}
-          path: chasm-rust/examples/temp/*.json
+          path: ironbridge-rust/examples/temp/*.json
           if-no-files-found: ignore
 
   # ==========================================================================
@@ -269,11 +269,11 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
 
-      - name: Build CSM binary
-        working-directory: chasm-rust
+      - name: Build IRONBRIDGE binary
+        working-directory: ironbridge-rust
         run: cargo build --release
 
       - name: Create mock VS Code data directory
@@ -284,7 +284,7 @@ jobs:
 
       - name: Test local_providers.sh (Git Bash)
         shell: bash
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           echo "Testing local_providers.sh on Windows (Git Bash)..."
           bash ./local_providers.sh || {
@@ -295,7 +295,7 @@ jobs:
 
       - name: Test cloud_providers.sh (Git Bash)
         shell: bash
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           echo "Testing cloud_providers.sh on Windows (Git Bash)..."
           bash ./cloud_providers.sh
@@ -305,7 +305,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-json-bash-windows
-          path: chasm-rust/examples/temp/*.json
+          path: ironbridge-rust/examples/temp/*.json
           if-no-files-found: ignore
 
   # ==========================================================================
@@ -332,7 +332,7 @@ jobs:
           sudo apt-get install -y powershell
 
       - name: Check Bash script syntax
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           echo "Checking Bash script syntax with ShellCheck..."
           for script in *.sh; do
@@ -345,7 +345,7 @@ jobs:
 
       - name: Check PowerShell script syntax
         shell: pwsh
-        working-directory: chasm-rust/examples/scripts
+        working-directory: ironbridge-rust/examples/scripts
         run: |
           Write-Host "Checking PowerShell script syntax..."
           $errors = @()

@@ -108,8 +108,8 @@ Group URLs by domain and type:
 
 ```bash
 # Search for URLs in sessions
-chasm harvest search --query "github.com OR stackoverflow.com OR docs"
+ironbridge harvest search --query "github.com OR stackoverflow.com OR docs"
 
 # Export sessions with URLs for external analysis
-chasm harvest export --format jsonl
+ironbridge harvest export --format jsonl
 ```

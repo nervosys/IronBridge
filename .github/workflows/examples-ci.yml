@@ -4,14 +4,14 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'chasm-rust/examples/*.rs'
-      - 'chasm-rust/src/**'
+      - 'ironbridge-rust/examples/*.rs'
+      - 'ironbridge-rust/src/**'
       - '.github/workflows/examples-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'chasm-rust/examples/*.rs'
-      - 'chasm-rust/src/**'
+      - 'ironbridge-rust/examples/*.rs'
+      - 'ironbridge-rust/src/**'
       - '.github/workflows/examples-ci.yml'
   workflow_dispatch:
 
@@ -46,18 +46,18 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-examples-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-examples-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-examples-
             ${{ runner.os }}-cargo-
 
       - name: Build all examples
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo build --examples
 
       - name: List built examples
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         shell: bash
         run: |
           echo "Built examples:"
@@ -92,8 +92,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            chasm-rust/target/
-          key: ${{ runner.os }}-cargo-examples-${{ hashFiles('chasm-rust/Cargo.lock') }}
+            ironbridge-rust/target/
+          key: ${{ runner.os }}-cargo-examples-${{ hashFiles('ironbridge-rust/Cargo.lock') }}
 
       - name: Create mock VS Code data directory (Linux)
         if: runner.os == 'Linux'
@@ -118,31 +118,31 @@ jobs:
           Write-Host "Created mock VS Code directory"
 
       - name: Run local_providers example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example local_providers
         continue-on-error: true
 
       - name: Run cloud_providers example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example cloud_providers
 
       - name: Run basic_usage example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example basic_usage
         continue-on-error: true
 
       - name: Run session_operations example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example session_operations
         continue-on-error: true
 
       - name: Run history_management example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example history_management
         continue-on-error: true
 
       - name: Run storage_operations example
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo run --example storage_operations
         continue-on-error: true
 
@@ -161,11 +161,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build documentation
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: cargo doc --no-deps --examples
 
       - name: Check example documentation
-        working-directory: chasm-rust
+        working-directory: ironbridge-rust
         run: |
           echo "Checking example files have documentation..."
           for example in examples/*.rs; do

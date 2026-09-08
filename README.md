@@ -1,6 +1,6 @@
-# Chasm 🗄️
+# IronBridge 🗄️
 
-**Chat Session Manager (Chasm):** Bridging the divide between AI providers.
+**Chat Session Manager (IronBridge):** Bridging the divide between AI providers.
 
 ---
 
@@ -28,15 +28,15 @@
 ## Install
 
 ```bash
-cargo install chasm
+cargo install ironbridge
 ```
 
 ## Quick Start
 
 ```bash
-chasm list workspaces        # List all VS Code workspaces
-chasm show path              # Show sessions for current project
-chasm find session "auth"    # Search session content
+ironbridge list workspaces        # List all VS Code workspaces
+ironbridge show path              # Show sessions for current project
+ironbridge find session "auth"    # Search session content
 ```
 
 ## Session Recovery
@@ -44,9 +44,9 @@ chasm find session "auth"    # Search session content
 Recover orphaned sessions when VS Code creates a new workspace hash:
 
 ```bash
-chasm detect orphaned /path/to/project              # Find orphaned sessions
-chasm detect orphaned -r /path/to/project           # Recover to active workspace
-chasm register all --force --path /path/to/project  # Register in VS Code
+ironbridge detect orphaned /path/to/project              # Find orphaned sessions
+ironbridge detect orphaned -r /path/to/project           # Recover to active workspace
+ironbridge register all --force --path /path/to/project  # Register in VS Code
 # Then: Ctrl+Shift+P → Developer: Reload Window
 ```
 
@@ -55,41 +55,41 @@ chasm register all --force --path /path/to/project  # Register in VS Code
 ### List & Find
 
 ```bash
-chasm list workspaces              # All VS Code workspaces
-chasm list sessions                # All chat sessions
-chasm list orphaned                # Unindexed sessions on disk
-chasm find workspace <pattern>     # Search by workspace name
-chasm find session <pattern>       # Search by session content
+ironbridge list workspaces              # All VS Code workspaces
+ironbridge list sessions                # All chat sessions
+ironbridge list orphaned                # Unindexed sessions on disk
+ironbridge find workspace <pattern>     # Search by workspace name
+ironbridge find session <pattern>       # Search by session content
 ```
 
 ### Detect & Recover
 
 ```bash
-chasm detect                       # Full detection report
-chasm detect workspace [path]      # Workspace info for path
-chasm detect providers             # Available LLM providers
-chasm detect orphaned [path]       # Find orphaned sessions
-chasm detect orphaned -r [path]    # Recover orphaned sessions
-chasm register all [--force]       # Register sessions in VS Code index
+ironbridge detect                       # Full detection report
+ironbridge detect workspace [path]      # Workspace info for path
+ironbridge detect providers             # Available LLM providers
+ironbridge detect orphaned [path]       # Find orphaned sessions
+ironbridge detect orphaned -r [path]    # Recover orphaned sessions
+ironbridge register all [--force]       # Register sessions in VS Code index
 ```
 
 ### Merge & Export
 
 ```bash
-chasm merge path [path]            # Merge all sessions into one
-chasm merge workspace <name>       # Merge by workspace name
-chasm export path <dest> [path]    # Export sessions
-chasm import path <src> [path]     # Import sessions
+ironbridge merge path [path]            # Merge all sessions into one
+ironbridge merge workspace <name>       # Merge by workspace name
+ironbridge export path <dest> [path]    # Export sessions
+ironbridge import path <src> [path]     # Import sessions
 ```
 
 ### Harvest (Multi-Provider Database)
 
 ```bash
-chasm harvest init                 # Initialize database
-chasm harvest scan                 # Scan for providers
-chasm harvest run                  # Collect all sessions
-chasm harvest search "query"       # Full-text search
-chasm harvest share <url>          # Import share link
+ironbridge harvest init                 # Initialize database
+ironbridge harvest scan                 # Scan for providers
+ironbridge harvest run                  # Collect all sessions
+ironbridge harvest search "query"       # Full-text search
+ironbridge harvest share <url>          # Import share link
 ```
 
 ## Supported Providers
@@ -105,17 +105,17 @@ chasm harvest share <url>          # Import share link
 
 | Component             | Description                       | Status         |
 | --------------------- | --------------------------------- | -------------- |
-| **chasm-rust**        | Core Rust library and CLI         | ✅ Stable       |
-| **chasm-web**         | React web application             | ✅ Stable       |
-| **chasm-app**         | React Native mobile app           | ⚠️ Partly wired |
-| **chasm-desktop**     | Tauri desktop application         | ✅ Stable       |
+| **ironbridge-rust**        | Core Rust library and CLI         | ✅ Stable       |
+| **ironbridge-web**         | React web application             | ✅ Stable       |
+| **ironbridge-app**         | React Native mobile app           | ⚠️ Partly wired |
+| **ironbridge-desktop**     | Tauri desktop application         | ✅ Stable       |
 | **vscode-extension**  | VS Code extension                 | ✅ Stable       |
 | **browser-extension** | Chrome/Firefox extension          | ✅ Stable       |
 | **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable       |
 | **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
 | **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
 
-> **chasm-app is partly wired.** Sessions, workspaces, chat, harvest
+> **ironbridge-app is partly wired.** Sessions, workspaces, chat, harvest
 > statistics, providers, SWE project context and provider accounts all come
 > from the API.
 >
@@ -128,12 +128,12 @@ chasm harvest share <url>          # Import share link
 > Persisting it needs `PUT /api/providers/{id}`, which the server does not
 > route; the app says so when you toggle rather than implying it saved.
 >
-> chasm-web has the same two gaps: its Developer and Research pages have no
+> ironbridge-web has the same two gaps: its Developer and Research pages have no
 > backend either, and now carry the same banner. Its Comparison page no longer
-> reports model latency, throughput or benchmark scores, because Chasm measures
+> reports model latency, throughput or benchmark scores, because IronBridge measures
 > none of them.
 >
-> This does not affect the CLI, the API or chasm-desktop.
+> This does not affect the CLI, the API or ironbridge-desktop.
 
 See [Implementation status](#implementation-status) for the per-area detail
 behind these labels, including which features need an API key or a
@@ -144,7 +144,7 @@ Linux-only build.
 Start the REST/GraphQL API server:
 
 ```bash
-chasm api serve --port 8787
+ironbridge api serve --port 8787
 ```
 
 ### REST Endpoints
@@ -220,16 +220,16 @@ Endpoints that refuse rather than guess:
   nothing.
 - `GET /api/stats/providers` reports `tokens: 0` where the store holds no
   token counts, rather than estimating.
-- `POST /api/settings/accounts` needs `CHASM_MASTER_KEY` to encrypt the
+- `POST /api/settings/accounts` needs `IRONBRIDGE_MASTER_KEY` to encrypt the
   credential it is given. Without one it returns `400` naming the variable,
   rather than writing the secret to the database in the clear.
 - `POST /api/training/jobs` needs a provider and answers `503` naming the
-  variable without one. Chasm does not train models itself. It also refuses,
+  variable without one. IronBridge does not train models itself. It also refuses,
   without uploading anything, a dataset that would not pass the provider's
   own rules — the upload is the part that costs.
 - `POST /api/downloads` refuses before a job exists when the file is not in
   that repository, the path could escape the download directory, the file is
-  over `CHASM_MAX_DOWNLOAD_BYTES`, the destination already exists, or it
+  over `IRONBRIDGE_MAX_DOWNLOAD_BYTES`, the destination already exists, or it
   would not leave 2 GB free on the volume. Filling that volume would take the
   database with it.
 - `GET /api/catalog/*` answers `502` when the Hub is unreachable or has
@@ -248,7 +248,7 @@ Merging leaves its sources intact. A fork is an independent copy, not an alias.
 
 ### Security posture
 
-Chasm is local-first, and its defaults assume that:
+IronBridge is local-first, and its defaults assume that:
 
 - **The server binds to `127.0.0.1`** — this machine only. Expose it on the
   network with `--host 0.0.0.0`, deliberately: the API reads local data and,
@@ -258,21 +258,21 @@ Chasm is local-first, and its defaults assume that:
   endpoints stay open so a client can check liveness and obtain a token. The web
   and desktop apps show a login screen the first time the server answers 401 and
   attach the token from then on. A trusted single-user machine can turn auth off
-  with `CHASM_DISABLE_AUTH=1` — appropriate when the server is bound to loopback
-  and nothing else can reach it. (`CHASM_REQUIRE_AUTH` is still accepted for
+  with `IRONBRIDGE_DISABLE_AUTH=1` — appropriate when the server is bound to loopback
+  and nothing else can reach it. (`IRONBRIDGE_REQUIRE_AUTH` is still accepted for
   compatibility but is now redundant.)
 
   Client support: the **web** and **desktop** apps have full login. The
   **mobile app** and **browser extension** attach a stored token when present
-  (`csm_access_token` / `accessToken` in their storage) but do not yet ship a
+  (`ironbridge_access_token` / `accessToken` in their storage) but do not yet ship a
   login screen; against an auth-required server, set their token manually or run
-  the server with `CHASM_DISABLE_AUTH=1`. The **VS Code extension** sends the
+  the server with `IRONBRIDGE_DISABLE_AUTH=1`. The **VS Code extension** sends the
   API key from its settings as the bearer token.
-- **`run_command` is off** unless `CHASM_ENABLE_RUN_COMMAND=1`. It executes
+- **`run_command` is off** unless `IRONBRIDGE_ENABLE_RUN_COMMAND=1`. It executes
   arbitrary commands through the shell; it is never on by default.
-- **Session tokens** are signed with `CHASM_JWT_SECRET` (>=32 bytes) or, if
+- **Session tokens** are signed with `IRONBRIDGE_JWT_SECRET` (>=32 bytes) or, if
   unset, a random per-process secret — never a value baked into the binary.
-- **Stored provider credentials** need `CHASM_MASTER_KEY`; without it the server
+- **Stored provider credentials** need `IRONBRIDGE_MASTER_KEY`; without it the server
   refuses to store one rather than writing it in the clear.
 - **Passwords** are hashed with Argon2id.
 
@@ -286,7 +286,7 @@ Every endpoint **except `GET /api/health`** wraps its payload:
 
 Errors carry `{"success": false, "error": "..."}` with no `data`.
 
-The full spec is `chasm-rust/openapi.yaml` — 105 paths, 137 operations. Two
+The full spec is `ironbridge-rust/openapi.yaml` — 105 paths, 137 operations. Two
 tests keep it honest: one fails if a documented path is not routed, the other
 if a response body no longer matches its schema.
 
@@ -307,7 +307,7 @@ curl -X DELETE localhost:8787/api/shared/$TOKEN # revoke
 
 **A share link is local.** The token grants read access *through your own
 server* — nothing is uploaded anywhere, and the link only works while your
-server is reachable by the recipient. That is deliberate: Chasm holds your
+server is reachable by the recipient. That is deliberate: IronBridge holds your
 entire chat history on your machine, and transmitting a conversation to a
 third party is a decision that should be yours to make explicitly.
 
@@ -378,7 +378,7 @@ job immediately and reports `downloadedBytes` against `totalBytes` as it runs �
 these files are large enough that waiting for the transfer would time out the
 request and show no progress on the way.
 
-Files land under `CHASM_DOWNLOAD_DIR`, or a `downloads` directory beside the
+Files land under `IRONBRIDGE_DOWNLOAD_DIR`, or a `downloads` directory beside the
 database, as `<kind>/<repo id>/<path>`. They are written to a `.part` file and
 renamed on success, so a file present under its real name is complete.
 
@@ -419,7 +419,7 @@ curl -X POST localhost:8787/api/training/jobs \
 curl "localhost:8787/api/training/jobs"
 ```
 
-Chasm does not train anything. It converts one of your datasets to JSONL,
+IronBridge does not train anything. It converts one of your datasets to JSONL,
 uploads it to the provider configured with `OPENAI_API_KEY`, starts a
 fine-tuning job there, and reports that provider's status back. Every status
 shown came from the provider on the request that displayed it.
@@ -482,7 +482,7 @@ Queries (`workspaces`, `sessions`, `messages`, `providers`, `agents`, `stats`,
 mutations perform real writes.
 
 Two deliberate exceptions: the `harvest` and `sync` mutations return an error
-directing you to `chasm harvest run` / `chasm sync`, because a multi-minute
+directing you to `ironbridge harvest run` / `ironbridge sync`, because a multi-minute
 directory scan does not belong in a synchronous GraphQL field. Updating a
 session with `tags` is also rejected — no column exists to store them.
 
@@ -506,15 +506,15 @@ success, because the agent that asked has already moved on.
 
 ### Client SDKs
 
-Chasm generates a single-file client for eight languages: Python, Node.js,
+IronBridge generates a single-file client for eight languages: Python, Node.js,
 Go, Rust, Java, C#, Ruby, and PHP.
 
 ```bash
-chasm sdk list                                  # languages and their filenames
-chasm sdk generate go                           # writes ./chasm.go
-chasm sdk generate --all --output ./clients     # all eight
-chasm sdk generate python --stdout              # to the terminal
-chasm sdk generate rust --base-url https://chasm.example.com
+ironbridge sdk list                                  # languages and their filenames
+ironbridge sdk generate go                           # writes ./ironbridge.go
+ironbridge sdk generate --all --output ./clients     # all eight
+ironbridge sdk generate python --stdout              # to the terminal
+ironbridge sdk generate rust --base-url https://ironbridge.example.com
 ```
 
 Generating never overwrites silently: an existing file aborts the run and
@@ -525,16 +525,16 @@ the eighth client does not leave seven behind.
 The same thing is available as a library API:
 
 ```rust
-use chasm::api::sdk::{SdkConfig, SdkGenerator, SdkLanguage};
+use ironbridge::api::sdk::{SdkConfig, SdkGenerator, SdkLanguage};
 
 let generator = SdkGenerator::new(SdkConfig::default());
 let source = generator.generate(SdkLanguage::Go);
-let name = generator.get_filename(&SdkLanguage::Go);   // "chasm.go"
+let name = generator.get_filename(&SdkLanguage::Go);   // "ironbridge.go"
 ```
 
 Every client covers the same core surface — health, stats, sessions
-(list/get/search), workspaces, and harvest — and each reads `CHASM_BASE_URL`
-and `CHASM_API_KEY` from the environment, falling back to the `base_url`
+(list/get/search), workspaces, and harvest — and each reads `IRONBRIDGE_BASE_URL`
+and `IRONBRIDGE_API_KEY` from the environment, falling back to the `base_url`
 baked in at generation time. Non-2xx responses raise a typed error carrying
 the status code rather than returning an empty result. None of them pull a
 dependency beyond their language's usual HTTP client.
@@ -575,9 +575,9 @@ supported state — and the compiler said so three times.
 ## Conversation Analysis
 
 ```bash
-chasm analyze session.json                  # topics, sentiment, key points
-chasm analyze session.json --json           # machine-readable
-chasm analyze session.json --require-model  # fail rather than fall back
+ironbridge analyze session.json                  # topics, sentiment, key points
+ironbridge analyze session.json --json           # machine-readable
+ironbridge analyze session.json --require-model  # fail rather than fall back
 ```
 
 Uses a language model when `OPENAI_API_KEY` is set, and offline heuristics
@@ -590,7 +590,7 @@ Point it at any OpenAI-compatible endpoint, including a local one:
 ```bash
 export OPENAI_API_KEY=local                        # local servers ignore it
 export OPENAI_BASE_URL=http://127.0.0.1:11434/v1   # e.g. Ollama
-export CHASM_ANALYSIS_MODEL=gemma4:latest
+export IRONBRIDGE_ANALYSIS_MODEL=gemma4:latest
 ```
 
 ## MCP Server
@@ -600,41 +600,41 @@ AI agent integration via Model Context Protocol:
 ```json
 {
   "mcpServers": {
-    "chasm": { "command": "csm-mcp" }
+    "ironbridge": { "command": "ironbridge-mcp" }
   }
 }
 ```
 
-The binary is `csm-mcp` and the tools are prefixed `csm_`, not `chasm_`:
-`csm_list_workspaces`, `csm_list_sessions`, `csm_show_session`, `csm_search`,
-`csm_detect`, `csm_register_all`, and ten more — see
+The binary is `ironbridge-mcp` and the tools are prefixed `ironbridge_`, not `ironbridge_`:
+`ironbridge_list_workspaces`, `ironbridge_list_sessions`, `ironbridge_show_session`, `ironbridge_search`,
+`ironbridge_detect`, `ironbridge_register_all`, and ten more — see
 [MCP Server](docs/api/mcp.md) for all sixteen and their parameters.
 
 ## TUI
 
 ```bash
-chasm run tui    # Interactive browser (↑↓/jk to navigate, Enter to select, ? for help)
+ironbridge run tui    # Interactive browser (↑↓/jk to navigate, Enter to select, ? for help)
 ```
 
 ## Desktop App
 
 ```bash
-cd chasm-desktop && cargo tauri dev     # or `cargo tauri build`
+cd ironbridge-desktop && cargo tauri dev     # or `cargo tauri build`
 ```
 
-The desktop app is chasm-web in a Tauri window. It starts the API server
+The desktop app is ironbridge-web in a Tauri window. It starts the API server
 in-process on `127.0.0.1:8788`, so there is no separate backend to launch. If
-a Chasm API is already listening there it is shared rather than duplicated —
+a IronBridge API is already listening there it is shared rather than duplicated —
 two processes writing one SQLite file is worse than one.
 
 The port differs from the CLI's 8787 deliberately, so the app and a
-`chasm api serve` you started yourself do not contend for the same database.
+`ironbridge api serve` you started yourself do not contend for the same database.
 
 ## Agency (AI Agent Framework)
 
 ```bash
-chasm agency run --agent researcher "What are the latest AI trends?"
-chasm agency run --orchestration swarm "Build a REST API"
+ironbridge agency run --agent researcher "What are the latest AI trends?"
+ironbridge agency run --orchestration swarm "Build a REST API"
 ```
 
 ## Enterprise Features (`--features enterprise`)
@@ -645,12 +645,12 @@ rest of the crate does — no `libxmlsec1`, no OpenSSL, no `clang`.
 - **SSO/OIDC**: OpenID Connect authorization-code flow with PKCE, at `/oidc`.
   **Prefer this over SAML** — a smaller, better-specified protocol with far
   less attack surface. ID tokens are verified against the provider's JWKS by
-  [`chasm-sso`](chasm-sso/); the `state` is single-use, the PKCE verifier
+  [`ironbridge-sso`](ironbridge-sso/); the `state` is single-use, the PKCE verifier
   never leaves the server, and a login whose email claim is not marked
   verified is refused.
 - **SSO/SAML**: SAML 2.0 flow for Okta, Azure AD, Google, OneLogin, Auth0, for
   providers that speak nothing else. Assertion signatures are verified by
-  `chasm-sso`, and the response is re-parsed from the signature-reduced
+  `ironbridge-sso`, and the response is re-parsed from the signature-reduced
   document so wrapped forgeries cannot reach the session.
 - **Audit Logging**: event model, categories, and CSV/JSON/JSONL export.
 - **Data Retention**: policy model, scheduling, and expiry actions.
@@ -668,13 +668,13 @@ reconciled; the routed implementation is the one that serves traffic.
 
 All of these services persist through `api::audit::DatabaseOps`. The crate ships
 `SqliteEnterpriseStore`, which implements all 35 methods against the same SQLite
-database as the rest of Chasm; an embedder can substitute its own implementor.
+database as the rest of IronBridge; an embedder can substitute its own implementor.
 
 The scopes mount at the root — `/audit`, `/retention`, `/sso`, `/oidc` — not
 under `/api`, and unlike the `/api` endpoints they return their payload bare
 rather than in a `{success, data}` envelope.
 
-Set `CHASM_PUBLIC_BASE_URL` when using SAML. It is what the SP metadata
+Set `IRONBRIDGE_PUBLIC_BASE_URL` when using SAML. It is what the SP metadata
 advertises to the identity provider; without it the URLs fall back to the bind
 address, which is normally `0.0.0.0` and unreachable from a browser.
 
@@ -699,25 +699,25 @@ enterprise layers are scaffolding at varying stages. Concretely:
 | MCP server, TUI                 | **Working.**                                                                                                              |
 | REST API                        | **Working.** 137 operations across 105 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
-| Enterprise (SSO/audit/retention)| **Working, all platforms.** OIDC (authorization code + PKCE) and SAML both run on the pure-Rust `chasm-sso`; SAML signatures are verified against wrapping attacks. `SqliteEnterpriseStore` implements every `DatabaseOps` method, so provider config, pending logins, sessions, audit events and retention policies persist. All 25 enterprise operations are served, probed by tests, and their response bodies documented. Until recently the lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
-| Conversation analysis           | **Model-backed.** `chasm analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
+| Enterprise (SSO/audit/retention)| **Working, all platforms.** OIDC (authorization code + PKCE) and SAML both run on the pure-Rust `ironbridge-sso`; SAML signatures are verified against wrapping attacks. `SqliteEnterpriseStore` implements every `DatabaseOps` method, so provider config, pending logins, sessions, audit events and retention policies persist. All 25 enterprise operations are served, probed by tests, and their response bodies documented. Until recently the lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
+| Conversation analysis           | **Model-backed.** `ironbridge analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
 | Embeddings / semantic search    | **Working, verified end to end.** `POST /api/search/semantic/index` embeds sessions and `GET /api/search/semantic` ranks them by cosine similarity. Exercised against a local OpenAI-compatible endpoint: every query ranked its own topic first, re-indexing is idempotent, and `force` rebuilds. The client's reordering-by-`index` is now covered by a test that fails if array position is trusted instead. Not yet run against OpenAI's own service, so their dialect (rate/token limits, error bodies) is still unverified. |
-| Client SDKs                     | **Working.** `chasm sdk generate` writes real single-file clients for all eight languages, each covering the same core surface and honouring `CHASM_BASE_URL`/`CHASM_API_KEY`. Five of the eight previously returned the string `"// SDK for {} not yet implemented"`, so a caller got a one-line file that looked like a successful generation; `generate()` is now exhaustive over `SdkLanguage`, so adding a language fails to compile until it has a template. Generation refuses to overwrite without `--force`, and checks the whole batch before writing any of it. Node, Go, Java and Rust output is compiler-verified — including a round trip through the CLI itself; Python, C#, Ruby and PHP are hand-reviewed only. No HTTP route serves a generated client. See [Client SDKs](#client-sdks). |
+| Client SDKs                     | **Working.** `ironbridge sdk generate` writes real single-file clients for all eight languages, each covering the same core surface and honouring `IRONBRIDGE_BASE_URL`/`IRONBRIDGE_API_KEY`. Five of the eight previously returned the string `"// SDK for {} not yet implemented"`, so a caller got a one-line file that looked like a successful generation; `generate()` is now exhaustive over `SdkLanguage`, so adding a language fails to compile until it has a template. Generation refuses to overwrite without `--force`, and checks the whole batch before writing any of it. Node, Go, Java and Rust output is compiler-verified — including a round trip through the CLI itself; Python, C#, Ruby and PHP are hand-reviewed only. No HTTP route serves a generated client. See [Client SDKs](#client-sdks). |
 | Session sharing                 | **Working, local only.** Revocable, optionally-expiring tokens readable through your own server. Nothing is uploaded anywhere — see [Sharing](#sharing). |
-| chasm-desktop                   | **Working.** Wraps chasm-web and runs the API server in-process on 127.0.0.1:8788, so it needs no separately started backend. No desktop-specific UI. |
-| chasm-web                       | **Working.** `AgentInbox` is backed by `/api/inbox`.                                                                      |
+| ironbridge-desktop                   | **Working.** Wraps ironbridge-web and runs the API server in-process on 127.0.0.1:8788, so it needs no separately started backend. No desktop-specific UI. |
+| ironbridge-web                       | **Working.** `AgentInbox` is backed by `/api/inbox`.                                                                      |
 
-Mock data in chasm-web is opt-in via `VITE_ENABLE_DEMO_MODE`; an empty or
+Mock data in ironbridge-web is opt-in via `VITE_ENABLE_DEMO_MODE`; an empty or
 failing backend renders as empty or as an error, never as fixtures.
 
 ## Project Structure
 
 ```bash
-chasm/
-├── chasm-rust/          # Core CLI and API server (Rust)
-├── chasm-web/           # Web dashboard (React)
-├── chasm-app/           # Mobile app (React Native)
-├── chasm-desktop/       # Desktop app (Tauri)
+ironbridge/
+├── ironbridge-rust/          # Core CLI and API server (Rust)
+├── ironbridge-web/           # Web dashboard (React)
+├── ironbridge-app/           # Mobile app (React Native)
+├── ironbridge-desktop/       # Desktop app (Tauri)
 ├── vscode-extension/    # VS Code extension
 ├── browser-extension/   # Chrome/Firefox extension
 ├── jetbrains-plugin/    # JetBrains IDEs plugin
@@ -728,9 +728,9 @@ chasm/
 
 ## License
 
-`AGPL-3.0-only OR LicenseRef-Chasm-Commercial` — [AGPL-3.0](LICENSE) with a
+`AGPL-3.0-only OR LicenseRef-IronBridge-Commercial` — [AGPL-3.0](LICENSE) with a
 [commercial option](COMMERCIAL_LICENSE.md) for organizations that cannot meet
-its source-disclosure terms. Absent a signed agreement, what you receive Chasm
+its source-disclosure terms. Absent a signed agreement, what you receive IronBridge
 under is AGPL-3.0-only. Made by [Nervosys](https://nervosys.ai)
 
 Contributions require signing the [CLA](CLA.md).

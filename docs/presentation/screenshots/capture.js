@@ -8,14 +8,14 @@ const path = require('path');
     const dir = __dirname;
 
     // Web screenshots (1920x1080)
-    console.log('\\nCapturing chasm-web...');
+    console.log('\\nCapturing ironbridge-web...');
     const webPage = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 
     try {
         await webPage.goto('http://localhost:5174/', { waitUntil: 'networkidle', timeout: 15000 });
         await webPage.waitForTimeout(2000);
-        await webPage.screenshot({ path: path.join(dir, 'chasm_web_home.png') });
-        console.log('  saved: chasm_web_home.png');
+        await webPage.screenshot({ path: path.join(dir, 'ironbridge_web_home.png') });
+        console.log('  saved: ironbridge_web_home.png');
     } catch (e) {
         console.log('  error:', e.message);
     }
@@ -25,8 +25,8 @@ const path = require('path');
         try {
             await webPage.goto('http://localhost:5174/' + route, { waitUntil: 'networkidle', timeout: 5000 });
             await webPage.waitForTimeout(500);
-            await webPage.screenshot({ path: path.join(dir, 'chasm_web_' + route + '.png') });
-            console.log('  saved: chasm_web_' + route + '.png');
+            await webPage.screenshot({ path: path.join(dir, 'ironbridge_web_' + route + '.png') });
+            console.log('  saved: ironbridge_web_' + route + '.png');
         } catch (e) {
             // Route doesn't exist, skip
         }
@@ -34,14 +34,14 @@ const path = require('path');
     await webPage.close();
 
     // Mobile screenshots (390x844)
-    console.log('\\nCapturing chasm-app (mobile)...');
+    console.log('\\nCapturing ironbridge-app (mobile)...');
     const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
 
     try {
         await mobilePage.goto('http://localhost:5174/', { waitUntil: 'networkidle', timeout: 15000 });
         await mobilePage.waitForTimeout(2000);
-        await mobilePage.screenshot({ path: path.join(dir, 'chasm_app_home.png') });
-        console.log('  saved: chasm_app_home.png');
+        await mobilePage.screenshot({ path: path.join(dir, 'ironbridge_app_home.png') });
+        console.log('  saved: ironbridge_app_home.png');
     } catch (e) {
         console.log('  error:', e.message);
     }
@@ -50,8 +50,8 @@ const path = require('path');
         try {
             await mobilePage.goto('http://localhost:5174/' + route, { waitUntil: 'networkidle', timeout: 5000 });
             await mobilePage.waitForTimeout(500);
-            await mobilePage.screenshot({ path: path.join(dir, 'chasm_app_' + route + '.png') });
-            console.log('  saved: chasm_app_' + route + '.png');
+            await mobilePage.screenshot({ path: path.join(dir, 'ironbridge_app_' + route + '.png') });
+            console.log('  saved: ironbridge_app_' + route + '.png');
         } catch (e) {
             // skip
         }
@@ -59,14 +59,14 @@ const path = require('path');
     await mobilePage.close();
 
     // Desktop screenshots (1440x900)
-    console.log('\\nCapturing chasm-desktop...');
+    console.log('\\nCapturing ironbridge-desktop...');
     const desktopPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
     try {
         await desktopPage.goto('http://localhost:5174/', { waitUntil: 'networkidle', timeout: 15000 });
         await desktopPage.waitForTimeout(2000);
-        await desktopPage.screenshot({ path: path.join(dir, 'chasm_desktop_home.png') });
-        console.log('  saved: chasm_desktop_home.png');
+        await desktopPage.screenshot({ path: path.join(dir, 'ironbridge_desktop_home.png') });
+        console.log('  saved: ironbridge_desktop_home.png');
     } catch (e) {
         console.log('  error:', e.message);
     }
@@ -75,8 +75,8 @@ const path = require('path');
         try {
             await desktopPage.goto('http://localhost:5174/' + route, { waitUntil: 'networkidle', timeout: 5000 });
             await desktopPage.waitForTimeout(500);
-            await desktopPage.screenshot({ path: path.join(dir, 'chasm_desktop_' + route + '.png') });
-            console.log('  saved: chasm_desktop_' + route + '.png');
+            await desktopPage.screenshot({ path: path.join(dir, 'ironbridge_desktop_' + route + '.png') });
+            console.log('  saved: ironbridge_desktop_' + route + '.png');
         } catch (e) {
             // skip
         }

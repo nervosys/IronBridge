@@ -49,16 +49,16 @@ response = client.chat.completions.create(
 )
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure LM Studio provider
-chasm provider config lm-studio --endpoint http://localhost:1234/v1
+ironbridge provider config lm-studio --endpoint http://localhost:1234/v1
 
 # Test connection
-chasm provider test lm-studio
+ironbridge provider test lm-studio
 
 # Import demo sessions
-chasm provider import lm-studio --source examples/lm-studio/sessions
+ironbridge provider import lm-studio --source examples/lm-studio/sessions
 ```
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { Card, Callout } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,7 +9,7 @@ export default function EnterprisePage() {
         <div className="content-wrapper">
             <h1>Enterprise Features</h1>
             <p className="page-description">
-                Chasm provides enterprise-grade security, compliance, and collaboration
+                IronBridge provides enterprise-grade security, compliance, and collaboration
                 features for teams of all sizes.
             </p>
 
@@ -65,7 +65,7 @@ export default function EnterprisePage() {
             </ul>
 
             <Callout type="info" title="Self-Hosted">
-                All enterprise features run entirely on your infrastructure. Chasm never
+                All enterprise features run entirely on your infrastructure. IronBridge never
                 sends data to external servers — your conversations remain fully private.
             </Callout>
 

@@ -1,4 +1,4 @@
-# Chasm v1.3 — X Release Thread
+# IronBridge v1.3 — X Release Thread
 
 > Copy each numbered section as a separate post in an X thread.
 > Character counts are noted per tweet. Images/video suggestions in brackets.
@@ -7,7 +7,7 @@
 
 ## 1/15 — Hook (267 chars)
 
-🚀 Introducing Chasm v1.3 — the universal AI session manager.
+🚀 Introducing IronBridge v1.3 — the universal AI session manager.
 
 One CLI to harvest, search, merge, version, and recover your chat history from every AI coding agent.
 
@@ -29,12 +29,12 @@ You can't search them. You can't back them up. You lose them.
 
 ## 3/15 — Agent Launcher (276 chars)
 
-`chasm run` — launch any AI coding agent with automatic session capture.
+`ironbridge run` — launch any AI coding agent with automatic session capture.
 
 ```
-chasm run claude "fix the auth bug"
-chasm run codex "add unit tests"
-chasm run gemini "refactor this module"
+ironbridge run claude "fix the auth bug"
+ironbridge run codex "add unit tests"
+ironbridge run gemini "refactor this module"
 ```
 
 7 agents supported. Sessions auto-harvested on exit. Zero config.
@@ -45,13 +45,13 @@ Your work is never lost again.
 
 ## 4/15 — Real-Time Watcher (248 chars)
 
-`chasm watch` — monitor agent session directories in real-time.
+`ironbridge watch` — monitor agent session directories in real-time.
 
 Detects new and modified sessions across all agents simultaneously. Auto-harvests them into your unified database.
 
 ```
-chasm watch              # all agents
-chasm watch --agent claude  # specific agent
+ironbridge watch              # all agents
+ironbridge watch --agent claude  # specific agent
 ```
 
 Set it and forget it.
@@ -60,7 +60,7 @@ Set it and forget it.
 
 ## 5/15 — Agency ADK (279 chars)
 
-Chasm ships its own Agent Development Kit.
+IronBridge ships its own Agent Development Kit.
 
 Built-in orchestration modes:
 → Single — one agent, one task
@@ -69,7 +69,7 @@ Built-in orchestration modes:
 → Swarm — multi-agent collaboration with a coordinator
 
 ```
-chasm agency run --orchestration swarm "build the feature"
+ironbridge agency run --orchestration swarm "build the feature"
 ```
 
 ---
@@ -88,12 +88,12 @@ One unified interface for 34 AI providers across 3 categories:
 
 ## 7/15 — Harvest & Search (278 chars)
 
-`chasm harvest` — ingest every session from every provider into a single SQLite database with FTS5 full-text search.
+`ironbridge harvest` — ingest every session from every provider into a single SQLite database with FTS5 full-text search.
 
 ```
-chasm harvest init
-chasm harvest run --commit
-chasm harvest search "authentication bug"
+ironbridge harvest init
+ironbridge harvest run --commit
+ironbridge harvest search "authentication bug"
 ```
 
 94,000 messages across 500 sessions? Searched in milliseconds. With git versioning.
@@ -115,7 +115,7 @@ Pre-built skills any AI agent can use (Claude Code, Copilot, Cursor, Codex, Gemi
 
 ## 9/15 — MCP Server (260 chars)
 
-`csm-mcp` — a Model Context Protocol server so any MCP-compatible agent can query your session history directly.
+`ironbridge-mcp` — a Model Context Protocol server so any MCP-compatible agent can query your session history directly.
 
 5 tools: list workspaces, list sessions, get session, search, get stats.
 
@@ -125,14 +125,14 @@ Works with Claude Desktop, VS Code, and any MCP client. Stdio transport. Zero co
 
 ## 10/15 — Session Recovery (280 chars)
 
-Lost a session? Chasm has 7 recovery paths:
+Lost a session? IronBridge has 7 recovery paths:
 
 ```
-chasm recover scan           # find everything
-chasm recover orphans        # unindexed files
-chasm recover jsonl <file>   # fix corruption
-chasm recover database <bak> # extract from backups
-chasm register repair        # rebuild VS Code index
+ironbridge recover scan           # find everything
+ironbridge recover orphans        # unindexed files
+ironbridge recover jsonl <file>   # fix corruption
+ironbridge recover database <bak> # extract from backups
+ironbridge register repair        # rebuild VS Code index
 ```
 
 Fixes concatenated JSONL, cancelled response states, and isEmpty bugs.
@@ -144,11 +144,11 @@ Fixes concatenated JSONL, cancelled response states, and isEmpty bugs.
 Version-control your AI conversations like code.
 
 ```
-chasm git init .
-chasm git track . -m "after auth refactor"
-chasm git snapshot . --tag v1
-chasm git diff . --from HEAD~1
-chasm git restore . <commit>
+ironbridge git init .
+ironbridge git track . -m "after auth refactor"
+ironbridge git snapshot . --tag v1
+ironbridge git diff . --from HEAD~1
+ironbridge git restore . <commit>
 ```
 
 Track sessions alongside your file changes. Diff conversations between commits.
@@ -157,7 +157,7 @@ Track sessions alongside your file changes. Diff conversations between commits.
 
 ## 12/15 — Machine-Readable Ontology (280 chars)
 
-We created a 1,400-line YAML ontology so AI agents can fully discover chasm without human guidance.
+We created a 1,400-line YAML ontology so AI agents can fully discover ironbridge without human guidance.
 
 Every command, argument, entity, relationship, workflow, constraint, and failure mode — machine-readable.
 
@@ -167,7 +167,7 @@ Agents read ontology.yaml and know exactly what to call, when, and why. Self-doc
 
 ## 13/15 — Full Interface Surface (265 chars)
 
-Chasm isn't just a CLI. It's a platform.
+IronBridge isn't just a CLI. It's a platform.
 
 → CLI with shell completions (bash/zsh/fish/pwsh)
 → REST API with OpenAPI spec (30+ endpoints)
@@ -181,19 +181,19 @@ Chasm isn't just a CLI. It's a platform.
 
 ## 14/15 — Migration & Sync (270 chars)
 
-Moving machines? Chasm handles it.
+Moving machines? IronBridge handles it.
 
 ```
-chasm migration create backup.tar --all
+ironbridge migration create backup.tar --all
 # transfer to new machine
-chasm migration restore backup.tar --mapping "C:\old:C:\new"
+ironbridge migration restore backup.tar --mapping "C:\old:C:\new"
 ```
 
 Bidirectional sync between harvest DB and provider workspaces:
 
 ```
-chasm sync --pull   # backup
-chasm sync --push   # restore
+ironbridge sync --pull   # backup
+ironbridge sync --push   # restore
 ```
 
 ---
@@ -201,14 +201,14 @@ chasm sync --push   # restore
 ## 15/15 — Get Started (232 chars)
 
 ```
-cargo install chasm-cli
-chasm doctor --fix
-chasm harvest init && chasm harvest run
-chasm harvest search "your query"
+cargo install ironbridge-cli
+ironbridge doctor --fix
+ironbridge harvest init && ironbridge harvest run
+ironbridge harvest search "your query"
 ```
 
-⭐ GitHub: github.com/nervosys/chasm
-📦 Crates.io: crates.io/crates/chasm-cli
+⭐ GitHub: github.com/nervosys/ironbridge
+📦 Crates.io: crates.io/crates/ironbridge-cli
 📄 License: AGPL-3.0 (commercial available)
 
 Built by @nervosys. Contributions welcome.

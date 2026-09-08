@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 // Extension Activation and Command Tests
 
@@ -7,7 +7,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 suite('Extension Test Suite', () => {
-    vscode.window.showInformationMessage('Starting Chasm extension tests');
+    vscode.window.showInformationMessage('Starting IronBridge extension tests');
 
     test('Extension should be present', () => {
         const extension = vscode.extensions.getExtension('nervosys.chat-session-manager');
@@ -24,28 +24,28 @@ suite('Extension Test Suite', () => {
 
     suite('Commands Registration', () => {
         const expectedCommands = [
-            'chasm.showWorkspaces',
-            'chasm.showSessions',
-            'chasm.showHistory',
-            'chasm.findWorkspace',
-            'chasm.exportSessions',
-            'chasm.importSessions',
-            'chasm.fetchHistory',
-            'chasm.mergeHistory',
-            'chasm.refresh',
-            'chasm.launchTui',
-            'chasm.moveSessions',
-            'chasm.gitInit',
-            'chasm.gitAdd',
-            'chasm.gitStatus',
-            'chasm.gitSnapshot',
-            'chasm.createMigration',
-            'chasm.restoreMigration',
-            'chasm.showVersion',
-            'chasm.loadSession'
+            'ironbridge.showWorkspaces',
+            'ironbridge.showSessions',
+            'ironbridge.showHistory',
+            'ironbridge.findWorkspace',
+            'ironbridge.exportSessions',
+            'ironbridge.importSessions',
+            'ironbridge.fetchHistory',
+            'ironbridge.mergeHistory',
+            'ironbridge.refresh',
+            'ironbridge.launchTui',
+            'ironbridge.moveSessions',
+            'ironbridge.gitInit',
+            'ironbridge.gitAdd',
+            'ironbridge.gitStatus',
+            'ironbridge.gitSnapshot',
+            'ironbridge.createMigration',
+            'ironbridge.restoreMigration',
+            'ironbridge.showVersion',
+            'ironbridge.loadSession'
         ];
 
-        test('All Chasm commands should be registered', async () => {
+        test('All IronBridge commands should be registered', async () => {
             const commands = await vscode.commands.getCommands(true);
 
             for (const cmd of expectedCommands) {
@@ -58,22 +58,22 @@ suite('Extension Test Suite', () => {
     });
 
     suite('Configuration', () => {
-        test('chasm.binaryPath configuration should exist', () => {
-            const config = vscode.workspace.getConfiguration('chasm');
+        test('ironbridge.binaryPath configuration should exist', () => {
+            const config = vscode.workspace.getConfiguration('ironbridge');
             const binaryPath = config.get<string>('binaryPath');
             assert.ok(binaryPath !== undefined, 'binaryPath should have a default value');
         });
 
-        test('chasm.showNotifications configuration should exist', () => {
-            const config = vscode.workspace.getConfiguration('chasm');
+        test('ironbridge.showNotifications configuration should exist', () => {
+            const config = vscode.workspace.getConfiguration('ironbridge');
             const showNotifications = config.get<boolean>('showNotifications');
             assert.ok(showNotifications !== undefined, 'showNotifications should have a default value');
         });
 
-        test('Default binary path should be chasm', () => {
-            const config = vscode.workspace.getConfiguration('chasm');
+        test('Default binary path should be ironbridge', () => {
+            const config = vscode.workspace.getConfiguration('ironbridge');
             const binaryPath = config.get<string>('binaryPath', 'default');
-            assert.strictEqual(binaryPath, 'chasm', "Default binary path should be chasm");
+            assert.strictEqual(binaryPath, 'ironbridge', "Default binary path should be ironbridge");
         });
     });
 

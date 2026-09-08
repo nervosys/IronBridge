@@ -35,9 +35,9 @@ Cursor stores conversations in its own JSON format:
 
 ```bash
 # Import Cursor sessions
-chasm provider import cursor --source examples/cursor/sessions
+ironbridge provider import cursor --source examples/cursor/sessions
 
 # List imported sessions
-chasm list sessions --provider cursor
+ironbridge list sessions --provider cursor
 ```
 
