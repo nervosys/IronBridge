@@ -299,10 +299,18 @@ xcross-ios notarize staple --path Chasm.ipa --keychain-profile chasm
 ```
 
 Credentials: `--keychain-profile` (recommended), App Store Connect API key
-(`--key-id/--issuer/--key`), or `--apple-id/--team/--password`. The status parser
-(`parse_status`, `parse_submission_id`) reads the `--wait` output, taking the
-*final* status. **Secrets are redacted in `--dry-run` output** (an app-specific
-password shows as `***`).
+(`--key-id/--issuer/--key`), or `--apple-id/--team/--password`. **Secrets are
+redacted in `--dry-run` output** (an app-specific password shows as `***`).
+
+Submissions request `--output-format json` and are parsed structurally
+(`SubmissionInfo`), falling back to the text scrape on older notarytool. When a
+submission is rejected, the log says why:
+
+```sh
+xcross-ios notarize log --id <submission-id> --keychain-profile chasm
+xcross-ios notarize log --file log.json          # parse a capture, any host
+#   status/summary plus each issue: severity, path, message, doc URL
+```
 
 ## JSON (`json` module)
 
