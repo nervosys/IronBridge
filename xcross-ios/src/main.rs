@@ -46,6 +46,7 @@ fn run(args: &[String]) -> Result<()> {
         "xcode-build" => cmd_xcode_build(rest),
         "xcode-sdks" => cmd_xcode_sdks(),
         "xcode-identities" => cmd_xcode_identities(),
+        "xcframework" => cmd_xcframework(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -255,6 +256,88 @@ fn cmd_xcode_identities() -> Result<()> {
     Ok(())
 }
 
+fn cmd_xcframework(args: &[String]) -> Result<()> {
+    use xcross_ios::ontology::{Arch, Platform};
+    use xcross_ios::xcframework::{assemble, Library, Slice};
+
+    // Non-`--slice` options go through the normal parser; `--slice` may repeat,
+    // so it is scanned separately.
+    let mut name: Option<String> = None;
+    let mut out = PathBuf::from("build/ios");
+    let mut specs: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--name" => {
+                name = args.get(i + 1).cloned();
+                i += 2;
+            }
+            "--out" => {
+                if let Some(v) = args.get(i + 1) {
+                    out = PathBuf::from(v);
+                }
+                i += 2;
+            }
+            "--slice" => {
+                if let Some(v) = args.get(i + 1) {
+                    specs.push(v.clone());
+                }
+                i += 2;
+            }
+            other => return Err(Error::InvalidInput(format!("unexpected argument `{other}`"))),
+        }
+    }
+    let name = name.ok_or_else(|| Error::InvalidInput("xcframework requires --name".into()))?;
+    if specs.is_empty() {
+        return Err(Error::InvalidInput(
+            "provide at least one --slice <platform>;<arch[,arch]>;<lib>[;<headers>]".into(),
+        ));
+    }
+
+    let mut slices = Vec::new();
+    for spec in &specs {
+        // platform;archs;lib[;headers] — `;` (not `:`) so Windows drive-letter
+        // paths like C:/… survive intact.
+        let parts: Vec<&str> = spec.split(';').collect();
+        if parts.len() < 3 {
+            return Err(Error::InvalidInput(format!(
+                "malformed --slice `{spec}` (want platform;arch[,arch];lib[;headers])"
+            )));
+        }
+        let platform = Platform::from_sdk_family(parts[0]).ok_or_else(|| {
+            Error::InvalidInput(format!("unknown slice platform `{}`", parts[0]))
+        })?;
+        let archs: Result<Vec<Arch>> = parts[1]
+            .split(',')
+            .map(|a| Arch::parse(a).ok_or_else(|| Error::InvalidInput(format!("bad arch `{a}`"))))
+            .collect();
+        let lib = PathBuf::from(parts[2]);
+        // A `.framework` directory vs a static `.a`.
+        let library = if lib.extension().and_then(|e| e.to_str()) == Some("framework")
+            || lib.is_dir()
+        {
+            Library::Framework(lib)
+        } else {
+            Library::StaticLib {
+                lib,
+                headers: parts.get(3).map(PathBuf::from),
+            }
+        };
+        slices.push(Slice {
+            platform,
+            archs: archs?,
+            library,
+        });
+    }
+
+    let path = assemble(&name, &slices, &out)?;
+    println!("assembled: {}", path.display());
+    for s in &slices {
+        println!("  slice: {}", s.identifier());
+    }
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -285,7 +368,16 @@ COMMANDS:
                          print the command; runs it on a Mac otherwise).
   xcode-sdks             List installed SDKs (parses `xcodebuild -showsdks`; Mac).
   xcode-identities       List code-signing identities (`security`; Mac).
+  xcframework            Assemble a .xcframework from per-slice libs (any host).
   help                   Show this help.
+
+XCFRAMEWORK OPTIONS:
+  --name <n>             Output <n>.xcframework
+  --out <dir>            Output directory                 (default: build/ios)
+  --slice <spec>         Repeatable. spec = platform;arch[,arch];lib[;headers]
+                         (';'-separated so Windows drive paths survive), e.g.
+                         iphoneos;arm64;libchasm.a;include
+                         iphonesimulator;arm64,x86_64;libchasm-sim.a;include
 
 XCODE-BUILD OPTIONS:
   --action <a>           build | clean | test | archive | build-for-testing
