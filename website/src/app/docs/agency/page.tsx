@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Card, Callout } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,7 +9,7 @@ export default function AgencyPage() {
     <div className="content-wrapper">
       <h1>Agency (Agent Development Kit)</h1>
       <p className="page-description">
-        Agency is Chasm&apos;s Rust-native framework for building, orchestrating,
+        Agency is IronBridge&apos;s Rust-native framework for building, orchestrating,
         and deploying AI agents with multi-agent workflows.
       </p>
 
@@ -26,20 +26,20 @@ export default function AgencyPage() {
       <h2>CLI Commands</h2>
       <CodeBlock language="bash">
 {`# List available agents
-chasm agency list
-chasm agency list --verbose
+ironbridge agency list
+ironbridge agency list --verbose
 
 # Run an agent with a prompt
-chasm agency run --agent researcher "What are the latest AI trends?"
-chasm agency run --agent coder --model gpt-4o "Write a REST API in Rust"
+ironbridge agency run --agent researcher "What are the latest AI trends?"
+ironbridge agency run --agent coder --model gpt-4o "Write a REST API in Rust"
 
 # Multi-agent orchestration
-chasm agency run --orchestration sequential "Build and test a web scraper"
-chasm agency run --orchestration parallel "Research AI, blockchain, quantum"
-chasm agency run --orchestration swarm "Design a microservices architecture"
+ironbridge agency run --orchestration sequential "Build and test a web scraper"
+ironbridge agency run --orchestration parallel "Research AI, blockchain, quantum"
+ironbridge agency run --orchestration swarm "Design a microservices architecture"
 
 # Create a custom agent
-chasm agency create my-agent --role coder --instruction "You are a Rust expert"`}
+ironbridge agency create my-agent --role coder --instruction "You are a Rust expert"`}
       </CodeBlock>
 
       <h2>Agent Roles</h2>
@@ -77,7 +77,7 @@ chasm agency create my-agent --role coder --instruction "You are a Rust expert"`
 
       <h2>Example: Research Agent</h2>
       <CodeBlock language="rust" filename="research_agent.rs">
-{`use chasm::agency::{AgentBuilder, Runtime, Tool};
+{`use ironbridge::agency::{AgentBuilder, Runtime, Tool};
 
 let researcher = AgentBuilder::new("researcher")
     .model("gemini-2.0-flash")

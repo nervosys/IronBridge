@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm VS Code Extension - Main Entry Point
+// IronBridge VS Code Extension - Main Entry Point
 // Universal AI chat session manager
 
 import * as vscode from 'vscode';
@@ -9,14 +9,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { spawnSync } from 'child_process';
-import { ChasmExecutor } from './chasmExecutor';
+import { IronBridgeExecutor } from './ironbridgeExecutor';
 import { WorkspaceProvider, WorkspaceItem } from './workspaceProvider';
 import { SessionProvider } from './sessionProvider';
-import { ChasmChatPanel } from './chatPanel';
+import { IronBridgeChatPanel } from './chatPanel';
 import { SessionRecorder } from './sessionRecorder';
 import { createApiClient } from './apiClient';
 
-let executor: ChasmExecutor;
+let executor: IronBridgeExecutor;
 let workspaceProvider: WorkspaceProvider;
 let sessionProvider: SessionProvider;
 let sessionRecorder: SessionRecorder | undefined;
@@ -357,7 +357,7 @@ async function openChatSession(sessionId: string, output: vscode.OutputChannel):
         },
         {
             label: '$(output) Show in Output',
-            description: 'Display conversation in Chasm Output panel',
+            description: 'Display conversation in IronBridge Output panel',
             detail: 'Quick view without opening new editor'
         }
     ];
@@ -880,13 +880,13 @@ async function updateSessionIndex(
 
 export function activate(context: vscode.ExtensionContext) {
     // Create output channel
-    outputChannel = vscode.window.createOutputChannel('Chasm');
-    outputChannel.appendLine('Chasm activated');
+    outputChannel = vscode.window.createOutputChannel('IronBridge');
+    outputChannel.appendLine('IronBridge activated');
 
-    // Check if we should show chats after reload (triggered by chasm.reloadAndShowChats)
-    const showChatsAfterReload = context.globalState.get<boolean>('chasm.showChatsAfterReload', false);
+    // Check if we should show chats after reload (triggered by ironbridge.reloadAndShowChats)
+    const showChatsAfterReload = context.globalState.get<boolean>('ironbridge.showChatsAfterReload', false);
     if (showChatsAfterReload) {
-        context.globalState.update('chasm.showChatsAfterReload', false);
+        context.globalState.update('ironbridge.showChatsAfterReload', false);
         // Give VS Code a moment to fully initialize, then open chat history
         setTimeout(async () => {
             try {
@@ -902,7 +902,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Initialize executor with extension path for bundled binary lookup
-    executor = new ChasmExecutor(outputChannel, context.extensionPath);
+    executor = new IronBridgeExecutor(outputChannel, context.extensionPath);
 
     // Auto-shard oversized JSONL session files (deferred to avoid blocking startup)
     setTimeout(() => {
@@ -916,8 +916,8 @@ export function activate(context: vscode.ExtensionContext) {
     sessionProvider = new SessionProvider(executor, outputChannel);
 
     // Initialize real-time session recorder
-    const recordingEnabled = vscode.workspace.getConfiguration('chasm').get<boolean>('recording.enabled', false);
-    const apiBaseUrl = vscode.workspace.getConfiguration('chasm').get<string>('api.baseUrl', 'http://localhost:8787');
+    const recordingEnabled = vscode.workspace.getConfiguration('ironbridge').get<boolean>('recording.enabled', false);
+    const apiBaseUrl = vscode.workspace.getConfiguration('ironbridge').get<string>('api.baseUrl', 'http://localhost:8787');
 
     if (recordingEnabled) {
         const apiClient = createApiClient({ baseUrl: apiBaseUrl }, outputChannel);
@@ -931,12 +931,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Register tree views
-    const workspaceTreeView = vscode.window.createTreeView('chasm.workspaces', {
+    const workspaceTreeView = vscode.window.createTreeView('ironbridge.workspaces', {
         treeDataProvider: workspaceProvider,
         showCollapseAll: true
     });
 
-    const sessionTreeView = vscode.window.createTreeView('chasm.sessions', {
+    const sessionTreeView = vscode.window.createTreeView('ironbridge.sessions', {
         treeDataProvider: sessionProvider,
         showCollapseAll: true
     });
@@ -945,48 +945,48 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Status Bar ─────────────────────────────────────────────────────
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-    statusBarItem.command = 'chasm.doctor';
-    statusBarItem.text = '$(heart) Chasm';
-    statusBarItem.tooltip = 'Chasm — Click to run health check';
-    const statusBarEnabled = vscode.workspace.getConfiguration('chasm').get<boolean>('statusBar.enabled', true);
+    statusBarItem.command = 'ironbridge.doctor';
+    statusBarItem.text = '$(heart) IronBridge';
+    statusBarItem.tooltip = 'IronBridge — Click to run health check';
+    const statusBarEnabled = vscode.workspace.getConfiguration('ironbridge').get<boolean>('statusBar.enabled', true);
     if (statusBarEnabled) {
         statusBarItem.show();
     }
     context.subscriptions.push(statusBarItem);
 
     // Run startup health check if enabled
-    const runDoctorOnStartup = vscode.workspace.getConfiguration('chasm').get<boolean>('doctor.runOnStartup', false);
+    const runDoctorOnStartup = vscode.workspace.getConfiguration('ironbridge').get<boolean>('doctor.runOnStartup', false);
     if (runDoctorOnStartup) {
         updateStatusBarWithHealth();
     }
 
     // Auto-start API server if configured
-    const autoStartServer = vscode.workspace.getConfiguration('chasm').get<boolean>('api.autoStart', false);
+    const autoStartServer = vscode.workspace.getConfiguration('ironbridge').get<boolean>('api.autoStart', false);
     if (autoStartServer) {
         startApiServer();
     }
 
     // Register commands
     context.subscriptions.push(
-        // Open Chasm Chat Panel - unified chat interface
-        vscode.commands.registerCommand('chasm.openChat', () => {
-            ChasmChatPanel.createOrShow(context.extensionUri, executor, outputChannel);
+        // Open IronBridge Chat Panel - unified chat interface
+        vscode.commands.registerCommand('ironbridge.openChat', () => {
+            IronBridgeChatPanel.createOrShow(context.extensionUri, executor, outputChannel);
         }),
 
-        vscode.commands.registerCommand('chasm.refresh', () => {
+        vscode.commands.registerCommand('ironbridge.refresh', () => {
             workspaceProvider.refresh();
             sessionProvider.refresh();
         }),
 
-        // Reload window and open chat history picker (for use after chasm register)
-        vscode.commands.registerCommand('chasm.reloadAndShowChats', async () => {
+        // Reload window and open chat history picker (for use after ironbridge register)
+        vscode.commands.registerCommand('ironbridge.reloadAndShowChats', async () => {
             // Store intent to show chats after reload
-            await context.globalState.update('chasm.showChatsAfterReload', true);
+            await context.globalState.update('ironbridge.showChatsAfterReload', true);
             await vscode.commands.executeCommand('workbench.action.reloadWindow');
         }),
 
         // Click handler for workspace items - single click shows sessions
-        vscode.commands.registerCommand('chasm.selectWorkspace', async (item: WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.selectWorkspace', async (item: WorkspaceItem) => {
             if (!item || !item.projectPath) {
                 return;
             }
@@ -995,7 +995,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Click handler for session items - show dropdown menu
-        vscode.commands.registerCommand('chasm.selectSession', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('ironbridge.selectSession', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -1112,7 +1112,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Load session in Chat
-        vscode.commands.registerCommand('chasm.loadSession', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('ironbridge.loadSession', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -1120,7 +1120,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Repair oversized session files by compacting them
-        vscode.commands.registerCommand('chasm.repairSession', async (item?: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('ironbridge.repairSession', async (item?: import('./sessionProvider').SessionItem) => {
             const sessionFile = item?.sessionInfo?.sessionFile;
             if (!sessionFile) {
                 vscode.window.showWarningMessage('No session selected');
@@ -1255,7 +1255,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Merge sessions
-        vscode.commands.registerCommand('chasm.mergeSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.mergeSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
             let projectPath: string | undefined;
 
             if (item && 'sessionInfo' in item) {
@@ -1294,7 +1294,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Fetch sessions from other workspaces
-        vscode.commands.registerCommand('chasm.fetchSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.fetchSessionsForWorkspace', async (item?: import('./sessionProvider').SessionItem | WorkspaceItem) => {
             let projectPath: string | undefined;
 
             if (item && 'sessionInfo' in item) {
@@ -1333,7 +1333,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: Copy session ID
-        vscode.commands.registerCommand('chasm.copySessionId', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('ironbridge.copySessionId', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -1342,7 +1342,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Context menu: View session details
-        vscode.commands.registerCommand('chasm.viewSessionDetails', async (item: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('ironbridge.viewSessionDetails', async (item: import('./sessionProvider').SessionItem) => {
             if (!item || !item.sessionInfo) {
                 return;
             }
@@ -1355,11 +1355,11 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`Messages: ${item.sessionInfo.messages}`);
         }),
 
-        vscode.commands.registerCommand('chasm.showWorkspaces', async () => {
+        vscode.commands.registerCommand('ironbridge.showWorkspaces', async () => {
             await showWorkspacesWebview(context);
         }),
 
-        vscode.commands.registerCommand('chasm.showSessions', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.showSessions', async (item?: WorkspaceItem) => {
             const path = item?.projectPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (path) {
                 sessionProvider.setWorkspacePath(path);
@@ -1369,7 +1369,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.showHistory', async () => {
+        vscode.commands.registerCommand('ironbridge.showHistory', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (path) {
                 await showHistoryWebview(context, path);
@@ -1378,7 +1378,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.findWorkspace', async () => {
+        vscode.commands.registerCommand('ironbridge.findWorkspace', async () => {
             const pattern = await vscode.window.showInputBox({
                 prompt: 'Enter search pattern',
                 placeHolder: 'e.g., my_project'
@@ -1388,7 +1388,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.exportSessions', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.exportSessions', async (item?: WorkspaceItem) => {
             const path = item?.projectPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace selected');
@@ -1411,7 +1411,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.importSessions', async () => {
+        vscode.commands.registerCommand('ironbridge.importSessions', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1437,7 +1437,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.fetchHistory', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.fetchHistory', async (item?: WorkspaceItem) => {
             const path = item?.projectPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace selected');
@@ -1460,7 +1460,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.mergeHistory', async () => {
+        vscode.commands.registerCommand('ironbridge.mergeHistory', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1490,17 +1490,17 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.launchTui', async () => {
+        vscode.commands.registerCommand('ironbridge.launchTui', async () => {
             const terminal = vscode.window.createTerminal({
-                name: 'Chasm TUI',
+                name: 'IronBridge TUI',
                 cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
             });
-            const binaryPath = vscode.workspace.getConfiguration('chasm').get('binaryPath', 'Chasm');
+            const binaryPath = vscode.workspace.getConfiguration('ironbridge').get('binaryPath', 'IronBridge');
             terminal.sendText(`"${binaryPath}" tui`);
             terminal.show();
         }),
 
-        vscode.commands.registerCommand('chasm.moveSessions', async (item?: WorkspaceItem) => {
+        vscode.commands.registerCommand('ironbridge.moveSessions', async (item?: WorkspaceItem) => {
             let sourceHash: string | undefined;
 
             if (item) {
@@ -1542,7 +1542,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.gitInit', async () => {
+        vscode.commands.registerCommand('ironbridge.gitInit', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1557,7 +1557,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.gitAdd', async () => {
+        vscode.commands.registerCommand('ironbridge.gitAdd', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1577,7 +1577,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.gitStatus', async () => {
+        vscode.commands.registerCommand('ironbridge.gitStatus', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1594,7 +1594,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.gitSnapshot', async () => {
+        vscode.commands.registerCommand('ironbridge.gitSnapshot', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1614,10 +1614,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.createMigration', async () => {
+        vscode.commands.registerCommand('ironbridge.createMigration', async () => {
             const dest = await vscode.window.showSaveDialog({
                 title: 'Create Migration Package',
-                defaultUri: vscode.Uri.file('csm_migration'),
+                defaultUri: vscode.Uri.file('ironbridge_migration'),
                 saveLabel: 'Create'
             });
 
@@ -1638,7 +1638,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.restoreMigration', async () => {
+        vscode.commands.registerCommand('ironbridge.restoreMigration', async () => {
             const src = await vscode.window.showOpenDialog({
                 title: 'Select Migration Package',
                 canSelectFolders: true,
@@ -1665,17 +1665,17 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('chasm.showVersion', async () => {
+        vscode.commands.registerCommand('ironbridge.showVersion', async () => {
             const result = await executor.getVersion();
             if (result.success) {
-                vscode.window.showInformationMessage(`Chasm: ${result.output.trim()}`);
+                vscode.window.showInformationMessage(`IronBridge: ${result.output.trim()}`);
             } else {
                 vscode.window.showErrorMessage(`Failed to get version: ${result.error}`);
             }
         }),
 
         // One-click harvest from workspace
-        vscode.commands.registerCommand('chasm.harvest', async () => {
+        vscode.commands.registerCommand('ironbridge.harvest', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
             const result = await vscode.window.withProgress({
@@ -1702,7 +1702,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Harvest scan - show available providers
-        vscode.commands.registerCommand('chasm.harvestScan', async () => {
+        vscode.commands.registerCommand('ironbridge.harvestScan', async () => {
             const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: 'Scanning for chat providers...',
@@ -1721,7 +1721,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Quick session search
-        vscode.commands.registerCommand('chasm.searchSessions', async () => {
+        vscode.commands.registerCommand('ironbridge.searchSessions', async () => {
             const query = await vscode.window.showInputBox({
                 prompt: 'Search sessions',
                 placeHolder: 'Enter search query (title, content, or ID)',
@@ -1772,7 +1772,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Recover orphaned sessions
-        vscode.commands.registerCommand('chasm.recoverOrphaned', async () => {
+        vscode.commands.registerCommand('ironbridge.recoverOrphaned', async () => {
             const path = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!path) {
                 vscode.window.showWarningMessage('No workspace folder open');
@@ -1826,7 +1826,7 @@ export function activate(context: vscode.ExtensionContext) {
                             'Reload Window'
                         );
                         if (reload === 'Reload Window') {
-                            await vscode.commands.executeCommand('chasm.reloadAndShowChats');
+                            await vscode.commands.executeCommand('ironbridge.reloadAndShowChats');
                         }
                     }
                     sessionProvider.refresh();
@@ -1837,7 +1837,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Inline session preview
-        vscode.commands.registerCommand('chasm.previewSession', async (item?: import('./sessionProvider').SessionItem) => {
+        vscode.commands.registerCommand('ironbridge.previewSession', async (item?: import('./sessionProvider').SessionItem) => {
             let sessionId: string | undefined;
 
             if (item?.sessionInfo) {
@@ -1858,8 +1858,8 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Toggle real-time session recording
-        vscode.commands.registerCommand('chasm.toggleRecording', async () => {
-            const config = vscode.workspace.getConfiguration('chasm');
+        vscode.commands.registerCommand('ironbridge.toggleRecording', async () => {
+            const config = vscode.workspace.getConfiguration('ironbridge');
             const currentState = config.get<boolean>('recording.enabled', false);
 
             if (currentState) {
@@ -1891,7 +1891,7 @@ export function activate(context: vscode.ExtensionContext) {
                         vscode.window.showWarningMessage(
                             `Recording is on, but ${apiBaseUrl} did not answer. ` +
                             'Events are buffered and nothing is stored until it does. ' +
-                            'Start the server with `chasm api serve`, or set chasm.api.baseUrl.'
+                            'Start the server with `ironbridge api serve`, or set ironbridge.api.baseUrl.'
                         );
                     }
                 } catch (err) {
@@ -1901,7 +1901,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Show recording status
-        vscode.commands.registerCommand('chasm.recordingStatus', async () => {
+        vscode.commands.registerCommand('ironbridge.recordingStatus', async () => {
             if (!sessionRecorder) {
                 vscode.window.showInformationMessage('Session recording is not active');
                 return;
@@ -1924,7 +1924,7 @@ export function activate(context: vscode.ExtensionContext) {
         // ── Doctor / Health Check commands ─────────────────────────────
 
         // Run health check
-        vscode.commands.registerCommand('chasm.doctor', async () => {
+        vscode.commands.registerCommand('ironbridge.doctor', async () => {
             const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: 'Running health check...',
@@ -1936,7 +1936,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (result.success) {
                 outputChannel.show();
                 outputChannel.appendLine('');
-                outputChannel.appendLine('=== Chasm Health Check ===');
+                outputChannel.appendLine('=== IronBridge Health Check ===');
                 outputChannel.appendLine(result.output);
 
                 // Check if issues were found
@@ -1947,9 +1947,9 @@ export function activate(context: vscode.ExtensionContext) {
                         'Fix All', 'Preview Repairs', 'Dismiss'
                     );
                     if (fix === 'Fix All') {
-                        await vscode.commands.executeCommand('chasm.doctorFix');
+                        await vscode.commands.executeCommand('ironbridge.doctorFix');
                     } else if (fix === 'Preview Repairs') {
-                        await vscode.commands.executeCommand('chasm.doctorDryRun');
+                        await vscode.commands.executeCommand('ironbridge.doctorDryRun');
                     }
                 } else {
                     vscode.window.showInformationMessage('Health check passed — no issues found!');
@@ -1961,7 +1961,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Fix all session issues
-        vscode.commands.registerCommand('chasm.doctorFix', async () => {
+        vscode.commands.registerCommand('ironbridge.doctorFix', async () => {
             const confirm = await vscode.window.showWarningMessage(
                 'This will auto-fix all detected session issues (compact JSONL, inject compat fields, rebuild indexes). Continue?',
                 'Fix All', 'Cancel'
@@ -1998,7 +1998,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Preview repairs (dry run)
-        vscode.commands.registerCommand('chasm.doctorDryRun', async () => {
+        vscode.commands.registerCommand('ironbridge.doctorDryRun', async () => {
             const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: 'Scanning for repairable issues...',
@@ -2021,7 +2021,7 @@ export function activate(context: vscode.ExtensionContext) {
         // ── Register / Repair commands ─────────────────────────────────
 
         // Repair all sessions
-        vscode.commands.registerCommand('chasm.registerRepair', async () => {
+        vscode.commands.registerCommand('ironbridge.registerRepair', async () => {
             const confirm = await vscode.window.showWarningMessage(
                 'Repair all sessions across all workspaces? This will compact JSONL files and rebuild indexes.',
                 'Repair All', 'Cancel'
@@ -2059,7 +2059,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Recursive repair
-        vscode.commands.registerCommand('chasm.registerRepairRecursive', async () => {
+        vscode.commands.registerCommand('ironbridge.registerRepairRecursive', async () => {
             const scanPath = await vscode.window.showInputBox({
                 prompt: 'Enter root directory to recursively scan for workspaces',
                 placeHolder: 'e.g., C:\\Users\\you\\dev',
@@ -2124,19 +2124,19 @@ export function activate(context: vscode.ExtensionContext) {
         // ── API Server commands ────────────────────────────────────────
 
         // Start API server
-        vscode.commands.registerCommand('chasm.startServer', async () => {
+        vscode.commands.registerCommand('ironbridge.startServer', async () => {
             startApiServer();
         }),
 
         // Stop API server
-        vscode.commands.registerCommand('chasm.stopServer', async () => {
+        vscode.commands.registerCommand('ironbridge.stopServer', async () => {
             stopApiServer();
         }),
 
         // ── Recover commands ───────────────────────────────────────────
 
         // Scan for recoverable sessions
-        vscode.commands.registerCommand('chasm.recoverScan', async () => {
+        vscode.commands.registerCommand('ironbridge.recoverScan', async () => {
             const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: 'Scanning for recoverable sessions...',
@@ -2156,7 +2156,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // List orphaned sessions
-        vscode.commands.registerCommand('chasm.recoverOrphans', async () => {
+        vscode.commands.registerCommand('ironbridge.recoverOrphans', async () => {
             const result = await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: 'Listing orphaned sessions...',
@@ -2178,7 +2178,7 @@ export function activate(context: vscode.ExtensionContext) {
         // ── Sync commands ──────────────────────────────────────────────
 
         // Sync pull (backup to database)
-        vscode.commands.registerCommand('chasm.syncPull', async () => {
+        vscode.commands.registerCommand('ironbridge.syncPull', async () => {
             const dryRunFirst = await vscode.window.showWarningMessage(
                 'Pull sessions from provider workspaces into the harvest database (backup)?',
                 'Preview First', 'Pull Now', 'Cancel'
@@ -2230,7 +2230,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         // Sync push (restore from database)
-        vscode.commands.registerCommand('chasm.syncPush', async () => {
+        vscode.commands.registerCommand('ironbridge.syncPush', async () => {
             const confirm = await vscode.window.showWarningMessage(
                 'Push sessions from the harvest database to provider workspaces (restore)? This may overwrite existing session files.',
                 'Push', 'Cancel'
@@ -2267,7 +2267,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // ── Upgrade format ─────────────────────────────────────────────
 
-        vscode.commands.registerCommand('chasm.upgradeFormat', async () => {
+        vscode.commands.registerCommand('ironbridge.upgradeFormat', async () => {
             const confirm = await vscode.window.showWarningMessage(
                 'Upgrade session files to the current provider format (JSON → JSONL for VS Code 1.109+)?',
                 'Upgrade', 'Cancel'
@@ -2297,7 +2297,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // ── Harvest DB search ──────────────────────────────────────────
 
-        vscode.commands.registerCommand('chasm.harvestSearch', async () => {
+        vscode.commands.registerCommand('ironbridge.harvestSearch', async () => {
             const query = await vscode.window.showInputBox({
                 prompt: 'Full-text search across all harvested sessions',
                 placeHolder: 'Enter search query',
@@ -2345,8 +2345,8 @@ async function showWorkspacesWebview(_context: vscode.ExtensionContext) {
     const result = await executor.listWorkspaces();
 
     const panel = vscode.window.createWebviewPanel(
-        'chasmWorkspaces',
-        'Chasm: All Workspaces',
+        'ironbridgeWorkspaces',
+        'IronBridge: All Workspaces',
         vscode.ViewColumn.One,
         // Static, script-free report; disabling scripts removes any XSS path
         // through the interpolated command output entirely.
@@ -2360,8 +2360,8 @@ async function showSessionsWebview(_context: vscode.ExtensionContext, path: stri
     const result = await executor.listSessions(path);
 
     const panel = vscode.window.createWebviewPanel(
-        'chasmSessions',
-        'Chasm: Sessions',
+        'ironbridgeSessions',
+        'IronBridge: Sessions',
         vscode.ViewColumn.One,
         // Static, script-free report; disabling scripts removes any XSS path
         // through the interpolated command output entirely.
@@ -2375,8 +2375,8 @@ async function showHistoryWebview(_context: vscode.ExtensionContext, path: strin
     const result = await executor.showHistory(path);
 
     const panel = vscode.window.createWebviewPanel(
-        'chasmHistory',
-        'Chasm: Chat History',
+        'ironbridgeHistory',
+        'IronBridge: Chat History',
         vscode.ViewColumn.One,
         // Static, script-free report; disabling scripts removes any XSS path
         // through the interpolated command output entirely.
@@ -2521,11 +2521,11 @@ async function updateStatusBarWithHealth(): Promise<void> {
             if (issueMatch) {
                 const issues = parseInt(issueMatch[1], 10);
                 const workspaces = parseInt(issueMatch[2], 10);
-                statusBarItem.text = `$(warning) Chasm: ${issues} issues`;
+                statusBarItem.text = `$(warning) IronBridge: ${issues} issues`;
                 statusBarItem.tooltip = `${issues} session issues in ${workspaces} workspaces — click to run health check`;
                 statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
             } else {
-                statusBarItem.text = '$(heart) Chasm';
+                statusBarItem.text = '$(heart) IronBridge';
                 statusBarItem.tooltip = 'All sessions healthy — click to run health check';
                 statusBarItem.backgroundColor = undefined;
             }
@@ -2539,14 +2539,14 @@ async function updateStatusBarWithHealth(): Promise<void> {
 
 function startApiServer(): void {
     if (serverTerminal) {
-        vscode.window.showInformationMessage('Chasm API server is already running');
+        vscode.window.showInformationMessage('IronBridge API server is already running');
         serverTerminal.show();
         return;
     }
 
-    const binaryPath = vscode.workspace.getConfiguration('chasm').get('binaryPath', 'chasm');
+    const binaryPath = vscode.workspace.getConfiguration('ironbridge').get('binaryPath', 'ironbridge');
     serverTerminal = vscode.window.createTerminal({
-        name: 'Chasm API Server',
+        name: 'IronBridge API Server',
         hideFromUser: false
     });
     serverTerminal.sendText(`"${binaryPath}" api serve`);
@@ -2556,15 +2556,15 @@ function startApiServer(): void {
     vscode.window.onDidCloseTerminal((terminal) => {
         if (terminal === serverTerminal) {
             serverTerminal = undefined;
-            statusBarItem.text = '$(heart) Chasm';
-            outputChannel.appendLine('Chasm API server stopped');
+            statusBarItem.text = '$(heart) IronBridge';
+            outputChannel.appendLine('IronBridge API server stopped');
         }
     });
 
-    statusBarItem.text = '$(server-process) Chasm';
+    statusBarItem.text = '$(server-process) IronBridge';
     statusBarItem.tooltip = 'API server running — click to run health check';
-    outputChannel.appendLine('Chasm API server started');
-    vscode.window.showInformationMessage('Chasm API server started');
+    outputChannel.appendLine('IronBridge API server started');
+    vscode.window.showInformationMessage('IronBridge API server started');
 }
 
 function stopApiServer(): void {
@@ -2575,9 +2575,9 @@ function stopApiServer(): void {
 
     serverTerminal.dispose();
     serverTerminal = undefined;
-    statusBarItem.text = '$(heart) Chasm';
-    outputChannel.appendLine('Chasm API server stopped');
-    vscode.window.showInformationMessage('Chasm API server stopped');
+    statusBarItem.text = '$(heart) IronBridge';
+    outputChannel.appendLine('IronBridge API server stopped');
+    vscode.window.showInformationMessage('IronBridge API server stopped');
 }
 
 export function deactivate() {

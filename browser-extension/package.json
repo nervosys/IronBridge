@@ -1,7 +1,7 @@
 {
-  "name": "chasm-browser-extension",
+  "name": "ironbridge-browser-extension",
   "version": "1.0.0",
-  "description": "Chasm browser extension for harvesting AI chat sessions",
-  "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial",
+  "description": "IronBridge browser extension for harvesting AI chat sessions",
+  "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial",
   "private": true
 }

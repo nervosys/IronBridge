@@ -1,4 +1,4 @@
-// Chasm video constants — shared across all compositions
+// IronBridge video constants — shared across all compositions
 
 // Video dimensions (1080p landscape)
 export const VIDEO_WIDTH = 1920;

@@ -52,16 +52,16 @@ curl http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure LocalAI provider
-chasm provider config localai --endpoint http://localhost:8080/v1
+ironbridge provider config localai --endpoint http://localhost:8080/v1
 
 # Test connection
-chasm provider test localai
+ironbridge provider test localai
 
 # Import demo sessions
-chasm provider import localai --source examples/localai/sessions
+ironbridge provider import localai --source examples/localai/sessions
 ```
 

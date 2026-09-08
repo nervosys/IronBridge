@@ -1,11 +1,11 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Workspace Tree View Provider
+// IronBridge Workspace Tree View Provider
 // Displays chat workspaces in a tree view
 
 import * as vscode from 'vscode';
-import { ChasmExecutor, WorkspaceInfo } from './chasmExecutor';
+import { IronBridgeExecutor, WorkspaceInfo } from './ironbridgeExecutor';
 
 export class WorkspaceItem extends vscode.TreeItem {
     constructor(
@@ -27,7 +27,7 @@ export class WorkspaceItem extends vscode.TreeItem {
 
         // Click handler - show sessions for this workspace
         this.command = {
-            command: 'chasm.selectWorkspace',
+            command: 'ironbridge.selectWorkspace',
             title: 'Select Workspace',
             arguments: [this]
         };
@@ -50,7 +50,7 @@ export class WorkspaceProvider implements vscode.TreeDataProvider<WorkspaceItem>
     private filter: string = '';
     private selectedWorkspace?: WorkspaceInfo;
 
-    constructor(private executor: ChasmExecutor) { }
+    constructor(private executor: IronBridgeExecutor) { }
 
     refresh(): void {
         this._onDidChangeTreeData.fire();

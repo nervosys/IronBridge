@@ -58,28 +58,28 @@ These providers require API keys:
 
 ```bash
 # Import Copilot demo sessions
-chasm provider import copilot --source examples/copilot/chatSessions
+ironbridge provider import copilot --source examples/copilot/chatSessions
 
 # Import from Ollama history
-chasm provider import ollama --source examples/ollama/sessions
+ironbridge provider import ollama --source examples/ollama/sessions
 
 # Import from other providers
-chasm provider import cursor --source examples/cursor/sessions
+ironbridge provider import cursor --source examples/cursor/sessions
 ```
 
 ### Test Provider Connections
 
 ```bash
 # Test local provider
-chasm provider test ollama
+ironbridge provider test ollama
 
 # Test with custom endpoint
-chasm provider test lm-studio --endpoint http://localhost:1234/v1
+ironbridge provider test lm-studio --endpoint http://localhost:1234/v1
 ```
 
 ## Session Format
 
-Each provider may use a different session format. Chasm normalizes these to a common format:
+Each provider may use a different session format. IronBridge normalizes these to a common format:
 
 ```json
 {

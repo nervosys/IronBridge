@@ -1,6 +1,6 @@
 # Session Summary Skill
 
-Generate standup-ready summaries of recent AI coding sessions from the chasm
+Generate standup-ready summaries of recent AI coding sessions from the ironbridge
 harvest database. Produces concise, actionable summaries grouped by project.
 
 ## When to Use
@@ -13,7 +13,7 @@ Run when the user says:
 
 ## How It Works
 
-Query the chasm harvest database for recent sessions, extract key information
+Query the ironbridge harvest database for recent sessions, extract key information
 from messages, and generate a structured summary.
 
 ### Step 1: Query Recent Sessions
@@ -83,17 +83,17 @@ Format the output as:
 ## CLI Alternative
 
 ```bash
-# Quick summary via chasm CLI
-chasm harvest search --query "recent" --limit 20
+# Quick summary via ironbridge CLI
+ironbridge harvest search --query "recent" --limit 20
 
 # Export recent sessions
-chasm harvest export --format md --since "7 days ago"
+ironbridge harvest export --format md --since "7 days ago"
 ```
 
 ## API Alternative
 
 ```bash
-# Via the chasm API server
+# Via the ironbridge API server
 curl http://localhost:3000/api/v1/stats/overview
 curl http://localhost:3000/api/v1/sessions?since=7d&limit=50
 ```

@@ -1,0 +1,912 @@
+// Copyright (c) 2024-2026 Nervosys LLC
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
+//! Telemetry module for anonymous usage data collection
+//!
+//! This module provides opt-in (by default) anonymous usage telemetry to help
+//! improve IronBridge. No personal data is collected - only aggregate usage statistics.
+//!
+//! ## OpenTelemetry Support
+//!
+//! When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, traces are exported via OTLP.
+//! All standard `OTEL_EXPORTER_OTLP_*` environment variables are respected
+//! (endpoint, protocol, headers, etc.) — no credentials are hardcoded.
+
+use crate::error::{IronBridgeError, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
+use uuid::Uuid;
+
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::KeyValue;
+use opentelemetry_sdk::trace::TracerProvider;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+/// Guard that shuts down the OpenTelemetry tracer provider on drop.
+/// Hold this in `main()` for the lifetime of the process.
+pub struct OtelGuard {
+    provider: Option<TracerProvider>,
+}
+
+impl Drop for OtelGuard {
+    fn drop(&mut self) {
+        if let Some(provider) = self.provider.take() {
+            if let Err(e) = provider.shutdown() {
+                eprintln!("[otel] shutdown error: {e}");
+            }
+        }
+    }
+}
+
+/// Initialise the `tracing` subscriber with optional OpenTelemetry OTLP export.
+///
+/// * First loads service-scoped env vars from the ironbridge config directory
+///   (`~/.config/ironbridge/.env` or `%APPDATA%\ironbridge\.env`).
+/// * When `OTEL_EXPORTER_OTLP_ENDPOINT` is set (from either the `.env` file or
+///   the process environment) the function builds an OTLP span exporter and
+///   registers a `tracing-opentelemetry` layer.
+/// * When the variable is absent a plain stderr logger is configured instead.
+///
+/// Returns an [`OtelGuard`] that **must** be held until the process exits so
+/// that the provider is flushed and shut down cleanly.
+pub fn init_otel() -> OtelGuard {
+    // Load service-scoped .env before checking env vars
+    load_dotenv();
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let has_otlp = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok();
+
+    if has_otlp {
+        match try_init_otlp(env_filter) {
+            Ok(guard) => return guard,
+            Err(e) => {
+                eprintln!("[otel] failed to initialise OTLP exporter: {e}");
+                eprintln!("[otel] falling back to stderr logging");
+            }
+        }
+    }
+
+    // Fallback: stderr-only subscriber
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .init();
+
+    OtelGuard { provider: None }
+}
+
+fn try_init_otlp(
+    env_filter: EnvFilter,
+) -> std::result::Result<OtelGuard, Box<dyn std::error::Error>> {
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http()
+        .build()?;
+
+    let provider = TracerProvider::builder()
+        .with_simple_exporter(exporter)
+        .with_resource(opentelemetry_sdk::Resource::new(vec![KeyValue::new(
+            "service.name",
+            std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "ironbridge-cli".into()),
+        )]))
+        .build();
+
+    let tracer = provider.tracer("ironbridge");
+    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(otel_layer)
+        .init();
+
+    Ok(OtelGuard {
+        provider: Some(provider),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Service-scoped .env loader
+// ---------------------------------------------------------------------------
+
+/// Path to the service-scoped `.env` file inside the ironbridge config directory.
+pub fn otel_env_path() -> Option<PathBuf> {
+    let config_dir = if cfg!(target_os = "windows") {
+        dirs::config_dir().map(|p| p.join("ironbridge"))
+    } else {
+        dirs::home_dir().map(|p| p.join(".config/ironbridge"))
+    };
+    config_dir.map(|d| d.join(".env"))
+}
+
+/// Load KEY=VALUE pairs from the ironbridge `.env` file into the process
+/// environment.  Already-set variables are **not** overwritten so that
+/// explicit env vars always win.
+fn load_dotenv() {
+    let path = match otel_env_path() {
+        Some(p) if p.exists() => p,
+        _ => return,
+    };
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim().trim_matches('"');
+            // Do not overwrite — process env takes precedence
+            if std::env::var(key).is_err() {
+                std::env::set_var(key, value);
+            }
+        }
+    }
+}
+
+/// Write the OTEL environment variables to the service-scoped `.env` file.
+/// Existing file contents are preserved for non-OTEL keys.
+pub fn write_otel_env(
+    endpoint: &str,
+    protocol: &str,
+    headers: &str,
+    service_name: &str,
+) -> Result<PathBuf> {
+    let path = otel_env_path().ok_or(IronBridgeError::StorageNotFound)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Read existing non-OTEL lines
+    let existing = if path.exists() {
+        fs::read_to_string(&path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let otel_keys = [
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_PROTOCOL",
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        "OTEL_SERVICE_NAME",
+    ];
+
+    let mut lines: Vec<String> = existing
+        .lines()
+        .filter(|l| {
+            let trimmed = l.trim();
+            trimmed.is_empty()
+                || trimmed.starts_with('#')
+                || !otel_keys.iter().any(|k| trimmed.starts_with(k))
+        })
+        .map(|l| l.to_string())
+        .collect();
+
+    lines.push(String::new());
+    lines.push("# OpenTelemetry (written by ironbridge telemetry setup)".to_string());
+    lines.push(format!("OTEL_EXPORTER_OTLP_ENDPOINT={endpoint}"));
+    lines.push(format!("OTEL_EXPORTER_OTLP_PROTOCOL={protocol}"));
+    lines.push(format!("OTEL_EXPORTER_OTLP_HEADERS={headers}"));
+    lines.push(format!("OTEL_SERVICE_NAME={service_name}"));
+
+    fs::write(&path, lines.join("\n") + "\n")?;
+    Ok(path)
+}
+
+/// Telemetry configuration stored on disk
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryConfig {
+    /// Whether telemetry is enabled (opt-in by default)
+    pub enabled: bool,
+
+    /// Anonymous identifier for this installation
+    pub installation_id: String,
+
+    /// When the config was first created
+    pub created_at: i64,
+
+    /// When the user last changed their preference
+    pub preference_changed_at: Option<i64>,
+
+    /// Version of the config format
+    pub version: u32,
+
+    /// Remote telemetry endpoint URL (optional)
+    #[serde(default)]
+    pub remote_endpoint: Option<String>,
+
+    /// API key for remote endpoint (optional)
+    #[serde(default)]
+    pub remote_api_key: Option<String>,
+
+    /// Whether to send telemetry to remote endpoint
+    #[serde(default)]
+    pub remote_enabled: bool,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true, // Opt-in by default as requested
+            installation_id: Uuid::new_v4().to_string(),
+            created_at: chrono::Utc::now().timestamp(),
+            preference_changed_at: None,
+            version: 1,
+            remote_endpoint: None,
+            remote_api_key: None,
+            remote_enabled: false,
+        }
+    }
+}
+
+impl TelemetryConfig {
+    /// Get the path to the telemetry config file
+    pub fn config_path() -> Result<PathBuf> {
+        let config_dir = if cfg!(target_os = "windows") {
+            dirs::config_dir().map(|p| p.join("ironbridge"))
+        } else if cfg!(target_os = "macos") {
+            dirs::home_dir().map(|p| p.join(".config/ironbridge"))
+        } else {
+            dirs::home_dir().map(|p| p.join(".config/ironbridge"))
+        };
+
+        config_dir
+            .map(|p| p.join("telemetry.json"))
+            .ok_or(IronBridgeError::StorageNotFound)
+    }
+
+    /// Load telemetry config from disk, creating default if not exists
+    pub fn load() -> Result<Self> {
+        let config_path = Self::config_path()?;
+
+        if config_path.exists() {
+            let content = fs::read_to_string(&config_path)?;
+            serde_json::from_str(&content)
+                .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))
+        } else {
+            // Create default config (opt-in by default)
+            let config = Self::default();
+            config.save()?;
+            Ok(config)
+        }
+    }
+
+    /// Save telemetry config to disk
+    pub fn save(&self) -> Result<()> {
+        let config_path = Self::config_path()?;
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+        fs::write(&config_path, content)?;
+
+        Ok(())
+    }
+
+    /// Enable telemetry
+    pub fn opt_in(&mut self) -> Result<()> {
+        self.enabled = true;
+        self.preference_changed_at = Some(chrono::Utc::now().timestamp());
+        self.save()
+    }
+
+    /// Disable telemetry
+    pub fn opt_out(&mut self) -> Result<()> {
+        self.enabled = false;
+        self.preference_changed_at = Some(chrono::Utc::now().timestamp());
+        self.save()
+    }
+
+    /// Reset installation ID (generates new anonymous identifier)
+    pub fn reset_id(&mut self) -> Result<()> {
+        self.installation_id = Uuid::new_v4().to_string();
+        self.preference_changed_at = Some(chrono::Utc::now().timestamp());
+        self.save()
+    }
+
+    /// Check if telemetry is enabled
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Configure remote endpoint
+    pub fn set_remote_endpoint(&mut self, endpoint: Option<String>) -> Result<()> {
+        self.remote_endpoint = endpoint;
+        self.preference_changed_at = Some(chrono::Utc::now().timestamp());
+        self.save()
+    }
+
+    /// Configure remote API key
+    pub fn set_remote_api_key(&mut self, api_key: Option<String>) -> Result<()> {
+        self.remote_api_key = api_key;
+        self.preference_changed_at = Some(chrono::Utc::now().timestamp());
+        self.save()
+    }
+
+    /// Enable/disable remote sending
+    pub fn set_remote_enabled(&mut self, enabled: bool) -> Result<()> {
+        self.remote_enabled = enabled;
+        self.preference_changed_at = Some(chrono::Utc::now().timestamp());
+        self.save()
+    }
+
+    /// Check if remote telemetry is configured and enabled
+    pub fn is_remote_enabled(&self) -> bool {
+        self.remote_enabled && self.remote_endpoint.is_some() && self.remote_api_key.is_some()
+    }
+}
+
+/// Types of telemetry events we track
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum TelemetryEvent {
+    /// CLI command invoked
+    CommandInvoked {
+        command: String,
+        subcommand: Option<String>,
+        duration_ms: Option<u64>,
+        success: bool,
+    },
+
+    /// Session harvested from a provider
+    SessionHarvested {
+        provider: String,
+        session_count: u32,
+    },
+
+    /// Sessions merged
+    SessionsMerged { session_count: u32 },
+
+    /// API server started
+    ApiServerStarted { port: u16 },
+
+    /// Provider detected
+    ProviderDetected { provider: String },
+
+    /// Error occurred (no PII, just error type)
+    ErrorOccurred { error_type: String },
+}
+
+/// Telemetry collector that batches and sends events
+#[derive(Debug)]
+pub struct TelemetryCollector {
+    config: TelemetryConfig,
+    events: Vec<TelemetryEvent>,
+}
+
+impl TelemetryCollector {
+    /// Create a new telemetry collector
+    pub fn new() -> Result<Self> {
+        let config = TelemetryConfig::load()?;
+        Ok(Self {
+            config,
+            events: Vec::new(),
+        })
+    }
+
+    /// Check if telemetry is enabled
+    pub fn is_enabled(&self) -> bool {
+        self.config.is_enabled()
+    }
+
+    /// Track a telemetry event
+    pub fn track(&mut self, event: TelemetryEvent) {
+        if self.is_enabled() {
+            self.events.push(event);
+        }
+    }
+
+    /// Track a CLI command invocation
+    pub fn track_command(&mut self, command: &str, subcommand: Option<&str>, success: bool) {
+        self.track(TelemetryEvent::CommandInvoked {
+            command: command.to_string(),
+            subcommand: subcommand.map(|s| s.to_string()),
+            duration_ms: None,
+            success,
+        });
+    }
+
+    /// Get the installation ID
+    pub fn installation_id(&self) -> &str {
+        &self.config.installation_id
+    }
+
+    /// Discard the buffered events.
+    ///
+    /// This is not a stub awaiting a backend. There is no Nervosys ingest
+    /// endpoint, and adding one would be a decision about what leaves a user's
+    /// machine, not a matter of finishing an implementation. Until such a
+    /// decision is made and disclosed, dropping the buffer is the correct
+    /// behaviour, and `flush` is honest about being a drop.
+    ///
+    /// Note that nothing populates this buffer either: no caller in the tree
+    /// invokes [`Self::track`] or [`Self::track_command`]. What users can
+    /// record deliberately, and send to an endpoint of their own choosing,
+    /// lives in `TelemetryStore` further down this file.
+    pub fn flush(&mut self) -> Result<()> {
+        self.events.clear();
+        Ok(())
+    }
+}
+
+impl Drop for TelemetryCollector {
+    fn drop(&mut self) {
+        // Try to flush remaining events on drop
+        let _ = self.flush();
+    }
+}
+
+/// What this build actually does with telemetry.
+///
+/// This text used to describe an analytics pipeline that does not exist. It
+/// announced that IronBridge "collects anonymous usage data", listed commands,
+/// provider types, session counts and error types as things it gathered, and
+/// framed the choice as opting out of collection.
+///
+/// None of that happened. [`TelemetryCollector`] has no callers anywhere in the
+/// tree -- nothing ever calls `track_command` -- and its `flush` discards the
+/// buffer rather than sending it. There is no default endpoint, so even a
+/// populated buffer had nowhere to go. A privacy notice that overstates
+/// collection is still a false privacy notice, and it invites users to opt out
+/// of something that was never running.
+pub const TELEMETRY_INFO: &str = r#"
+IronBridge sends nothing anywhere on its own. There is no Nervosys endpoint
+built in, and no data leaves this machine unless you configure a
+destination yourself.
+
+WHAT IS RECORDED AUTOMATICALLY:
+  • Nothing. Records are written only by `ironbridge telemetry record`,
+    with the category, event and data you pass to it.
+
+WHAT IS SENT:
+  • Nothing, until you run `ironbridge telemetry config` to set your own
+    endpoint and API key and enable remote sync. Then, and only when
+    you run `ironbridge telemetry sync`, your recorded rows are POSTed to
+    that endpoint -- yours, not ours.
+  • Separately, if OTEL_EXPORTER_OTLP_ENDPOINT is set in your
+    environment, traces go to that collector. Also yours.
+
+WHERE IT LIVES:
+  • Records are plain JSONL under your local config directory. Read
+    them with `ironbridge telemetry query`, or delete the file.
+
+Your installation ID: {installation_id}
+Status: {status}
+
+The status below governs whether local records are written at all:
+  ironbridge telemetry opt-in   - Allow local recording (default)
+  ironbridge telemetry opt-out  - Refuse it
+  ironbridge telemetry reset    - Generate a new installation ID
+"#;
+
+// =============================================================================
+// STRUCTURED DATA RECORDING FOR AI ANALYSIS
+// =============================================================================
+
+/// A structured telemetry record for AI analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryRecord {
+    /// Unique record ID
+    pub id: String,
+
+    /// Installation ID (anonymous)
+    pub installation_id: String,
+
+    /// Event category (e.g., 'workflow', 'error', 'performance', 'usage', 'custom')
+    pub category: String,
+
+    /// Event name or type
+    pub event: String,
+
+    /// Structured data payload
+    pub data: HashMap<String, serde_json::Value>,
+
+    /// Tags for filtering
+    pub tags: Vec<String>,
+
+    /// Optional context/session ID
+    pub context: Option<String>,
+
+    /// Unix timestamp when recorded
+    pub timestamp: i64,
+
+    /// Human-readable timestamp
+    pub timestamp_iso: String,
+}
+
+impl TelemetryRecord {
+    /// Create a new telemetry record
+    pub fn new(
+        installation_id: &str,
+        category: &str,
+        event: &str,
+        data: HashMap<String, serde_json::Value>,
+        tags: Vec<String>,
+        context: Option<String>,
+    ) -> Self {
+        let now = chrono::Utc::now();
+        Self {
+            id: Uuid::new_v4().to_string(),
+            installation_id: installation_id.to_string(),
+            category: category.to_string(),
+            event: event.to_string(),
+            data,
+            tags,
+            context,
+            timestamp: now.timestamp(),
+            timestamp_iso: now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+        }
+    }
+}
+
+/// Storage for telemetry records (JSONL file for easy streaming/appending)
+pub struct TelemetryStore {
+    config: TelemetryConfig,
+}
+
+impl TelemetryStore {
+    /// Create a new telemetry store
+    pub fn new() -> Result<Self> {
+        let config = TelemetryConfig::load()?;
+        Ok(Self { config })
+    }
+
+    /// Get path to the telemetry records file
+    pub fn records_path() -> Result<PathBuf> {
+        let config_dir = if cfg!(target_os = "windows") {
+            dirs::config_dir().map(|p| p.join("ironbridge"))
+        } else {
+            dirs::home_dir().map(|p| p.join(".config/ironbridge"))
+        };
+
+        config_dir
+            .map(|p| p.join("telemetry_records.jsonl"))
+            .ok_or(IronBridgeError::StorageNotFound)
+    }
+
+    /// Record a new telemetry event
+    pub fn record(
+        &self,
+        category: &str,
+        event: &str,
+        data: HashMap<String, serde_json::Value>,
+        tags: Vec<String>,
+        context: Option<String>,
+    ) -> Result<TelemetryRecord> {
+        let record = TelemetryRecord::new(
+            &self.config.installation_id,
+            category,
+            event,
+            data,
+            tags,
+            context,
+        );
+
+        // Append to JSONL file
+        let path = Self::records_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
+
+        let line = serde_json::to_string(&record)
+            .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+        writeln!(file, "{}", line)?;
+
+        Ok(record)
+    }
+
+    /// Read all records, optionally filtered
+    pub fn read_records(
+        &self,
+        category: Option<&str>,
+        event: Option<&str>,
+        tag: Option<&str>,
+        after: Option<i64>,
+        before: Option<i64>,
+        limit: Option<usize>,
+    ) -> Result<Vec<TelemetryRecord>> {
+        let path = Self::records_path()?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let file = File::open(&path)?;
+        let reader = BufReader::new(file);
+        let mut records: Vec<TelemetryRecord> = Vec::new();
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let record: TelemetryRecord = serde_json::from_str(&line)
+                .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+
+            // Apply filters
+            if let Some(cat) = category {
+                if record.category != cat {
+                    continue;
+                }
+            }
+            if let Some(evt) = event {
+                if record.event != evt {
+                    continue;
+                }
+            }
+            if let Some(t) = tag {
+                if !record.tags.contains(&t.to_string()) {
+                    continue;
+                }
+            }
+            if let Some(after_ts) = after {
+                if record.timestamp < after_ts {
+                    continue;
+                }
+            }
+            if let Some(before_ts) = before {
+                if record.timestamp > before_ts {
+                    continue;
+                }
+            }
+
+            records.push(record);
+        }
+
+        // Sort by timestamp descending (newest first)
+        records.sort_by_key(|r| std::cmp::Reverse(r.timestamp));
+
+        // Apply limit
+        if let Some(lim) = limit {
+            records.truncate(lim);
+        }
+
+        Ok(records)
+    }
+
+    /// Get record count
+    pub fn count_records(&self) -> Result<usize> {
+        let path = Self::records_path()?;
+        if !path.exists() {
+            return Ok(0);
+        }
+
+        let file = File::open(&path)?;
+        let reader = BufReader::new(file);
+        Ok(reader.lines().filter(|l| l.is_ok()).count())
+    }
+
+    /// Clear records (optionally older than N days)
+    pub fn clear_records(&self, older_than_days: Option<u32>) -> Result<usize> {
+        let path = Self::records_path()?;
+        if !path.exists() {
+            return Ok(0);
+        }
+
+        if older_than_days.is_none() {
+            // Delete entire file
+            let count = self.count_records()?;
+            fs::remove_file(&path)?;
+            return Ok(count);
+        }
+
+        // Filter out old records
+        let cutoff =
+            chrono::Utc::now().timestamp() - (older_than_days.unwrap() as i64 * 24 * 60 * 60);
+
+        let file = File::open(&path)?;
+        let reader = BufReader::new(file);
+        let mut kept_records: Vec<String> = Vec::new();
+        let mut removed_count = 0;
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let record: TelemetryRecord = serde_json::from_str(&line)
+                .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+
+            if record.timestamp >= cutoff {
+                kept_records.push(line);
+            } else {
+                removed_count += 1;
+            }
+        }
+
+        // Rewrite file with kept records
+        let mut file = File::create(&path)?;
+        for line in kept_records {
+            writeln!(file, "{}", line)?;
+        }
+
+        Ok(removed_count)
+    }
+
+    /// Export records to a file
+    pub fn export_records(
+        &self,
+        output_path: &str,
+        format: &str,
+        category: Option<&str>,
+        with_metadata: bool,
+    ) -> Result<usize> {
+        let records = self.read_records(category, None, None, None, None, None)?;
+
+        if records.is_empty() {
+            return Ok(0);
+        }
+
+        let mut file = File::create(output_path)?;
+
+        match format {
+            "json" => {
+                if with_metadata {
+                    let export = serde_json::json!({
+                        "installation_id": self.config.installation_id,
+                        "exported_at": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                        "record_count": records.len(),
+                        "records": records,
+                    });
+                    let content = serde_json::to_string_pretty(&export)
+                        .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+                    write!(file, "{}", content)?;
+                } else {
+                    let content = serde_json::to_string_pretty(&records)
+                        .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+                    write!(file, "{}", content)?;
+                }
+            }
+            "jsonl" => {
+                if with_metadata {
+                    let meta = serde_json::json!({
+                        "_type": "metadata",
+                        "installation_id": self.config.installation_id,
+                        "exported_at": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                        "record_count": records.len(),
+                    });
+                    writeln!(
+                        file,
+                        "{}",
+                        serde_json::to_string(&meta)
+                            .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?
+                    )?;
+                }
+                for record in &records {
+                    let line = serde_json::to_string(record)
+                        .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+                    writeln!(file, "{}", line)?;
+                }
+            }
+            "csv" => {
+                // Write CSV header
+                writeln!(
+                    file,
+                    "id,timestamp,timestamp_iso,category,event,tags,context,data"
+                )?;
+                for record in &records {
+                    let tags = record.tags.join(";");
+                    let context = record.context.clone().unwrap_or_default();
+                    let data = serde_json::to_string(&record.data)
+                        .map_err(|e| IronBridgeError::InvalidSessionFormat(e.to_string()))?;
+                    // Escape CSV fields
+                    let data_escaped = data.replace('"', "\"\"");
+                    writeln!(
+                        file,
+                        "{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
+                        record.id,
+                        record.timestamp,
+                        record.timestamp_iso,
+                        record.category,
+                        record.event,
+                        tags,
+                        context,
+                        data_escaped
+                    )?;
+                }
+            }
+            _ => {
+                return Err(IronBridgeError::InvalidSessionFormat(format!(
+                    "Unknown export format: {}",
+                    format
+                )));
+            }
+        }
+
+        Ok(records.len())
+    }
+
+    /// Get installation ID
+    pub fn installation_id(&self) -> &str {
+        &self.config.installation_id
+    }
+
+    /// Sync records to remote endpoint
+    pub fn sync_to_remote(&self, limit: Option<usize>) -> Result<SyncResult> {
+        if !self.config.is_remote_enabled() {
+            return Err(IronBridgeError::InvalidSessionFormat(
+                "Remote telemetry not configured. Use 'ironbridge telemetry config' to set endpoint and API key".to_string()
+            ));
+        }
+
+        let endpoint = self.config.remote_endpoint.as_ref().unwrap();
+        let api_key = self.config.remote_api_key.as_ref().unwrap();
+
+        // Read records to sync
+        let records = self.read_records(None, None, None, None, None, limit)?;
+
+        if records.is_empty() {
+            return Ok(SyncResult {
+                records_sent: 0,
+                success: true,
+                error: None,
+            });
+        }
+
+        // Build the request payload
+        let payload = serde_json::json!({
+            "installation_id": self.config.installation_id,
+            "records": records,
+        });
+
+        // Send to remote endpoint
+        let client = reqwest::blocking::Client::new();
+        let response = client
+            .post(format!("{}/ingest", endpoint.trim_end_matches('/')))
+            .header("Content-Type", "application/json")
+            .header("X-Api-Key", api_key)
+            .json(&payload)
+            .send();
+
+        match response {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    Ok(SyncResult {
+                        records_sent: records.len(),
+                        success: true,
+                        error: None,
+                    })
+                } else {
+                    let status = resp.status();
+                    let error_text = resp.text().unwrap_or_else(|_| "Unknown error".to_string());
+                    Ok(SyncResult {
+                        records_sent: 0,
+                        success: false,
+                        error: Some(format!("HTTP {}: {}", status, error_text)),
+                    })
+                }
+            }
+            Err(e) => Ok(SyncResult {
+                records_sent: 0,
+                success: false,
+                error: Some(format!("Request failed: {}", e)),
+            }),
+        }
+    }
+
+    /// Get the config
+    pub fn config(&self) -> &TelemetryConfig {
+        &self.config
+    }
+}
+
+/// Result of a sync operation
+#[derive(Debug)]
+pub struct SyncResult {
+    pub records_sent: usize,
+    pub success: bool,
+    pub error: Option<String>,
+}

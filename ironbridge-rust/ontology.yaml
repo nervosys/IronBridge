@@ -1,0 +1,1611 @@
+# =============================================================================
+# IronBridge CLI Ontology — Machine-Readable Agent Discovery & Observability Schema
+# =============================================================================
+#
+# This ontology makes the ironbridge CLI fully discoverable and observable by AI
+# agents (Claude, Copilot, Codex, Gemini, etc.). It describes:
+#
+#   1. What ironbridge IS (identity, purpose, domain)
+#   2. What it CAN DO (commands, capabilities, workflows)
+#   3. What it KNOWS ABOUT (entities, relationships, data model)
+#   4. How to INTERACT with it (CLI, API, MCP, database)
+#   5. How to OBSERVE it (diagnostics, telemetry, health)
+#   6. How to REASON about it (intents, workflows, constraints)
+#
+# Format: YAML (machine-parseable, human-readable)
+# Spec version: 1.1.0 (ironbridge ontology schema)
+# CLI version: 1.5.3
+# Updated: 2025-07-14
+
+# =============================================================================
+# §1  IDENTITY
+# =============================================================================
+
+identity:
+  name: ironbridge
+  full_name: "CHAt Session Manager"
+  binary: ironbridge
+  alt_binary: ironbridge-mcp
+  version: 1.5.3
+  edition: rust-2021
+  min_rust: "1.75"
+  license: AGPL-3.0-only
+  author: Nervosys LLC
+  repository: https://github.com/nervosys/ironbridge
+  description: >
+    Universal chat session manager — harvest, merge, and analyze AI chat
+    history from VS Code Copilot, Cursor, Claude Code, OpenCode, Gemini CLI,
+    Codex CLI, and 30+ other providers.
+  keywords:
+    - chat
+    - ai
+    - copilot
+    - session
+    - history
+    - harvest
+    - merge
+    - search
+    - versioning
+
+# =============================================================================
+# §2  DOMAIN MODEL — Entities and Relationships
+# =============================================================================
+
+domain:
+  # -------------------------------------------------------------------------
+  # Core entities
+  # -------------------------------------------------------------------------
+  entities:
+    Workspace:
+      description: >
+        An editor workspace — a directory opened as a project in VS Code,
+        Cursor, or another supported editor. Maps to a workspace storage hash
+        on disk (e.g., %APPDATA%/Code/User/workspaceStorage/<hash>).
+      primary_key: hash
+      fields:
+        hash:               { type: string,        description: "MD5 hash of the workspace folder URI" }
+        project_path:       { type: "string?",     description: "Local filesystem path to the project directory" }
+        workspace_path:     { type: path,          description: "Full path to the editor's workspace storage directory" }
+        chat_sessions_path: { type: path,          description: "Path to the chatSessions/ subdirectory" }
+        chat_session_count: { type: integer,       description: "Number of session files on disk" }
+        has_chat_sessions:  { type: boolean,       description: "Whether chatSessions directory exists" }
+        last_modified:      { type: "datetime?",   description: "Most recent modification timestamp" }
+      relationships:
+        - { target: ChatSession,     cardinality: "1:N", via: "chat_sessions_path contains session files" }
+        - { target: SessionIndex,    cardinality: "1:1", via: "state.vscdb contains session index" }
+        - { target: Provider,        cardinality: "N:1", via: "workspace belongs to a provider (VS Code, Cursor, etc.)" }
+
+    ChatSession:
+      description: >
+        A single conversation between a human and an AI assistant. Stored as a
+        .json or .jsonl file inside a workspace's chatSessions/ directory. The
+        JSONL format uses event sourcing: kind:0 = initial snapshot, kind:1 =
+        delta update, kind:2 = array append.
+      primary_key: session_id
+      file_formats:
+        - extension: .json
+          description: "Legacy single-object format (VS Code < 1.109)"
+        - extension: .jsonl
+          description: "Event-sourced JSONL format (VS Code >= 1.109)"
+          event_kinds:
+            0: "Initial snapshot — full session state in 'v' field"
+            1: "Delta update — 'k' = key path array, 'v' = new value"
+            2: "Array append — 'k' = key path to array, 'v' = items to append"
+      fields:
+        version:           { type: u32,         default: 3,       description: "Session format version" }
+        session_id:        { type: "string?",   description: "UUID identifier" }
+        creation_date:     { type: i64,         description: "Creation timestamp (epoch milliseconds)" }
+        last_message_date: { type: i64,         description: "Last message timestamp (epoch milliseconds)" }
+        is_imported:       { type: boolean,     default: false,   description: "Whether imported from another source" }
+        initial_location:  { type: string,      default: panel,   description: "UI location: panel, terminal, notebook, editor" }
+        custom_title:      { type: "string?",   description: "User-assigned title" }
+        requests:          { type: "ChatRequest[]",               description: "Ordered list of request/response pairs" }
+      computed:
+        title:           "custom_title || first user message (truncated) || 'Untitled'"
+        is_empty:        "requests.length == 0"
+        request_count:   "requests.length"
+        timestamp_range: "(creation_date, last_message_date)"
+
+    ChatRequest:
+      description: "A single request/response turn within a session."
+      fields:
+        request_id:      { type: "string?",   description: "Unique request identifier" }
+        timestamp:       { type: "i64?",      description: "When the request was sent (epoch ms)" }
+        message:         { type: "ChatMessage?", description: "The user's message" }
+        response:        { type: "json?",     description: "The AI's response (complex structured JSON)" }
+        model_id:        { type: "string?",   description: "Model used for this request (e.g., gpt-4o, claude-sonnet-4)" }
+        agent:           { type: "json?",     description: "Agent mode metadata" }
+        is_canceled:     { type: "bool?",     description: "Whether the request was cancelled" }
+        content_references: { type: "json[]?", description: "Files, URLs, and context referenced" }
+        code_citations:  { type: "json[]?",   description: "Code citations in the response" }
+        source_session:  { type: "string?",   description: "Original session ID if merged from another session" }
+
+    ChatMessage:
+      description: "A user or assistant message."
+      fields:
+        text:  { type: "string?", aliases: [content], description: "Message text content" }
+        parts: { type: "json[]?", description: "Structured message parts (multi-modal)" }
+
+    SessionIndex:
+      description: >
+        VS Code's in-memory index of known sessions, persisted in state.vscdb
+        under the key 'chat.ChatSessionStore.index'. This lightweight manifest
+        controls which sessions appear in the UI sidebar. The index is cached
+        in memory and flushed to SQLite on VS Code save/exit.
+      storage: "state.vscdb SQLite database, key = 'chat.ChatSessionStore.index'"
+      fields:
+        version:  { type: u32,     default: 1 }
+        entries:  { type: "Map<session_id, ChatSessionIndexEntry>" }
+      important_behaviors:
+        - "VS Code caches this in memory; writes to state.vscdb while VS Code runs are overwritten on exit"
+        - "Session appears in sidebar iff it has an index entry with isEmpty=false"
+        - "lastResponseState=2 (Cancelled) causes VS Code to attempt request resumption on load"
+
+    ChatSessionIndexEntry:
+      description: "A lightweight index entry for a single session."
+      fields:
+        session_id:          { type: string,    description: "Session UUID" }
+        title:               { type: string,    description: "Display title" }
+        last_message_date:   { type: i64,       description: "Last message timestamp (epoch ms)" }
+        timing:              { type: "ChatSessionTiming?", description: "VS Code 1.109+ timing info" }
+        last_response_state: { type: u8,        description: "0=Pending, 1=Complete, 2=Cancelled, 3=Failed, 4=NeedsInput" }
+        initial_location:    { type: string,    description: "panel, terminal, notebook, editor" }
+        is_empty:            { type: boolean,   description: "Whether the session has zero requests" }
+
+    Provider:
+      description: >
+        An AI chat provider — either a file-based editor (VS Code, Cursor),
+        a local API server (Ollama, vLLM), or a cloud API (OpenAI, Anthropic).
+      categories:
+        file_based:
+          description: "Editors that store sessions as local files"
+          variants:
+            - Copilot
+            - Cursor
+            - ContinueDev
+            - CodexCli
+            - DroidCli
+            - GeminiCli
+            - ClaudeCode
+            - OpenCode
+            - OpenClaw
+            - Antigravity
+        local_api:
+          description: "Self-hosted LLM servers with HTTP APIs"
+          variants:
+            - Ollama
+            - Vllm
+            - Foundry
+            - LmStudio
+            - LocalAI
+            - TextGenWebUI
+            - Jan
+            - Gpt4All
+            - Llamafile
+        cloud_api:
+          description: "Cloud-hosted LLM APIs"
+          variants:
+            - M365Copilot
+            - ChatGPT
+            - OpenAI
+            - Anthropic
+            - Perplexity
+            - DeepSeek
+            - Qwen
+            - Gemini
+            - Mistral
+            - Cohere
+            - Grok
+            - Groq
+            - Together
+            - Fireworks
+            - Replicate
+            - HuggingFace
+            - Custom
+      capabilities:
+        uses_file_storage:   "Copilot, Cursor, ContinueDev, ClaudeCode, OpenCode, etc."
+        is_cloud_provider:   "ChatGPT, OpenAI, Anthropic, etc."
+        is_openai_compatible: "Most local API providers implement the OpenAI API spec"
+        requires_api_key:    "Cloud providers and some local servers"
+
+    HarvestDatabase:
+      description: >
+        A unified SQLite database that normalizes sessions from all providers
+        into a queryable schema with FTS5 full-text search.
+      default_path: "./chat_sessions.db"
+      tables:
+        sessions:
+          columns: [id, title, provider, workspace_name, created_at, message_count, model, source_hash]
+        messages_v2:
+          columns: [id, session_id, role, content, timestamp, model, token_count]
+        tool_invocations:
+          columns: [id, session_id, tool_name, input, output, timestamp]
+        file_changes:
+          columns: [id, session_id, file_path, change_type, timestamp]
+      indexes:
+        - "FTS5 full-text search on messages_v2.content"
+
+    GenericSession:
+      description: "Provider-agnostic session format for inter-provider conversion."
+      fields:
+        id:         { type: string }
+        title:      { type: string }
+        messages:   { type: "GenericMessage[]" }
+        created_at: { type: datetime }
+        updated_at: { type: datetime }
+        provider:   { type: string }
+        model:      { type: string }
+
+    GenericMessage:
+      description: "Provider-agnostic message format."
+      fields:
+        role:      { type: string, enum: [user, assistant, system] }
+        content:   { type: string }
+        timestamp: { type: "datetime?" }
+        model:     { type: "string?" }
+
+  # -------------------------------------------------------------------------
+  # Entity relationship graph
+  # -------------------------------------------------------------------------
+  relationships:
+    - "Provider --[hosts]--> Workspace (1:N)"
+    - "Workspace --[contains]--> ChatSession (1:N)"
+    - "Workspace --[indexed_by]--> SessionIndex (1:1)"
+    - "SessionIndex --[has_entries]--> ChatSessionIndexEntry (1:N)"
+    - "ChatSession --[has_turns]--> ChatRequest (1:N)"
+    - "ChatRequest --[user_msg]--> ChatMessage (1:1)"
+    - "ChatSession --[normalizes_to]--> GenericSession (1:1)"
+    - "GenericSession --[stored_in]--> HarvestDatabase (N:1)"
+    - "HarvestDatabase --[indexes]--> messages_v2 via FTS5"
+
+# =============================================================================
+# §3  CAPABILITIES — Complete Command Tree
+# =============================================================================
+
+capabilities:
+  binary: ironbridge
+  global_description: "Manage and merge chat sessions across workspaces"
+
+  commands:
+    # -----------------------------------------------------------------------
+    # list (ls)
+    # -----------------------------------------------------------------------
+    list:
+      aliases: [ls]
+      description: "List workspaces, sessions, or paths"
+      subcommands:
+        workspaces:
+          aliases: [ws]
+          description: "List all VS Code workspaces that have chat sessions"
+          args: []
+          output: "Table of workspace hashes, project paths, and session counts"
+        sessions:
+          aliases: [s]
+          description: "List all chat sessions across workspaces"
+          args:
+            --project-path: { type: "string?", description: "Filter by project path" }
+            --size / -s:    { type: flag, description: "Show file sizes" }
+            --provider / -p: { type: "string?", description: "Filter by provider", values: [vscode, cursor, claudecode, opencode, openclaw, antigravity] }
+            --all-providers: { type: flag, description: "Include all providers" }
+          output: "Table of session IDs, titles, message counts, sizes, and timestamps"
+        agents:
+          aliases: [a]
+          description: "List available AI coding agents and their installation status"
+        edits:
+          aliases: [e]
+          description: "List agent mode sessions (Copilot Edits / chatEditingSessions)"
+          args:
+            --project-path: { type: "string?" }
+            --size / -s:    { type: flag }
+            --provider / -p: { type: "string?" }
+        path:
+          description: "List sessions for a specific project path"
+          args:
+            project_path: { type: "string?", positional: true, default: "current directory" }
+        orphaned:
+          description: "List unregistered sessions (on disk but invisible to the editor)"
+          args:
+            --path: { type: "string?", default: "current directory" }
+
+    # -----------------------------------------------------------------------
+    # find
+    # -----------------------------------------------------------------------
+    find:
+      description: "Search workspaces or sessions by text pattern"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          description: "Search workspaces by name pattern"
+          args:
+            pattern: { type: "string?", positional: true, description: "Case-insensitive pattern, defaults to cwd name" }
+        session:
+          aliases: [s]
+          description: "Search sessions by title, content, or ID"
+          args:
+            pattern:            { type: "string?", positional: true }
+            --workspace / -w:   { type: "string?", description: "Filter by workspace" }
+            --title-only / -t:  { type: flag, description: "Only search titles (faster)" }
+            --content / -c:     { type: flag, description: "Include message content (slower)" }
+            --after:            { type: "date?", description: "Modified after YYYY-MM-DD" }
+            --before:           { type: "date?", description: "Modified before YYYY-MM-DD" }
+            --date:             { type: "date?", description: "Filter by internal message date" }
+            --all / -a:         { type: flag, description: "Search all workspaces" }
+            --provider / -p:    { type: "string?" }
+            --all-providers:    { type: flag }
+            --limit / -n:       { type: integer, default: 50 }
+        path:
+          description: "Search sessions within a specific project path"
+          args:
+            pattern:        { type: "string?", positional: true }
+            --project-path: { type: "string?" }
+
+    # -----------------------------------------------------------------------
+    # show (info)
+    # -----------------------------------------------------------------------
+    show:
+      aliases: [info]
+      description: "Show detailed information about workspaces, sessions, indexes, or timelines"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          description: "Show workspace details"
+          args:
+            workspace: { type: string, positional: true, description: "Workspace name or hash" }
+        session:
+          aliases: [s]
+          description: "Show session details (messages, metadata, model info)"
+          args:
+            session_id:     { type: string, positional: true }
+            --project-path: { type: "string?" }
+        agent:
+          aliases: [a]
+          description: "Show agent mode session details (Copilot Edits)"
+          args:
+            session_id:     { type: string, positional: true }
+            --project-path: { type: "string?" }
+        index:
+          aliases: [idx]
+          description: "Show the session index from state.vscdb — isEmpty, lastResponseState, etc."
+          args:
+            --path: { type: "string?" }
+            --all / -a: { type: flag, description: "Show all workspaces" }
+        path:
+          description: "Show chat history timeline for a project path"
+          args:
+            project_path: { type: "string?", positional: true }
+        timeline:
+          description: "Show session activity timeline with gap visualization"
+          args:
+            project_path:     { type: "string?", positional: true }
+            --agents / -a:    { type: flag }
+            --provider / -p:  { type: "string?" }
+            --all-providers:  { type: flag }
+
+    # -----------------------------------------------------------------------
+    # fetch
+    # -----------------------------------------------------------------------
+    fetch:
+      description: "Fetch (copy) chat sessions from other workspaces"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          description: "Fetch sessions from workspaces matching a name pattern"
+          args:
+            workspace_name:  { type: string, positional: true, required: true }
+            --target-path:   { type: "string?" }
+            --force:         { type: flag }
+            --no-register:   { type: flag }
+        session:
+          aliases: [s]
+          description: "Fetch specific sessions by ID"
+          args:
+            session_ids:     { type: "string[]", positional: true, required: true }
+            --target-path:   { type: "string?" }
+            --force:         { type: flag }
+            --no-register:   { type: flag }
+        path:
+          description: "Fetch sessions from other workspaces by project path"
+          args:
+            project_path: { type: "string?", positional: true }
+            --force:      { type: flag }
+            --no-register: { type: flag }
+
+    # -----------------------------------------------------------------------
+    # merge
+    # -----------------------------------------------------------------------
+    merge:
+      description: "Merge multiple sessions into a single unified conversation"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          description: "Merge sessions from workspaces matching a name pattern"
+          args:
+            workspace_name:  { type: string, positional: true, required: true }
+            --title / -t:    { type: "string?" }
+            --target-path:   { type: "string?" }
+            --force:         { type: flag }
+            --no-backup:     { type: flag }
+        workspaces:
+          aliases: [wss]
+          description: "Merge sessions from multiple workspace name patterns"
+          args:
+            workspace_names: { type: "string[]", positional: true, required: true }
+            --title / -t:    { type: "string?" }
+            --target-path:   { type: "string?" }
+            --force:         { type: flag }
+            --no-backup:     { type: flag }
+        sessions:
+          aliases: [s]
+          description: "Merge specific sessions by ID or filename"
+          args:
+            sessions:        { type: "string[]", positional: true, required: true }
+            --title / -t:    { type: "string?" }
+            --target-path:   { type: "string?" }
+            --force:         { type: flag }
+            --no-backup:     { type: flag }
+        path:
+          description: "Merge all sessions for a project path into one"
+          args:
+            project_path:  { type: "string?", positional: true }
+            --title / -t:  { type: "string?" }
+            --force:       { type: flag }
+            --no-backup:   { type: flag }
+        provider:
+          description: "Merge sessions from an LLM provider"
+          args:
+            provider_name: { type: string, positional: true, required: true }
+            --title / -t:  { type: "string?" }
+            --target-path: { type: "string?" }
+            --sessions:    { type: "string[]?" }
+            --force:       { type: flag }
+            --no-backup:   { type: flag }
+        providers:
+          description: "Merge sessions from multiple providers"
+          args:
+            providers:     { type: "string[]", positional: true, required: true }
+            --title / -t:  { type: "string?" }
+            --target-path: { type: "string?" }
+            --workspace:   { type: "string?" }
+            --force:       { type: flag }
+            --no-backup:   { type: flag }
+        all:
+          description: "Merge all sessions across all providers"
+          args:
+            --title / -t:  { type: "string?" }
+            --target-path: { type: "string?" }
+            --workspace:   { type: "string?" }
+            --force:       { type: flag }
+            --no-backup:   { type: flag }
+
+    # -----------------------------------------------------------------------
+    # export
+    # -----------------------------------------------------------------------
+    export:
+      description: "Export chat sessions to a directory"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          description: "Export sessions from a workspace by hash"
+          args:
+            destination: { type: string, positional: true, required: true }
+            hash:        { type: string, positional: true, required: true }
+        sessions:
+          aliases: [s]
+          description: "Export specific sessions by ID"
+          args:
+            destination:    { type: string, positional: true, required: true }
+            session_ids:    { type: "string[]", positional: true, required: true }
+            --project-path: { type: "string?" }
+        path:
+          description: "Export sessions from a project path"
+          args:
+            destination:  { type: string, positional: true, required: true }
+            project_path: { type: "string?", positional: true }
+        batch:
+          description: "Export sessions from multiple project paths"
+          args:
+            destination:   { type: string, positional: true, required: true }
+            project_paths: { type: "string[]", positional: true, required: true }
+
+    # -----------------------------------------------------------------------
+    # import
+    # -----------------------------------------------------------------------
+    import:
+      description: "Import session files from external directories into a workspace"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          args:
+            source: { type: string, positional: true, required: true }
+            hash:   { type: string, positional: true, required: true }
+            --force: { type: flag }
+        sessions:
+          aliases: [s]
+          args:
+            session_files:  { type: "string[]", positional: true, required: true }
+            --target-path:  { type: "string?" }
+            --force:        { type: flag }
+        path:
+          args:
+            source:      { type: string, positional: true, required: true }
+            target_path: { type: "string?", positional: true }
+            --force:     { type: flag }
+
+    # -----------------------------------------------------------------------
+    # move (mv)
+    # -----------------------------------------------------------------------
+    move:
+      aliases: [mv]
+      description: "Move chat sessions between workspaces"
+      subcommands:
+        workspace:
+          aliases: [ws]
+          args:
+            source_hash: { type: string, positional: true, required: true }
+            target:      { type: string, positional: true, required: true }
+        sessions:
+          aliases: [s]
+          args:
+            session_ids: { type: "string[]", positional: true, required: true }
+            target_path: { type: string, positional: true, required: true }
+        path:
+          args:
+            source_path: { type: string, positional: true, required: true }
+            target_path: { type: string, positional: true, required: true }
+
+    # -----------------------------------------------------------------------
+    # git
+    # -----------------------------------------------------------------------
+    git:
+      description: "Git integration for chat session versioning"
+      subcommands:
+        config:
+          description: "Configure git settings for chat sessions"
+          args:
+            --name:  { type: "string?" }
+            --email: { type: "string?" }
+            --path:  { type: "string?" }
+        init:
+          description: "Initialize git versioning for a project's sessions"
+          args:
+            path: { type: string, positional: true, required: true }
+        add:
+          description: "Stage and optionally commit chat sessions to git"
+          args:
+            path:             { type: string, positional: true, required: true }
+            --commit:         { type: flag }
+            --message / -m:   { type: "string?" }
+        status:
+          description: "Show git status of chat sessions"
+          args:
+            path: { type: string, positional: true, required: true }
+        snapshot:
+          description: "Create a git tag snapshot of chat sessions"
+          args:
+            path:          { type: string, positional: true, required: true }
+            --tag:         { type: "string?" }
+            --message / -m: { type: "string?" }
+        track:
+          description: "Track sessions together with associated file changes"
+          args:
+            path:          { type: string, positional: true, required: true }
+            --message / -m: { type: "string?" }
+            --all:         { type: flag }
+            --files:       { type: "string[]?" }
+            --tag:         { type: "string?" }
+        log:
+          description: "Show commit history"
+          args:
+            path:             { type: string, positional: true, required: true }
+            --count / -n:     { type: integer, default: 10 }
+            --sessions-only:  { type: flag }
+        diff:
+          description: "Diff sessions between commits"
+          args:
+            path:         { type: string, positional: true, required: true }
+            --from:       { type: "string?" }
+            --to:         { type: "string?" }
+            --with-files: { type: flag }
+        restore:
+          description: "Restore sessions from a specific commit"
+          args:
+            path:         { type: string, positional: true, required: true }
+            commit:       { type: string, positional: true, required: true }
+            --with-files: { type: flag }
+            --backup:     { type: flag }
+
+    # -----------------------------------------------------------------------
+    # migration
+    # -----------------------------------------------------------------------
+    migration:
+      description: "Move chat sessions between machines"
+      subcommands:
+        create:
+          description: "Create a migration package"
+          args:
+            output:     { type: string, positional: true, required: true }
+            --projects: { type: "string?", description: "Comma-separated project paths" }
+            --all:      { type: flag }
+        restore:
+          description: "Restore a migration package on a new machine"
+          args:
+            package:    { type: string, positional: true, required: true }
+            --mapping:  { type: "string?", description: "Path mapping old1:new1;old2:new2" }
+            --dry-run:  { type: flag }
+
+    # -----------------------------------------------------------------------
+    # run
+    # -----------------------------------------------------------------------
+    run:
+      description: "Launch an AI coding agent with auto-save, or run interactive TUI"
+      subcommands:
+        tui:
+          description: "Launch interactive Terminal User Interface"
+        claude:
+          aliases: [claude-code, claudecode]
+          description: "Launch Claude Code with auto-save"
+          args:
+            args:          { type: "string[]", positional: true, passthrough: true }
+            --no-save:     { type: flag }
+            --verbose / -v: { type: flag }
+        open:
+          aliases: [opencode, open-code]
+          description: "Launch OpenCode with auto-save"
+          args: { args: passthrough, --no-save: flag, --verbose / -v: flag }
+        claw:
+          aliases: [openclaw, clawdbot]
+          description: "Launch OpenClaw with auto-save"
+          args: { args: passthrough, --no-save: flag, --verbose / -v: flag }
+        cursor:
+          description: "Launch Cursor CLI with auto-save"
+          args: { args: passthrough, --no-save: flag, --verbose / -v: flag }
+        codex:
+          aliases: [codex-cli, codexcli]
+          description: "Launch Codex CLI (OpenAI) with auto-save"
+          args: { args: passthrough, --no-save: flag, --verbose / -v: flag }
+        droid:
+          aliases: [droid-cli, droidcli, factory]
+          description: "Launch Droid CLI (Factory) with auto-save"
+          args: { args: passthrough, --no-save: flag, --verbose / -v: flag }
+        gemini:
+          aliases: [gemini-cli, geminicli]
+          description: "Launch Gemini CLI (Google) with auto-save"
+          args: { args: passthrough, --no-save: flag, --verbose / -v: flag }
+
+    # -----------------------------------------------------------------------
+    # watch (w)
+    # -----------------------------------------------------------------------
+    watch:
+      aliases: [w]
+      description: "Watch agent session directories for changes and auto-harvest"
+      args:
+        --agent / -a:     { type: "string?", description: "Watch specific agent (claude, gemini, etc.)" }
+        --path / -p:      { type: "string?", description: "Watch a custom path" }
+        --debounce / -d:  { type: integer, default: 3, description: "Debounce interval in seconds" }
+        --no-harvest:     { type: flag, description: "Detect without harvesting (dry-run)" }
+        --verbose / -v:   { type: flag }
+
+    # -----------------------------------------------------------------------
+    # provider
+    # -----------------------------------------------------------------------
+    provider:
+      description: "Manage LLM providers"
+      subcommands:
+        list:
+          description: "List all discovered providers"
+        info:
+          description: "Show provider details"
+          args:
+            provider: { type: string, positional: true, required: true }
+        config:
+          description: "Configure a provider"
+          args:
+            provider:     { type: string, positional: true, required: true }
+            --endpoint:   { type: "string?" }
+            --api-key:    { type: "string?" }
+            --model:      { type: "string?" }
+            --enabled:    { type: "bool?" }
+        import:
+          description: "Import sessions from another provider"
+          args:
+            --from:    { type: string, required: true }
+            --path:    { type: "string?" }
+            --session: { type: "string?" }
+        test:
+          description: "Test connection to a provider"
+          args:
+            provider: { type: string, positional: true, required: true }
+
+    # -----------------------------------------------------------------------
+    # detect
+    # -----------------------------------------------------------------------
+    detect:
+      description: "Auto-detect workspace and provider information"
+      subcommands:
+        workspace:
+          description: "Detect workspace for a path"
+          args:
+            path: { type: "string?", positional: true }
+        providers:
+          description: "Detect available providers"
+          args:
+            --with-sessions: { type: flag }
+        session:
+          description: "Detect which provider a session belongs to"
+          args:
+            session_id: { type: string, positional: true, required: true }
+            --path:     { type: "string?" }
+        all:
+          description: "Detect everything (workspace, providers, sessions) for a path"
+          args:
+            path:      { type: "string?", positional: true }
+            --verbose: { type: flag }
+        orphaned:
+          description: "Find all workspace hashes for a project path including orphans"
+          args:
+            path:         { type: "string?", positional: true }
+            --recover / -r: { type: flag, description: "Auto-recover orphaned sessions" }
+
+    # -----------------------------------------------------------------------
+    # register
+    # -----------------------------------------------------------------------
+    register:
+      description: "Add on-disk sessions to VS Code's database index (makes orphaned sessions visible)"
+      important_notes:
+        - "VS Code caches the index in memory — writes while VS Code runs get overwritten on exit"
+        - "Use --close-vscode --reopen for reliable index persistence"
+        - "Use --force to skip the VS Code running check (file changes persist, index may not)"
+      subcommands:
+        all:
+          description: "Register all on-disk sessions into the index"
+          args:
+            --path:         { type: "string?" }
+            --merge / -m:   { type: flag, description: "Merge all sessions into one before registering" }
+            --force / -f:   { type: flag }
+            --close-vscode: { type: flag }
+            --reopen:       { type: flag, description: "Implies --close-vscode" }
+        session:
+          aliases: [s]
+          description: "Register specific sessions by ID or title"
+          args:
+            ids:            { type: "string[]", positional: true }
+            --title / -t:   { type: "string[]?" }
+            --path:         { type: "string?" }
+            --force / -f:   { type: flag }
+        recursive:
+          aliases: [r]
+          description: "Recursively find and register orphaned sessions across all workspaces"
+          args:
+            path:            { type: "string?", positional: true }
+            --depth / -d:    { type: "integer?" }
+            --force / -f:    { type: flag }
+            --dry-run:       { type: flag }
+            --exclude / -x:  { type: "string[]", description: "Patterns to exclude" }
+        repair:
+          aliases: [fix]
+          description: >
+            Repair sessions: compact large JSONL files (replay event-sourced
+            deltas into single snapshot) and rebuild the index with correct
+            metadata (isEmpty, lastResponseState, timing).
+          args:
+            --path:          { type: "string?" }
+            --all / -a:      { type: flag, description: "Repair all workspaces" }
+            --recursive / -r: { type: flag, description: "Recursively scan directory tree for workspaces" }
+            --depth / -d:    { type: "integer?", description: "Max depth for --recursive" }
+            --exclude / -x:  { type: "string[]", description: "Skip directories matching patterns (for --recursive)" }
+            --dry-run:       { type: flag }
+            --force / -f:    { type: flag }
+            --close-vscode:  { type: flag }
+            --reopen:        { type: flag }
+          fixes:
+            - "Compacts multi-line JSONL into single kind:0 snapshot"
+            - "Splits concatenated JSON objects that lack newline separators"
+            - "Sets lastResponseState to 1 (Complete)"
+            - "Recomputes isEmpty from actual request count"
+            - "Backs up originals as .jsonl.bak"
+        trim:
+          aliases: [t]
+          description: "Trim oversized sessions by keeping only the most recent requests"
+          args:
+            --path:          { type: "string?" }
+            --keep / -k:     { type: integer, default: 20, description: "Number of recent requests to keep" }
+            --session / -s:  { type: "string?", description: "Session ID (default: largest session)" }
+            --all / -a:      { type: flag, description: "Trim all sessions over threshold" }
+            --threshold-mb:  { type: integer, default: 10, description: "Only trim sessions larger than N MB" }
+            --force / -f:    { type: flag }
+
+    # -----------------------------------------------------------------------
+    # sync
+    # -----------------------------------------------------------------------
+    sync:
+      description: "Sync sessions between the harvest database and provider workspaces"
+      args:
+        --path:      { type: "string?", description: "Path to harvest database" }
+        --push:      { type: flag, description: "Push from DB to workspaces (restore)" }
+        --pull:      { type: flag, description: "Pull from workspaces into DB (backup)" }
+        --provider:  { type: "string?" }
+        --workspace: { type: "string?" }
+        --sessions:  { type: "string[]?" }
+        --format:    { type: string, default: auto, values: [auto, jsonl, json] }
+        --force:     { type: flag }
+        --dry-run:   { type: flag }
+
+    # -----------------------------------------------------------------------
+    # harvest
+    # -----------------------------------------------------------------------
+    harvest:
+      description: "Harvest sessions from all providers into a unified SQLite database"
+      subcommands:
+        init:
+          description: "Initialize a harvest database"
+          args:
+            --path: { type: "string?", default: "./chat_sessions.db" }
+            --git:  { type: flag, description: "Initialize git tracking" }
+        scan:
+          description: "Scan for available providers and sessions"
+          args:
+            --sessions:    { type: flag }
+            --web:         { type: flag }
+            --timeout:     { type: integer, default: 5 }
+            --verbose / -v: { type: flag }
+        run:
+          description: "Execute the harvest — collect sessions from all providers"
+          args:
+            --path:        { type: "string?" }
+            --providers:   { type: "string[]?", description: "Comma-delimited provider filter" }
+            --exclude:     { type: "string[]?" }
+            --incremental: { type: flag }
+            --commit:      { type: flag }
+            --message / -m: { type: "string?" }
+        status:
+          description: "Show harvest database status"
+          args:
+            --path: { type: "string?" }
+        list:
+          description: "List sessions in the harvest database"
+          args:
+            --path:     { type: "string?" }
+            --provider: { type: "string?" }
+            --limit:    { type: integer, default: 20 }
+            --search:   { type: "string?" }
+        export:
+          description: "Export sessions from the harvest database"
+          args:
+            output:     { type: string, positional: true, required: true }
+            --path:     { type: "string?" }
+            --format:   { type: string, default: json, values: [json, jsonl, md] }
+            --provider: { type: "string?" }
+            --sessions: { type: "string[]?" }
+        share:
+          description: "Import a shared chat session from a URL"
+          args:
+            url:        { type: string, positional: true, required: true }
+            --path:     { type: "string?" }
+            --name:     { type: "string?" }
+            --workspace: { type: "string?" }
+        shares:
+          description: "List pending or imported share links"
+          args:
+            --path:   { type: "string?" }
+            --status: { type: "string?", values: [pending, imported, failed, expired] }
+            --limit:  { type: integer, default: 20 }
+        checkpoint:
+          description: "Create a version snapshot of a session"
+          args:
+            session:       { type: string, positional: true, required: true }
+            --path:        { type: "string?" }
+            --message / -m: { type: "string?" }
+        checkpoints:
+          description: "List checkpoints for a session"
+          args:
+            session: { type: string, positional: true, required: true }
+            --path:  { type: "string?" }
+        revert:
+          description: "Revert a session to a previous checkpoint"
+          args:
+            session:    { type: string, positional: true, required: true }
+            checkpoint: { type: integer, positional: true, required: true }
+            --path:     { type: "string?" }
+        sync:
+          description: "Sync sessions between harvest DB and providers"
+          args:
+            --path:      { type: "string?" }
+            --push:      { type: flag }
+            --pull:      { type: flag }
+            --provider:  { type: "string?" }
+            --workspace: { type: "string?" }
+            --sessions:  { type: "string[]?" }
+            --format:    { type: string, default: auto }
+            --force:     { type: flag }
+            --dry-run:   { type: flag }
+        compact:
+          aliases: [gc]
+          description: "Compact the database by stripping session_json blobs (data preserved in messages_v2)"
+          args:
+            --path:    { type: "string?" }
+            --dry-run: { type: flag, description: "Show what would be compacted without changes" }
+        rebuild:
+          description: "Rebuild the FTS5 full-text search index"
+          args:
+            --path: { type: "string?" }
+        search:
+          description: "Full-text search across all harvested sessions"
+          args:
+            query:      { type: string, positional: true, required: true }
+            --path:     { type: "string?" }
+            --provider: { type: "string?" }
+            --limit:    { type: integer, default: 20 }
+        git:
+          description: "Git operations for the harvest database"
+          subcommands:
+            init:    { args: { --path: "string?" } }
+            commit:  { args: { --path: "string?", --message / -m: "string?" } }
+            log:     { args: { --path: "string?", --count / -n: { type: integer, default: 10 } } }
+            diff:    { args: { --path: "string?", --commit: "string?" } }
+            restore: { args: { commit: { type: string, positional: true, required: true }, --path: "string?" } }
+
+    # -----------------------------------------------------------------------
+    # recover (restore)
+    # -----------------------------------------------------------------------
+    recover:
+      aliases: [restore]
+      description: "Recover lost sessions from backups, recording state, or corrupted files"
+      subcommands:
+        scan:
+          description: "Scan for recoverable sessions"
+          args:
+            --provider: { type: string, default: all, values: [vscode, cursor, all] }
+            --verbose / -v: { type: flag }
+            --include-old:  { type: flag }
+        recording:
+          description: "Recover from the recording API server"
+          args:
+            --server:  { type: string, default: "http://localhost:8787" }
+            --session: { type: "string?" }
+            --output / -o: { type: "string?" }
+        database:
+          description: "Recover from SQLite database backups"
+          args:
+            backup:    { type: string, positional: true, required: true }
+            --session: { type: "string?" }
+            --output / -o: { type: "string?" }
+            --format:  { type: string, default: json, values: [json, jsonl, md] }
+        jsonl:
+          description: "Recover from corrupted JSONL files"
+          args:
+            file:          { type: string, positional: true, required: true }
+            --output / -o: { type: "string?" }
+            --aggressive:  { type: flag }
+        orphans:
+          description: "List potentially orphaned sessions in workspaceStorage"
+          args:
+            --provider:   { type: string, default: all }
+            --unindexed:  { type: flag }
+            --verify:     { type: flag }
+        repair:
+          description: "Repair corrupted session files in place (JSON-level fixes)"
+          args:
+            path:      { type: string, positional: true, required: true }
+            --backup:  { type: boolean, default: true }
+            --dry-run: { type: flag }
+        status:
+          description: "Show recovery status and recommendations"
+          args:
+            --provider: { type: string, default: all }
+            --system:   { type: flag }
+        convert:
+          description: "Convert between JSON and JSONL session formats"
+          args:
+            input:     { type: string, positional: true, required: true }
+            --output / -o: { type: "string?" }
+            --format:  { type: "string?", values: [json, jsonl] }
+            --compat:  { type: string, default: both, values: [legacy, modern, both] }
+        extract:
+          description: "Extract sessions from a workspace by project path"
+          args:
+            path:            { type: string, positional: true, required: true }
+            --output / -o:   { type: "string?" }
+            --all-formats:   { type: flag }
+            --include-edits: { type: flag }
+        detect:
+          description: "Detect session format and version"
+          args:
+            file:      { type: string, positional: true, required: true }
+            --verbose: { type: flag }
+            --json:    { type: flag }
+        upgrade:
+          description: "Upgrade session files to JSONL format (VS Code 1.109+)"
+          args:
+            project_paths:  { type: "string[]", positional: true, required: true }
+            --provider:     { type: string, default: auto, values: [vscode, cursor, auto] }
+            --target-format: { type: string, default: jsonl, values: [jsonl, json] }
+            --no-backup:    { type: flag }
+            --dry-run:      { type: flag }
+
+    # -----------------------------------------------------------------------
+    # api (serve)
+    # -----------------------------------------------------------------------
+    api:
+      aliases: [serve]
+      description: "Start the HTTP API server for the web frontend"
+      subcommands:
+        serve:
+          description: "Start the API server"
+          args:
+            --host:     { type: string, default: "0.0.0.0" }
+            --port / -p: { type: integer, default: 8787 }
+            --database: { type: "string?" }
+
+    # -----------------------------------------------------------------------
+    # agency
+    # -----------------------------------------------------------------------
+    agency:
+      description: "Agent Development Kit — create, manage, and orchestrate AI agents"
+      subcommands:
+        list:
+          description: "List available agents"
+          args:
+            --verbose / -v: { type: flag }
+        info:
+          description: "Show agent information"
+          args:
+            name: { type: string, positional: true, required: true }
+        modes:
+          description: "List orchestration modes (single, sequential, parallel, swarm)"
+        run:
+          description: "Run an agent with a prompt"
+          args:
+            prompt:             { type: string, positional: true, required: true }
+            --agent / -a:       { type: string, default: assistant }
+            --model / -m:       { type: "string?" }
+            --orchestration:    { type: string, default: single, values: [single, sequential, parallel, swarm] }
+            --verbose / -v:     { type: flag }
+        create:
+          description: "Create a new agent configuration"
+          args:
+            name:               { type: string, positional: true, required: true }
+            --role / -r:        { type: string, default: custom, values: [coordinator, researcher, coder, reviewer, executor, writer, tester, custom] }
+            --instruction / -i: { type: "string?" }
+            --model / -m:       { type: "string?" }
+        tools:
+          description: "List available agent tools"
+        templates:
+          description: "Show swarm templates"
+
+    # -----------------------------------------------------------------------
+    # telemetry
+    # -----------------------------------------------------------------------
+    telemetry:
+      description: "Manage anonymous usage data collection and structured event logging"
+      subcommands:
+        info:
+          aliases: [status]
+          description: "Show telemetry status"
+        opt-in:
+          aliases: [enable]
+          description: "Enable telemetry (default)"
+        opt-out:
+          aliases: [disable]
+          description: "Disable telemetry"
+        reset:
+          description: "Reset telemetry ID"
+        record:
+          aliases: [log]
+          description: "Record a structured event for later analysis"
+          args:
+            --category / -c: { type: string, default: custom, values: [workflow, error, performance, usage, custom] }
+            --event / -e:    { type: string, required: true }
+            --data / -d:     { type: "string?", description: "JSON payload" }
+            --kv / -k:       { type: "key=value[]" }
+            --tags / -t:     { type: "string[]" }
+            --context:       { type: "string?" }
+            --verbose / -v:  { type: flag }
+        show:
+          aliases: [logs]
+          description: "Show recorded events"
+          args:
+            --category / -c: { type: "string?" }
+            --event / -e:    { type: "string?" }
+            --tag / -t:      { type: "string?" }
+            --limit / -n:    { type: integer, default: 20 }
+            --format / -f:   { type: string, default: table, values: [table, json, jsonl] }
+            --after:         { type: "date?" }
+            --before:        { type: "date?" }
+        export:
+          description: "Export events for AI analysis"
+          args:
+            output:              { type: string, positional: true, required: true }
+            --format / -f:       { type: string, default: jsonl, values: [json, jsonl, csv] }
+            --category / -c:     { type: "string?" }
+            --with-metadata:     { type: flag }
+        clear:
+          description: "Clear recorded events"
+          args:
+            --force / -f:    { type: flag }
+            --older-than:    { type: "integer?", description: "Days" }
+        config:
+          description: "Configure remote telemetry endpoint"
+          args:
+            --endpoint:       { type: "string?" }
+            --api-key:        { type: "string?" }
+            --enable-remote:  { type: flag }
+            --disable-remote: { type: flag }
+        sync:
+          description: "Sync events to remote server"
+          args:
+            --limit / -n:  { type: "integer?" }
+            --clear-after: { type: flag }
+        test:
+          description: "Test remote server connection"
+
+    # -----------------------------------------------------------------------
+    # doctor (check)
+    # -----------------------------------------------------------------------
+    doctor:
+      aliases: [check]
+      description: "Check system environment, providers, and configuration health"
+      args:
+        --full:   { type: flag, description: "Include network connectivity checks" }
+        --format: { type: string, default: text, values: [text, json] }
+        --fix:    { type: flag, description: "Attempt automatic fixes" }
+
+    # -----------------------------------------------------------------------
+    # completions
+    # -----------------------------------------------------------------------
+    completions:
+      description: "Generate shell completions"
+      args:
+        shell: { type: enum, required: true, values: [bash, zsh, fish, powershell, elvish] }
+
+    # -----------------------------------------------------------------------
+    # shard
+    # -----------------------------------------------------------------------
+    shard:
+      description: "Split oversized sessions into linked shards (by request count or file size)"
+      subcommands:
+        session:
+          description: "Shard a single session file into linked parts"
+          args:
+            file:              { type: string, positional: true, required: true, description: "Path to .json or .jsonl session file" }
+            --max-requests / -n: { type: "integer?", default: 50, description: "Max requests per shard (mutually exclusive with --max-size)" }
+            --max-size / -s:   { type: "string?", description: "Max file size per shard, e.g. '10MB', '500KB' (mutually exclusive with --max-requests)" }
+            --output / -o:     { type: "string?", description: "Output directory (default: same as input)" }
+            --update-index:    { type: flag, description: "Update VS Code session index after sharding" }
+            --workspace / -w:  { type: "string?", description: "Workspace hash or project path (for --update-index)" }
+            --dry-run:         { type: flag }
+            --no-backup:       { type: flag, description: "Skip creating .oversized backup of original" }
+          mutually_exclusive: [--max-requests, --max-size]
+          output: "Linked shard files with _shardInfo metadata (prev/next pointers, deterministic UUIDs)"
+        workspace:
+          description: "Shard all oversized sessions in a workspace"
+          args:
+            --workspace / -w:    { type: "string?", description: "Workspace hash or project path (default: cwd)" }
+            --max-requests / -n: { type: "integer?", default: 50 }
+            --max-size / -s:     { type: "string?" }
+            --dry-run:           { type: flag }
+            --no-backup:         { type: flag }
+          mutually_exclusive: [--max-requests, --max-size]
+        info:
+          description: "Show shard metadata for a session file (linked-list pointers, part number)"
+          args:
+            file: { type: string, positional: true, required: true }
+      shard_metadata:
+        description: >
+          Each shard file contains a _shardInfo object with linked-list
+          pointers enabling agents to navigate between parts.
+        fields:
+          originalSessionId: { type: string, description: "UUID of the original unsplit session" }
+          shardIndex:        { type: integer, description: "0-based part number" }
+          totalShards:       { type: integer, description: "Total number of parts" }
+          prevShardId:       { type: "string?", description: "UUID of previous shard (null for first)" }
+          nextShardId:       { type: "string?", description: "UUID of next shard (null for last)" }
+          prevShardFile:     { type: "string?", description: "Filename of previous shard" }
+          nextShardFile:     { type: "string?", description: "Filename of next shard" }
+          requestRange:      { type: "[start, end]", description: "0-based request index range in this shard" }
+          strategy:          { type: string, values: [by_requests, by_size] }
+        uuid_generation: "Deterministic UUIDs derived from MD5(originalSessionId + shardIndex)"
+
+# =============================================================================
+# §4  INTERFACES — How Agents Can Interact
+# =============================================================================
+
+interfaces:
+  cli:
+    binary: ironbridge
+    description: "Primary interface — invoke commands via shell"
+    invocation: "ironbridge <command> [subcommand] [args] [flags]"
+    shell_completions: true
+    json_output: "Some commands support --format json"
+    exit_codes:
+      0: success
+      1: error
+
+  rest_api:
+    description: "HTTP REST API for programmatic access and the web frontend"
+    spec: openapi.yaml
+    spec_version: "3.0.3"
+    default_endpoint: "http://localhost:8787/api/v1"
+    start_command: "ironbridge api serve"
+    authentication: "None (local), SSO/SAML/API key (enterprise)"
+    websocket: "/ws (real-time updates)"
+    endpoints:
+      health: { method: GET, path: /health }
+      system_info: { method: GET, path: /system/info }
+      list_workspaces: { method: GET, path: /workspaces }
+      get_workspace: { method: GET, path: "/workspaces/{id}" }
+      discover_workspaces: { method: POST, path: /workspaces/discover }
+      list_sessions: { method: GET, path: /sessions }
+      get_session: { method: GET, path: "/sessions/{id}" }
+      merge_sessions: { method: POST, path: /sessions/merge }
+      export_session: { method: GET, path: "/sessions/{id}/export?format=json|markdown|html|pdf" }
+      list_messages: { method: GET, path: "/sessions/{id}/messages" }
+      list_providers: { method: GET, path: /providers }
+      provider_health: { method: GET, path: "/providers/{id}/health" }
+      provider_models: { method: GET, path: "/providers/{id}/models" }
+      chat_completions: { method: POST, path: /chat/completions, description: "OpenAI-compatible" }
+      search_all: { method: GET, path: "/search?q=" }
+      search_sessions: { method: GET, path: "/search/sessions?q=" }
+      semantic_search: { method: GET, path: "/search/semantic?q=" }
+      stats_overview: { method: GET, path: /stats/overview }
+      stats_providers: { method: GET, path: /stats/providers }
+      stats_timeline: { method: GET, path: "/stats/timeline?period=day|week|month|year" }
+      harvest: { method: POST, path: /harvest }
+      sync: { method: POST, path: /sync }
+      settings: { method: GET, path: /settings }
+
+  mcp:
+    description: "Model Context Protocol server for direct agent integration"
+    binary: ironbridge-mcp
+    start_command: "ironbridge mcp serve"
+    transport: stdio
+    tools:
+      ironbridge_list_workspaces:
+        description: "List all discovered workspaces"
+        parameters: {}
+      ironbridge_list_sessions:
+        description: "List sessions, optionally filtered by workspace"
+        parameters:
+          workspace_id: { type: "string?", description: "Filter by workspace" }
+      ironbridge_get_session:
+        description: "Get full session content including all messages"
+        parameters:
+          session_id: { type: string, required: true }
+      ironbridge_search_sessions:
+        description: "Full-text search across all harvested sessions"
+        parameters:
+          query: { type: string, required: true }
+          limit: { type: integer, default: 10 }
+      ironbridge_get_stats:
+        description: "Get aggregate statistics"
+        parameters: {}
+    client_configs:
+      claude_desktop:
+        file: claude_desktop_config.json
+        config:
+          mcpServers:
+            ironbridge:
+              command: ironbridge
+              args: [mcp, serve]
+      vscode:
+        file: settings.json
+        config:
+          mcp.servers:
+            ironbridge:
+              command: ironbridge
+              args: [mcp, serve]
+
+  database:
+    description: "Direct SQLite access to the harvest database"
+    default_path: "./chat_sessions.db"
+    engine: SQLite
+    features: [FTS5, WAL mode]
+    tables:
+      sessions: "Normalized session metadata"
+      messages_v2: "Individual messages with role, content, timestamp"
+      tool_invocations: "Tool calls made during sessions"
+      file_changes: "File modifications tracked per session"
+    example_queries:
+      recent_sessions: >
+        SELECT id, title, provider, created_at, message_count
+        FROM sessions ORDER BY created_at DESC LIMIT 20;
+      search_messages: >
+        SELECT s.title, m.role, m.content
+        FROM messages_v2 m JOIN sessions s ON s.id = m.session_id
+        WHERE messages_v2 MATCH 'search term';
+      provider_stats: >
+        SELECT provider, COUNT(*) as sessions, SUM(message_count) as messages
+        FROM sessions GROUP BY provider;
+
+# =============================================================================
+# §5  WORKFLOWS — Common Agent Task Patterns
+# =============================================================================
+
+workflows:
+  discover_project_sessions:
+    description: "Find all chat sessions associated with a project directory"
+    intent_triggers:
+      - "What sessions exist for this project?"
+      - "Show my chat history"
+      - "List conversations"
+    steps:
+      - { command: "ironbridge detect all --path <project>", purpose: "Discover workspace, providers, sessions" }
+      - { command: "ironbridge list sessions --project-path <project> -s", purpose: "List with sizes" }
+      - { command: "ironbridge show index --path <project>", purpose: "Check index health (isEmpty, responseState)" }
+
+  fix_invisible_session:
+    description: "Session exists on disk but doesn't appear in the editor's UI"
+    intent_triggers:
+      - "Session shows but won't load"
+      - "Session is invisible"
+      - "Orphaned sessions"
+    steps:
+      - { command: "ironbridge list orphaned --path <project>", purpose: "Find unregistered sessions" }
+      - { command: "ironbridge show index --path <project>", purpose: "Check isEmpty and lastResponseState" }
+      - { command: "ironbridge register repair --path <project> --close-vscode --reopen", purpose: "Compact + fix index" }
+    constraints:
+      - "VS Code must be closed for index writes to persist"
+      - "Use --force only for file operations; index will be overwritten if VS Code is running"
+
+  recover_lost_session:
+    description: "Session was lost, corrupted, or accidentally deleted"
+    intent_triggers:
+      - "Recover my session"
+      - "Session disappeared"
+      - "File is corrupted"
+    steps:
+      - { command: "ironbridge recover scan", purpose: "Scan all recovery sources" }
+      - { command: "ironbridge recover orphans --unindexed --verify", purpose: "Check for unindexed files" }
+      - { command: "ironbridge recover database <backup>", purpose: "Extract from SQLite backup" }
+      - { command: "ironbridge recover jsonl <file>", purpose: "Repair corrupted JSONL" }
+      - { command: "ironbridge register all --path <project> --close-vscode --reopen", purpose: "Re-register" }
+
+  harvest_and_search:
+    description: "Build a searchable database of all AI conversations"
+    intent_triggers:
+      - "Index all my sessions"
+      - "Search across conversations"
+      - "Build session database"
+    steps:
+      - { command: "ironbridge harvest init", purpose: "Create the database" }
+      - { command: "ironbridge harvest scan --sessions", purpose: "Preview what will be collected" }
+      - { command: "ironbridge harvest run --commit", purpose: "Collect and version" }
+      - { command: "ironbridge harvest search '<query>'", purpose: "Full-text search" }
+
+  merge_project_history:
+    description: "Combine scattered sessions into a unified conversation"
+    intent_triggers:
+      - "Merge my sessions"
+      - "Combine conversations"
+      - "Unify chat history"
+    steps:
+      - { command: "ironbridge list sessions --project-path <project>", purpose: "See available sessions" }
+      - { command: "ironbridge merge path <project> --title '<title>'", purpose: "Merge all for a path" }
+
+  migrate_to_new_machine:
+    description: "Move sessions from one machine to another"
+    intent_triggers:
+      - "Move to new computer"
+      - "Transfer sessions"
+    steps:
+      - { command: "ironbridge migration create <output> --all", purpose: "Package everything" }
+      - { note: "Transfer package to new machine" }
+      - { command: "ironbridge migration restore <package> --mapping 'old:new'", purpose: "Restore with path mapping" }
+
+  continuous_monitoring:
+    description: "Auto-harvest sessions as agents produce them"
+    intent_triggers:
+      - "Watch for new sessions"
+      - "Auto-save agent output"
+    steps:
+      - { command: "ironbridge watch --verbose", purpose: "Monitor all agent directories" }
+      - { command: "ironbridge watch --agent claude", purpose: "Monitor specific agent" }
+
+  health_check:
+    description: "Diagnose system issues"
+    intent_triggers:
+      - "Check health"
+      - "Something is broken"
+      - "Diagnose issue"
+    steps:
+      - { command: "ironbridge doctor --full", purpose: "Full system check" }
+      - { command: "ironbridge doctor --fix", purpose: "Auto-fix detected issues" }
+
+  shard_oversized_session:
+    description: "Split a session that's too large for VS Code to load into linked shards"
+    intent_triggers:
+      - "Session is too large"
+      - "Blank session"
+      - "Session won't load"
+      - "Split oversized session"
+      - "Shard session"
+    steps:
+      - { command: "ironbridge list sessions -s --project-path <project>", purpose: "Identify oversized files" }
+      - { command: "ironbridge shard session <file> --dry-run", purpose: "Preview shard plan (default: 50 requests/shard)" }
+      - { command: "ironbridge shard session <file> --update-index", purpose: "Execute sharding and update VS Code index" }
+      - { command: "ironbridge shard info <shard-file>", purpose: "Verify linked-list metadata" }
+    alternatives:
+      by_size: "ironbridge shard session <file> --max-size 10MB"
+      by_requests: "ironbridge shard session <file> --max-requests 25"
+      whole_workspace: "ironbridge shard workspace --workspace <path>"
+    constraints:
+      - "Original file is backed up as .oversized unless --no-backup is set"
+      - "Shard UUIDs are deterministic (MD5 of original ID + index)"
+      - "VS Code must be closed for --update-index to persist"
+
+# =============================================================================
+# §6  OBSERVABILITY — Diagnostics, Telemetry, and Health
+# =============================================================================
+
+observability:
+  health_check:
+    command: "ironbridge doctor"
+    checks:
+      - VS Code installation and version
+      - Workspace storage accessibility
+      - Provider availability (file-based and API)
+      - Database integrity
+      - Network connectivity (with --full)
+    output_formats: [text, json]
+    auto_fix: "ironbridge doctor --fix"
+
+  telemetry:
+    description: "Structured event logging for AI analysis"
+    opt_in_by_default: true
+    record: "ironbridge telemetry record -e <event> -c <category> -k key=value"
+    query: "ironbridge telemetry show --format json"
+    export: "ironbridge telemetry export output.jsonl"
+    categories: [workflow, error, performance, usage, custom]
+
+  session_index_diagnostics:
+    command: "ironbridge show index --path <project>"
+    fields_shown:
+      - session_id
+      - title
+      - isEmpty
+      - lastResponseState
+      - lastMessageDate
+      - location
+    known_failure_modes:
+      isEmpty_true_bug:
+        symptom: "Session has messages but shows isEmpty=true in index"
+        cause: "sync_session_index parsed requests before JSONL deltas were replayed"
+        fix: "ironbridge register repair"
+      cancelled_response_state:
+        symptom: "Session shows in sidebar but fails/hangs when clicked"
+        cause: "lastResponseState=2 triggers VS Code request resumption"
+        fix: "ironbridge register repair (sets state to 1=Complete)"
+      concatenated_jsonl:
+        symptom: "compact_session_jsonl fails with 'trailing characters'"
+        cause: "VS Code appended delta ops to line 0 without newline separator"
+        fix: "split_concatenated_jsonl() pre-processor (added v1.3.2)"
+      oversized_session:
+        symptom: "Session shows in sidebar but is blank or slow to load"
+        cause: "Session file exceeds ~50MB; VS Code struggles with JSON parse"
+        mitigation: "Export, archive, or trim old requests"
+
+  api_server:
+    health_endpoint: "GET /api/v1/health"
+    system_info: "GET /api/v1/system/info"
+    response_format:
+      status: "healthy | degraded | unhealthy"
+      version: string
+      uptime_seconds: integer
+
+# =============================================================================
+# §7  CONSTRAINTS — Rules Agents Must Respect
+# =============================================================================
+
+constraints:
+  vs_code_state_db:
+    description: >
+      VS Code caches the session index (chat.ChatSessionStore.index) in memory.
+      Any direct writes to state.vscdb while VS Code runs will be overwritten
+      when VS Code saves its state (on window close, periodic flush, etc.).
+    implication: "Close VS Code before writing to state.vscdb, then reopen."
+    commands_affected: [register, repair, sync push]
+
+  file_locking:
+    description: "state.vscdb may be locked by VS Code's SQLite connection."
+    implication: "Use --force to bypass the VS Code running check for read operations."
+
+  jsonl_event_sourcing:
+    description: >
+      VS Code's JSONL session format uses event sourcing. The first line is
+      kind:0 (full snapshot), subsequent lines are kind:1 (delta) and kind:2
+      (array append). Agents must never modify JSONL files directly — use
+      ironbridge's compaction and registration tools instead.
+    implication: "Treat session files as append-only logs; modify via ironbridge commands only."
+
+  session_size_limits:
+    description: >
+      VS Code's JSON parser struggles with session files over ~50MB. Sessions
+      that grow very large (100+ messages with rich context) may become
+      unloadable in the editor even if the file is valid JSON.
+    implication: >
+      Monitor file sizes with `ironbridge list sessions -s`. Use `ironbridge shard session <file>`
+      to split oversized sessions into linked shards (default: 50 requests per shard).
+      Alternatively, use `ironbridge register trim` to keep only recent requests.
+
+  backup_convention:
+    description: "IronBridge creates backup files before destructive operations."
+    files:
+      - "*.jsonl.bak — original before JSONL compaction"
+      - "*.json.bak — original before format conversion"
+      - "*.oversized — original before session sharding"
+      - ".ironbridge_recovery/ — project-level recovery backups"
+
+  shard_linked_list:
+    description: >
+      Shard files form a doubly-linked list via _shardInfo.prevShardId and
+      nextShardId. Agents navigating shards should follow these pointers
+      rather than relying on filename patterns. UUIDs are deterministic
+      (MD5 of original session ID + shard index), ensuring idempotent
+      re-sharding produces identical output.
+    implication: >
+      Never delete individual shard files without updating the linked list.
+      Use `ironbridge shard info <file>` to inspect shard metadata.
+
+# =============================================================================
+# §8  SKILLS — Agent-Specific Task Knowledge
+# =============================================================================
+
+skills:
+  description: >
+    Pre-built analysis skills that agents can invoke. Each skill defines
+    SQL queries, intent triggers, and output formats for common tasks.
+  location: skills/
+  available:
+    session-summary:
+      file: skills/session-summary.md
+      triggers: ["summarize sessions", "standup summary", "what did I work on"]
+      queries: [recent_sessions, message_highlights, tool_usage]
+    yak-detector:
+      file: skills/yak-detector.md
+      triggers: ["am I yak-shaving", "scope creep check", "detect tangents"]
+    code-insight:
+      file: skills/code-insight.md
+      triggers: ["analyze tool usage", "file change patterns", "code quality"]
+    session-organizer:
+      file: skills/session-organizer.md
+      triggers: ["organize sessions", "tag by project", "categorize"]
+    secret-guard:
+      file: skills/secret-guard.md
+      triggers: ["scan for secrets", "leaked API keys", "security audit"]
+    link-trail:
+      file: skills/link-trail.md
+      triggers: ["track URLs", "list references", "link catalog"]
+
+# =============================================================================
+# §9  FILESYSTEM LAYOUT — Where Things Live
+# =============================================================================
+
+filesystem:
+  workspace_storage:
+    windows: "%APPDATA%/Code/User/workspaceStorage/<hash>/"
+    macos: "~/Library/Application Support/Code/User/workspaceStorage/<hash>/"
+    linux: "~/.config/Code/User/workspaceStorage/<hash>/"
+    contents:
+      workspace.json: "Maps hash to project folder URI"
+      state.vscdb: "SQLite database with session index and other state"
+      chatSessions/: "Directory containing .json and .jsonl session files"
+      chatEditingSessions/: "Directory containing agent mode (Copilot Edits) sessions"
+
+  cursor_storage:
+    windows: "%APPDATA%/Cursor/User/workspaceStorage/<hash>/"
+    contents: "Same structure as VS Code"
+
+  claude_code_storage:
+    path: "~/.claude/projects/<project-hash>/sessions/"
+
+  harvest_database:
+    default: "./chat_sessions.db"
+    description: "SQLite database with normalized session data and FTS5 index"
+
+  ironbridge_config:
+    path: "~/.config/ironbridge/ or platform-appropriate XDG directory"
+
+  recovery_backups:
+    path: "<project>/.ironbridge_recovery/"
+    contents:
+      - "vscode_sqlite_state.vscdb — backup of state database"
+      - "vscode_sqlite_<hash>_state.vscdb — workspace-specific backup"

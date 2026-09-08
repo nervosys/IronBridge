@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout, Badge } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -18,10 +18,10 @@ export default function WatchPage() {
             <h2>Basic Usage</h2>
             <CodeBlock language="bash">
                 {`# Watch all known agent directories
-chasm watch
+ironbridge watch
 
 # Short alias
-chasm w`}
+ironbridge w`}
             </CodeBlock>
 
             <h2>Options</h2>
@@ -40,16 +40,16 @@ chasm w`}
 
             <h2>Examples</h2>
             <CodeBlock language="bash" filename="Watch specific agent">
-                {`chasm watch --agent claude
-chasm watch -a gemini --verbose`}
+                {`ironbridge watch --agent claude
+ironbridge watch -a gemini --verbose`}
             </CodeBlock>
 
             <CodeBlock language="bash" filename="Watch custom directory">
-                {`chasm watch --path /home/user/ai-sessions/`}
+                {`ironbridge watch --path /home/user/ai-sessions/`}
             </CodeBlock>
 
             <CodeBlock language="bash" filename="Dry-run with fast debounce">
-                {`chasm watch --no-harvest --debounce 1 --verbose`}
+                {`ironbridge watch --no-harvest --debounce 1 --verbose`}
             </CodeBlock>
 
             <h2>How It Works</h2>
@@ -60,10 +60,10 @@ chasm watch -a gemini --verbose`}
                 <li><strong>Harvest</strong> — After the debounce window, detected files are passed to the harvest system.</li>
             </ol>
 
-            <Callout type="tip" title="Complement to chasm run">
-                Use <code>chasm watch</code> when you launch agents outside of Chasm
+            <Callout type="tip" title="Complement to ironbridge run">
+                Use <code>ironbridge watch</code> when you launch agents outside of IronBridge
                 (e.g., directly from the terminal). For agents launched via{' '}
-                <code>chasm run &lt;agent&gt;</code>, auto-save is already built in.
+                <code>ironbridge run &lt;agent&gt;</code>, auto-save is already built in.
             </Callout>
 
             <PageNav currentPath="/docs/watch" />

@@ -1,11 +1,11 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 // =============================================================================
-// Chasm Shared Constants
+// IronBridge Shared Constants
 // =============================================================================
-// Constants shared across chasm-rust, chasm-web, chasm-app, and vscode-extension
-// These should be kept in sync with chasm-shared/src/constants.ts
+// Constants shared across ironbridge-rust, ironbridge-web, ironbridge-app, and vscode-extension
+// These should be kept in sync with ironbridge-shared/src/constants.ts
 
 /**
  * Provider configuration type

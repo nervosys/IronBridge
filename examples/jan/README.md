@@ -56,16 +56,16 @@ response = client.chat.completions.create(
 )
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure Jan provider
-chasm provider config jan --endpoint http://localhost:1337/v1
+ironbridge provider config jan --endpoint http://localhost:1337/v1
 
 # Test connection
-chasm provider test jan
+ironbridge provider test jan
 
 # Import demo sessions
-chasm provider import jan --source examples/jan/sessions
+ironbridge provider import jan --source examples/jan/sessions
 ```
 

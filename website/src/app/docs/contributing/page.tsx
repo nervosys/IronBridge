@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -16,14 +16,14 @@ export default function ContributingPage() {
       <CodeBlock language="bash">
 {`# 1. Fork the repository on GitHub
 # 2. Clone your fork
-git clone https://github.com/YOUR_USERNAME/chasm.git
-cd chasm
+git clone https://github.com/YOUR_USERNAME/ironbridge.git
+cd ironbridge
 
 # 3. Add upstream remote
-git remote add upstream https://github.com/nervosys/chasm.git
+git remote add upstream https://github.com/nervosys/ironbridge.git
 
 # 4. Build the CLI
-cd chasm-rust
+cd ironbridge-rust
 cargo build`}
       </CodeBlock>
 
@@ -33,10 +33,10 @@ cargo build`}
           <tr><th>Component</th><th>Requirements</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>chasm-rust</code></td><td>Rust 1.75+, cargo</td></tr>
-          <tr><td><code>chasm-web</code></td><td>Node.js 18+, npm</td></tr>
-          <tr><td><code>chasm-app</code></td><td>Node.js 18+, React Native CLI</td></tr>
-          <tr><td><code>chasm-desktop</code></td><td>Rust 1.75+, Tauri CLI</td></tr>
+          <tr><td><code>ironbridge-rust</code></td><td>Rust 1.75+, cargo</td></tr>
+          <tr><td><code>ironbridge-web</code></td><td>Node.js 18+, npm</td></tr>
+          <tr><td><code>ironbridge-app</code></td><td>Node.js 18+, React Native CLI</td></tr>
+          <tr><td><code>ironbridge-desktop</code></td><td>Rust 1.75+, Tauri CLI</td></tr>
           <tr><td><code>docs-site</code></td><td>Node.js 18+, npm</td></tr>
         </tbody>
       </table>

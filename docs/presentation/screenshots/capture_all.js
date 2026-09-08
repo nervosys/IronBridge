@@ -1,4 +1,4 @@
-console.log("Chasm Screenshot Capture Script");
+console.log("IronBridge Screenshot Capture Script");
 console.log("=============================\n");
 
 const { chromium } = require('playwright');
@@ -8,7 +8,7 @@ const http = require('http');
 
 // Start the Vite dev server and wait for it to be ready
 async function startDevServer() {
-    const webDir = path.resolve(__dirname, '../../../chasm-web');
+    const webDir = path.resolve(__dirname, '../../../ironbridge-web');
     console.log(`Starting Vite dev server from ${webDir} (demo mode)...`);
 
     const isWindows = process.platform === 'win32';
@@ -41,7 +41,7 @@ async function startDevServer() {
 
 // Start the Expo web server for the mobile app
 async function startExpoServer() {
-    const appDir = path.resolve(__dirname, '../../../chasm-app');
+    const appDir = path.resolve(__dirname, '../../../ironbridge-app');
     console.log(`Starting Expo web server from ${appDir}...`);
 
     const isWindows = process.platform === 'win32';
@@ -207,12 +207,12 @@ async function main() {
                 await webPage.waitForTimeout(300);
                 // Wait for page to be fully ready
                 await waitForPageReady(webPage, route.name);
-                const filename = `chasm_web_${route.name}.png`;
+                const filename = `ironbridge_web_${route.name}.png`;
                 await webPage.screenshot({ path: filename, fullPage: false });
                 console.log(`✓ ${filename}`);
                 capturedFiles.push(filename);
             } catch (e) {
-                console.log(`✗ chasm_web_${route.name}.png - ${e.message}`);
+                console.log(`✗ ironbridge_web_${route.name}.png - ${e.message}`);
             }
         }
         await webPage.close();
@@ -230,7 +230,7 @@ async function main() {
 
         // Set dark mode for Expo app (uses AsyncStorage key)
         await mobilePage.evaluate(() => {
-            localStorage.setItem('csm_theme_mode', 'dark');
+            localStorage.setItem('ironbridge_theme_mode', 'dark');
         });
         await mobilePage.reload({ waitUntil: 'domcontentloaded' });
         await mobilePage.waitForTimeout(5000); // Wait for app to fully load
@@ -252,12 +252,12 @@ async function main() {
                     await mobilePage.waitForTimeout(2000); // Wait for navigation
                 }
 
-                const filename = `chasm_app_${tab.name}.png`;
+                const filename = `ironbridge_app_${tab.name}.png`;
                 await mobilePage.screenshot({ path: filename, fullPage: false });
                 console.log(`✓ ${filename}`);
                 capturedFiles.push(filename);
             } catch (e) {
-                console.log(`✗ chasm_app_${tab.name}.png - ${e.message}`);
+                console.log(`✗ ironbridge_app_${tab.name}.png - ${e.message}`);
             }
         }
         await mobilePage.close();
@@ -288,12 +288,12 @@ async function main() {
                 });
                 await desktopPage.waitForTimeout(300);
                 await waitForPageReady(desktopPage, route.name);
-                const filename = `chasm_desktop_${route.name}.png`;
+                const filename = `ironbridge_desktop_${route.name}.png`;
                 await desktopPage.screenshot({ path: filename, fullPage: false });
                 console.log(`✓ ${filename}`);
                 capturedFiles.push(filename);
             } catch (e) {
-                console.log(`✗ chasm_desktop_${route.name}.png - ${e.message}`);
+                console.log(`✗ ironbridge_desktop_${route.name}.png - ${e.message}`);
             }
         }
         await desktopPage.close();

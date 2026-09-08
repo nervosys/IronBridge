@@ -1,9 +1,9 @@
 {
-  "name": "chasm-videos",
+  "name": "ironbridge-videos",
   "version": "1.0.0",
-  "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial",
+  "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial",
   "private": true,
-  "description": "Programmatic video tutorials for Chasm, built with Remotion",
+  "description": "Programmatic video tutorials for IronBridge, built with Remotion",
   "scripts": {
     "start": "npx remotion studio",
     "build": "npx remotion bundle",

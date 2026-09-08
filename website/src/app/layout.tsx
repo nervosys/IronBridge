@@ -1,12 +1,12 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CHASM // Documentation',
-  description: 'Chat Session Manager (Chasm): Bridging the divide between AI providers.',
+  title: 'IRONBRIDGE // Documentation',
+  description: 'Chat Session Manager (IronBridge): Bridging the divide between AI providers.',
   icons: { icon: '/favicon.ico' },
 };
 

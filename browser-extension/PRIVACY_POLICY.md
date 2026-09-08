@@ -1,12 +1,12 @@
-# Privacy Policy — Chasm Browser Extension
+# Privacy Policy — IronBridge Browser Extension
 
 **Last Updated:** February 10, 2026
-**Extension Name:** Chasm — Chat Session Manager
+**Extension Name:** IronBridge — Chat Session Manager
 **Publisher:** Nervosys LLC
 
 ## Overview
 
-The Chasm browser extension ("Extension") is designed to help you capture and manage your AI chat sessions from supported web-based AI tools. We are committed to protecting your privacy. This policy explains what data the Extension handles and how.
+The IronBridge browser extension ("Extension") is designed to help you capture and manage your AI chat sessions from supported web-based AI tools. We are committed to protecting your privacy. This policy explains what data the Extension handles and how.
 
 ## Data Collection
 
@@ -35,13 +35,13 @@ The Extension accesses content on the following supported AI chat websites only 
 
 ### How Data Is Used
 
-- **Session export:** When you explicitly click "Export" or "Harvest," the Extension reads the chat conversation from the current page and sends it to **your self-hosted Chasm API server** (default: `http://localhost:8787`).
+- **Session export:** When you explicitly click "Export" or "Harvest," the Extension reads the chat conversation from the current page and sends it to **your self-hosted IronBridge API server** (default: `http://localhost:8787`).
 - **Local storage:** Extension settings (API URL, auto-harvest preferences, notification preferences) are stored locally in your browser using the `chrome.storage.local` API.
-- **Auto-harvest:** If enabled by you, the Extension will periodically request your local Chasm server to harvest sessions. No data leaves your network.
+- **Auto-harvest:** If enabled by you, the Extension will periodically request your local IronBridge server to harvest sessions. No data leaves your network.
 
 ### Where Data Goes
 
-All exported session data is sent exclusively to the Chasm API server URL that **you** configure. By default, this is `http://localhost:8787` — your own machine. The Extension never sends data to Nervosys servers or any other third party.
+All exported session data is sent exclusively to the IronBridge API server URL that **you** configure. By default, this is `http://localhost:8787` — your own machine. The Extension never sends data to Nervosys servers or any other third party.
 
 ## Permissions Explained
 
@@ -57,12 +57,12 @@ All exported session data is sent exclusively to the Chasm API server URL that *
 
 ## Third-Party Services
 
-The Extension does **not** integrate with or send data to any third-party services, APIs, or analytics platforms. The only network requests made are to your configured Chasm API server.
+The Extension does **not** integrate with or send data to any third-party services, APIs, or analytics platforms. The only network requests made are to your configured IronBridge API server.
 
 ## Data Retention
 
 - **Local storage:** Settings persist until you uninstall the Extension or clear browser data.
-- **Exported sessions:** Stored on your Chasm server under your control. Retention is determined by your server configuration.
+- **Exported sessions:** Stored on your IronBridge server under your control. Retention is determined by your server configuration.
 
 ## Children's Privacy
 
@@ -74,13 +74,13 @@ We may update this Privacy Policy from time to time. Changes will be reflected b
 
 ## Open Source
 
-The Chasm browser extension is open source under the AGPL-3.0-only license. You can review the complete source code at:
+The IronBridge browser extension is open source under the AGPL-3.0-only license. You can review the complete source code at:
 
-- **Repository:** [github.com/nervosys/chasm](https://github.com/nervosys/chasm)
+- **Repository:** [github.com/nervosys/ironbridge](https://github.com/nervosys/ironbridge)
 
 ## Contact
 
 If you have questions about this Privacy Policy, please contact:
 
 - **Email:** privacy@nervosys.com
-- **GitHub:** [github.com/nervosys/chasm/issues](https://github.com/nervosys/chasm/issues)
+- **GitHub:** [github.com/nervosys/ironbridge/issues](https://github.com/nervosys/ironbridge/issues)

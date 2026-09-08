@@ -45,16 +45,16 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure vLLM provider
-chasm provider config vllm --endpoint http://localhost:8000/v1
+ironbridge provider config vllm --endpoint http://localhost:8000/v1
 
 # Test connection
-chasm provider test vllm
+ironbridge provider test vllm
 
 # Import demo sessions
-chasm provider import vllm --source examples/vllm/sessions
+ironbridge provider import vllm --source examples/vllm/sessions
 ```
 

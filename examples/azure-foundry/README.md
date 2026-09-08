@@ -45,21 +45,21 @@ curl https://<endpoint>.openai.azure.com/openai/deployments/<model>/chat/complet
   }'
 ```
 
-## Usage with chasm
+## Usage with ironbridge
 
 ```bash
 # Configure Azure AI Foundry provider (local)
-chasm provider config foundry --endpoint http://localhost:5272
+ironbridge provider config foundry --endpoint http://localhost:5272
 
 # Configure with API key (cloud)
-chasm provider config foundry \
+ironbridge provider config foundry \
   --endpoint https://your-endpoint.openai.azure.com \
   --api-key YOUR_API_KEY
 
 # Test connection
-chasm provider test foundry
+ironbridge provider test foundry
 
 # Import demo sessions
-chasm provider import foundry --source examples/azure-foundry/sessions
+ironbridge provider import foundry --source examples/azure-foundry/sessions
 ```
 

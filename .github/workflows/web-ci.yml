@@ -4,18 +4,18 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'chasm-shared/**'
-      - 'chasm-web/**'
-      - 'chasm-app/**'
+      - 'ironbridge-shared/**'
+      - 'ironbridge-web/**'
+      - 'ironbridge-app/**'
       - 'website/**'
       - 'vscode-extension/**'
       - '.github/workflows/web-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'chasm-shared/**'
-      - 'chasm-web/**'
-      - 'chasm-app/**'
+      - 'ironbridge-shared/**'
+      - 'ironbridge-web/**'
+      - 'ironbridge-app/**'
       - 'website/**'
       - 'vscode-extension/**'
       - '.github/workflows/web-ci.yml'
@@ -27,11 +27,11 @@ env:
 
 jobs:
   # ==========================================================================
-  # Shared types package — a `file:` dependency of chasm-web and chasm-app,
+  # Shared types package — a `file:` dependency of ironbridge-web and ironbridge-app,
   # so it must build before either of them.
   # ==========================================================================
   shared:
-    name: chasm-shared
+    name: ironbridge-shared
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,29 +42,29 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: chasm-shared/package-lock.json
+          cache-dependency-path: ironbridge-shared/package-lock.json
 
       - name: Install dependencies
-        working-directory: chasm-shared
+        working-directory: ironbridge-shared
         run: npm ci
 
       - name: Typecheck
-        working-directory: chasm-shared
+        working-directory: ironbridge-shared
         run: npm run typecheck
 
       - name: Test
-        working-directory: chasm-shared
+        working-directory: ironbridge-shared
         run: npm test
 
       - name: Build
-        working-directory: chasm-shared
+        working-directory: ironbridge-shared
         run: npm run build
 
   # ==========================================================================
   # Web dashboard (React + Vite)
   # ==========================================================================
   web:
-    name: chasm-web
+    name: ironbridge-web
     runs-on: ubuntu-latest
     needs: shared
     steps:
@@ -76,33 +76,33 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: chasm-web/package-lock.json
+          cache-dependency-path: ironbridge-web/package-lock.json
 
       - name: Build shared package
-        working-directory: chasm-shared
+        working-directory: ironbridge-shared
         run: npm ci && npm run build
 
       - name: Install dependencies
-        working-directory: chasm-web
+        working-directory: ironbridge-web
         run: npm ci
 
       - name: Lint
-        working-directory: chasm-web
+        working-directory: ironbridge-web
         run: npm run lint
 
       - name: Test
-        working-directory: chasm-web
+        working-directory: ironbridge-web
         run: npm test
 
       - name: Build (typecheck + bundle)
-        working-directory: chasm-web
+        working-directory: ironbridge-web
         run: npm run build
 
   # ==========================================================================
   # Mobile/desktop app (Expo). No typecheck script, so tsc is invoked directly.
   # ==========================================================================
   app:
-    name: chasm-app
+    name: ironbridge-app
     runs-on: ubuntu-latest
     needs: shared
     steps:
@@ -114,18 +114,18 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: chasm-app/package-lock.json
+          cache-dependency-path: ironbridge-app/package-lock.json
 
       - name: Build shared package
-        working-directory: chasm-shared
+        working-directory: ironbridge-shared
         run: npm ci && npm run build
 
       - name: Install dependencies
-        working-directory: chasm-app
+        working-directory: ironbridge-app
         run: npm ci
 
       - name: Typecheck
-        working-directory: chasm-app
+        working-directory: ironbridge-app
         run: npx tsc --noEmit
 
   # ==========================================================================

@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Card } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,14 +9,14 @@ export default function ArchitecturePage() {
     <div className="content-wrapper">
       <h1>Architecture</h1>
       <p className="page-description">
-        Chasm uses a hub-and-spoke architecture where the Rust core serves as the
+        IronBridge uses a hub-and-spoke architecture where the Rust core serves as the
         single source of truth for all data.
       </p>
 
       <h2>System Overview</h2>
       <CodeBlock language="text" filename="Architecture Diagram">
 {`                    ┌─────────────────┐
-                    │   chasm-rust    │
+                    │   ironbridge-rust    │
                     │  (Backend API)  │
                     │                 │
                     │  SQLite DB      │
@@ -27,18 +27,18 @@ export default function ArchitecturePage() {
               │              │              │
               ▼              ▼              ▼
        ┌──────────┐   ┌──────────┐   ┌──────────┐
-       │ chasm-web │   │ chasm-app│   │ desktop  │
+       │ ironbridge-web │   │ ironbridge-app│   │ desktop  │
        │ (React)  │   │(iOS/And) │   │ (Tauri)  │
        └──────────┘   └──────────┘   └──────────┘`}
       </CodeBlock>
 
       <h2>Components</h2>
       <div className="card-grid">
-        <Card icon="⚙️" title="chasm-rust" description="Core CLI, API server, SQLite database, harvest engine" />
-        <Card icon="🌐" title="chasm-web" description="React + Vite web dashboard with real-time sync" />
-        <Card icon="📱" title="chasm-app" description="React Native mobile app for iOS and Android" />
-        <Card icon="🖥️" title="chasm-desktop" description="Tauri native desktop app" />
-        <Card icon="📦" title="chasm-shared" description="Shared TypeScript types and sync utilities" />
+        <Card icon="⚙️" title="ironbridge-rust" description="Core CLI, API server, SQLite database, harvest engine" />
+        <Card icon="🌐" title="ironbridge-web" description="React + Vite web dashboard with real-time sync" />
+        <Card icon="📱" title="ironbridge-app" description="React Native mobile app for iOS and Android" />
+        <Card icon="🖥️" title="ironbridge-desktop" description="Tauri native desktop app" />
+        <Card icon="📦" title="ironbridge-shared" description="Shared TypeScript types and sync utilities" />
         <Card icon="🧩" title="vscode-extension" description="VS Code extension with session recording" />
         <Card icon="🔗" title="browser-extension" description="Chrome/Firefox extension for web AI chat" />
         <Card icon="🔧" title="jetbrains-plugin" description="IntelliJ/PyCharm/WebStorm plugin" />

@@ -1,18 +1,18 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 // =============================================================================
-// Chasm VS Code Extension Types
+// IronBridge VS Code Extension Types
 // =============================================================================
-// Type definitions aligned with chasm-shared and chasm-rust Agency
-// These types ensure consistency across the entire Chasm ecosystem
+// Type definitions aligned with ironbridge-shared and ironbridge-rust Agency
+// These types ensure consistency across the entire IronBridge ecosystem
 
 // =============================================================================
-// Core Session Types (aligned with chasm-shared/types)
+// Core Session Types (aligned with ironbridge-shared/types)
 // =============================================================================
 
 /**
- * Message role - matches chasm-rust Agency MessageRole
+ * Message role - matches ironbridge-rust Agency MessageRole
  */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -22,46 +22,46 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 export type ToolStatus = 'pending' | 'running' | 'complete' | 'error';
 
 /**
- * Agent status - matches chasm-shared AgentStatus
+ * Agent status - matches ironbridge-shared AgentStatus
  */
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'waiting' | 'completed' | 'failed' | 'paused';
 
 /**
- * Agent role - matches chasm-shared AgentRole
+ * Agent role - matches ironbridge-shared AgentRole
  */
 export type AgentRole = 'coordinator' | 'researcher' | 'coder' | 'reviewer' | 'executor' | 'custom';
 
 /**
- * Task status - matches chasm-shared TaskStatus
+ * Task status - matches ironbridge-shared TaskStatus
  */
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * Swarm status - matches chasm-shared SwarmStatus
+ * Swarm status - matches ironbridge-shared SwarmStatus
  */
 export type SwarmStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 
 /**
- * Orchestration type - matches chasm-rust Agency OrchestrationType
+ * Orchestration type - matches ironbridge-rust Agency OrchestrationType
  */
 export type OrchestrationType = 'single' | 'sequential' | 'parallel' | 'loop' | 'hierarchical' | 'swarm' | 'debate';
 
 /**
- * Provider type - matches chasm-shared ProviderType
+ * Provider type - matches ironbridge-shared ProviderType
  */
 export type ProviderType = 'local' | 'cloud';
 
 /**
- * Provider status - matches chasm-shared ProviderStatus
+ * Provider status - matches ironbridge-shared ProviderStatus
  */
 export type ProviderStatus = 'connected' | 'disconnected' | 'error' | 'unknown';
 
 // =============================================================================
-// Message Types (aligned with chasm-rust Agency models)
+// Message Types (aligned with ironbridge-rust Agency models)
 // =============================================================================
 
 /**
- * Tool call request - matches chasm-rust Agency ToolCall
+ * Tool call request - matches ironbridge-rust Agency ToolCall
  */
 export interface ToolCall {
     id: string;
@@ -71,7 +71,7 @@ export interface ToolCall {
 }
 
 /**
- * Tool execution result - matches chasm-rust Agency ToolResult
+ * Tool execution result - matches ironbridge-rust Agency ToolResult
  */
 export interface ToolResult {
     callId: string;
@@ -83,7 +83,7 @@ export interface ToolResult {
 }
 
 /**
- * Tool invocation - matches chasm-shared ToolInvocation
+ * Tool invocation - matches ironbridge-shared ToolInvocation
  */
 export interface ToolInvocation {
     toolName: string;
@@ -101,7 +101,7 @@ export interface ToolInvocation {
 }
 
 /**
- * File change from tool invocation - matches chasm-shared FileChange
+ * File change from tool invocation - matches ironbridge-shared FileChange
  */
 export interface FileChange {
     type: 'file_edit' | 'file_create' | 'file_delete' | 'terminal_command' | 'notebook_edit' | string;
@@ -120,7 +120,7 @@ export interface FileChange {
 }
 
 /**
- * Token usage - matches chasm-shared TokenUsage
+ * Token usage - matches ironbridge-shared TokenUsage
  */
 export interface TokenUsage {
     prompt?: number;
@@ -132,7 +132,7 @@ export interface TokenUsage {
 }
 
 /**
- * Chat message - aligned with chasm-shared Message and chasm-rust AgencyMessage
+ * Chat message - aligned with ironbridge-shared Message and ironbridge-rust AgencyMessage
  */
 export interface ChatMessage {
     id: string;
@@ -157,11 +157,11 @@ export interface ChatMessage {
 }
 
 // =============================================================================
-// Session Types (aligned with chasm-shared Session)
+// Session Types (aligned with ironbridge-shared Session)
 // =============================================================================
 
 /**
- * Chat session - matches chasm-shared Session
+ * Chat session - matches ironbridge-shared Session
  */
 export interface ChatSession {
     id: string;
@@ -182,7 +182,7 @@ export interface ChatSession {
 }
 
 /**
- * Session filter - matches chasm-shared SessionFilter
+ * Session filter - matches ironbridge-shared SessionFilter
  */
 export interface SessionFilter {
     workspaceId?: string;
@@ -199,7 +199,7 @@ export interface SessionFilter {
 }
 
 // =============================================================================
-// Agent Types (aligned with chasm-shared Agent and chasm-rust Agency Agent)
+// Agent Types (aligned with ironbridge-shared Agent and ironbridge-rust Agency Agent)
 // =============================================================================
 
 /**
@@ -212,7 +212,7 @@ export interface AgentCapability {
 }
 
 /**
- * Agent configuration - aligned with chasm-shared Agent and chasm-rust Agency Agent
+ * Agent configuration - aligned with ironbridge-shared Agent and ironbridge-rust Agency Agent
  */
 export interface AgentConfig {
     id?: string;
@@ -238,7 +238,7 @@ export interface AgentConfig {
 }
 
 /**
- * Agent task - matches chasm-shared AgentTask
+ * Agent task - matches ironbridge-shared AgentTask
  */
 export interface AgentTask {
     id: string;
@@ -257,7 +257,7 @@ export interface AgentTask {
 }
 
 /**
- * Agent message for inter-agent communication - matches chasm-shared AgentMessage
+ * Agent message for inter-agent communication - matches ironbridge-shared AgentMessage
  */
 export interface AgentMessage {
     id: string;
@@ -300,11 +300,11 @@ export interface AgentReflection {
 }
 
 // =============================================================================
-// Swarm Types (aligned with chasm-shared Swarm and chasm-rust Agency Swarm)
+// Swarm Types (aligned with ironbridge-shared Swarm and ironbridge-rust Agency Swarm)
 // =============================================================================
 
 /**
- * Swarm agent assignment - matches chasm-shared SwarmAgent
+ * Swarm agent assignment - matches ironbridge-shared SwarmAgent
  */
 export interface SwarmAgent {
     agentId: string;
@@ -313,7 +313,7 @@ export interface SwarmAgent {
 }
 
 /**
- * Workflow node - matches chasm-shared WorkflowNode
+ * Workflow node - matches ironbridge-shared WorkflowNode
  */
 export interface WorkflowNode {
     id: string;
@@ -324,7 +324,7 @@ export interface WorkflowNode {
 }
 
 /**
- * Workflow edge - matches chasm-shared WorkflowEdge
+ * Workflow edge - matches ironbridge-shared WorkflowEdge
  */
 export interface WorkflowEdge {
     id: string;
@@ -334,7 +334,7 @@ export interface WorkflowEdge {
 }
 
 /**
- * Swarm workflow - matches chasm-shared SwarmWorkflow
+ * Swarm workflow - matches ironbridge-shared SwarmWorkflow
  */
 export interface SwarmWorkflow {
     nodes: WorkflowNode[];
@@ -342,7 +342,7 @@ export interface SwarmWorkflow {
 }
 
 /**
- * Multi-agent swarm - matches chasm-shared Swarm and chasm-rust Agency Swarm
+ * Multi-agent swarm - matches ironbridge-shared Swarm and ironbridge-rust Agency Swarm
  */
 export interface Swarm {
     id: string;
@@ -363,7 +363,7 @@ export interface Swarm {
 }
 
 /**
- * Agent run - matches chasm-shared AgentRun
+ * Agent run - matches ironbridge-shared AgentRun
  */
 export interface AgentRun {
     id: string;
@@ -382,11 +382,11 @@ export interface AgentRun {
 }
 
 // =============================================================================
-// Provider Types (aligned with chasm-shared Provider)
+// Provider Types (aligned with ironbridge-shared Provider)
 // =============================================================================
 
 /**
- * Provider settings - matches chasm-shared ProviderSettings
+ * Provider settings - matches ironbridge-shared ProviderSettings
  */
 export interface ProviderSettings {
     enabled: boolean;
@@ -397,7 +397,7 @@ export interface ProviderSettings {
 }
 
 /**
- * Provider configuration - matches chasm-shared Provider
+ * Provider configuration - matches ironbridge-shared Provider
  */
 export interface ProviderConfig {
     id?: string;
@@ -415,7 +415,7 @@ export interface ProviderConfig {
 }
 
 /**
- * Provider health check - matches chasm-shared ProviderHealth
+ * Provider health check - matches ironbridge-shared ProviderHealth
  */
 export interface ProviderHealth {
     providerId: string;
@@ -444,11 +444,11 @@ export interface ToolDefinition {
     description: string;
     parameters: Record<string, unknown>;
     category: ToolCategory;
-    source?: 'vscode' | 'mcp' | 'Chasm' | 'custom';
+    source?: 'vscode' | 'mcp' | 'IronBridge' | 'custom';
 }
 
 /**
- * MCP Tool - matches chasm-shared McpTool
+ * MCP Tool - matches ironbridge-shared McpTool
  */
 export interface McpTool {
     name: string;
@@ -457,7 +457,7 @@ export interface McpTool {
 }
 
 /**
- * MCP Tool Call - matches chasm-shared McpToolCall
+ * MCP Tool Call - matches ironbridge-shared McpToolCall
  */
 export interface McpToolCall {
     name: string;
@@ -465,7 +465,7 @@ export interface McpToolCall {
 }
 
 /**
- * MCP Tool Result - matches chasm-shared McpToolResult
+ * MCP Tool Result - matches ironbridge-shared McpToolResult
  */
 export interface McpToolResult {
     tool: string;
@@ -476,11 +476,11 @@ export interface McpToolResult {
 }
 
 // =============================================================================
-// Event Types (aligned with chasm-rust Agency events)
+// Event Types (aligned with ironbridge-rust Agency events)
 // =============================================================================
 
 /**
- * Event type - matches chasm-rust Agency EventType
+ * Event type - matches ironbridge-rust Agency EventType
  */
 export type EventType =
     | 'agent_started'
@@ -497,7 +497,7 @@ export type EventType =
     | 'reflection_complete';
 
 /**
- * Agency Event - aligned with chasm-rust Agency AgencyEvent
+ * Agency Event - aligned with ironbridge-rust Agency AgencyEvent
  */
 export interface AgencyEvent {
     eventType: EventType;
@@ -507,11 +507,11 @@ export interface AgencyEvent {
 }
 
 // =============================================================================
-// Chat Completion Types (aligned with chasm-shared)
+// Chat Completion Types (aligned with ironbridge-shared)
 // =============================================================================
 
 /**
- * Chat completion request - matches chasm-shared ChatCompletionRequest
+ * Chat completion request - matches ironbridge-shared ChatCompletionRequest
  */
 export interface ChatCompletionRequest {
     provider: string;
@@ -526,7 +526,7 @@ export interface ChatCompletionRequest {
 }
 
 /**
- * Chat completion response - matches chasm-shared ChatCompletionResponse
+ * Chat completion response - matches ironbridge-shared ChatCompletionResponse
  */
 export interface ChatCompletionResponse {
     id: string;
@@ -540,7 +540,7 @@ export interface ChatCompletionResponse {
 }
 
 /**
- * Stream chunk - matches chasm-shared StreamChunk
+ * Stream chunk - matches ironbridge-shared StreamChunk
  */
 export interface StreamChunk {
     id: string;
@@ -549,11 +549,11 @@ export interface StreamChunk {
 }
 
 // =============================================================================
-// API Types (aligned with chasm-shared)
+// API Types (aligned with ironbridge-shared)
 // =============================================================================
 
 /**
- * API error - matches chasm-shared ApiError
+ * API error - matches ironbridge-shared ApiError
  */
 export interface ApiError {
     code: string;
@@ -562,7 +562,7 @@ export interface ApiError {
 }
 
 /**
- * API response - matches chasm-shared ApiResponse
+ * API response - matches ironbridge-shared ApiResponse
  */
 export interface ApiResponse<T> {
     success: boolean;
@@ -571,7 +571,7 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Paginated response - matches chasm-shared PaginatedResponse
+ * Paginated response - matches ironbridge-shared PaginatedResponse
  */
 export interface PaginatedResponse<T> {
     items: T[];
@@ -582,11 +582,11 @@ export interface PaginatedResponse<T> {
 }
 
 // =============================================================================
-// Search Types (aligned with chasm-shared)
+// Search Types (aligned with ironbridge-shared)
 // =============================================================================
 
 /**
- * Search result - matches chasm-shared SearchResult
+ * Search result - matches ironbridge-shared SearchResult
  */
 export interface SearchResult {
     type: 'session' | 'message' | 'workspace';
@@ -602,7 +602,7 @@ export interface SearchResult {
 }
 
 // =============================================================================
-// Export Types (aligned with chasm-shared)
+// Export Types (aligned with ironbridge-shared)
 // =============================================================================
 
 /**
@@ -611,7 +611,7 @@ export interface SearchResult {
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'csv';
 
 /**
- * Export options - matches chasm-shared ExportOptions
+ * Export options - matches ironbridge-shared ExportOptions
  */
 export interface ExportOptions {
     format: ExportFormat;
@@ -623,11 +623,11 @@ export interface ExportOptions {
 }
 
 // =============================================================================
-// Git Types (aligned with chasm-shared)
+// Git Types (aligned with ironbridge-shared)
 // =============================================================================
 
 /**
- * Git commit - matches chasm-shared GitCommit
+ * Git commit - matches ironbridge-shared GitCommit
  */
 export interface GitCommit {
     hash: string;
@@ -642,7 +642,7 @@ export interface GitCommit {
 }
 
 /**
- * Git repository - matches chasm-shared GitRepository
+ * Git repository - matches ironbridge-shared GitRepository
  */
 export interface GitRepository {
     path: string;
@@ -654,11 +654,11 @@ export interface GitRepository {
 }
 
 // =============================================================================
-// Checkpoint Types (aligned with chasm-shared)
+// Checkpoint Types (aligned with ironbridge-shared)
 // =============================================================================
 
 /**
- * Session checkpoint - matches chasm-shared Checkpoint
+ * Session checkpoint - matches ironbridge-shared Checkpoint
  */
 export interface Checkpoint {
     id: string;
@@ -733,11 +733,11 @@ export interface WebviewMessage {
 }
 
 // =============================================================================
-// Backend API Types (for chasm-rust API communication)
+// Backend API Types (for ironbridge-rust API communication)
 // =============================================================================
 
 /**
- * Workspace - matches chasm-shared Workspace (for API)
+ * Workspace - matches ironbridge-shared Workspace (for API)
  */
 export interface Workspace {
     id: string;
@@ -752,7 +752,7 @@ export interface Workspace {
 }
 
 /**
- * Session - matches chasm-shared Session (for API, without messages array)
+ * Session - matches ironbridge-shared Session (for API, without messages array)
  */
 export interface Session {
     id: string;
@@ -771,7 +771,7 @@ export interface Session {
 }
 
 /**
- * Agent - matches chasm-shared Agent (for API)
+ * Agent - matches ironbridge-shared Agent (for API)
  */
 export interface Agent {
     id: string;
@@ -794,7 +794,7 @@ export interface Agent {
 }
 
 /**
- * Provider - matches chasm-shared Provider (for API)
+ * Provider - matches ironbridge-shared Provider (for API)
  */
 export interface Provider {
     id: string;
@@ -810,7 +810,7 @@ export interface Provider {
 }
 
 /**
- * Statistics - matches chasm-shared Statistics
+ * Statistics - matches ironbridge-shared Statistics
  */
 export interface Statistics {
     totalSessions: number;

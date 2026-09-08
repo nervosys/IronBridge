@@ -1,6 +1,6 @@
 {
-    "name": "chasm",
-    "displayName": "Chasm",
+    "name": "ironbridge",
+    "displayName": "IronBridge",
     "description": "Universal AI chat session manager — harvest, repair, merge, and search across VS Code, Cursor, Claude Code, and 30+ providers",
     "version": "1.0.0",
     "publisher": "nervosys",
@@ -14,7 +14,7 @@
         "Other"
     ],
     "keywords": [
-        "chasm",
+        "ironbridge",
         "chat",
         "session",
         "ai",
@@ -31,35 +31,35 @@
     "main": "./out/extension.js",
     "contributes": {
         "configuration": {
-            "title": "Chasm",
+            "title": "IronBridge",
             "properties": {
-                "chasm.binaryPath": {
+                "ironbridge.binaryPath": {
                     "type": "string",
-                    "default": "chasm",
-                    "description": "Path to chasm binary (or just 'chasm' if in PATH)",
+                    "default": "ironbridge",
+                    "description": "Path to ironbridge binary (or just 'ironbridge' if in PATH)",
                     "scope": "machine"
                 },
-                "chasm.showNotifications": {
+                "ironbridge.showNotifications": {
                     "type": "boolean",
                     "default": true,
                     "description": "Show notifications for operations"
                 },
-                "chasm.api.baseUrl": {
+                "ironbridge.api.baseUrl": {
                     "type": "string",
                     "default": "http://localhost:8787",
-                    "description": "Base URL for Chasm API server"
+                    "description": "Base URL for IronBridge API server"
                 },
-                "chasm.api.autoStart": {
+                "ironbridge.api.autoStart": {
                     "type": "boolean",
                     "default": false,
                     "description": "Automatically start API server when extension activates"
                 },
-                "chasm.recording.enabled": {
+                "ironbridge.recording.enabled": {
                     "type": "boolean",
                     "default": false,
                     "description": "Enable real-time session recording to prevent data loss"
                 },
-                "chasm.recording.providers": {
+                "ironbridge.recording.providers": {
                     "type": "array",
                     "items": {
                         "type": "string",
@@ -85,319 +85,319 @@
                     ],
                     "description": "AI chat providers to record sessions from"
                 },
-                "chasm.doctor.runOnStartup": {
+                "ironbridge.doctor.runOnStartup": {
                     "type": "boolean",
                     "default": false,
                     "description": "Run health check on startup and show issues in status bar"
                 },
-                "chasm.statusBar.enabled": {
+                "ironbridge.statusBar.enabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Show Chasm status in the status bar"
+                    "description": "Show IronBridge status in the status bar"
                 }
             }
         },
         "commands": [
             {
-                "command": "chasm.openChat",
-                "title": "Chasm: Open Chat",
+                "command": "ironbridge.openChat",
+                "title": "IronBridge: Open Chat",
                 "icon": "$(comment-discussion)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.showWorkspaces",
-                "title": "Chasm: Show All Workspaces",
+                "command": "ironbridge.showWorkspaces",
+                "title": "IronBridge: Show All Workspaces",
                 "icon": "$(list-tree)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.showSessions",
-                "title": "Chasm: Show Sessions for Current Workspace",
+                "command": "ironbridge.showSessions",
+                "title": "IronBridge: Show Sessions for Current Workspace",
                 "icon": "$(comment-discussion)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.showHistory",
-                "title": "Chasm: Show Chat History",
+                "command": "ironbridge.showHistory",
+                "title": "IronBridge: Show Chat History",
                 "icon": "$(history)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.findWorkspace",
-                "title": "Chasm: Find Workspace",
+                "command": "ironbridge.findWorkspace",
+                "title": "IronBridge: Find Workspace",
                 "icon": "$(search)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.exportSessions",
-                "title": "Chasm: Export Sessions",
+                "command": "ironbridge.exportSessions",
+                "title": "IronBridge: Export Sessions",
                 "icon": "$(export)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.importSessions",
-                "title": "Chasm: Import Sessions",
+                "command": "ironbridge.importSessions",
+                "title": "IronBridge: Import Sessions",
                 "icon": "$(import)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.fetchHistory",
-                "title": "Chasm: Fetch History from Other Workspaces",
+                "command": "ironbridge.fetchHistory",
+                "title": "IronBridge: Fetch History from Other Workspaces",
                 "icon": "$(cloud-download)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.mergeHistory",
-                "title": "Chasm: Merge All Sessions",
+                "command": "ironbridge.mergeHistory",
+                "title": "IronBridge: Merge All Sessions",
                 "icon": "$(git-merge)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.refresh",
-                "title": "Chasm: Refresh",
+                "command": "ironbridge.refresh",
+                "title": "IronBridge: Refresh",
                 "icon": "$(refresh)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.reloadAndShowChats",
-                "title": "Chasm: Reload Window and Show Chats",
+                "command": "ironbridge.reloadAndShowChats",
+                "title": "IronBridge: Reload Window and Show Chats",
                 "icon": "$(refresh)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.launchTui",
-                "title": "Chasm: Launch TUI",
+                "command": "ironbridge.launchTui",
+                "title": "IronBridge: Launch TUI",
                 "icon": "$(terminal)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.moveSessions",
-                "title": "Chasm: Move Sessions to Another Workspace",
+                "command": "ironbridge.moveSessions",
+                "title": "IronBridge: Move Sessions to Another Workspace",
                 "icon": "$(move)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.doctor",
-                "title": "Chasm: Run Health Check",
+                "command": "ironbridge.doctor",
+                "title": "IronBridge: Run Health Check",
                 "icon": "$(heart)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.doctorFix",
-                "title": "Chasm: Fix All Session Issues",
+                "command": "ironbridge.doctorFix",
+                "title": "IronBridge: Fix All Session Issues",
                 "icon": "$(wrench)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.doctorDryRun",
-                "title": "Chasm: Preview Repairs (Dry Run)",
+                "command": "ironbridge.doctorDryRun",
+                "title": "IronBridge: Preview Repairs (Dry Run)",
                 "icon": "$(eye)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.registerRepair",
-                "title": "Chasm: Repair All Sessions",
+                "command": "ironbridge.registerRepair",
+                "title": "IronBridge: Repair All Sessions",
                 "icon": "$(tools)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.registerRepairRecursive",
-                "title": "Chasm: Repair Sessions (Recursive Scan)",
+                "command": "ironbridge.registerRepairRecursive",
+                "title": "IronBridge: Repair Sessions (Recursive Scan)",
                 "icon": "$(folder-library)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.startServer",
-                "title": "Chasm: Start API Server",
+                "command": "ironbridge.startServer",
+                "title": "IronBridge: Start API Server",
                 "icon": "$(server-process)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.stopServer",
-                "title": "Chasm: Stop API Server",
+                "command": "ironbridge.stopServer",
+                "title": "IronBridge: Stop API Server",
                 "icon": "$(stop)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.recoverScan",
-                "title": "Chasm: Scan for Recoverable Sessions",
+                "command": "ironbridge.recoverScan",
+                "title": "IronBridge: Scan for Recoverable Sessions",
                 "icon": "$(search)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.recoverOrphans",
-                "title": "Chasm: List Orphaned Sessions",
+                "command": "ironbridge.recoverOrphans",
+                "title": "IronBridge: List Orphaned Sessions",
                 "icon": "$(warning)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.syncPull",
-                "title": "Chasm: Sync Pull (Backup to Database)",
+                "command": "ironbridge.syncPull",
+                "title": "IronBridge: Sync Pull (Backup to Database)",
                 "icon": "$(cloud-download)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.syncPush",
-                "title": "Chasm: Sync Push (Restore from Database)",
+                "command": "ironbridge.syncPush",
+                "title": "IronBridge: Sync Push (Restore from Database)",
                 "icon": "$(cloud-upload)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.upgradeFormat",
-                "title": "Chasm: Upgrade Session Format",
+                "command": "ironbridge.upgradeFormat",
+                "title": "IronBridge: Upgrade Session Format",
                 "icon": "$(arrow-up)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.gitInit",
-                "title": "Chasm: Initialize Git Versioning",
+                "command": "ironbridge.gitInit",
+                "title": "IronBridge: Initialize Git Versioning",
                 "icon": "$(git-branch-create)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.gitAdd",
-                "title": "Chasm: Stage & Commit Sessions",
+                "command": "ironbridge.gitAdd",
+                "title": "IronBridge: Stage & Commit Sessions",
                 "icon": "$(git-commit)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.gitStatus",
-                "title": "Chasm: Show Git Status",
+                "command": "ironbridge.gitStatus",
+                "title": "IronBridge: Show Git Status",
                 "icon": "$(git-compare)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.gitSnapshot",
-                "title": "Chasm: Create Git Snapshot",
+                "command": "ironbridge.gitSnapshot",
+                "title": "IronBridge: Create Git Snapshot",
                 "icon": "$(tag)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.createMigration",
-                "title": "Chasm: Create Migration Package",
+                "command": "ironbridge.createMigration",
+                "title": "IronBridge: Create Migration Package",
                 "icon": "$(package)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.restoreMigration",
-                "title": "Chasm: Restore Migration Package",
+                "command": "ironbridge.restoreMigration",
+                "title": "IronBridge: Restore Migration Package",
                 "icon": "$(folder-opened)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.showVersion",
-                "title": "Chasm: Show Version",
+                "command": "ironbridge.showVersion",
+                "title": "IronBridge: Show Version",
                 "icon": "$(info)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.loadSession",
+                "command": "ironbridge.loadSession",
                 "title": "View Session",
                 "icon": "$(open-preview)"
             },
             {
-                "command": "chasm.repairSession",
+                "command": "ironbridge.repairSession",
                 "title": "Repair Oversized Session",
                 "icon": "$(wrench)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.mergeSessionsForWorkspace",
+                "command": "ironbridge.mergeSessionsForWorkspace",
                 "title": "Merge All Sessions",
                 "icon": "$(git-merge)"
             },
             {
-                "command": "chasm.fetchSessionsForWorkspace",
+                "command": "ironbridge.fetchSessionsForWorkspace",
                 "title": "Fetch from Other Workspaces",
                 "icon": "$(cloud-download)"
             },
             {
-                "command": "chasm.copySessionId",
+                "command": "ironbridge.copySessionId",
                 "title": "Copy Session ID",
                 "icon": "$(clippy)"
             },
             {
-                "command": "chasm.viewSessionDetails",
+                "command": "ironbridge.viewSessionDetails",
                 "title": "View Session Details",
                 "icon": "$(info)"
             },
             {
-                "command": "chasm.harvest",
-                "title": "Chasm: Harvest Sessions",
+                "command": "ironbridge.harvest",
+                "title": "IronBridge: Harvest Sessions",
                 "icon": "$(cloud-download)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.harvestScan",
-                "title": "Chasm: Scan for Providers",
+                "command": "ironbridge.harvestScan",
+                "title": "IronBridge: Scan for Providers",
                 "icon": "$(search)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.harvestSearch",
-                "title": "Chasm: Full-Text Search (Harvest DB)",
+                "command": "ironbridge.harvestSearch",
+                "title": "IronBridge: Full-Text Search (Harvest DB)",
                 "icon": "$(search)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.searchSessions",
-                "title": "Chasm: Quick Session Search",
+                "command": "ironbridge.searchSessions",
+                "title": "IronBridge: Quick Session Search",
                 "icon": "$(search)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.recoverOrphaned",
-                "title": "Chasm: Recover Orphaned Sessions",
+                "command": "ironbridge.recoverOrphaned",
+                "title": "IronBridge: Recover Orphaned Sessions",
                 "icon": "$(debug-restart)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.previewSession",
-                "title": "Chasm: Preview Session",
+                "command": "ironbridge.previewSession",
+                "title": "IronBridge: Preview Session",
                 "icon": "$(open-preview)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.toggleRecording",
-                "title": "Chasm: Toggle Real-Time Recording",
+                "command": "ironbridge.toggleRecording",
+                "title": "IronBridge: Toggle Real-Time Recording",
                 "icon": "$(record)",
-                "category": "Chasm"
+                "category": "IronBridge"
             },
             {
-                "command": "chasm.recordingStatus",
-                "title": "Chasm: Recording Status",
+                "command": "ironbridge.recordingStatus",
+                "title": "IronBridge: Recording Status",
                 "icon": "$(pulse)",
-                "category": "Chasm"
+                "category": "IronBridge"
             }
         ],
         "viewsContainers": {
             "activitybar": [
                 {
-                    "id": "chasm",
-                    "title": "Chasm",
+                    "id": "ironbridge",
+                    "title": "IronBridge",
                     "icon": "$(comment-discussion)"
                 }
             ]
         },
         "views": {
-            "chasm": [
+            "ironbridge": [
                 {
-                    "id": "chasm.chatQuickAccess",
+                    "id": "ironbridge.chatQuickAccess",
                     "name": "Chat",
                     "icon": "$(comment-discussion)"
                 },
                 {
-                    "id": "chasm.workspaces",
+                    "id": "ironbridge.workspaces",
                     "name": "Workspaces",
                     "icon": "$(folder)"
                 },
                 {
-                    "id": "chasm.sessions",
+                    "id": "ironbridge.sessions",
                     "name": "Sessions",
                     "icon": "$(comment)"
                 },
                 {
-                    "id": "chasm.health",
+                    "id": "ironbridge.health",
                     "name": "Health",
                     "icon": "$(heart)",
                     "visibility": "collapsed"
@@ -406,247 +406,247 @@
         },
         "viewsWelcome": [
             {
-                "view": "chasm.chatQuickAccess",
-                "contents": "Start a new conversation or continue an existing one.\n[Open Chasm Chat](command:chasm.openChat)\n[Run Health Check](command:chasm.doctor)"
+                "view": "ironbridge.chatQuickAccess",
+                "contents": "Start a new conversation or continue an existing one.\n[Open IronBridge Chat](command:ironbridge.openChat)\n[Run Health Check](command:ironbridge.doctor)"
             },
             {
-                "view": "chasm.workspaces",
-                "contents": "No workspaces found.\n[Refresh](command:chasm.refresh)\n[Harvest Sessions](command:chasm.harvest)"
+                "view": "ironbridge.workspaces",
+                "contents": "No workspaces found.\n[Refresh](command:ironbridge.refresh)\n[Harvest Sessions](command:ironbridge.harvest)"
             },
             {
-                "view": "chasm.sessions",
-                "contents": "Open a workspace to view sessions.\n[Show All Workspaces](command:chasm.showWorkspaces)"
+                "view": "ironbridge.sessions",
+                "contents": "Open a workspace to view sessions.\n[Show All Workspaces](command:ironbridge.showWorkspaces)"
             },
             {
-                "view": "chasm.health",
-                "contents": "Run a health check to scan for session issues.\n[Run Health Check](command:chasm.doctor)\n[Fix All Issues](command:chasm.doctorFix)"
+                "view": "ironbridge.health",
+                "contents": "Run a health check to scan for session issues.\n[Run Health Check](command:ironbridge.doctor)\n[Fix All Issues](command:ironbridge.doctorFix)"
             }
         ],
         "menus": {
             "view/title": [
                 {
-                    "command": "chasm.refresh",
-                    "when": "view == chasm.workspaces || view == chasm.sessions",
+                    "command": "ironbridge.refresh",
+                    "when": "view == ironbridge.workspaces || view == ironbridge.sessions",
                     "group": "navigation"
                 },
                 {
-                    "command": "chasm.findWorkspace",
-                    "when": "view == chasm.workspaces",
+                    "command": "ironbridge.findWorkspace",
+                    "when": "view == ironbridge.workspaces",
                     "group": "navigation"
                 },
                 {
-                    "command": "chasm.launchTui",
-                    "when": "view == chasm.workspaces || view == chasm.sessions",
+                    "command": "ironbridge.launchTui",
+                    "when": "view == ironbridge.workspaces || view == ironbridge.sessions",
                     "group": "navigation"
                 },
                 {
-                    "command": "chasm.doctor",
-                    "when": "view == chasm.health",
+                    "command": "ironbridge.doctor",
+                    "when": "view == ironbridge.health",
                     "group": "navigation"
                 },
                 {
-                    "command": "chasm.doctorFix",
-                    "when": "view == chasm.health",
+                    "command": "ironbridge.doctorFix",
+                    "when": "view == ironbridge.health",
                     "group": "navigation"
                 }
             ],
             "view/item/context": [
                 {
-                    "command": "chasm.showSessions",
-                    "when": "view == chasm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "command": "ironbridge.showSessions",
+                    "when": "view == ironbridge.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
                     "group": "inline"
                 },
                 {
-                    "command": "chasm.mergeSessionsForWorkspace",
-                    "when": "view == chasm.workspaces && viewItem == workspaceWithChats",
+                    "command": "ironbridge.mergeSessionsForWorkspace",
+                    "when": "view == ironbridge.workspaces && viewItem == workspaceWithChats",
                     "group": "1_sessions"
                 },
                 {
-                    "command": "chasm.fetchSessionsForWorkspace",
-                    "when": "view == chasm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "command": "ironbridge.fetchSessionsForWorkspace",
+                    "when": "view == ironbridge.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
                     "group": "1_sessions"
                 },
                 {
-                    "command": "chasm.exportSessions",
-                    "when": "view == chasm.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
+                    "command": "ironbridge.exportSessions",
+                    "when": "view == ironbridge.workspaces && (viewItem == workspace || viewItem == workspaceWithChats)",
                     "group": "2_export"
                 },
                 {
-                    "command": "chasm.moveSessions",
-                    "when": "view == chasm.workspaces && viewItem == workspaceWithChats",
+                    "command": "ironbridge.moveSessions",
+                    "when": "view == ironbridge.workspaces && viewItem == workspaceWithChats",
                     "group": "2_export"
                 },
                 {
-                    "command": "chasm.loadSession",
-                    "when": "view == chasm.sessions && viewItem == session",
+                    "command": "ironbridge.loadSession",
+                    "when": "view == ironbridge.sessions && viewItem == session",
                     "group": "inline"
                 },
                 {
-                    "command": "chasm.repairSession",
-                    "when": "view == chasm.sessions && viewItem == session",
+                    "command": "ironbridge.repairSession",
+                    "when": "view == ironbridge.sessions && viewItem == session",
                     "group": "1_actions"
                 },
                 {
-                    "command": "chasm.mergeSessionsForWorkspace",
-                    "when": "view == chasm.sessions && viewItem == session",
+                    "command": "ironbridge.mergeSessionsForWorkspace",
+                    "when": "view == ironbridge.sessions && viewItem == session",
                     "group": "1_actions"
                 },
                 {
-                    "command": "chasm.fetchSessionsForWorkspace",
-                    "when": "view == chasm.sessions && viewItem == session",
+                    "command": "ironbridge.fetchSessionsForWorkspace",
+                    "when": "view == ironbridge.sessions && viewItem == session",
                     "group": "1_actions"
                 },
                 {
-                    "command": "chasm.copySessionId",
-                    "when": "view == chasm.sessions && viewItem == session",
+                    "command": "ironbridge.copySessionId",
+                    "when": "view == ironbridge.sessions && viewItem == session",
                     "group": "2_info"
                 },
                 {
-                    "command": "chasm.viewSessionDetails",
-                    "when": "view == chasm.sessions && viewItem == session",
+                    "command": "ironbridge.viewSessionDetails",
+                    "when": "view == ironbridge.sessions && viewItem == session",
                     "group": "2_info"
                 }
             ],
             "commandPalette": [
                 {
-                    "command": "chasm.openChat"
+                    "command": "ironbridge.openChat"
                 },
                 {
-                    "command": "chasm.showWorkspaces"
+                    "command": "ironbridge.showWorkspaces"
                 },
                 {
-                    "command": "chasm.showSessions"
+                    "command": "ironbridge.showSessions"
                 },
                 {
-                    "command": "chasm.showHistory"
+                    "command": "ironbridge.showHistory"
                 },
                 {
-                    "command": "chasm.findWorkspace"
+                    "command": "ironbridge.findWorkspace"
                 },
                 {
-                    "command": "chasm.exportSessions"
+                    "command": "ironbridge.exportSessions"
                 },
                 {
-                    "command": "chasm.importSessions"
+                    "command": "ironbridge.importSessions"
                 },
                 {
-                    "command": "chasm.fetchHistory"
+                    "command": "ironbridge.fetchHistory"
                 },
                 {
-                    "command": "chasm.mergeHistory"
+                    "command": "ironbridge.mergeHistory"
                 },
                 {
-                    "command": "chasm.launchTui"
+                    "command": "ironbridge.launchTui"
                 },
                 {
-                    "command": "chasm.moveSessions"
+                    "command": "ironbridge.moveSessions"
                 },
                 {
-                    "command": "chasm.doctor"
+                    "command": "ironbridge.doctor"
                 },
                 {
-                    "command": "chasm.doctorFix"
+                    "command": "ironbridge.doctorFix"
                 },
                 {
-                    "command": "chasm.doctorDryRun"
+                    "command": "ironbridge.doctorDryRun"
                 },
                 {
-                    "command": "chasm.registerRepair"
+                    "command": "ironbridge.registerRepair"
                 },
                 {
-                    "command": "chasm.registerRepairRecursive"
+                    "command": "ironbridge.registerRepairRecursive"
                 },
                 {
-                    "command": "chasm.startServer"
+                    "command": "ironbridge.startServer"
                 },
                 {
-                    "command": "chasm.stopServer"
+                    "command": "ironbridge.stopServer"
                 },
                 {
-                    "command": "chasm.recoverScan"
+                    "command": "ironbridge.recoverScan"
                 },
                 {
-                    "command": "chasm.recoverOrphans"
+                    "command": "ironbridge.recoverOrphans"
                 },
                 {
-                    "command": "chasm.syncPull"
+                    "command": "ironbridge.syncPull"
                 },
                 {
-                    "command": "chasm.syncPush"
+                    "command": "ironbridge.syncPush"
                 },
                 {
-                    "command": "chasm.upgradeFormat"
+                    "command": "ironbridge.upgradeFormat"
                 },
                 {
-                    "command": "chasm.harvest"
+                    "command": "ironbridge.harvest"
                 },
                 {
-                    "command": "chasm.harvestScan"
+                    "command": "ironbridge.harvestScan"
                 },
                 {
-                    "command": "chasm.harvestSearch"
+                    "command": "ironbridge.harvestSearch"
                 },
                 {
-                    "command": "chasm.searchSessions"
+                    "command": "ironbridge.searchSessions"
                 },
                 {
-                    "command": "chasm.recoverOrphaned"
+                    "command": "ironbridge.recoverOrphaned"
                 },
                 {
-                    "command": "chasm.gitInit"
+                    "command": "ironbridge.gitInit"
                 },
                 {
-                    "command": "chasm.gitAdd"
+                    "command": "ironbridge.gitAdd"
                 },
                 {
-                    "command": "chasm.gitStatus"
+                    "command": "ironbridge.gitStatus"
                 },
                 {
-                    "command": "chasm.gitSnapshot"
+                    "command": "ironbridge.gitSnapshot"
                 },
                 {
-                    "command": "chasm.createMigration"
+                    "command": "ironbridge.createMigration"
                 },
                 {
-                    "command": "chasm.restoreMigration"
+                    "command": "ironbridge.restoreMigration"
                 },
                 {
-                    "command": "chasm.showVersion"
+                    "command": "ironbridge.showVersion"
                 },
                 {
-                    "command": "chasm.toggleRecording"
+                    "command": "ironbridge.toggleRecording"
                 },
                 {
-                    "command": "chasm.recordingStatus"
+                    "command": "ironbridge.recordingStatus"
                 }
             ]
         },
         "keybindings": [
             {
-                "command": "chasm.openChat",
+                "command": "ironbridge.openChat",
                 "key": "ctrl+shift+;",
                 "mac": "cmd+shift+;"
             },
             {
-                "command": "chasm.doctor",
+                "command": "ironbridge.doctor",
                 "key": "ctrl+shift+h",
                 "mac": "cmd+shift+h"
             },
             {
-                "command": "chasm.searchSessions",
+                "command": "ironbridge.searchSessions",
                 "key": "ctrl+shift+/",
                 "mac": "cmd+shift+/"
             },
             {
-                "command": "chasm.harvest",
+                "command": "ironbridge.harvest",
                 "key": "ctrl+shift+\\",
                 "mac": "cmd+shift+\\"
             },
             {
-                "command": "chasm.refresh",
+                "command": "ironbridge.refresh",
                 "key": "ctrl+shift+r",
                 "mac": "cmd+shift+r",
-                "when": "view == chasm.workspaces || view == chasm.sessions"
+                "when": "view == ironbridge.workspaces || view == ironbridge.sessions"
             }
         ]
     },
@@ -680,7 +680,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/nervosys/chasm.git"
+        "url": "https://github.com/nervosys/ironbridge.git"
     },
-    "license": "AGPL-3.0-only OR LicenseRef-Chasm-Commercial"
+    "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
 }

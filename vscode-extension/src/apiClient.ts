@@ -1,11 +1,11 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 // =============================================================================
-// Chasm API Client
+// IronBridge API Client
 // =============================================================================
-// HTTP client for communicating with chasm-rust backend API
-// Aligned with chasm-web/src/api/client.ts and chasm-shared types
+// HTTP client for communicating with ironbridge-rust backend API
+// Aligned with ironbridge-web/src/api/client.ts and ironbridge-shared types
 
 import * as vscode from 'vscode';
 import {
@@ -26,16 +26,16 @@ import {
     ExportOptions,
 } from './types';
 
-// Re-export types that use different names in chasm-shared
-export type { Session as CsmSession };
-export type { Workspace as CsmWorkspace };
-export type { Agent as CsmAgent };
-export type { Swarm as CsmSwarm };
+// Re-export types that use different names in ironbridge-shared
+export type { Session as IronBridgeSession };
+export type { Workspace as IronBridgeWorkspace };
+export type { Agent as IronBridgeAgent };
+export type { Swarm as IronBridgeSwarm };
 
 /**
- * Configuration for the Chasm API client
+ * Configuration for the IronBridge API client
  */
-export interface ChasmApiConfig {
+export interface IronBridgeApiConfig {
     baseUrl: string;
     timeout?: number;
     apiKey?: string;
@@ -44,8 +44,8 @@ export interface ChasmApiConfig {
 /**
  * Default API configuration
  */
-const DEFAULT_CONFIG: ChasmApiConfig = {
-    // 8787 is what `chasm api serve` binds by default. This said 3000, which
+const DEFAULT_CONFIG: IronBridgeApiConfig = {
+    // 8787 is what `ironbridge api serve` binds by default. This said 3000, which
     // nothing in this repository listens on, so every request failed at the
     // socket before a path was ever in question.
     baseUrl: 'http://localhost:8787',
@@ -53,16 +53,16 @@ const DEFAULT_CONFIG: ChasmApiConfig = {
 };
 
 /**
- * Chasm API Client for communicating with chasm-rust backend
- * API structure mirrors chasm-web/src/api/client.ts
+ * IronBridge API Client for communicating with ironbridge-rust backend
+ * API structure mirrors ironbridge-web/src/api/client.ts
  */
-export class ChasmApiClient {
-    private _config: ChasmApiConfig;
+export class IronBridgeApiClient {
+    private _config: IronBridgeApiConfig;
     private _outputChannel: vscode.OutputChannel;
 
-    constructor(config?: Partial<ChasmApiConfig>, outputChannel?: vscode.OutputChannel) {
+    constructor(config?: Partial<IronBridgeApiConfig>, outputChannel?: vscode.OutputChannel) {
         this._config = { ...DEFAULT_CONFIG, ...config };
-        this._outputChannel = outputChannel || vscode.window.createOutputChannel('Chasm API');
+        this._outputChannel = outputChannel || vscode.window.createOutputChannel('IronBridge API');
     }
 
     // =========================================================================
@@ -158,7 +158,7 @@ export class ChasmApiClient {
     }
 
     // =========================================================================
-    // Workspaces API (mirrors chasm-web/src/api/client.ts)
+    // Workspaces API (mirrors ironbridge-web/src/api/client.ts)
     // =========================================================================
 
     workspaces = {
@@ -184,7 +184,7 @@ export class ChasmApiClient {
     };
 
     // =========================================================================
-    // Sessions API (mirrors chasm-web/src/api/client.ts)
+    // Sessions API (mirrors ironbridge-web/src/api/client.ts)
     // =========================================================================
 
     sessions = {
@@ -229,7 +229,7 @@ export class ChasmApiClient {
     };
 
     // =========================================================================
-    // Providers API (mirrors chasm-web/src/api/client.ts)
+    // Providers API (mirrors ironbridge-web/src/api/client.ts)
     // =========================================================================
 
     providers = {
@@ -243,7 +243,7 @@ export class ChasmApiClient {
 
         healthAll: (): Promise<ApiResponse<ProviderHealth[]>> => {
             // Served as /api/system/providers/health; there is no
-            // /api/providers/health. Same note chasm-web's client carries,
+            // /api/providers/health. Same note ironbridge-web's client carries,
             // because the same wrong guess was made in both.
             return this._get('/api/system/providers/health');
         },
@@ -251,7 +251,7 @@ export class ChasmApiClient {
     };
 
     // =========================================================================
-    // Agents API (mirrors chasm-web/src/api/client.ts)
+    // Agents API (mirrors ironbridge-web/src/api/client.ts)
     // =========================================================================
 
     agents = {
@@ -278,7 +278,7 @@ export class ChasmApiClient {
     };
 
     // =========================================================================
-    // Swarms API (mirrors chasm-web/src/api/client.ts)
+    // Swarms API (mirrors ironbridge-web/src/api/client.ts)
     // =========================================================================
 
     swarms = {
@@ -313,7 +313,7 @@ export class ChasmApiClient {
         },
 
         completionStream: async function* (
-            this: ChasmApiClient,
+            this: IronBridgeApiClient,
             request: ChatCompletionRequest
         ): AsyncGenerator<string, void, unknown> {
             const url = `${this._config.baseUrl}/api/chat/completions`;
@@ -519,14 +519,14 @@ export interface RecordingRecoveryResponse {
 /**
  * Singleton API client instance
  */
-let _apiClient: ChasmApiClient | null = null;
+let _apiClient: IronBridgeApiClient | null = null;
 
 /**
  * Get the shared API client instance
  */
-export function getApiClient(config?: Partial<ChasmApiConfig>): ChasmApiClient {
+export function getApiClient(config?: Partial<IronBridgeApiConfig>): IronBridgeApiClient {
     if (!_apiClient || config) {
-        _apiClient = new ChasmApiClient(config);
+        _apiClient = new IronBridgeApiClient(config);
     }
     return _apiClient;
 }
@@ -534,7 +534,7 @@ export function getApiClient(config?: Partial<ChasmApiConfig>): ChasmApiClient {
 /**
  * Create a new API client with custom configuration
  */
-export function createApiClient(config?: Partial<ChasmApiConfig>, outputChannel?: vscode.OutputChannel): ChasmApiClient {
-    return new ChasmApiClient(config, outputChannel);
+export function createApiClient(config?: Partial<IronBridgeApiConfig>, outputChannel?: vscode.OutputChannel): IronBridgeApiClient {
+    return new IronBridgeApiClient(config, outputChannel);
 }
 

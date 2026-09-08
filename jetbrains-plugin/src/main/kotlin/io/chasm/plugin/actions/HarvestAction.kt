@@ -1,6 +1,6 @@
 // Copyright (c) 2024-2027 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
-package io.chasm.plugin.actions
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
+package io.ironbridge.plugin.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -10,8 +10,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
-import io.chasm.plugin.services.ChasmService
-import io.chasm.plugin.settings.ChasmSettings
+import io.ironbridge.plugin.services.IronBridgeService
+import io.ironbridge.plugin.settings.IronBridgeSettings
 
 /**
  * Action to harvest sessions from all connected AI providers.
@@ -23,16 +23,16 @@ class HarvestAction : AnAction("Harvest Sessions", "Harvest sessions from AI pro
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Harvesting Sessions", false) {
             override fun run(indicator: ProgressIndicator) {
-                indicator.text = "Connecting to Chasm server..."
+                indicator.text = "Connecting to IronBridge server..."
                 indicator.fraction = 0.1
 
-                val service = ChasmService.getInstance()
+                val service = IronBridgeService.getInstance()
                 val health = service.checkHealth()
 
                 if (!health.healthy) {
                     showNotification(
                         "Harvest Failed",
-                        "Could not connect to Chasm server: ${health.error}",
+                        "Could not connect to IronBridge server: ${health.error}",
                         NotificationType.ERROR
                     )
                     return
@@ -67,11 +67,11 @@ class HarvestAction : AnAction("Harvest Sessions", "Harvest sessions from AI pro
     }
 
     private fun showNotification(title: String, content: String, type: NotificationType) {
-        if (!ChasmSettings.getInstance().showNotifications) return
+        if (!IronBridgeSettings.getInstance().showNotifications) return
 
         ApplicationManager.getApplication().invokeLater {
             NotificationGroupManager.getInstance()
-                .getNotificationGroup("Chasm Notifications")
+                .getNotificationGroup("IronBridge Notifications")
                 .createNotification(title, content, type)
                 .notify(null)
         }

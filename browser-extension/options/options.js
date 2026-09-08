@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Browser Extension - Options Page Script
+// IronBridge Browser Extension - Options Page Script
 // Copyright 2025-2026 Nervosys LLC
 
 const DEFAULT_SETTINGS = {
@@ -151,7 +151,7 @@ function exportSettingsFile() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'chasm-settings.json';
+        a.download = 'ironbridge-settings.json';
         a.click();
         URL.revokeObjectURL(url);
 

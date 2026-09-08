@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# build.ps1 — Build and package Chasm browser extension for store submission
+# build.ps1 — Build and package IronBridge browser extension for store submission
 # Copyright 2025-2026 Nervosys LLC — AGPL-3.0-only
 
 param(
@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 $ExtDir = $PSScriptRoot
 $DistDir = Join-Path $ExtDir "dist"
 
-Write-Host "Chasm Browser Extension — Build Script" -ForegroundColor Cyan
+Write-Host "IronBridge Browser Extension — Build Script" -ForegroundColor Cyan
 Write-Host "=======================================" -ForegroundColor Cyan
 
 # --- Clean ---
@@ -113,11 +113,11 @@ function Build-Chrome {
     }
 
     # Create ZIP
-    $zipPath = Join-Path $DistDir "chasm-chrome.zip"
+    $zipPath = Join-Path $DistDir "ironbridge-chrome.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath }
     Compress-Archive -Path "$chromeDir\*" -DestinationPath $zipPath -Force
     $zipSize = (Get-Item $zipPath).Length
-    Write-Host "[Chrome] Created: dist/chasm-chrome.zip ($([math]::Round($zipSize / 1KB, 1)) KB)" -ForegroundColor Green
+    Write-Host "[Chrome] Created: dist/ironbridge-chrome.zip ($([math]::Round($zipSize / 1KB, 1)) KB)" -ForegroundColor Green
 }
 
 # --- Build Firefox ---
@@ -144,11 +144,11 @@ function Build-Firefox {
     }
 
     # Create ZIP (Firefox uses .zip or .xpi)
-    $zipPath = Join-Path $DistDir "chasm-firefox.zip"
+    $zipPath = Join-Path $DistDir "ironbridge-firefox.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath }
     Compress-Archive -Path "$firefoxDir\*" -DestinationPath $zipPath -Force
     $zipSize = (Get-Item $zipPath).Length
-    Write-Host "[Firefox] Created: dist/chasm-firefox.zip ($([math]::Round($zipSize / 1KB, 1)) KB)" -ForegroundColor Green
+    Write-Host "[Firefox] Created: dist/ironbridge-firefox.zip ($([math]::Round($zipSize / 1KB, 1)) KB)" -ForegroundColor Green
 }
 
 # --- Execute ---
@@ -161,5 +161,5 @@ switch ($Target) {
 }
 
 Write-Host "`n[Done] Build complete!" -ForegroundColor Cyan
-Write-Host "  Upload dist/chasm-chrome.zip to Chrome Web Store Developer Dashboard"
-Write-Host "  Upload dist/chasm-firefox.zip to Firefox Add-on Developer Hub"
+Write-Host "  Upload dist/ironbridge-chrome.zip to Chrome Web Store Developer Dashboard"
+Write-Host "  Upload dist/ironbridge-firefox.zip to Firefox Add-on Developer Hub"

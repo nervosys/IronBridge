@@ -1,8 +1,8 @@
-# Open Source Strategy: CSM-Rust
+# Open Source Strategy: IRONBRIDGE-Rust
 
 ## Executive Summary
 
-This document outlines the strategy for releasing **csm-rust** (the Chat Session Manager CLI and API backend) as open-source software while maintaining **csm-web** and **csm-app** as proprietary products.
+This document outlines the strategy for releasing **ironbridge-rust** (the Chat Session Manager CLI and API backend) as open-source software while maintaining **ironbridge-web** and **ironbridge-app** as proprietary products.
 
 This follows the successful "open core" model used by companies like:
 
@@ -19,9 +19,9 @@ This follows the successful "open core" model used by companies like:
 
 ```bash
 ChatSessionManager/           # Single private repo
-├── csm-rust/                 # CLI + API backend
-├── csm-web/                  # React web app
-├── csm-app/                  # React Native mobile app
+├── ironbridge-rust/                 # CLI + API backend
+├── ironbridge-web/                  # React web app
+├── ironbridge-app/                  # React Native mobile app
 └── vscode-extension/         # VS Code extension
 ```
 
@@ -29,19 +29,19 @@ ChatSessionManager/           # Single private repo
 
 ```bash
 # PUBLIC REPOSITORIES
-nervosys/chasm                # Open-source CLI + API (renamed)
-nervosys/chasm-vscode         # Open-source VS Code extension (optional)
+nervosys/ironbridge                # Open-source CLI + API (renamed)
+nervosys/ironbridge-vscode         # Open-source VS Code extension (optional)
 
 # PRIVATE REPOSITORIES  
-nervosys/csm-web              # Proprietary web app
-nervosys/csm-app              # Proprietary mobile app
-nervosys/csm-cloud            # Future: hosted service infrastructure
+nervosys/ironbridge-web              # Proprietary web app
+nervosys/ironbridge-app              # Proprietary mobile app
+nervosys/ironbridge-cloud            # Future: hosted service infrastructure
 ```
 
 ### Migration Steps
 
-1. **Create new public repo**: `nervosys/chasm`
-2. **Extract csm-rust** with clean git history (no proprietary references)
+1. **Create new public repo**: `nervosys/ironbridge`
+2. **Extract ironbridge-rust** with clean git history (no proprietary references)
 3. **Update imports/references** in private repos to use published crate
 4. **Set up CI/CD** for public releases
 
@@ -49,7 +49,7 @@ nervosys/csm-cloud            # Future: hosted service infrastructure
 
 ## 2. Licensing Strategy
 
-### Open Source Component (csm-rust → chasm)
+### Open Source Component (ironbridge-rust → ironbridge)
 
 **License: AGPL-3.0-only with Commercial Dual-License**
 
@@ -70,8 +70,8 @@ nervosys/csm-cloud            # Future: hosted service infrastructure
 ### Proprietary Components
 
 ```text
-csm-web/LICENSE
-csm-app/LICENSE
+ironbridge-web/LICENSE
+ironbridge-app/LICENSE
 
 Copyright (c) 2024-2026 Nervosys LLC. All Rights Reserved.
 
@@ -84,7 +84,7 @@ is strictly prohibited without express written permission.
 
 ## 3. Public API Design Principles
 
-The API exposed by csm-rust must be designed to:
+The API exposed by ironbridge-rust must be designed to:
 
 ### ✅ DO
 
@@ -99,13 +99,13 @@ The API exposed by csm-rust must be designed to:
 - Include business logic specific to proprietary apps
 - Expose internal implementation details
 - Include analytics/telemetry tied to proprietary services
-- Hard-code references to csm-web/csm-app
+- Hard-code references to ironbridge-web/ironbridge-app
 
 ### API Boundary Definition
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    OPEN SOURCE (chasm)                      │
+│                    OPEN SOURCE (ironbridge)                      │
 ├─────────────────────────────────────────────────────────────┤
 │  CLI Commands        │  REST API            │  MCP Tools    │
 │  - list workspaces   │  GET /api/workspaces │  - list_*     │
@@ -120,7 +120,7 @@ The API exposed by csm-rust must be designed to:
 ┌─────────────────────────────────────────────────────────────┐
 │                   PROPRIETARY CLIENTS                       │
 ├─────────────────────────────────────────────────────────────┤
-│  csm-web             │  csm-app             │  csm-cloud    │
+│  ironbridge-web             │  ironbridge-app             │  ironbridge-cloud    │
 │  - Dashboard UI      │  - Mobile UI         │  - Hosting    │
 │  - Analytics views   │  - Push notifs       │  - Team sync  │
 │  - Team features     │  - Offline mode      │  - Enterprise │
@@ -131,7 +131,7 @@ The API exposed by csm-rust must be designed to:
 
 ## 4. Code Audit Checklist
 
-Before open-sourcing, audit csm-rust for:
+Before open-sourcing, audit ironbridge-rust for:
 
 ### Security
 
@@ -151,10 +151,10 @@ Before open-sourcing, audit csm-rust for:
 
 ### Branding
 
-- [x] Finalize public name (chasm vs csm) → chasm-cli
+- [x] Finalize public name (ironbridge vs ironbridge) → ironbridge-cli
 - [x] Update all references in code
 - [ ] Create public-facing logo/branding
-- [x] Register crates.io name (chasm-cli)
+- [x] Register crates.io name (ironbridge-cli)
 
 ### Documentation
 
@@ -174,35 +174,35 @@ Before open-sourcing, audit csm-rust for:
 ```toml
 # Cargo.toml
 [package]
-name = "chasm"
+name = "ironbridge"
 version = "1.0.0"
 edition = "2021"
-license = "AGPL-3.0-only OR LicenseRef-Chasm-Commercial"
+license = "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
 description = "Universal chat session manager - harvest, merge, and analyze AI chat history"
-repository = "https://github.com/nervosys/chasm"
-documentation = "https://docs.rs/chasm"
+repository = "https://github.com/nervosys/ironbridge"
+documentation = "https://docs.rs/ironbridge"
 keywords = ["chat", "ai", "copilot", "session", "history"]
 categories = ["command-line-utilities", "database"]
 ```
 
 ### Binary Releases
 
-- Windows: `chasm-windows-x64.exe`
-- macOS: `chasm-darwin-x64`, `chasm-darwin-arm64`
-- Linux: `chasm-linux-x64`, `chasm-linux-arm64`
+- Windows: `ironbridge-windows-x64.exe`
+- macOS: `ironbridge-darwin-x64`, `ironbridge-darwin-arm64`
+- Linux: `ironbridge-linux-x64`, `ironbridge-linux-arm64`
 
 ### Container Images
 
 ```dockerfile
-# Published to ghcr.io/nervosys/chasm
+# Published to ghcr.io/nervosys/ironbridge
 FROM rust:alpine AS builder
 COPY . .
 RUN cargo build --release
 
 FROM alpine:latest
-COPY --from=builder /app/target/release/chasm /usr/local/bin/
+COPY --from=builder /app/target/release/ironbridge /usr/local/bin/
 EXPOSE 8787
-CMD ["chasm", "api", "serve"]
+CMD ["ironbridge", "api", "serve"]
 ```
 
 ---
@@ -212,16 +212,16 @@ CMD ["chasm", "api", "serve"]
 ### Features to Keep Proprietary
 
 > **⚠️ SSO no longer matches this table.** The row below says SSO belongs in
-> `csm-cloud`. In the tree today, both SAML *and* OIDC ship in this AGPL
-> repository, behind `--features enterprise`: `chasm-rust/src/api/{sso,oidc}.rs`
-> serve 14 of the 25 enterprise operations, on the pure-Rust `chasm-sso` crate.
+> `ironbridge-cloud`. In the tree today, both SAML *and* OIDC ship in this AGPL
+> repository, behind `--features enterprise`: `ironbridge-rust/src/api/{sso,oidc}.rs`
+> serve 14 of the 25 enterprise operations, on the pure-Rust `ironbridge-sso` crate.
 >
 > This is recorded, not resolved. The table states the intended boundary and
 > the tree states what was built; they disagree, and which one changes is a
 > business decision. Two things worth knowing while deciding:
 >
-> - `chasm-sso` is a standalone crate. A future `csm-cloud` can depend on it
->   without any of the REST surface in `chasm-rust`, so moving the *endpoints*
+> - `ironbridge-sso` is a standalone crate. A future `ironbridge-cloud` can depend on it
+>   without any of the REST surface in `ironbridge-rust`, so moving the *endpoints*
 >   later does not mean rewriting the protocol work.
 > - Under AGPL-3.0-only, what has already shipped stays shipped. Removing the
 >   endpoints changes future releases; it does not retract released ones.
@@ -234,26 +234,26 @@ CMD ["chasm", "api", "serve"]
 
 | Feature                          | Reason                  | Location      |
 | -------------------------------- | ----------------------- | ------------- |
-| Team/Organization sync           | Enterprise value        | csm-cloud     |
-| Custom analytics dashboards      | Product differentiation | csm-web       |
-| Push notifications               | Mobile value            | csm-app       |
-| Offline-first mobile             | Mobile value            | csm-app       |
-| White-label branding             | Enterprise value        | csm-cloud     |
-| SSO/SAML integration             | Enterprise value        | csm-cloud — **but see the note above: it ships in `chasm` today** |
-| Advanced search/filtering UI     | Product differentiation | csm-web       |
-| Session commenting/collaboration | Team feature            | csm-web/cloud |
+| Team/Organization sync           | Enterprise value        | ironbridge-cloud     |
+| Custom analytics dashboards      | Product differentiation | ironbridge-web       |
+| Push notifications               | Mobile value            | ironbridge-app       |
+| Offline-first mobile             | Mobile value            | ironbridge-app       |
+| White-label branding             | Enterprise value        | ironbridge-cloud     |
+| SSO/SAML integration             | Enterprise value        | ironbridge-cloud — **but see the note above: it ships in `ironbridge` today** |
+| Advanced search/filtering UI     | Product differentiation | ironbridge-web       |
+| Session commenting/collaboration | Team feature            | ironbridge-web/cloud |
 
 ### Features to Open Source
 
 | Feature              | Reason                  | Location     |
 | -------------------- | ----------------------- | ------------ |
-| Core database schema | Foundation              | chasm        |
-| CLI commands         | Developer utility       | chasm        |
-| REST API             | Integration point       | chasm        |
-| Provider harvesting  | Community contributions | chasm        |
-| MCP tools            | AI integration          | chasm        |
-| Basic sync protocol  | Enables self-hosting    | chasm        |
-| VS Code extension    | Developer adoption      | chasm-vscode |
+| Core database schema | Foundation              | ironbridge        |
+| CLI commands         | Developer utility       | ironbridge        |
+| REST API             | Integration point       | ironbridge        |
+| Provider harvesting  | Community contributions | ironbridge        |
+| MCP tools            | AI integration          | ironbridge        |
+| Basic sync protocol  | Enables self-hosting    | ironbridge        |
+| VS Code extension    | Developer adoption      | ironbridge-vscode |
 
 ---
 
@@ -300,9 +300,9 @@ By contributing to this project, you agree that:
 
 | Stream                   | Description                               | Target                   |
 | ------------------------ | ----------------------------------------- | ------------------------ |
-| **csm-web Pro**          | Advanced web features, team collaboration | Individuals, small teams |
-| **csm-app Premium**      | Mobile app subscription                   | Mobile users             |
-| **csm-cloud Enterprise** | Hosted service, SSO, audit logs           | Enterprises              |
+| **ironbridge-web Pro**          | Advanced web features, team collaboration | Individuals, small teams |
+| **ironbridge-app Premium**      | Mobile app subscription                   | Mobile users             |
+| **ironbridge-cloud Enterprise** | Hosted service, SSO, audit logs           | Enterprises              |
 | **Support contracts**    | Priority support, consulting              | Enterprises              |
 | **Sponsorships**         | GitHub Sponsors, Open Collective          | Community                |
 
@@ -316,8 +316,8 @@ FREE (Open Source CLI)
 └── Community support
 
 PRO ($9/mo)
-├── csm-web full features
-├── csm-app full features
+├── ironbridge-web full features
+├── ironbridge-app full features
 ├── Cloud sync (personal)
 └── Email support
 
@@ -347,12 +347,12 @@ ENTERPRISE (Custom)
 - [x] Remove proprietary references
 - [x] Finalize licensing (AGPL-3.0-only + commercial dual-license)
 - [x] Create public documentation
-- [x] Set up new public repository (nervosys/chasm-cli)
+- [x] Set up new public repository (nervosys/ironbridge-cli)
 
 ### Phase 2: Soft Launch (2 weeks) ✅
 
 - [x] Push to public repo (no announcement)
-- [x] Publish to crates.io (chasm-cli v1.0.0)
+- [x] Publish to crates.io (ironbridge-cli v1.0.0)
 - [x] Set up CI/CD for releases (GitHub Actions)
 - [x] Gather early feedback from select users
 - [x] Fix any issues discovered (reqwest CVE, cargo-deny)
@@ -414,22 +414,22 @@ ENTERPRISE (Custom)
 
 ```rust
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 //
-// This file is part of Chasm - Universal Chat Session Manager
-// https://github.com/nervosys/chasm
+// This file is part of IronBridge - Universal Chat Session Manager
+// https://github.com/nervosys/ironbridge
 ```
 
 ## Appendix B: README Template
 
 ```markdown
-# Chasm 🗄️
+# IronBridge 🗄️
 
 **Universal Chat Session Manager** - Harvest, merge, and analyze your AI chat history.
 
-[![Crates.io](https://img.shields.io/crates/v/chasm)](https://crates.io/crates/chasm)
+[![Crates.io](https://img.shields.io/crates/v/ironbridge)](https://crates.io/crates/ironbridge)
 [![License](https://img.shields.io/badge/license-AGPL_3.0-blue.svg)](LICENSE)
-[![CI](https://github.com/nervosys/chasm/workflows/CI/badge.svg)](https://github.com/nervosys/chasm/actions)
+[![CI](https://github.com/nervosys/ironbridge/workflows/CI/badge.svg)](https://github.com/nervosys/ironbridge/actions)
 
 ## Features
 
@@ -442,20 +442,20 @@ ENTERPRISE (Custom)
 ## Installation
 
 ```bash
-cargo install chasm
+cargo install ironbridge
 ```
 
 ## Quick Start
 
 ```bash
 # List all workspaces
-chasm list workspaces
+ironbridge list workspaces
 
 # Show sessions for a project
-chasm show path /path/to/project
+ironbridge show path /path/to/project
 
 # Start the API server
-chasm api serve
+ironbridge api serve
 ```
 
 ## Documentation
@@ -471,7 +471,7 @@ Licensed under [AGPL-3.0](LICENSE) with [commercial dual-license](COMMERCIAL_LIC
 ## Appendix C: File Structure for Public Repo
 
 ```bash
-chasm/
+ironbridge/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml
@@ -509,7 +509,7 @@ chasm/
 
 Before proceeding, decisions needed on:
 
-1. **Name**: Keep "chasm" or use different name?
+1. **Name**: Keep "ironbridge" or use different name?
 2. **License**: AGPL-3.0-only + commercial dual-license ✅
 3. **VS Code Extension**: Open source with CLI or keep proprietary?
 4. **Timeline**: When to begin Phase 1?

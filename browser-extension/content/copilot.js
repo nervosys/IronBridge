@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Browser Extension - Microsoft Copilot Content Script
+// IronBridge Browser Extension - Microsoft Copilot Content Script
 // Copyright 2025-2026 Nervosys LLC
 
 (() => {
@@ -58,7 +58,7 @@
 
             return { session };
         } catch (error) {
-            console.error('Chasm: Failed to extract session', error);
+            console.error('IronBridge: Failed to extract session', error);
             return { session: null, error: error.message };
         }
     }
@@ -231,5 +231,5 @@
     }
 
     // Initialize
-    console.log('Chasm: Microsoft Copilot content script loaded');
+    console.log('IronBridge: Microsoft Copilot content script loaded');
 })();

@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -15,16 +15,16 @@ export default function HarvestPage() {
 
             <h2>Initialize</h2>
             <CodeBlock language="bash">
-                {`chasm harvest init               # Create database
-chasm harvest init --git         # Also initialize git tracking`}
+                {`ironbridge harvest init               # Create database
+ironbridge harvest init --git         # Also initialize git tracking`}
             </CodeBlock>
 
             <h2>Scan &amp; Run</h2>
             <CodeBlock language="bash">
-                {`chasm harvest scan               # Discover available providers
-chasm harvest run                # Collect all sessions
-chasm harvest run --incremental  # Only new/modified sessions
-chasm harvest status             # Database statistics`}
+                {`ironbridge harvest scan               # Discover available providers
+ironbridge harvest run                # Collect all sessions
+ironbridge harvest run --incremental  # Only new/modified sessions
+ironbridge harvest status             # Database statistics`}
             </CodeBlock>
 
             <h2>Full-Text Search</h2>
@@ -33,24 +33,24 @@ chasm harvest status             # Database statistics`}
                 and contextual snippets:
             </p>
             <CodeBlock language="bash">
-                {`chasm harvest search "authentication middleware"
-chasm harvest search "how to deploy" --limit 20`}
+                {`ironbridge harvest search "authentication middleware"
+ironbridge harvest search "how to deploy" --limit 20`}
             </CodeBlock>
 
             <h2>Share Link Import</h2>
             <p>Import shared conversations from cloud AI services:</p>
             <CodeBlock language="bash">
-                {`chasm harvest share https://chatgpt.com/share/abc123
-chasm harvest share https://claude.ai/share/xyz789`}
+                {`ironbridge harvest share https://chatgpt.com/share/abc123
+ironbridge harvest share https://claude.ai/share/xyz789`}
             </CodeBlock>
 
             <h2>Provider Filtering</h2>
             <CodeBlock language="bash">
                 {`# Only harvest from specific providers
-chasm harvest run --providers copilot,cursor
+ironbridge harvest run --providers copilot,cursor
 
 # Exclude certain providers
-chasm harvest run --exclude ollama,vllm`}
+ironbridge harvest run --exclude ollama,vllm`}
             </CodeBlock>
 
             <h2>Database Schema</h2>
@@ -66,7 +66,7 @@ file_changes  — id, session_id, path, action, diff`}
             </CodeBlock>
 
             <Callout type="info" title="Search Optimization">
-                Chasm uses FTS5 <code>snippet()</code> and <code>rank</code> ordering
+                IronBridge uses FTS5 <code>snippet()</code> and <code>rank</code> ordering
                 with session deduplication. Title-only searches use 4KB header reads
                 for 10-100x faster performance.
             </Callout>

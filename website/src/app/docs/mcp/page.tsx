@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,7 +9,7 @@ export default function McpPage() {
         <div className="content-wrapper">
             <h1>MCP Server</h1>
             <p className="page-description">
-                Chasm provides a{' '}
+                IronBridge provides a{' '}
                 <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener noreferrer">
                     Model Context Protocol
                 </a>{' '}
@@ -17,12 +17,12 @@ export default function McpPage() {
             </p>
 
             <h2>Configuration</h2>
-            <p>Add Chasm to your AI agent&apos;s MCP configuration:</p>
+            <p>Add IronBridge to your AI agent&apos;s MCP configuration:</p>
             <CodeBlock language="json" filename="mcp_config.json">
                 {`{
   "mcpServers": {
-    "chasm": {
-      "command": "csm-mcp"
+    "ironbridge": {
+      "command": "ironbridge-mcp"
     }
   }
 }`}
@@ -34,29 +34,29 @@ export default function McpPage() {
                     <tr><th>Tool</th><th>Description</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><code>chasm_list_workspaces</code></td><td>List all discovered workspaces</td></tr>
-                    <tr><td><code>chasm_list_sessions</code></td><td>List sessions in a workspace</td></tr>
-                    <tr><td><code>chasm_get_session</code></td><td>Get full session content with messages</td></tr>
-                    <tr><td><code>chasm_search_sessions</code></td><td>Full-text search across all sessions</td></tr>
-                    <tr><td><code>chasm_get_stats</code></td><td>Get database statistics</td></tr>
+                    <tr><td><code>ironbridge_list_workspaces</code></td><td>List all discovered workspaces</td></tr>
+                    <tr><td><code>ironbridge_list_sessions</code></td><td>List sessions in a workspace</td></tr>
+                    <tr><td><code>ironbridge_get_session</code></td><td>Get full session content with messages</td></tr>
+                    <tr><td><code>ironbridge_search_sessions</code></td><td>Full-text search across all sessions</td></tr>
+                    <tr><td><code>ironbridge_get_stats</code></td><td>Get database statistics</td></tr>
                 </tbody>
             </table>
 
             <h2>Usage with Claude Code</h2>
             <CodeBlock language="bash">
                 {`# Install the MCP binary
-cargo install chasm --bin csm-mcp
+cargo install ironbridge --bin ironbridge-mcp
 
 # Add to Claude Code config
-echo '{"mcpServers":{"chasm":{"command":"csm-mcp"}}}' > ~/.claude/mcp_config.json`}
+echo '{"mcpServers":{"ironbridge":{"command":"ironbridge-mcp"}}}' > ~/.claude/mcp_config.json`}
             </CodeBlock>
 
             <h2>Usage with VS Code Copilot</h2>
             <CodeBlock language="json" filename=".vscode/mcp.json">
                 {`{
   "servers": {
-    "chasm": {
-      "command": "csm-mcp",
+    "ironbridge": {
+      "command": "ironbridge-mcp",
       "args": []
     }
   }

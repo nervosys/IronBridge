@@ -2,7 +2,7 @@
 
 Analyze tool invocations and file changes across AI coding sessions to extract
 code quality insights, development patterns, and improvement opportunities.
-This skill is **unique to Chasm** — it leverages the normalized `tool_invocations`
+This skill is **unique to IronBridge** — it leverages the normalized `tool_invocations`
 and `file_changes` tables that no markdown-only system can provide.
 
 ## When to Use
@@ -130,8 +130,8 @@ ORDER BY date DESC;
 
 ```bash
 # Search across all sessions
-chasm harvest search --query "refactor OR restructure OR cleanup"
+ironbridge harvest search --query "refactor OR restructure OR cleanup"
 
 # Export for external analysis
-chasm harvest export --format jsonl
+ironbridge harvest export --format jsonl
 ```

@@ -1,11 +1,11 @@
 <idea-plugin>
-    <id>io.chasm.plugin</id>
-    <name>Chasm - Chat Session Manager</name>
+    <id>io.ironbridge.plugin</id>
+    <name>IronBridge - Chat Session Manager</name>
     <version>1.0.0</version>
-    <vendor email="hello@nervosys.ai" url="https://github.com/nervosys/chasm">Nervosys LLC</vendor>
+    <vendor email="hello@nervosys.ai" url="https://github.com/nervosys/ironbridge">Nervosys LLC</vendor>
 
     <description><![CDATA[
-    <h2>Chasm - Universal Chat Session Manager</h2>
+    <h2>IronBridge - Universal Chat Session Manager</h2>
     <p>Harvest, view, and manage AI chat sessions from JetBrains AI Assistant and other providers.</p>
     
     <h3>Features</h3>
@@ -15,17 +15,17 @@
         <li>🔍 Search across all your AI conversations</li>
         <li>🏷️ Tag and organize sessions</li>
         <li>📤 Export sessions to Markdown, JSON, or HTML</li>
-        <li>🔄 Sync with Chasm server for cross-tool access</li>
+        <li>🔄 Sync with IronBridge server for cross-tool access</li>
     </ul>
     
     <h3>Quick Start</h3>
     <ol>
         <li>Install the plugin</li>
-        <li>Open the Chasm tool window (View → Tool Windows → Chasm)</li>
+        <li>Open the IronBridge tool window (View → Tool Windows → IronBridge)</li>
         <li>Click "Harvest" to import your chat sessions</li>
     </ol>
     
-    <p>Part of the Chasm ecosystem for unified AI chat management.</p>
+    <p>Part of the IronBridge ecosystem for unified AI chat management.</p>
     ]]></description>
 
     <change-notes><![CDATA[
@@ -34,7 +34,7 @@
         <li>Initial release</li>
         <li>JetBrains AI Assistant session harvesting</li>
         <li>Session viewer and search</li>
-        <li>Chasm server integration</li>
+        <li>IronBridge server integration</li>
     </ul>
     ]]></change-notes>
 
@@ -46,68 +46,68 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Tool Window -->
-        <toolWindow id="Chasm" 
+        <toolWindow id="IronBridge" 
                     secondary="true" 
-                    icon="/icons/chasm.svg"
+                    icon="/icons/ironbridge.svg"
                     anchor="right"
-                    factoryClass="io.chasm.plugin.ui.ChasmToolWindowFactory"/>
+                    factoryClass="io.ironbridge.plugin.ui.IronBridgeToolWindowFactory"/>
 
         <!-- Settings -->
         <applicationConfigurable 
             parentId="tools"
-            instance="io.chasm.plugin.settings.ChasmSettingsConfigurable"
-            id="io.chasm.plugin.settings"
-            displayName="Chasm"/>
+            instance="io.ironbridge.plugin.settings.IronBridgeSettingsConfigurable"
+            id="io.ironbridge.plugin.settings"
+            displayName="IronBridge"/>
 
         <!-- Application Service -->
         <applicationService 
-            serviceImplementation="io.chasm.plugin.services.ChasmService"/>
+            serviceImplementation="io.ironbridge.plugin.services.IronBridgeService"/>
 
         <!-- Project Service -->
         <projectService 
-            serviceImplementation="io.chasm.plugin.services.ChasmProjectService"/>
+            serviceImplementation="io.ironbridge.plugin.services.IronBridgeProjectService"/>
 
         <!-- Notifications -->
-        <notificationGroup id="Chasm Notifications" 
+        <notificationGroup id="IronBridge Notifications" 
                           displayType="BALLOON"/>
     </extensions>
 
     <actions>
         <!-- Add to Tools menu -->
-        <group id="Chasm.ToolsMenu" text="Chasm" popup="true">
+        <group id="IronBridge.ToolsMenu" text="IronBridge" popup="true">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             
-            <action id="Chasm.Harvest"
-                    class="io.chasm.plugin.actions.HarvestAction"
+            <action id="IronBridge.Harvest"
+                    class="io.ironbridge.plugin.actions.HarvestAction"
                     text="Harvest Sessions"
                     description="Import AI chat sessions"
                     icon="/icons/harvest.svg"/>
                     
-            <action id="Chasm.Search"
-                    class="io.chasm.plugin.actions.SearchAction"
+            <action id="IronBridge.Search"
+                    class="io.ironbridge.plugin.actions.SearchAction"
                     text="Search Sessions"
                     description="Search across all chat sessions"
                     icon="/icons/search.svg"/>
                     
-            <action id="Chasm.Sync"
-                    class="io.chasm.plugin.actions.SyncAction"
+            <action id="IronBridge.Sync"
+                    class="io.ironbridge.plugin.actions.SyncAction"
                     text="Sync with Server"
-                    description="Synchronize with Chasm server"
+                    description="Synchronize with IronBridge server"
                     icon="/icons/sync.svg"/>
                     
             <separator/>
             
-            <action id="Chasm.Settings"
-                    class="io.chasm.plugin.actions.OpenSettingsAction"
+            <action id="IronBridge.Settings"
+                    class="io.ironbridge.plugin.actions.OpenSettingsAction"
                     text="Settings"
-                    description="Open Chasm settings"/>
+                    description="Open IronBridge settings"/>
         </group>
 
         <!-- Editor context menu -->
-        <action id="Chasm.SaveToSession"
-                class="io.chasm.plugin.actions.SaveToSessionAction"
-                text="Save Selection to Chasm"
-                description="Save selected code to a Chasm session">
+        <action id="IronBridge.SaveToSession"
+                class="io.ironbridge.plugin.actions.SaveToSessionAction"
+                text="Save Selection to IronBridge"
+                description="Save selected code to a IronBridge session">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
     </actions>

@@ -48,21 +48,21 @@ export const CLIWalkthrough: React.FC = () => {
             title="bash — Browse sessions"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm list workspaces", delay: 0 },
+              { prompt: true, text: "ironbridge list workspaces", delay: 0 },
               {
                 text: "Found 42 workspaces",
                 color: COLORS.primary,
                 delay: 25,
               },
               { text: "", delay: 30 },
-              { prompt: true, text: "chasm list sessions --all-providers", delay: 40 },
+              { prompt: true, text: "ironbridge list sessions --all-providers", delay: 40 },
               {
                 text: "1,722 sessions across Copilot, Cursor, Claude Code",
                 color: COLORS.primary,
                 delay: 65,
               },
               { text: "", delay: 75 },
-              { prompt: true, text: "chasm show path .", delay: 85 },
+              { prompt: true, text: "ironbridge show path .", delay: 85 },
               {
                 text: "Current project: 8 sessions, 241 messages",
                 color: COLORS.text,
@@ -91,7 +91,7 @@ export const CLIWalkthrough: React.FC = () => {
             lines={[
               {
                 prompt: true,
-                text: "chasm export session abc123 --format markdown",
+                text: "ironbridge export session abc123 --format markdown",
                 delay: 0,
               },
               {
@@ -102,7 +102,7 @@ export const CLIWalkthrough: React.FC = () => {
               { text: "", delay: 40 },
               {
                 prompt: true,
-                text: "chasm export batch ./backup /proj1 /proj2 /proj3",
+                text: "ironbridge export batch ./backup /proj1 /proj2 /proj3",
                 delay: 50,
               },
               {
@@ -113,7 +113,7 @@ export const CLIWalkthrough: React.FC = () => {
               { text: "", delay: 90 },
               {
                 prompt: true,
-                text: "chasm import ./backup/session.json",
+                text: "ironbridge import ./backup/session.json",
                 delay: 100,
               },
               {
@@ -142,7 +142,7 @@ export const CLIWalkthrough: React.FC = () => {
             title="bash — Unified harvesting"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm harvest scan", delay: 0 },
+              { prompt: true, text: "ironbridge harvest scan", delay: 0 },
               {
                 text: "Providers: copilot, cursor, claude-code, ollama",
                 color: COLORS.text,
@@ -154,7 +154,7 @@ export const CLIWalkthrough: React.FC = () => {
                 delay: 35,
               },
               { text: "", delay: 45 },
-              { prompt: true, text: "chasm harvest run", delay: 55 },
+              { prompt: true, text: "ironbridge harvest run", delay: 55 },
               {
                 text: "Harvesting... ████████████████████ 100%",
                 color: COLORS.success,
@@ -168,7 +168,7 @@ export const CLIWalkthrough: React.FC = () => {
               { text: "", delay: 110 },
               {
                 prompt: true,
-                text: 'chasm harvest search "react hooks"',
+                text: 'ironbridge harvest search "react hooks"',
                 delay: 120,
               },
               {
@@ -197,7 +197,7 @@ export const CLIWalkthrough: React.FC = () => {
             title="bash — Auto-harvest & agent launcher"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm watch --agent claude", delay: 0 },
+              { prompt: true, text: "ironbridge watch --agent claude", delay: 0 },
               {
                 text: "Watching Claude Code sessions for changes...",
                 color: COLORS.textMuted,
@@ -216,7 +216,7 @@ export const CLIWalkthrough: React.FC = () => {
               { text: "", delay: 90 },
               {
                 prompt: true,
-                text: "chasm run claude",
+                text: "ironbridge run claude",
                 delay: 100,
               },
               {
@@ -245,9 +245,9 @@ export const CLIWalkthrough: React.FC = () => {
             title="bash — Health check"
             startFrame={10}
             lines={[
-              { prompt: true, text: "chasm doctor --full", delay: 0 },
+              { prompt: true, text: "ironbridge doctor --full", delay: 0 },
               {
-                text: "✓ Chasm v1.3.2",
+                text: "✓ IronBridge v1.3.2",
                 color: COLORS.success,
                 delay: 20,
               },

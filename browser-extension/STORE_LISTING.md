@@ -1,4 +1,4 @@
-# Store Listing — Chasm Browser Extension
+# Store Listing — IronBridge Browser Extension
 
 > Reference document for Chrome Web Store and Firefox Add-on Store submissions.
 
@@ -8,7 +8,7 @@
 
 ### Extension Name
 
-Chasm — Chat Session Manager
+IronBridge — Chat Session Manager
 
 ### Summary (132 chars max)
 
@@ -16,7 +16,7 @@ Capture, export, and manage your AI chat sessions from ChatGPT, Claude, Gemini, 
 
 ### Description
 
-Chasm is a privacy-first browser extension that lets you capture and manage your AI chat sessions from popular web-based AI tools.
+IronBridge is a privacy-first browser extension that lets you capture and manage your AI chat sessions from popular web-based AI tools.
 
 **Key Features:**
 • One-click session export — Save any AI conversation with a single click
@@ -35,12 +35,12 @@ Chasm is a privacy-first browser extension that lets you capture and manage your
 • Perplexity (perplexity.ai)
 
 **Privacy First:**
-Chasm sends your data only to your self-hosted Chasm API server (default: localhost). No analytics, no tracking, no third-party data sharing. You own your data.
+IronBridge sends your data only to your self-hosted IronBridge API server (default: localhost). No analytics, no tracking, no third-party data sharing. You own your data.
 
 **Open Source:**
-Chasm is fully open source under the AGPL-3.0-only license. Review the code, contribute, or self-host.
+IronBridge is fully open source under the AGPL-3.0-only license. Review the code, contribute, or self-host.
 
-Learn more: https://github.com/nervosys/chasm
+Learn more: https://github.com/nervosys/ironbridge
 
 ### Category
 
@@ -52,15 +52,15 @@ English
 
 ### Website
 
-https://github.com/nervosys/chasm
+https://github.com/nervosys/ironbridge
 
 ### Support URL
 
-https://github.com/nervosys/chasm/issues
+https://github.com/nervosys/ironbridge/issues
 
 ### Privacy Policy URL
 
-https://github.com/nervosys/chasm/blob/master/browser-extension/PRIVACY_POLICY.md
+https://github.com/nervosys/ironbridge/blob/master/browser-extension/PRIVACY_POLICY.md
 
 ---
 
@@ -68,7 +68,7 @@ https://github.com/nervosys/chasm/blob/master/browser-extension/PRIVACY_POLICY.m
 
 ### Add-on Name
 
-Chasm — Chat Session Manager
+IronBridge — Chat Session Manager
 
 ### Summary (250 chars max)
 
@@ -92,7 +92,7 @@ AGPL-3.0-only
 
 ### Homepage
 
-https://github.com/nervosys/chasm
+https://github.com/nervosys/ironbridge
 
 ### Support Email
 
@@ -100,7 +100,7 @@ support@nervosys.com
 
 ### Support URL
 
-https://github.com/nervosys/chasm/issues
+https://github.com/nervosys/ironbridge/issues
 
 ---
 
@@ -110,19 +110,19 @@ Prepare the following screenshots for store submission (1280×800 or 640×400 re
 
 1. **Popup UI** — Show the extension popup on a ChatGPT page with connection status active
 2. **Export in Action** — Demonstrate one-click export with a success notification
-3. **Context Menu** — Show the right-click context menu with Chasm options
+3. **Context Menu** — Show the right-click context menu with IronBridge options
 4. **Settings Page** — Display the options/settings panel with configuration fields
 5. **Multi-Provider** — Show the extension working on Claude or Gemini to demonstrate breadth
 
 ### Promotional Tile (440×280)
 
-Include the Chasm logo, tagline "Capture Your AI Conversations," and a preview of the popup UI.
+Include the IronBridge logo, tagline "Capture Your AI Conversations," and a preview of the popup UI.
 
 ---
 
 ## Review Notes for Store Reviewers
 
-- The extension requires a local Chasm API server running at the configured URL (default: http://localhost:8787) to function fully. Without the server, the extension will show "Disconnected" status but will not error.
+- The extension requires a local IronBridge API server running at the configured URL (default: http://localhost:8787) to function fully. Without the server, the extension will show "Disconnected" status but will not error.
 - All network requests go exclusively to the user-configured API URL. No external services are contacted.
 - The extension uses Manifest V3 (Chrome) / Manifest V2 (Firefox).
 - Content scripts are injected only on the specific AI chat sites listed in the manifest.

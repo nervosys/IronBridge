@@ -114,8 +114,8 @@ Calculate a yak-shaving score (0-10) based on:
 
 ```bash
 # Search for long sessions (potential yak-shaving)
-chasm harvest search --query "debug OR fix OR workaround" --limit 10
+ironbridge harvest search --query "debug OR fix OR workaround" --limit 10
 
 # Check session message counts
-chasm harvest list --sort-by messages --limit 10
+ironbridge harvest list --sort-by messages --limit 10
 ```

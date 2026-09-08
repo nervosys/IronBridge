@@ -1,14 +1,14 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Browser Extension - Service Worker
+// IronBridge Browser Extension - Service Worker
 // Copyright 2025-2026 Nervosys LLC
 
 const API_BASE = 'http://localhost:8787';
 
 // Headers for an /api request, including a bearer token when one is stored.
 //
-// A Chasm server with CHASM_REQUIRE_AUTH set rejects unauthenticated /api calls
+// A IronBridge server with IRONBRIDGE_REQUIRE_AUTH set rejects unauthenticated /api calls
 // with 401. The token is saved under `accessToken` in extension storage (set it
 // from the options page after logging in); without one, requests go out
 // unauthenticated, which is correct against a server that does not require auth.
@@ -27,7 +27,7 @@ async function apiHeaders(extra = {}) {
 
 // Install event
 chrome.runtime.onInstalled.addListener(async () => {
-    console.log('Chasm extension installed');
+    console.log('IronBridge extension installed');
     await createContextMenus();
     const defaults = {
         apiUrl: API_BASE,
@@ -43,7 +43,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // Startup event - reinitialize alarms after browser restart
 chrome.runtime.onStartup.addListener(async () => {
-    console.log('Chasm extension started');
+    console.log('IronBridge extension started');
     await initAutoHarvest();
 });
 
@@ -67,8 +67,8 @@ async function initAutoHarvest() {
 async function createContextMenus() {
     await chrome.contextMenus.removeAll();
     chrome.contextMenus.create({
-        id: 'chasm-export',
-        title: 'Export to Chasm',
+        id: 'ironbridge-export',
+        title: 'Export to IronBridge',
         contexts: ['page'],
         documentUrlPatterns: [
             '*://chat.openai.com/*', '*://chatgpt.com/*', '*://claude.ai/*',
@@ -77,8 +77,8 @@ async function createContextMenus() {
         ],
     });
     chrome.contextMenus.create({
-        id: 'chasm-export-selection',
-        title: 'Save selection to Chasm',
+        id: 'ironbridge-export-selection',
+        title: 'Save selection to IronBridge',
         contexts: ['selection'],
         documentUrlPatterns: [
             '*://chat.openai.com/*', '*://chatgpt.com/*', '*://claude.ai/*',
@@ -87,7 +87,7 @@ async function createContextMenus() {
         ],
     });
     chrome.contextMenus.create({
-        id: 'chasm-copy-markdown',
+        id: 'ironbridge-copy-markdown',
         title: 'Copy as Markdown',
         contexts: ['selection'],
         documentUrlPatterns: [
@@ -100,9 +100,9 @@ async function createContextMenus() {
 // Context menu click handler
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     switch (info.menuItemId) {
-        case 'chasm-export': await handleExportSession(tab); break;
-        case 'chasm-export-selection': await handleExportSelection(info, tab); break;
-        case 'chasm-copy-markdown': await handleCopyMarkdown(info, tab); break;
+        case 'ironbridge-export': await handleExportSession(tab); break;
+        case 'ironbridge-export-selection': await handleExportSelection(info, tab); break;
+        case 'ironbridge-copy-markdown': await handleCopyMarkdown(info, tab); break;
     }
 });
 
@@ -121,7 +121,7 @@ async function serverReason(response) {
     } catch (error) {
         // Not JSON. Fall through to the status.
     }
-    return 'Chasm answered ' + response.status + ' ' + response.statusText;
+    return 'IronBridge answered ' + response.status + ' ' + response.statusText;
 }
 
 // Handle export session
@@ -135,7 +135,7 @@ async function handleExportSession(tab) {
                 body: JSON.stringify(response.session),
             });
             if (apiResponse.ok) {
-                showNotification('Session Exported', 'Session saved to Chasm successfully');
+                showNotification('Session Exported', 'Session saved to IronBridge successfully');
             } else {
                 showNotification('Export Failed', await serverReason(apiResponse));
             }
@@ -162,7 +162,7 @@ async function handleExportSelection(info, tab) {
             body: JSON.stringify(note),
         });
         if (apiResponse.ok) {
-            showNotification('Note Saved', 'Selection saved to Chasm');
+            showNotification('Note Saved', 'Selection saved to IronBridge');
         } else {
             // The server says why -- "content is required", or that the
             // selection is past the length cap. Repeating its words is more
@@ -245,7 +245,7 @@ async function showNotification(title, message) {
     chrome.notifications.create({
         type: 'basic',
         iconUrl: '../icons/icon128.png',
-        title: 'Chasm: ' + title,
+        title: 'IronBridge: ' + title,
         message: message,
     });
 }

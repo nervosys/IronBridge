@@ -1,6 +1,6 @@
 // Copyright (c) 2024-2027 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
-package io.chasm.plugin.actions
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
+package io.ironbridge.plugin.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -10,13 +10,13 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
-import io.chasm.plugin.services.ChasmService
-import io.chasm.plugin.settings.ChasmSettings
+import io.ironbridge.plugin.services.IronBridgeService
+import io.ironbridge.plugin.settings.IronBridgeSettings
 
 /**
- * Action to synchronize sessions with the Chasm server.
+ * Action to synchronize sessions with the IronBridge server.
  */
-class SyncAction : AnAction("Sync Sessions", "Synchronize sessions with Chasm server", null) {
+class SyncAction : AnAction("Sync Sessions", "Synchronize sessions with IronBridge server", null) {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
@@ -26,13 +26,13 @@ class SyncAction : AnAction("Sync Sessions", "Synchronize sessions with Chasm se
                 indicator.text = "Checking server connection..."
                 indicator.fraction = 0.1
 
-                val service = ChasmService.getInstance()
+                val service = IronBridgeService.getInstance()
                 val health = service.checkHealth()
 
                 if (!health.healthy) {
                     showNotification(
                         "Sync Failed",
-                        "Could not connect to Chasm server: ${health.error}",
+                        "Could not connect to IronBridge server: ${health.error}",
                         NotificationType.ERROR
                     )
                     return
@@ -65,11 +65,11 @@ class SyncAction : AnAction("Sync Sessions", "Synchronize sessions with Chasm se
     }
 
     private fun showNotification(title: String, content: String, type: NotificationType) {
-        if (!ChasmSettings.getInstance().showNotifications) return
+        if (!IronBridgeSettings.getInstance().showNotifications) return
 
         ApplicationManager.getApplication().invokeLater {
             NotificationGroupManager.getInstance()
-                .getNotificationGroup("Chasm Notifications")
+                .getNotificationGroup("IronBridge Notifications")
                 .createNotification(title, content, type)
                 .notify(null)
         }

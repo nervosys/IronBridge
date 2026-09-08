@@ -1,5 +1,5 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
 import { CodeBlock, Callout, Card } from '@/components/Ui';
 import { PageNav } from '@/components/PageNav';
@@ -9,13 +9,13 @@ export default function DocsIntroPage() {
         <div className="content-wrapper">
             <h1>Introduction</h1>
             <p className="page-description">
-                Chasm is a universal chat session manager that harvests, merges, and
+                IronBridge is a universal chat session manager that harvests, merges, and
                 analyzes AI chat history across workspaces and providers.
             </p>
 
-            <Callout type="tip" title="Why Chasm?">
+            <Callout type="tip" title="Why IronBridge?">
                 AI coding assistants produce valuable conversations that are scattered
-                across editors, local files, and cloud services. Chasm unifies them into
+                across editors, local files, and cloud services. IronBridge unifies them into
                 a single, searchable database you fully control.
             </Callout>
 
@@ -57,12 +57,12 @@ export default function DocsIntroPage() {
             <h2>Project Structure</h2>
 
             <CodeBlock language="bash" filename="Monorepo Layout">
-                {`chasm/
-├── chasm-rust/          # Core CLI and API server (Rust)
-├── chasm-web/           # Web dashboard (React + Vite)
-├── chasm-app/           # Mobile app (React Native)
-├── chasm-desktop/       # Desktop app (Tauri)
-├── chasm-shared/        # Shared TypeScript types
+                {`ironbridge/
+├── ironbridge-rust/          # Core CLI and API server (Rust)
+├── ironbridge-web/           # Web dashboard (React + Vite)
+├── ironbridge-app/           # Mobile app (React Native)
+├── ironbridge-desktop/       # Desktop app (Tauri)
+├── ironbridge-shared/        # Shared TypeScript types
 ├── vscode-extension/    # VS Code extension
 ├── browser-extension/   # Chrome/Firefox extension
 ├── jetbrains-plugin/    # JetBrains IDEs plugin
@@ -76,7 +76,7 @@ export default function DocsIntroPage() {
 
             <ol>
                 <li>
-                    <strong>Discover</strong> — Chasm scans your system for VS Code
+                    <strong>Discover</strong> — IronBridge scans your system for VS Code
                     workspaces, local LLM providers, and editor extensions.
                 </li>
                 <li>

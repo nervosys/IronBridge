@@ -1,11 +1,11 @@
 // Copyright (c) 2024-2026 Nervosys LLC
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Chasm-Commercial
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-IronBridge-Commercial
 
-// Chasm Session Tree View Provider
+// IronBridge Session Tree View Provider
 // Displays chat sessions for a selected workspace
 
 import * as vscode from 'vscode';
-import { ChasmExecutor, SessionInfo } from './chasmExecutor';
+import { IronBridgeExecutor, SessionInfo } from './ironbridgeExecutor';
 
 export class SessionItem extends vscode.TreeItem {
     constructor(
@@ -36,7 +36,7 @@ export class SessionItem extends vscode.TreeItem {
 
         // Click handler - open session details
         this.command = {
-            command: 'chasm.selectSession',
+            command: 'ironbridge.selectSession',
             title: 'Select Session',
             arguments: [this]
         };
@@ -51,7 +51,7 @@ export class SessionProvider implements vscode.TreeDataProvider<SessionItem> {
     private sessions: SessionInfo[] = [];
     private outputChannel?: vscode.OutputChannel;
 
-    constructor(private executor: ChasmExecutor, outputChannel?: vscode.OutputChannel) {
+    constructor(private executor: IronBridgeExecutor, outputChannel?: vscode.OutputChannel) {
         this.outputChannel = outputChannel;
     }
 

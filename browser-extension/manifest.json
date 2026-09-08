@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Chasm - Chat Session Manager",
+  "name": "IronBridge - Chat Session Manager",
   "description": "Harvest and manage AI chat sessions from web-based AI tools like ChatGPT, Claude, and more",
   "version": "1.0.0",
   "author": "Nervosys LLC",
-  "homepage_url": "https://github.com/nervosys/chasm",
+  "homepage_url": "https://github.com/nervosys/ironbridge",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -20,7 +20,7 @@
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-    "default_title": "Chasm - Chat Session Manager"
+    "default_title": "IronBridge - Chat Session Manager"
   },
   "background": { "service_worker": "background/service-worker.js", "type": "module" },
   "content_scripts": [
