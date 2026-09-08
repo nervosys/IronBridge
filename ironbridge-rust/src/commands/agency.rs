@@ -145,7 +145,10 @@ pub fn show_agent_info(name: &str) -> Result<()> {
                 name
             );
             println!();
-            println!("  Use 'ironbridge Agency create {}' to create a new agent", name);
+            println!(
+                "  Use 'ironbridge Agency create {}' to create a new agent",
+                name
+            );
         }
     }
 
@@ -332,7 +335,10 @@ pub fn create_agent(
     println!("  {} {}", "Instruction:".dimmed(), instruction);
     println!();
     println!("{}", "[*] To use this agent:".dimmed());
-    println!("   ironbridge Agency run --agent {} \"Your prompt here\"", name);
+    println!(
+        "   ironbridge Agency run --agent {} \"Your prompt here\"",
+        name
+    );
 
     Ok(())
 }

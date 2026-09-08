@@ -413,11 +413,10 @@ pub fn apply_pending_index(pending_file: &str) -> Result<()> {
     let ws_id = pending["workspace_id"]
         .as_str()
         .ok_or_else(|| IronBridgeError::InvalidSessionFormat("missing workspace_id".into()))?;
-    let chat_sessions_dir = PathBuf::from(
-        pending["chat_sessions_dir"]
-            .as_str()
-            .ok_or_else(|| IronBridgeError::InvalidSessionFormat("missing chat_sessions_dir".into()))?,
-    );
+    let chat_sessions_dir =
+        PathBuf::from(pending["chat_sessions_dir"].as_str().ok_or_else(|| {
+            IronBridgeError::InvalidSessionFormat("missing chat_sessions_dir".into())
+        })?);
 
     // Wait for VS Code to exit (poll every 2 seconds, timeout after 10 minutes)
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
@@ -2203,9 +2202,11 @@ pub fn register_trim(
         // Trim a specific session
         let jsonl_path = chat_sessions_dir.join(format!("{}.jsonl", sid));
         if !jsonl_path.exists() {
-            return Err(
-                IronBridgeError::InvalidSessionFormat(format!("Session not found: {}", sid)).into(),
-            );
+            return Err(IronBridgeError::InvalidSessionFormat(format!(
+                "Session not found: {}",
+                sid
+            ))
+            .into());
         }
 
         let size_mb = std::fs::metadata(&jsonl_path)?.len() / (1024 * 1024);

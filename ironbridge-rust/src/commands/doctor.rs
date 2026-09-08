@@ -740,8 +740,10 @@ fn check_api_server() -> CheckResult {
         .timeout(std::time::Duration::from_secs(3))
         .send()
     {
-        Ok(resp) if resp.status().is_success() => CheckResult::pass("network", "IronBridge API server")
-            .with_detail("Running at http://localhost:8787"),
+        Ok(resp) if resp.status().is_success() => {
+            CheckResult::pass("network", "IronBridge API server")
+                .with_detail("Running at http://localhost:8787")
+        }
         _ => CheckResult::pass("network", "IronBridge API server")
             .with_detail("Not running (start with `ironbridge api serve`)"),
     }

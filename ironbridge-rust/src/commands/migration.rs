@@ -116,7 +116,10 @@ pub fn create_migration(output: &str, projects: Option<&str>, include_all: bool)
     println!("   Workspaces: {}", filtered.len());
     println!("   Sessions: {}", total_sessions);
     println!("\nTo restore on new machine:");
-    println!("   ironbridge migration restore \"{}\"", output_path.display());
+    println!(
+        "   ironbridge migration restore \"{}\"",
+        output_path.display()
+    );
 
     Ok(())
 }

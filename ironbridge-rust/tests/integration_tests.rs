@@ -248,8 +248,8 @@ mod model_tests {
 // =============================================================================
 
 mod cli_tests {
-    use ironbridge::cli::{Cli, Commands};
     use clap::Parser;
+    use ironbridge::cli::{Cli, Commands};
 
     #[test]
     fn test_cli_run_tui_command() {
@@ -265,8 +265,14 @@ mod cli_tests {
 
     #[test]
     fn test_cli_list_sessions_command() {
-        let cli = Cli::try_parse_from(["ironbridge", "list", "sessions", "--project-path", "/test/path"])
-            .unwrap();
+        let cli = Cli::try_parse_from([
+            "ironbridge",
+            "list",
+            "sessions",
+            "--project-path",
+            "/test/path",
+        ])
+        .unwrap();
         assert!(matches!(cli.command, Commands::List { .. }));
     }
 
@@ -329,13 +335,15 @@ mod cli_tests {
     #[test]
     fn test_cli_import_sessions_command() {
         let cli =
-            Cli::try_parse_from(["ironbridge", "import", "sessions", "/src/path/session.json"]).unwrap();
+            Cli::try_parse_from(["ironbridge", "import", "sessions", "/src/path/session.json"])
+                .unwrap();
         assert!(matches!(cli.command, Commands::Import { .. }));
     }
 
     #[test]
     fn test_cli_move_sessions_command() {
-        let cli = Cli::try_parse_from(["ironbridge", "move", "sessions", "abc123", "/dest/path"]).unwrap();
+        let cli = Cli::try_parse_from(["ironbridge", "move", "sessions", "abc123", "/dest/path"])
+            .unwrap();
         assert!(matches!(cli.command, Commands::Move { .. }));
     }
 
@@ -374,15 +382,21 @@ mod cli_tests {
     #[test]
     fn test_cli_migration_create_command() {
         let cli =
-            Cli::try_parse_from(["ironbridge", "migration", "create", "/output/path", "--all"]).unwrap();
+            Cli::try_parse_from(["ironbridge", "migration", "create", "/output/path", "--all"])
+                .unwrap();
         assert!(matches!(cli.command, Commands::Migration { .. }));
     }
 
     #[test]
     fn test_cli_migration_restore_command() {
-        let cli =
-            Cli::try_parse_from(["ironbridge", "migration", "restore", "/package/path", "--dry-run"])
-                .unwrap();
+        let cli = Cli::try_parse_from([
+            "ironbridge",
+            "migration",
+            "restore",
+            "/package/path",
+            "--dry-run",
+        ])
+        .unwrap();
         assert!(matches!(cli.command, Commands::Migration { .. }));
     }
 

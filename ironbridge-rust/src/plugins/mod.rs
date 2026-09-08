@@ -410,8 +410,12 @@ impl PluginManager {
 
         // Validate IRONBRIDGE version requirement
         let current_version = env!("CARGO_PKG_VERSION");
-        let req = semver::VersionReq::parse(&manifest.ironbridge_version)
-            .map_err(|_| anyhow!("Invalid ironbridge_version: {}", manifest.ironbridge_version))?;
+        let req = semver::VersionReq::parse(&manifest.ironbridge_version).map_err(|_| {
+            anyhow!(
+                "Invalid ironbridge_version: {}",
+                manifest.ironbridge_version
+            )
+        })?;
         let current = semver::Version::parse(current_version)?;
 
         if !req.matches(&current) {

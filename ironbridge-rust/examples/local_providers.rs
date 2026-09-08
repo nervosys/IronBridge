@@ -15,7 +15,7 @@ use ironbridge::providers::discovery::discover_all_providers;
 use ironbridge::providers::ollama::OllamaProvider;
 use ironbridge::providers::openai_compat::OpenAICompatProvider;
 use ironbridge::providers::{
-    ChatProvider, IronBridgeConfig, GenericMessage, GenericSession, ProviderConfig, ProviderType,
+    ChatProvider, GenericMessage, GenericSession, IronBridgeConfig, ProviderConfig, ProviderType,
 };
 use ironbridge::workspace::discover_workspaces;
 

@@ -90,7 +90,8 @@ pub use models::{
     SessionWithPath, Workspace, WorkspaceJson,
 };
 pub use providers::{
-    IronBridgeConfig, GenericMessage, GenericSession, ProviderConfig, ProviderRegistry, ProviderType,
+    GenericMessage, GenericSession, IronBridgeConfig, ProviderConfig, ProviderRegistry,
+    ProviderType,
 };
 pub use schema::{DetectedSchema, Ontology, ProviderSchema, SchemaRegistry, SchemaVersion};
 pub use storage::{

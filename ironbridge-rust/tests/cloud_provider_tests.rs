@@ -328,8 +328,8 @@ mod cloud_provider_trait_tests {
 // ============================================================================
 
 mod cloud_conversation_tests {
-    use ironbridge::providers::cloud::common::{CloudConversation, CloudMessage};
     use chrono::Utc;
+    use ironbridge::providers::cloud::common::{CloudConversation, CloudMessage};
 
     #[test]
     fn test_cloud_conversation_to_chat_session() {
@@ -413,8 +413,8 @@ mod cloud_conversation_tests {
 // ============================================================================
 
 mod fetch_options_tests {
-    use ironbridge::providers::cloud::common::FetchOptions;
     use chrono::Utc;
+    use ironbridge::providers::cloud::common::FetchOptions;
 
     #[test]
     fn test_fetch_options_default() {
@@ -569,7 +569,9 @@ mod provider_registry_cloud_tests {
 // ============================================================================
 
 mod m365_copilot_export_tests {
-    use ironbridge::providers::cloud::m365copilot::{get_friendly_app_name, parse_m365_copilot_export};
+    use ironbridge::providers::cloud::m365copilot::{
+        get_friendly_app_name, parse_m365_copilot_export,
+    };
 
     #[test]
     fn test_parse_empty_array() {
@@ -857,8 +859,8 @@ mod extended_cloud_provider_tests {
 // ============================================================================
 
 mod cloud_conversation_edge_cases {
-    use ironbridge::providers::cloud::common::{CloudConversation, CloudMessage};
     use chrono::Utc;
+    use ironbridge::providers::cloud::common::{CloudConversation, CloudMessage};
 
     #[test]
     fn test_conversation_with_single_message() {
@@ -1120,8 +1122,8 @@ mod provider_type_methods_tests {
 // ============================================================================
 
 mod cloud_stress_tests {
-    use ironbridge::providers::cloud::common::{CloudConversation, CloudMessage};
     use chrono::Utc;
+    use ironbridge::providers::cloud::common::{CloudConversation, CloudMessage};
 
     #[test]
     fn test_many_conversations() {

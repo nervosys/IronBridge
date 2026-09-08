@@ -2718,7 +2718,9 @@ pub fn show_index(project_path: Option<&str>, all: bool) -> Result<()> {
     );
 
     let (ws_id, ws_path, _folder) = crate::workspace::find_workspace_by_path(&path_str)?
-        .ok_or_else(|| crate::error::IronBridgeError::WorkspaceNotFound(path.display().to_string()))?;
+        .ok_or_else(|| {
+            crate::error::IronBridgeError::WorkspaceNotFound(path.display().to_string())
+        })?;
 
     let db_path = crate::storage::get_workspace_storage_db(&ws_id)?;
     let index = crate::storage::read_chat_session_index(&db_path)?;

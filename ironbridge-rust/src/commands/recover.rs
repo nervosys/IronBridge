@@ -1032,7 +1032,9 @@ pub fn recover_status(provider: &str, check_system: bool) -> Result<()> {
     println!("    1. Run 'ironbridge recover scan' to find recoverable sessions");
     println!("    2. Use 'ironbridge harvest run' to consolidate all sessions");
     println!("    3. Consider setting up the recording API for crash protection");
-    println!("    4. Run 'ironbridge recover copilot-info' for detailed extension version analysis");
+    println!(
+        "    4. Run 'ironbridge recover copilot-info' for detailed extension version analysis"
+    );
 
     Ok(())
 }

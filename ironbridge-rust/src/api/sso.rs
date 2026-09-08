@@ -1357,8 +1357,12 @@ mod signature_tests {
         // `Reference URI="#_assert7"`, so the assertion is what the signature
         // claims to cover. Signing the enclosing Response instead produces a
         // digest over the wrong element and fails verification -- correctly.
-        ironbridge_sso::saml::sign::sign_enveloped(&unsigned_response(email), "_assert7", &test_key())
-            .expect("signing the test response should succeed")
+        ironbridge_sso::saml::sign::sign_enveloped(
+            &unsigned_response(email),
+            "_assert7",
+            &test_key(),
+        )
+        .expect("signing the test response should succeed")
     }
 
     #[test]
