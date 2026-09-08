@@ -46,6 +46,7 @@ pub mod sign;
 pub mod target;
 pub mod toolchain;
 pub mod xcode;
+pub mod xcframework;
 pub mod zip;
 
 pub use config::Config;

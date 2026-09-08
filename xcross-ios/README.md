@@ -123,6 +123,28 @@ xcross-ios xcode-sdks         # lists SDKs on a Mac; clean "macOS-only" error ot
 xcross-ios xcode-identities   # lists signing identities on a Mac
 ```
 
+## `.xcframework` assembly (`xcframework` module)
+
+Once you have per-platform slices (from cross-compiling, or from Xcode), fuse
+them into the single multi-platform artifact Apple distributes. This is pure
+filesystem + `Info.plist` layout — the same operation as
+`xcodebuild -create-xcframework`, done here **on any host**:
+
+```sh
+xcross-ios xcframework --name Chasm --out build/ios \
+  --slice "iphoneos;arm64;libchasm.a;include" \
+  --slice "iphonesimulator;arm64,x86_64;libchasm-sim.a;include"
+# -> build/ios/Chasm.xcframework/
+#      Info.plist   (AvailableLibraries: ios-arm64, ios-arm64_x86_64-simulator)
+#      ios-arm64/{libchasm.a, Headers/}
+#      ios-arm64_x86_64-simulator/{libchasm-sim.a, Headers/}
+```
+
+The library identifier (`ios-arm64_x86_64-simulator`), the
+`SupportedPlatformVariant`, and the platform→arch validity are all derived from
+the `ontology` types. (Slices use `;`, not `:`, so Windows drive-letter paths
+survive.)
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
