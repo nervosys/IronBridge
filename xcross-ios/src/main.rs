@@ -540,7 +540,13 @@ fn cmd_simctl(args: &[String]) -> Result<()> {
             let devices = if let Some(file) = o.get("file") {
                 let text = std::fs::read_to_string(file)
                     .map_err(|e| Error::io(format!("reading {file}"), e))?;
-                simctl::parse_list_devices(&text)
+                // `--json` parses the structured form (robust); otherwise the
+                // human-readable table.
+                if o.has("json") || text.trim_start().starts_with('{') {
+                    simctl::parse_list_devices_json(&text)?
+                } else {
+                    simctl::parse_list_devices(&text)
+                }
             } else {
                 simctl::list_devices()?
             };

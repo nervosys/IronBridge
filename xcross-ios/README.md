@@ -304,6 +304,24 @@ Credentials: `--keychain-profile` (recommended), App Store Connect API key
 *final* status. **Secrets are redacted in `--dry-run` output** (an app-specific
 password shows as `***`).
 
+## JSON (`json` module)
+
+Several Apple tools emit JSON — `simctl list --json`, `notarytool
+--output-format json`, `xcresulttool`, SwiftPM's `Package.resolved`. Parsing the
+*structured* output is more robust than scraping the human-readable form, so the
+crate ships a small dependency-free JSON reader (full grammar: objects, arrays,
+strings with `\u` escapes and surrogate pairs, numbers, literals).
+
+It already backs `simctl list --json`:
+
+```sh
+xcross-ios simctl list --file devices.json   # JSON auto-detected
+```
+
+`parse_list_devices_json` reads each device's name/udid/state as discrete
+fields — so names like `iPhone SE (3rd generation)` are exact — and derives the
+readable runtime (`com.apple.CoreSimulator.SimRuntime.iOS-17-4` → `iOS 17.4`).
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

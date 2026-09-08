@@ -132,6 +132,68 @@ pub fn list_devices_args() -> Vec<String> {
     vec!["simctl".into(), "list".into(), "devices".into()]
 }
 
+/// `xcrun simctl list devices --json` argv — the structured form, which avoids
+/// all the ambiguity of scraping the human-readable table.
+pub fn list_devices_json_args() -> Vec<String> {
+    vec![
+        "simctl".into(),
+        "list".into(),
+        "devices".into(),
+        "--json".into(),
+    ]
+}
+
+/// Parse `simctl list devices --json`.
+///
+/// Preferred over [`parse_list_devices`]: the JSON carries each device's name,
+/// udid and state as discrete fields, so names containing parentheses, quotes or
+/// other punctuation cannot confuse it.
+pub fn parse_list_devices_json(text: &str) -> Result<Vec<SimDevice>> {
+    let root = crate::json::Json::parse(text)?;
+    let devices = root
+        .get("devices")
+        .ok_or_else(|| Error::InvalidInput("simctl json: no `devices` key".into()))?;
+    let runtimes = devices
+        .as_object()
+        .ok_or_else(|| Error::InvalidInput("simctl json: `devices` is not an object".into()))?;
+
+    let mut out = Vec::new();
+    for (runtime_id, list) in runtimes {
+        let runtime = runtime_display_name(runtime_id);
+        for d in list.as_array().unwrap_or(&[]) {
+            let (Some(name), Some(udid)) = (
+                d.get("name").and_then(crate::json::Json::as_str),
+                d.get("udid").and_then(crate::json::Json::as_str),
+            ) else {
+                continue;
+            };
+            let state = d
+                .get("state")
+                .and_then(crate::json::Json::as_str)
+                .unwrap_or("");
+            out.push(SimDevice {
+                name: name.to_string(),
+                udid: udid.to_string(),
+                state: SimState::parse(state),
+                runtime: runtime.clone(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Turn a runtime identifier into the readable name the text listing uses:
+/// `com.apple.CoreSimulator.SimRuntime.iOS-17-4` -> `iOS 17.4`.
+fn runtime_display_name(id: &str) -> String {
+    let tail = id.rsplit('.').next().unwrap_or(id);
+    match tail.split_once('-') {
+        // The first `-` separates the OS name from its version; the rest of the
+        // dashes are the version's dots.
+        Some((os, ver)) => format!("{os} {}", ver.replace('-', ".")),
+        None => tail.to_string(),
+    }
+}
+
 /// `xcrun simctl boot <udid>` argv.
 pub fn boot_args(udid: &str) -> Vec<String> {
     vec!["simctl".into(), "boot".into(), udid.into()]
@@ -257,5 +319,49 @@ mod tests {
         // A stray line without a UDID must not become a device.
         let devs = parse_list_devices("-- iOS 17.4 --\n    (no devices)\n");
         assert!(devs.is_empty());
+    }
+
+    const SAMPLE_JSON: &str = r#"{
+      "devices" : {
+        "com.apple.CoreSimulator.SimRuntime.iOS-17-4" : [
+          { "udid" : "A1111111-2222-3333-4444-555555555555",
+            "name" : "iPhone 15", "state" : "Shutdown", "isAvailable" : true },
+          { "udid" : "B1111111-2222-3333-4444-555555555555",
+            "name" : "iPhone SE (3rd generation)", "state" : "Booted", "isAvailable" : true }
+        ],
+        "com.apple.CoreSimulator.SimRuntime.watchOS-10-4" : [
+          { "udid" : "C1111111-2222-3333-4444-555555555555",
+            "name" : "Apple Watch Ultra 2 (49mm)", "state" : "Shutdown", "isAvailable" : true }
+        ]
+      }
+    }"#;
+
+    #[test]
+    fn json_listing_parses_devices_and_runtime_names() {
+        let devs = parse_list_devices_json(SAMPLE_JSON).unwrap();
+        assert_eq!(devs.len(), 3);
+        let ios: Vec<_> = devs.iter().filter(|d| d.runtime == "iOS 17.4").collect();
+        assert_eq!(ios.len(), 2);
+        // Names with parentheses are exact — no text-scraping ambiguity.
+        assert!(devs.iter().any(|d| d.name == "iPhone SE (3rd generation)" && d.is_booted()));
+        assert!(devs.iter().any(|d| d.runtime == "watchOS 10.4"));
+    }
+
+    #[test]
+    fn runtime_identifier_maps_to_the_readable_name() {
+        assert_eq!(
+            runtime_display_name("com.apple.CoreSimulator.SimRuntime.iOS-17-4"),
+            "iOS 17.4"
+        );
+        assert_eq!(
+            runtime_display_name("com.apple.CoreSimulator.SimRuntime.xrOS-2-0"),
+            "xrOS 2.0"
+        );
+    }
+
+    #[test]
+    fn malformed_json_is_rejected() {
+        assert!(parse_list_devices_json("{ not json").is_err());
+        assert!(parse_list_devices_json(r#"{"nope":1}"#).is_err());
     }
 }
