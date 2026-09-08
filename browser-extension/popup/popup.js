@@ -55,7 +55,7 @@ async function checkConnection() {
         } else {
             throw new Error('API not healthy');
         }
-    } catch (error) {
+    } catch {
         statusDot.classList.add('disconnected');
         statusDot.classList.remove('connected');
         statusText.textContent = 'Not connected - Start IronBridge API';
@@ -107,7 +107,7 @@ async function loadStats() {
             totalMessages.textContent = '-';
             providersCount.textContent = '-';
         }
-    } catch (error) {
+    } catch {
         totalSessions.textContent = '-';
         totalMessages.textContent = '-';
         providersCount.textContent = '-';
@@ -144,7 +144,7 @@ async function handleHarvest() {
         } else {
             throw new Error('Harvest failed');
         }
-    } catch (error) {
+    } catch {
         showToast('Harvest failed - check API connection', 'error');
     } finally {
         harvestBtn.disabled = false;
@@ -180,7 +180,7 @@ async function handleExport() {
         } else {
             showToast('No session found on this page', 'error');
         }
-    } catch (error) {
+    } catch {
         showToast('Export failed - try refreshing the page', 'error');
     }
 }

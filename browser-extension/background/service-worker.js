@@ -19,7 +19,7 @@ async function apiHeaders(extra = {}) {
         if (accessToken) {
             headers['Authorization'] = `Bearer ${accessToken}`;
         }
-    } catch (error) {
+    } catch {
         // Storage unavailable: send unauthenticated rather than fail outright.
     }
     return headers;
@@ -118,7 +118,7 @@ async function serverReason(response) {
         if (body && typeof body.error === 'string' && body.error.trim()) {
             return body.error;
         }
-    } catch (error) {
+    } catch {
         // Not JSON. Fall through to the status.
     }
     return 'IronBridge answered ' + response.status + ' ' + response.statusText;
