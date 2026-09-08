@@ -188,6 +188,13 @@ jobs:
         working-directory: vscode-extension
         run: npm run compile
 
+      # Only the tests that do not need a running Extension Host. The full
+      # suite (`npm test`) launches VS Code via @vscode/test-electron, which
+      # needs a display; that is not wired up here.
+      - name: Unit tests
+        working-directory: vscode-extension
+        run: npm run test:unit
+
   # ==========================================================================
   # Browser extension — plain JavaScript loaded straight by the browser, with
   # no bundler and no TypeScript step, so ESLint is the only static check that
