@@ -53,7 +53,7 @@ class SyncAction : AnAction("Sync Sessions", "Synchronize sessions with IronBrid
 
                 showNotification(
                     "Sync Complete",
-                    "Synchronized ${sessions?.totalCount ?: 0} sessions",
+                    "Synchronized ${sessions?.total ?: 0} sessions",
                     NotificationType.INFORMATION
                 )
             }
