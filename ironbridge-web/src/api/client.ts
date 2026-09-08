@@ -176,7 +176,7 @@ interface AuthEnvelope {
 
 /**
  * Log in and register. These call the root-mounted `/auth/*` endpoints, which
- * stay open even when `IRONBRIDGE_REQUIRE_AUTH` gates `/api` -- otherwise a token
+ * stay open even though the gate covers `/api` -- otherwise a token
  * could never be obtained. On success the token is stored via `session`, which
  * clears the login-required flag and lets `request()` attach it from then on.
  *

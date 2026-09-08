@@ -6,7 +6,7 @@
  *
  * The design is 401-driven. The client does not probe the server to ask whether
  * authentication is on; it just makes requests. When the server has
- * `IRONBRIDGE_REQUIRE_AUTH` set, an unauthenticated call comes back 401, `request()`
+ * auth on -- the default -- an unauthenticated call comes back 401, `request()`
  * reports it here, and the app shows the login screen. When the server does not
  * require auth (the local-first default), no 401 ever arrives and none of this
  * is visible. One code path serves both, with nothing to configure.

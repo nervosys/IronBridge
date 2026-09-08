@@ -462,8 +462,8 @@ pub async fn start_server(config: ServerConfig) -> Result<()> {
             .app_data(recording_state.clone())
             // Registered before `cors`, so `cors` stays the outer layer: it
             // answers preflight and, when this gate returns 401, still stamps
-            // the CORS headers on that response. Off unless IRONBRIDGE_REQUIRE_AUTH
-            // is set; see `auth::auth_required`.
+            // the CORS headers on that response. On by default; only
+            // IRONBRIDGE_DISABLE_AUTH=1 turns it off. See `auth::auth_required`.
             .wrap(actix_web::middleware::from_fn(auth::require_auth))
             .wrap(cors)
             .wrap(middleware::Logger::default())
