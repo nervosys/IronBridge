@@ -208,6 +208,16 @@ pub fn find_tool(name: &str) -> Result<PathBuf> {
     Ok(PathBuf::from(out.trim()))
 }
 
+/// Run `xcodebuild <xb args> -showBuildSettings` and parse the result
+/// (requires a Mac). The pure parser lives in [`crate::build_settings`].
+pub fn show_build_settings(xb: &Xcodebuild) -> Result<crate::build_settings::BuildSettings> {
+    let mut argv = xb.args();
+    argv.push("-showBuildSettings".to_string());
+    let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+    let out = capture_tool("xcodebuild", &refs)?;
+    Ok(crate::build_settings::BuildSettings::parse(&out))
+}
+
 /// Enumerate installed SDKs by parsing `xcodebuild -showsdks`.
 pub fn installed_sdks() -> Result<Vec<InstalledSdk>> {
     let out = capture_tool("xcodebuild", &["-showsdks"])?;

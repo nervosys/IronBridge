@@ -185,6 +185,25 @@ Built on `plist_read`, a small dependency-free reader for the XML property-list
 subset Apple emits (`dict`/`array`/`string`/`integer`/`real`/`bool`/`date`/
 `data`), reused for any Apple plist the crate needs to read.
 
+## Build settings (`build_settings` module)
+
+After a build, `xcodebuild -showBuildSettings` tells you *where the product
+landed* and *what it is*. This parses that output and resolves the product path
+— which is exactly what the remote executor needs to know which `.app`/`.ipa` to
+pull back.
+
+```sh
+# On a Mac:
+xcross-ios build-settings --workspace App.xcworkspace --scheme App
+# Anywhere, parsing a captured dump:
+xcross-ios build-settings --file settings.txt --key SWIFT_VERSION
+#   bundle id / product name / executable / build dir / resolved product path
+```
+
+Typed accessors: `bundle_identifier`, `full_product_name`, `executable_name`,
+`configuration_build_dir`, `built_products_dir`, and `product_path()` (joined
+with `/`, since these are Mac paths).
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

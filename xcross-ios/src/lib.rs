@@ -31,6 +31,7 @@
 //! [`bundle::AppBundle`], [`sign`] it, and [`ipa`]-package it. The stages are
 //! also exposed individually for `bundle`/`sign`/`package` subcommands.
 
+pub mod build_settings;
 pub mod builder;
 pub mod bundle;
 pub mod command;
