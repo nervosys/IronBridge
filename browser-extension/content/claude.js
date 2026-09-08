@@ -14,10 +14,11 @@
                 extractSession().then(sendResponse);
                 return true;
 
-            case 'getSelectionAsMarkdown':
+            case 'getSelectionAsMarkdown': {
                 const markdown = convertToMarkdown(message.text);
                 sendResponse({ markdown });
                 return true;
+            }
 
             case 'copyToClipboard':
                 navigator.clipboard.writeText(message.text);

@@ -94,7 +94,7 @@ async function testConnection() {
         } else {
             throw new Error(`HTTP ${response.status}`);
         }
-    } catch (error) {
+    } catch {
         elements.connectionStatus.textContent = 'Failed to connect';
         elements.connectionStatus.className = 'status error';
     } finally {
@@ -189,7 +189,7 @@ function importSettingsFile(event) {
             await chrome.storage.local.set(settings);
             await loadSettings();
             showToast('Settings imported', 'success');
-        } catch (error) {
+        } catch {
             showToast('Invalid settings file', 'error');
         }
     };
