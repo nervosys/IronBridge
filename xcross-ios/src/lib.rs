@@ -37,6 +37,7 @@ pub mod bundle;
 pub mod command;
 pub mod config;
 pub mod doctor;
+pub mod entitlements;
 pub mod error;
 pub mod ipa;
 pub mod ontology;

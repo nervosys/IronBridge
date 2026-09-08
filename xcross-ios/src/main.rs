@@ -50,6 +50,7 @@ fn run(args: &[String]) -> Result<()> {
         "remote-xcodebuild" => cmd_remote_xcodebuild(rest),
         "provision" => cmd_provision(rest),
         "build-settings" => cmd_build_settings(rest),
+        "entitlements" => cmd_entitlements(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -475,6 +476,43 @@ fn cmd_build_settings(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_entitlements(args: &[String]) -> Result<()> {
+    use xcross_ios::entitlements::diff;
+    use xcross_ios::plist_read::Plist;
+    use xcross_ios::provision::ParsedProfile;
+
+    let o = parse_opts(args)?;
+    // The app's requested entitlements: a .entitlements plist file.
+    let app_file = o.require("app")?;
+    let app_xml = std::fs::read_to_string(app_file)
+        .map_err(|e| Error::io(format!("reading {app_file}"), e))?;
+    let app = Plist::parse(&app_xml)?;
+
+    // The profile's granted entitlements, extracted from a .mobileprovision.
+    let profile_file = o.require("profile")?;
+    let profile = ParsedProfile::from_file(std::path::Path::new(profile_file))?;
+    let granted = profile
+        .entitlements
+        .as_ref()
+        .ok_or_else(|| Error::InvalidInput("profile has no Entitlements dict".into()))?;
+
+    let report = diff(&app, granted);
+    println!("checked {} app entitlement(s) against profile `{}`", report.checked, profile.name);
+    if report.is_satisfiable() {
+        println!("OK: the profile satisfies every requested entitlement.");
+    } else {
+        println!("{} problem(s):", report.findings.len());
+        for f in &report.findings {
+            println!("  - {}", f.explain());
+        }
+        // A non-zero exit signals a would-fail signing to scripts/CI.
+        return Err(Error::InvalidInput(
+            "entitlements are not satisfied by the profile".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -508,6 +546,9 @@ COMMANDS:
   xcframework            Assemble a .xcframework from per-slice libs (any host).
   remote-xcodebuild      Run xcodebuild on a remote Mac over SSH.
   provision <file>       Parse a .mobileprovision and print its fields (any host).
+  entitlements           Check an app's --app <.entitlements> against a
+                         --profile <.mobileprovision>; non-zero exit if a
+                         requested entitlement is missing/mismatched (any host).
   build-settings         Parse `xcodebuild -showBuildSettings`. --file <dump>
                          parses a capture (any host); else runs on a Mac via
                          --workspace/--project + --scheme. --key <K> prints one.
