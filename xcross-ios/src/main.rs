@@ -49,6 +49,7 @@ fn run(args: &[String]) -> Result<()> {
         "xcframework" => cmd_xcframework(rest),
         "remote-xcodebuild" => cmd_remote_xcodebuild(rest),
         "provision" => cmd_provision(rest),
+        "build-settings" => cmd_build_settings(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -435,6 +436,45 @@ fn cmd_provision(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn cmd_build_settings(args: &[String]) -> Result<()> {
+    use xcross_ios::build_settings::BuildSettings;
+    let o = parse_opts(args)?;
+
+    // Either parse a captured dump (works anywhere) or run it on a Mac.
+    let settings = if let Some(file) = o.get("file") {
+        let text = std::fs::read_to_string(file)
+            .map_err(|e| Error::io(format!("reading {file}"), e))?;
+        BuildSettings::parse(&text)
+    } else {
+        use xcross_ios::xcode::{show_build_settings, Action, Xcodebuild};
+        let mut xb = Xcodebuild::new(Action::Build);
+        if let Some(w) = o.get("workspace") {
+            xb = xb.workspace(w);
+        } else if let Some(p) = o.get("project") {
+            xb = xb.project(p);
+        }
+        if let Some(s) = o.get("scheme") {
+            xb = xb.scheme(s);
+        }
+        show_build_settings(&xb)?
+    };
+
+    println!("parsed {} settings", settings.len());
+    println!("  bundle id:     {}", settings.bundle_identifier().unwrap_or("-"));
+    println!("  product name:  {}", settings.full_product_name().unwrap_or("-"));
+    println!("  executable:    {}", settings.executable_name().unwrap_or("-"));
+    println!("  build dir:     {}", settings.configuration_build_dir().unwrap_or("-"));
+    match settings.product_path() {
+        Some(p) => println!("  product path:  {}", p.display()),
+        None => println!("  product path:  (unresolved — need CONFIGURATION_BUILD_DIR + FULL_PRODUCT_NAME)"),
+    }
+    // If a specific --key was requested, print it too.
+    if let Some(key) = o.get("key") {
+        println!("  {key} = {}", settings.get(key).unwrap_or("(unset)"));
+    }
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -468,6 +508,9 @@ COMMANDS:
   xcframework            Assemble a .xcframework from per-slice libs (any host).
   remote-xcodebuild      Run xcodebuild on a remote Mac over SSH.
   provision <file>       Parse a .mobileprovision and print its fields (any host).
+  build-settings         Parse `xcodebuild -showBuildSettings`. --file <dump>
+                         parses a capture (any host); else runs on a Mac via
+                         --workspace/--project + --scheme. --key <K> prints one.
   help                   Show this help.
 
 REMOTE-XCODEBUILD OPTIONS:
