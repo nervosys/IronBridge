@@ -273,6 +273,21 @@ args) without running anything, so `--dry-run` shows the full plan on Windows an
 `--export-path`, …) default to being **relative to `--workdir`** so they resolve
 after the remote `cd` (xcodebuild does not expand a `~` in an argument itself).
 
+## ExportOptions.plist (`export_options` module)
+
+`ship`'s export step needs an `ExportOptions.plist`; generate one from flags
+instead of hand-writing it:
+
+```sh
+xcross-ios export-options --method app-store --team TEAM12345 --out ExportOptions.plist
+xcross-ios export-options --method ad-hoc --team TEAM12345 --manual \
+  --certificate "Apple Distribution" --profiles "com.nervosys.csm=Chasm AdHoc"
+```
+
+Typed `ExportMethod`/`SigningStyle`; manual signing requires a certificate and at
+least one profile (validated before emit). `--method` accepts the classic and
+newer Xcode aliases (`app-store-connect`, `release-testing`, `debugging`).
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,

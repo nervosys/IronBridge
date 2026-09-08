@@ -54,6 +54,7 @@ fn run(args: &[String]) -> Result<()> {
         "simctl" => cmd_simctl(rest),
         "codesign" => cmd_codesign(rest),
         "ship" => cmd_ship(rest),
+        "export-options" => cmd_export_options(rest),
         "help" | "--help" | "-h" => {
             print!("{HELP}");
             Ok(())
@@ -714,6 +715,43 @@ fn cmd_ship(args: &[String]) -> Result<()> {
     plan.execute()
 }
 
+fn cmd_export_options(args: &[String]) -> Result<()> {
+    use xcross_ios::export_options::{ExportMethod, ExportOptions, SigningStyle};
+    let o = parse_opts(args)?;
+
+    let mut opts = ExportOptions::new(ExportMethod::parse(o.get("method").unwrap_or("app-store"))?);
+    opts.team_id = o.get("team").map(str::to_string);
+    if o.has("manual") {
+        opts.signing_style = SigningStyle::Manual;
+    }
+    opts.signing_certificate = o.get("certificate").map(str::to_string);
+    // --profile bundle=name (repeatable via comma: bundle=name,bundle2=name2)
+    if let Some(spec) = o.get("profiles") {
+        for pair in spec.split(',') {
+            if let Some((bundle, name)) = pair.split_once('=') {
+                opts.provisioning_profiles
+                    .push((bundle.trim().to_string(), name.trim().to_string()));
+            }
+        }
+    }
+    if o.has("no-symbols") {
+        opts.upload_symbols = false;
+    }
+    if o.has("upload") {
+        opts.destination_upload = true;
+    }
+
+    let xml = opts.render()?;
+    match o.get("out") {
+        Some(path) => {
+            std::fs::write(path, &xml).map_err(|e| Error::io(format!("writing {path}"), e))?;
+            println!("wrote {path}");
+        }
+        None => print!("{xml}"),
+    }
+    Ok(())
+}
+
 /// Join args for display, quoting any that contain spaces.
 fn shell_join(args: &[String]) -> String {
     args.iter()
@@ -760,6 +798,10 @@ COMMANDS:
                          parses identity/team/authorities (any host);
                          verify/entitlements run on a Mac (entitlements can
                          --profile <p> to diff a signed app's real entitlements).
+  export-options         Generate an ExportOptions.plist. --method
+                         app-store|ad-hoc|enterprise|development, --team <id>,
+                         --manual --certificate <c> --profiles bundle=name,…,
+                         --out <file> (else stdout). Any host.
   ship                   Orchestrate the whole release on a remote Mac:
                          archive -> exportArchive .ipa -> scp pull -> verify.
                          --host/--user/--scheme/--workspace|--project required;
