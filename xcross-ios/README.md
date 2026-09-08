@@ -255,6 +255,24 @@ xcross-ios codesign entitlements --bundle Chasm.app --profile Dev.mobileprovisio
 `entitlements` diff so you validate the *actually-embedded* entitlements, not
 just the `.entitlements` source.
 
+## One-command ship (`pipeline` module)
+
+The capstone: chain the whole release on a remote Mac into one ordered,
+inspectable plan — **archive → exportArchive `.ipa` → `scp` pull → `codesign`
+verify**.
+
+```sh
+xcross-ios ship --host mac.local --user ci --identity ~/.ssh/id_ed25519 \
+  --workspace Chasm.xcworkspace --scheme Chasm --workdir '~/Chasm' \
+  --verify-bundle build/App.xcarchive/Products/Applications/App.app --dry-run
+```
+
+`ShipPlan::plan` is pure — it computes every `Step` (its host, program, and exact
+args) without running anything, so `--dry-run` shows the full plan on Windows and
+`execute()` runs each step where it belongs. Build paths (`--archive-path`,
+`--export-path`, …) default to being **relative to `--workdir`** so they resolve
+after the remote `cd` (xcodebuild does not expand a `~` in an argument itself).
+
 ## Design
 
 Deliberately dependency-free: the toolchain probing, the `Info.plist` emitter,
