@@ -270,11 +270,31 @@ IronBridge is local-first, and its defaults assume that:
   API key from its settings as the bearer token.
 - **`run_command` is off** unless `IRONBRIDGE_ENABLE_RUN_COMMAND=1`. It executes
   arbitrary commands through the shell; it is never on by default.
+- **The SWE filesystem tools are off** unless `IRONBRIDGE_ENABLE_FILE_TOOLS=1`.
+  `read_file`, `write_file`, `list_directory` and `search_files` on
+  `/api/swe/projects/{id}/execute` read and write as the server process. Paths
+  are confined to the project directory, but a project's path is chosen by
+  whoever creates it, so a project rooted at `/` puts the whole host inside it
+  — the confinement stops a path escaping a root, not a caller picking one.
+  Off by default for the same reason `run_command` is.
 - **Session tokens** are signed with `IRONBRIDGE_JWT_SECRET` (>=32 bytes) or, if
   unset, a random per-process secret — never a value baked into the binary.
 - **Stored provider credentials** need `IRONBRIDGE_MASTER_KEY`; without it the server
   refuses to store one rather than writing it in the clear.
-- **Passwords** are hashed with Argon2id.
+- **Passwords** are hashed with Argon2id. Policy is a minimum of eight
+  characters plus a refusal of the passwords that get guessed first — no
+  composition rules, following NIST SP 800-63B, which argues that demanding a
+  digit and a symbol just produces `Passw0rd!`. Applies to passwords set from
+  now on; stored hashes cannot be tested against a list.
+- **Logging out revokes the token.** `/auth/logout` moves the user's
+  revocation point forward, so the access and refresh tokens presented up to
+  that moment stop being accepted rather than staying valid until they expire.
+  It is a global sign-out: every session that user has, on every device.
+- **Webhook targets are parsed, not pattern-matched.** A webhook makes the
+  server POST to a URL the caller chose, so the host is taken from a real URL
+  parse and checked against the cloud metadata addresses; redirects are
+  re-validated at every hop. Private and loopback targets stay allowed, since
+  posting to `localhost` in development is normal.
 
 ### Response envelope
 
