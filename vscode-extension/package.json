@@ -673,7 +673,7 @@
         "@typescript-eslint/eslint-plugin": "^6.13.0",
         "@typescript-eslint/parser": "^6.13.0",
         "@vscode/test-electron": "^2.3.8",
-        "eslint": "^8.54.0",
+        "eslint": "^10.10.0",
         "glob": "^10.3.10",
         "mocha": "^10.2.0",
         "ts-node": "^10.9.2",
