@@ -1,6 +1,6 @@
 {
   "name": "@ironbridge/shared",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "Shared types, API client, and utilities for IRONBRIDGE web and mobile apps",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

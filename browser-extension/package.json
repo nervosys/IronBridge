@@ -1,6 +1,6 @@
 {
   "name": "ironbridge-browser-extension",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "IronBridge browser extension for harvesting AI chat sessions",
   "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial",
   "private": true,

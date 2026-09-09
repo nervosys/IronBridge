@@ -2,7 +2,7 @@
     "name": "ironbridge",
     "displayName": "IronBridge",
     "description": "Universal AI chat session manager — harvest, repair, merge, and search across VS Code, Cursor, Claude Code, and 30+ providers",
-    "version": "1.0.0",
+    "version": "2.0.1",
     "publisher": "nervosys",
     "icon": "resources/icon.png",
     "engines": {

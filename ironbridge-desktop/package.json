@@ -1,6 +1,6 @@
 {
   "name": "ironbridge-desktop",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "license": "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial",
   "description": "IronBridge Desktop - Chat Session Manager",
   "private": true,

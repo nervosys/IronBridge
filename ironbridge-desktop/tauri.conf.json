@@ -1,6 +1,6 @@
 {
     "productName": "IronBridge",
-    "version": "1.0.0",
+    "version": "2.0.1",
     "identifier": "com.nervosys.ironbridge",
     "build": {
         "beforeDevCommand": "cd ../ironbridge-web && npm run dev",
