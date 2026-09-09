@@ -93,7 +93,7 @@ thiserror = "2.0"
 async-trait = "0.1"
 
 # Process management (check if VS Code is running)
-sysinfo = "0.37"
+sysinfo = "0.39"
 
 # TUI framework
 ratatui = "0.29"
