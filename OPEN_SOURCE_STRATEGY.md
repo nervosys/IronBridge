@@ -359,12 +359,11 @@ ENTERPRISE (Custom)
 ### Phase 2: Soft Launch (2 weeks)
 
 - [ ] Push to a public repo (no announcement) — blocked on the item above
-- [ ] Publish to crates.io — neither `ironbridge` nor `ironbridge-cli` is
-      registered. What is published is [`chasm-cli`](https://crates.io/crates/chasm-cli),
-      the project's former name, last released as 2.0.0 in March 2026 and
-      pointing at a repository URL that has since been renamed twice. Until
-      this is done, the README's install instructions have to build from
-      source.
+- [x] Publish to crates.io — `ironbridge-sso` 0.1.0 and `ironbridge-cli` 2.0.1
+      are published, in that order, since the second depends on the first.
+      `chasm-cli` 2.0.1 went up as a final release under the former name: the
+      same code, described as deprecated in favour of `ironbridge-cli`, which
+      also corrects the repository URL that 2.0.0 still pointed at.
 - [x] Decide which repository owns the `ironbridge-cli` crate name — this one.
       `nervosys/IronBridgeCLI` is the archived 1.x source: its package is
       `ironbridge-cli-legacy` and carries `publish = false`, so the name cannot

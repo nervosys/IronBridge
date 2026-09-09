@@ -27,7 +27,11 @@
 
 ## Install
 
-The 2.x line is not on crates.io yet, so install it from source:
+```bash
+cargo install ironbridge-cli
+```
+
+That puts `ironbridge` and `ironbridge-mcp` on your PATH. Or from source:
 
 ```bash
 git clone https://github.com/nervosys/IronBridge
@@ -35,12 +39,10 @@ cd IronBridge/ironbridge-rust
 cargo install --path .
 ```
 
-That puts `ironbridge` and `ironbridge-mcp` on your PATH. The 1.x line is
-published as [`chasm-cli`](https://crates.io/crates/chasm-cli) under the
-project's former name, and its source is archived at
-[nervosys/IronBridgeCLI](https://github.com/nervosys/IronBridgeCLI); it predates
-the 2.0 release and is not a substitute for the above. The `ironbridge-cli`
-crate name belongs to this tree.
+The crate was published under the project's former name until 2.0.1;
+[`chasm-cli`](https://crates.io/crates/chasm-cli) is deprecated in favour of
+`ironbridge-cli` and will receive no further releases. Its 1.x source is
+archived at [nervosys/IronBridgeCLI](https://github.com/nervosys/IronBridgeCLI).
 
 ## Quick Start
 

@@ -10,8 +10,14 @@ The `v1.3.3` tag in this repository is the last of that line.
 
 ## [Unreleased] — 2.0.1
 
-No `v2.*` tag has been cut yet, so everything below is in the tree but not in a
-release. `release.yml` builds artifacts when a `v*` tag is pushed.
+Published to crates.io as [`ironbridge-cli`](https://crates.io/crates/ironbridge-cli)
+2.0.1, on [`ironbridge-sso`](https://crates.io/crates/ironbridge-sso) 0.1.0. The
+former name is deprecated: `chasm-cli` 2.0.1 is a final release carrying the
+same code and a notice pointing here.
+
+No `v2.*` tag has been cut yet, so the GitHub release artifacts — binaries and
+desktop installers — do not exist yet. `release.yml` builds them when a `v*`
+tag is pushed.
 
 ### Added
 
