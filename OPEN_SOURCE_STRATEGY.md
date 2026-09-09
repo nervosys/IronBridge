@@ -352,7 +352,9 @@ ENTERPRISE (Custom)
 - [x] Create public documentation
 - [ ] Make the repository public — `nervosys/IronBridge` exists but is private,
       so every public-facing link in the README and on the docs site resolves
-      only for people inside the org. There is no `nervosys/IronBridge-cli`.
+      only for people inside the org. The public repository is
+      `nervosys/IronBridgeCLI`, renamed from `chasm-cli`: the 1.x line, not
+      this tree.
 
 ### Phase 2: Soft Launch (2 weeks)
 
@@ -360,8 +362,12 @@ ENTERPRISE (Custom)
 - [ ] Publish to crates.io — neither `ironbridge` nor `ironbridge-cli` is
       registered. What is published is [`chasm-cli`](https://crates.io/crates/chasm-cli),
       the project's former name, last released as 2.0.0 in March 2026 and
-      pointing at a repository URL that has since been renamed. Until this is
-      done, the README's install instructions have to build from source.
+      pointing at a repository URL that has since been renamed twice. Until
+      this is done, the README's install instructions have to build from
+      source.
+- [ ] Decide which repository owns the `ironbridge-cli` crate name. Both
+      declare it today: this tree at 2.0.1 and `nervosys/IronBridgeCLI` at
+      1.3.2. Only one can publish it.
 - [x] Set up CI/CD for releases (GitHub Actions) — `release.yml` exists and
       triggers on `v*` tags, but no `v2.*` tag has been cut, so it has never
       produced a 2.x artifact
