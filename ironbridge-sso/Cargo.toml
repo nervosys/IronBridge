@@ -23,7 +23,7 @@ base64 = "0.21"
 # `oid` is required: RSA PKCS#1 v1.5 prefixes the hash with a DigestInfo
 # structure identifying the algorithm, and that identifier comes from
 # AssociatedOid. Without the feature the signature types will not build.
-sha2 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.11", features = ["oid"] }
 rand = "0.8"
 url = "2"
 chrono = "0.4"
@@ -46,6 +46,6 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 roxmltree = "0.20"
 rand = "0.8"
 rsa = { version = "0.9", features = ["sha2"] }
-sha2 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.11", features = ["oid"] }
 chrono = "0.4"
 base64 = "0.21"
