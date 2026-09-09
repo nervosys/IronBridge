@@ -142,6 +142,27 @@ impl WebhookState {
             deliveries: RwLock::new(Vec::new()),
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
+                // Validating the registered URL is worthless if the server
+                // then follows wherever that URL points. reqwest's default is
+                // to follow up to 10 redirects, so a target that passes
+                // `validate_webhook_url` could answer `302 Location:
+                // http://169.254.169.254/...` and have this server fetch the
+                // instance credentials on the attacker's behalf -- the check
+                // only ever saw the first hop.
+                //
+                // Each hop is re-validated rather than refused outright, so an
+                // ordinary redirect (http to https, a moved path) still works
+                // while a hop into metadata space does not. The cap is low
+                // because a webhook receiver should answer directly.
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() >= 3 {
+                        return attempt.stop();
+                    }
+                    match validate_webhook_url(attempt.url().as_str()) {
+                        Ok(()) => attempt.follow(),
+                        Err(_) => attempt.stop(),
+                    }
+                }))
                 .build()
                 .unwrap_or_default(),
         }
@@ -378,21 +399,58 @@ pub async fn list_webhooks(state: web::Data<Arc<WebhookState>>) -> impl Responde
 ///   escalated into file reads or protocol smuggling;
 /// - the cloud metadata address `169.254.169.254`, whose only purpose to reach
 ///   from here would be to steal instance credentials.
+///
+/// The host is taken from a real URL parse, not by slicing the string. The
+/// earlier version split on `/`, `:`, `?` and `#` but not `@`, and compared the
+/// result literally, so every one of these reached the metadata service while
+/// reading as some other host:
+///
+/// - `http://anything@169.254.169.254/` -- userinfo before the host; the
+///   validator saw `anything@169.254.169.254`, the HTTP client connected to
+///   what follows the `@`;
+/// - `http://2852039166/` and `http://0xa9fea9fe/` -- the same address in
+///   decimal and hex, which URL parsing normalises back to dotted quad;
+/// - `http://169.254.169.254./` -- a trailing root dot, still the same host.
+///
+/// `Url::parse` resolves all of them to `169.254.169.254` before the check
+/// runs, which is the point of parsing rather than pattern-matching.
 fn validate_webhook_url(url: &str) -> Result<(), &'static str> {
-    let lower = url.trim().to_lowercase();
-    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+    let parsed = reqwest::Url::parse(url.trim()).map_err(|_| "webhook url is not a valid url")?;
+
+    if !matches!(parsed.scheme(), "http" | "https") {
         return Err("webhook url must be http or https");
     }
-    // Host portion, between the scheme and the first `/`, `:`, `?` or `#`.
-    let after_scheme = &lower[lower.find("//").map(|i| i + 2).unwrap_or(0)..];
-    let host = after_scheme
-        .split(['/', ':', '?', '#'])
-        .next()
-        .unwrap_or("");
-    if host == "169.254.169.254" || host == "metadata.google.internal" {
+
+    let host = parsed.host_str().ok_or("webhook url must include a host")?;
+    if is_metadata_host(host) {
         return Err("webhook url may not target the cloud metadata endpoint");
     }
     Ok(())
+}
+
+/// The link-local addresses and names that serve instance credentials.
+///
+/// Deliberately a small explicit set rather than "all private addresses": this
+/// is a local-first tool and posting a webhook to `localhost` or a LAN host is
+/// a legitimate thing to do, so blanket-blocking private space would break
+/// normal use. What is never legitimate is asking this server to fetch its own
+/// cloud credentials.
+fn is_metadata_host(host: &str) -> bool {
+    // A trailing dot is the DNS root and resolves identically.
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    matches!(
+        host.as_str(),
+        // AWS, Azure, GCP, DigitalOcean, Oracle all answer here over IPv4.
+        "169.254.169.254"
+            // AWS IPv6. Url::parse renders bracketed literals without brackets.
+            | "fd00:ec2::254"
+            | "[fd00:ec2::254]"
+            // GCP, including the short name that resolves on-instance.
+            | "metadata.google.internal"
+            | "metadata"
+            // Alibaba Cloud.
+            | "100.100.100.200"
+    )
 }
 
 /// Create webhook
@@ -602,5 +660,56 @@ mod ssrf_tests {
         // Local targets stay allowed: a dev legitimately posts to localhost.
         assert!(validate_webhook_url("http://localhost:9000/hook").is_ok());
         assert!(validate_webhook_url("https://example.com/webhooks/ironbridge").is_ok());
+    }
+
+    /// Spellings of the metadata address that a literal string comparison
+    /// misses but an HTTP client resolves to it anyway.
+    ///
+    /// Every one of these reached `169.254.169.254` while the previous
+    /// validator, which sliced the string on `/`, `:`, `?` and `#`, read a
+    /// different host. Confirmed against `Url::parse` before the fix: each
+    /// line's `host_str()` is exactly `169.254.169.254`.
+    #[test]
+    fn metadata_is_blocked_however_the_address_is_written() {
+        // Userinfo: the validator saw `anything@169.254.169.254`, the client
+        // connected to what follows the `@`. The sharpest of the four.
+        assert!(validate_webhook_url("http://anything@169.254.169.254/latest/meta-data/").is_err());
+        assert!(validate_webhook_url("http://user:pass@169.254.169.254/").is_err());
+
+        // The same address in decimal and hex.
+        assert!(validate_webhook_url("http://2852039166/").is_err());
+        assert!(validate_webhook_url("http://0xa9fea9fe/").is_err());
+
+        // Trailing root dot, and an explicit port.
+        assert!(validate_webhook_url("http://169.254.169.254./").is_err());
+        assert!(validate_webhook_url("http://169.254.169.254:80/").is_err());
+
+        // Case is not an escape hatch for the named hosts.
+        assert!(validate_webhook_url("https://METADATA.GOOGLE.INTERNAL/x").is_err());
+        assert!(validate_webhook_url("http://Metadata/computeMetadata/v1/").is_err());
+
+        // Other clouds' equivalents.
+        assert!(validate_webhook_url("http://100.100.100.200/").is_err());
+        assert!(validate_webhook_url("http://[fd00:ec2::254]/").is_err());
+    }
+
+    /// Hosts that merely resemble the blocked ones must still work -- a false
+    /// positive here silently breaks a legitimate webhook.
+    #[test]
+    fn lookalike_hosts_are_not_blocked() {
+        assert!(validate_webhook_url("https://metadata.google.internal.evil.com/x").is_ok());
+        assert!(validate_webhook_url("https://metadata.example.com/x").is_ok());
+        assert!(validate_webhook_url("https://my-metadata.internal/x").is_ok());
+        assert!(validate_webhook_url("http://169.254.169.253/").is_ok());
+        assert!(validate_webhook_url("http://100.100.100.201/").is_ok());
+    }
+
+    /// Garbage in the URL field is a rejection, not a panic or a silent pass.
+    #[test]
+    fn unparseable_urls_are_refused() {
+        assert!(validate_webhook_url("").is_err());
+        assert!(validate_webhook_url("not a url").is_err());
+        assert!(validate_webhook_url("http://").is_err());
+        assert!(validate_webhook_url("://missing-scheme").is_err());
     }
 }
