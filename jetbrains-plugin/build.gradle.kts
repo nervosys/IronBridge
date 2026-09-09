@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.ironbridge"
-version = "1.0.0"
+version = "2.0.1"
 
 repositories {
     mavenCentral()
@@ -25,9 +25,23 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+
+    // MockWebServer serves the fixtures the service is pointed at, so the tests
+    // exercise the real okhttp client and the real Gson mapping rather than a
+    // stand-in for either.
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks {
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "failed", "skipped")
+        }
+    }
+
     // Set the JVM compatibility versions
     withType<JavaCompile> {
         sourceCompatibility = "17"

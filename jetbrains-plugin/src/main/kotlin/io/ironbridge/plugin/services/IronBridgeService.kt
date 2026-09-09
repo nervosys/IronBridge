@@ -162,7 +162,7 @@ class IronBridgeService {
     fun searchSessions(query: String, limit: Int = 20): List<Session> {
         return try {
             val request = Request.Builder()
-                .url("$serverUrl/api/search/sessions?q=${java.net.URLEncoder.encode(query, "UTF-8")}&limit=$limit")
+                .url("$serverUrl/api/sessions/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}&limit=$limit")
                 .get()
                 .build()
 
@@ -192,7 +192,7 @@ class IronBridgeService {
             }
 
             val request = Request.Builder()
-                .url("$serverUrl/harvest")
+                .url("$serverUrl/api/harvest")
                 .post(jsonBody.toRequestBody("application/json".toMediaType()))
                 .build()
 
