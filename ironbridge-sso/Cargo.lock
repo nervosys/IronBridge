@@ -141,26 +141,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ironbridge-sso"
-version = "0.1.0"
-dependencies = [
- "base64 0.21.7",
- "chrono",
- "jsonwebtoken",
- "rand 0.8.7",
- "reqwest",
- "roxmltree",
- "rsa",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.19",
- "tokio",
- "url",
- "x509-parser",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -587,6 +567,26 @@ name = "ipnet"
 version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
+
+[[package]]
+name = "ironbridge-sso"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "chrono",
+ "jsonwebtoken",
+ "rand 0.8.7",
+ "reqwest",
+ "roxmltree",
+ "rsa",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "x509-parser",
+]
 
 [[package]]
 name = "itoa"

@@ -18,6 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { getStats, getProviders } from '../api';
 import type { Statistics as Stats, Provider } from '@ironbridge/shared';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
@@ -354,7 +355,9 @@ export function SettingsScreen() {
                     <View style={[styles.divider, { backgroundColor: colors.divider }]} />
                     <View style={styles.statRow}>
                         <Text style={[styles.statLabel, { color: colors.text }]}>Version</Text>
-                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>1.0.0</Text>
+                        <Text style={[styles.statValue, { color: colors.textTertiary }]}>
+                            {Constants.expoConfig?.version ?? 'unknown'}
+                        </Text>
                     </View>
                 </View>
             </View>

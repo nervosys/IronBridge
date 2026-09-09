@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 0.1.0)'
+        description: 'Version to release, without the leading v (e.g. 2.0.1)'
         required: true
         type: string
 
@@ -16,9 +16,38 @@ env:
 
 jobs:
   # ==========================================================================
+  # Version guard
+  # ==========================================================================
+  # A tag and a Cargo.toml that disagree produce a release whose binaries answer
+  # `--version` with a different number than the release they are attached to.
+  # Nothing caught that before, because nothing compared them.
+  check-version:
+    name: Tag matches Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compare the tag with the crate version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ github.event.inputs.version }}"
+          else
+            tag="${GITHUB_REF_NAME#v}"
+          fi
+          crate=$(grep -m1 '^version = ' ironbridge-rust/Cargo.toml | cut -d'"' -f2)
+          echo "tag=$tag crate=$crate"
+          if [ "$tag" != "$crate" ]; then
+            echo "::error::tag $tag does not match ironbridge-rust/Cargo.toml version $crate" >&2
+            exit 1
+          fi
+
+  # ==========================================================================
   # Build Release Binaries
   # ==========================================================================
   build-release:
+    needs: check-version
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -80,11 +109,88 @@ jobs:
           path: ironbridge-rust/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
   # ==========================================================================
+  # Build Desktop Installers
+  # ==========================================================================
+  # The Tauri app produces real installers -- MSI and NSIS on Windows, .deb and
+  # .AppImage on Linux, .dmg on macOS -- and none of them were ever released.
+  # The app existed only as something you could build yourself.
+  build-desktop:
+    name: Desktop (${{ matrix.os }})
+    needs: check-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y             libwebkit2gtk-4.1-dev             libappindicator3-dev             librsvg2-dev             patchelf             libssl-dev
+
+      # The desktop build shells out to the web build, which needs the shared
+      # package present first.
+      - name: Build shared package
+        working-directory: ironbridge-shared
+        run: npm ci && npm run build
+
+      - name: Install web dependencies
+        working-directory: ironbridge-web
+        run: npm ci
+
+      - name: Install desktop dependencies
+        working-directory: ironbridge-desktop
+        run: npm ci
+
+      - name: Build installers
+        working-directory: ironbridge-desktop
+        run: npm run build
+
+      # Bundle layout differs per platform, so collect by extension rather than
+      # by a hardcoded path, and fail if a platform produced nothing at all.
+      - name: Collect installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p desktop-artifacts
+          found=0
+          for ext in msi exe deb AppImage dmg; do
+            while IFS= read -r file; do
+              cp "$file" desktop-artifacts/
+              found=$((found + 1))
+            done < <(find ironbridge-desktop/target/release/bundle -type f -name "*.$ext" 2>/dev/null || true)
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::the desktop build produced no installers on ${{ matrix.os }}" >&2
+            exit 1
+          fi
+          ls -la desktop-artifacts/
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironbridge-desktop-${{ matrix.os }}
+          path: desktop-artifacts/*
+
+  # ==========================================================================
   # Create GitHub Release
   # ==========================================================================
   create-release:
     name: Create Release
-    needs: build-release
+    needs: [build-release, build-desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -104,9 +210,9 @@ jobs:
           mkdir -p release
 
           # Every expected binary must exist. These steps used to be wrapped in
-          # `if [ -f ... ]`, so renaming the cargo bin target (ironbridge -> ironbridge)
-          # silently produced green runs with empty releases -- v0.2.1 shipped
-          # zero assets this way.
+          # `if [ -f ... ]`, so renaming the cargo bin target (chasm ->
+          # ironbridge) silently produced green runs with empty releases --
+          # v0.2.1 shipped zero assets that way.
           for asset in ironbridge-linux-x86_64 ironbridge-linux-aarch64 \
                        ironbridge-macos-x86_64 ironbridge-macos-aarch64; do
             src="artifacts/$asset/ironbridge"
@@ -124,6 +230,21 @@ jobs:
             exit 1
           fi
           cp "$win" release/ironbridge-windows-x86_64.exe
+
+          # Desktop installers, one artifact directory per platform.
+          desktop=0
+          for dir in artifacts/ironbridge-desktop-*; do
+            [ -d "$dir" ] || continue
+            for file in "$dir"/*; do
+              [ -f "$file" ] || continue
+              cp "$file" release/
+              desktop=$((desktop + 1))
+            done
+          done
+          if [ "$desktop" -eq 0 ]; then
+            echo "::error::no desktop installers were attached to the release" >&2
+            exit 1
+          fi
 
           ls -la release/
 
@@ -146,13 +267,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: IRONBRIDGE ${{ steps.version.outputs.version }}
+          name: IronBridge ${{ steps.version.outputs.version }}
           draft: true
           prerelease: false
           files: |
             release/*
           body: |
-            ## Chat System Manager (IRONBRIDGE) ${{ steps.version.outputs.version }}
+            ## IronBridge ${{ steps.version.outputs.version }} — Chat Session Manager
 
             ### Downloads
 
@@ -163,6 +284,11 @@ jobs:
             | macOS | x86_64 (Intel) | [ironbridge-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-macos-x86_64.tar.gz) |
             | macOS | ARM64 (Apple Silicon) | [ironbridge-macos-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-macos-aarch64.tar.gz) |
             | Windows | x86_64 | [ironbridge-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/ironbridge-windows-x86_64.exe) |
+
+            The desktop application is attached to this release as well: `.msi`
+            and `-setup.exe` for Windows, `.deb` and `.AppImage` for Linux, and
+            `.dmg` for macOS. It runs the API server in-process, so it needs no
+            separately started backend.
 
             ### Installation
 
@@ -179,4 +305,4 @@ jobs:
 
             ### Changelog
 
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) for details.

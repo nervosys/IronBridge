@@ -31,7 +31,11 @@ enterprise = []
 # `http` is on because the OIDC flow has to fetch: discovery, JWKS, and the
 # token exchange. It pulls reqwest with rustls, the same backend this crate
 # already uses, so it adds no new native dependency. SAML needs none of it.
-ironbridge-sso = { path = "../ironbridge-sso", default-features = false, features = [
+# The version is required as well as the path: `cargo publish` refuses a
+# dependency without one, since the published crate resolves it from the
+# registry with the path stripped. Keep it in step with ironbridge-sso's own
+# Cargo.toml, and publish that crate first.
+ironbridge-sso = { path = "../ironbridge-sso", version = "0.1.0", default-features = false, features = [
     "http",
 ] }
 
