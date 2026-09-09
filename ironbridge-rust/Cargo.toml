@@ -147,7 +147,7 @@ jsonwebtoken = "9.3"
 # leaked users table is not a fast GPU-cracking target the way the previous
 # unsalted-construction SHA-256 was. sha2 remains for non-password digests
 # (content hashes, the legacy verify-and-upgrade path).
-argon2 = "0.5"
+argon2 = "0.6"
 sha2 = "0.10"
 md5 = "0.7"
 hmac = "0.12"
