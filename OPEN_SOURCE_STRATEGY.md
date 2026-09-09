@@ -365,9 +365,10 @@ ENTERPRISE (Custom)
       pointing at a repository URL that has since been renamed twice. Until
       this is done, the README's install instructions have to build from
       source.
-- [ ] Decide which repository owns the `ironbridge-cli` crate name. Both
-      declare it today: this tree at 2.0.1 and `nervosys/IronBridgeCLI` at
-      1.3.2. Only one can publish it.
+- [x] Decide which repository owns the `ironbridge-cli` crate name — this one.
+      `nervosys/IronBridgeCLI` is the archived 1.x source: its package is
+      `ironbridge-cli-legacy` and carries `publish = false`, so the name cannot
+      be taken from this tree by accident.
 - [x] Set up CI/CD for releases (GitHub Actions) — `release.yml` exists and
       triggers on `v*` tags, but no `v2.*` tag has been cut, so it has never
       produced a 2.x artifact
