@@ -93,10 +93,15 @@ jobs:
         working-directory: ironbridge-desktop
         run: npm ci
 
-      # cargo check rather than a full bundle: this proves the Tauri crate and
-      # its in-process API server compile against the current ironbridge-rust on
-      # both platforms, without paying for installer generation on every push.
-      # The release workflow is what produces the bundles.
-      - name: Check Tauri crate
+      # cargo test rather than a full bundle: this compiles the Tauri crate
+      # and its in-process API server against the current ironbridge-rust on
+      # both platforms and runs the crate's own tests, without paying for
+      # installer generation on every push. The release workflow produces the
+      # bundles.
+      #
+      # The tests cover the loopback bind, the port choice and the adoption
+      # logic that keeps two processes off one SQLite file. One is #[ignore]d
+      # because it binds a fixed port against the real database.
+      - name: Test Tauri crate
         working-directory: ironbridge-desktop
-        run: cargo check --all-targets
+        run: cargo test --all-targets

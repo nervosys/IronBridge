@@ -1,0 +1,59 @@
+name: Editor Plugins CI
+
+# The Vim and Neovim plugins had no automated checks of any kind. Both are thin
+# clients over the REST API, and both had a request path the server does not
+# route — the failure mode that motivated these suites, because the plugins turn
+# a 404 into a message and carry on, so nothing looked broken.
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'vim-plugin/**'
+      - 'neovim-plugin/**'
+      - '.github/workflows/editor-plugins-ci.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'vim-plugin/**'
+      - 'neovim-plugin/**'
+      - '.github/workflows/editor-plugins-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  vim:
+    name: vim-plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The suite drives the plugin through Vim against a loopback HTTP server,
+      # and the plugin shells out to curl for every request.
+      - name: Install Vim and curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y vim curl
+
+      - name: Test
+        working-directory: vim-plugin
+        run: python3 test/run_tests.py
+
+  neovim:
+    name: neovim-plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      # `nvim -l` runs the Lua suite directly; plenary is stubbed in-process, so
+      # no plugin manager is needed.
+      - name: Test
+        working-directory: neovim-plugin
+        run: nvim --headless -l test/run.lua

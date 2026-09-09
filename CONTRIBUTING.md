@@ -62,12 +62,15 @@ Then, per package:
 
 ```bash
 cd ironbridge-web        && npm ci && npm run lint && npm test && npm run build
-cd ironbridge-app        && npm ci && npx tsc --noEmit
+cd ironbridge-app        && npm ci && npx tsc --noEmit && npm test
 cd ironbridge-desktop    && npm ci && npm run build      # produces MSI/NSIS bundles
 cd vscode-extension      && npm ci && npm run lint && npm run compile && npm run test:unit
-cd browser-extension     && npm ci && npm run lint
+cd browser-extension     && npm ci && npm run lint && npm test
 cd website               && npm ci && npm run lint && npm run build
 ```
+
+The desktop app is a Rust crate as well; `cd ironbridge-desktop && cargo test`
+covers the embedded API server.
 
 If `@ironbridge/shared` cannot be resolved, the link in `node_modules` is stale
 — re-run `npm ci` in that package.
@@ -75,7 +78,20 @@ If `@ironbridge/shared` cannot be resolved, the link in `node_modules` is stale
 ### JetBrains plugin
 
 ```bash
-cd jetbrains-plugin && ./gradlew build
+cd jetbrains-plugin && ./gradlew build    # `build` includes `test`
+```
+
+Needs JDK 21; Gradle 8.7 does not run on JDK 25.
+
+### Editor plugins
+
+Both are thin clients over the REST API, and both are tested against a stub
+server rather than mocked, so a request path that the API does not route fails
+the suite:
+
+```bash
+cd vim-plugin     && python3 test/run_tests.py   # needs vim and curl
+cd neovim-plugin  && nvim --headless -l test/run.lua
 ```
 
 ## Pull requests

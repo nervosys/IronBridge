@@ -112,23 +112,25 @@ ironbridge harvest share <url>          # Import share link
 
 ## Ecosystem
 
-| Component              | Description                        | Status          | Automated checks              |
-| ---------------------- | ---------------------------------- | --------------- | ----------------------------- |
-| **ironbridge-rust**    | Core Rust library and CLI          | ✅ Stable       | 1121 tests (1187 enterprise)  |
-| **ironbridge-sso**     | Pure-Rust OIDC and SAML            | ✅ Stable       | covered by ironbridge-rust    |
-| **ironbridge-shared**  | Shared TypeScript types            | ✅ Stable       | 29 tests                      |
-| **ironbridge-web**     | React web application              | ✅ Stable       | 13 tests, lint, typecheck     |
-| **ironbridge-app**     | React Native mobile app            | ⚠️ Partly wired | typecheck only                |
-| **ironbridge-desktop** | Tauri desktop application          | ✅ Stable       | build only                    |
-| **vscode-extension**   | VS Code extension                  | ✅ Stable       | 64 tests, lint, compile       |
-| **browser-extension**  | Chrome/Firefox extension           | ✅ Stable       | lint only                     |
-| **jetbrains-plugin**   | IntelliJ/PyCharm/WebStorm plugin   | ✅ Stable       | Gradle build only             |
-| **vim-plugin**         | Vim 8.0+ plugin                    | ✅ Stable       | none                          |
-| **neovim-plugin**      | Neovim 0.8+ plugin with Telescope  | ✅ Stable       | none                          |
+| Component              | Description                        | Status          | Automated checks               |
+| ---------------------- | ---------------------------------- | --------------- | ------------------------------ |
+| **ironbridge-rust**    | Core Rust library and CLI          | ✅ Stable       | 1121 tests (1187 enterprise)   |
+| **ironbridge-sso**     | Pure-Rust OIDC and SAML            | ✅ Stable       | covered by ironbridge-rust     |
+| **ironbridge-shared**  | Shared TypeScript types            | ✅ Stable       | 29 tests, typecheck            |
+| **ironbridge-web**     | React web application              | ✅ Stable       | 13 tests, lint, typecheck      |
+| **ironbridge-app**     | React Native mobile app            | ⚠️ Partly wired | 36 tests, typecheck            |
+| **ironbridge-desktop** | Tauri desktop application          | ✅ Stable       | 8 tests, build                 |
+| **vscode-extension**   | VS Code extension                  | ✅ Stable       | 64 tests, lint, compile        |
+| **browser-extension**  | Chrome/Firefox extension           | ✅ Stable       | 41 tests, lint                 |
+| **jetbrains-plugin**   | IntelliJ/PyCharm/WebStorm plugin   | ✅ Stable       | 21 tests, Gradle build         |
+| **vim-plugin**         | Vim 8.0+ plugin                    | ✅ Stable       | 20 assertions, 8 request paths |
+| **neovim-plugin**      | Neovim 0.8+ plugin with Telescope  | ✅ Stable       | 24 checks                      |
 
 The last column is what actually runs against each component, not a coverage
-figure. Where it says "build only" or "none", the component compiles and has
-been exercised by hand, but nothing would catch a regression automatically.
+figure. The editor and browser plugins are thin clients over the REST API, so
+their suites assert the request paths as well as the parsing: a path the server
+does not route comes back as a 404, which every one of these clients renders as
+an empty result rather than as an error.
 
 > **ironbridge-app is partly wired.** Sessions, workspaces, chat, harvest
 > statistics, providers, SWE project context and provider accounts all come

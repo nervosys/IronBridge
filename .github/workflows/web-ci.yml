@@ -130,6 +130,10 @@ jobs:
         working-directory: ironbridge-app
         run: npx tsc --noEmit
 
+      - name: Test
+        working-directory: ironbridge-app
+        run: npm test
+
   # ==========================================================================
   # Marketing site (Next.js)
   # ==========================================================================
@@ -221,3 +225,7 @@ jobs:
       - name: Lint
         working-directory: browser-extension
         run: npm run lint
+
+      - name: Test
+        working-directory: browser-extension
+        run: npm test

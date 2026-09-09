@@ -36,6 +36,11 @@ release. `release.yml` builds artifacts when a `v*` tag is pushed.
 - Battery-aware background sync in the mobile app now reads real battery state
   via `expo-battery`, and skips the battery gates on platforms that cannot
   report it rather than assuming a level.
+- **Test suites for the five components that had none**: the browser extension
+  (41), the mobile app (36), the JetBrains plugin (21), and the Vim (20
+  assertions over 8 request paths) and Neovim (24 checks) plugins. The editor
+  and browser clients are driven against a stub server, so the request paths are
+  asserted rather than assumed.
 
 ### Changed
 
@@ -54,6 +59,13 @@ release. `release.yml` builds artifacts when a `v*` tag is pushed.
 - `scripts-ci`, which tested files that do not exist.
 - Two generated desktop artifacts that had drifted from their sources.
 - Three things the rename broke, plus rustfmt compliance.
+- **Four broken API calls in the editor clients**, all found by the new
+  suites. The JetBrains plugin asked for `/api/search/sessions` (the route is
+  `/api/sessions/search`) and posted harvests to `/harvest` instead of
+  `/api/harvest`; the Vim and Neovim plugins both checked `/health` instead of
+  `/api/health`. All four requests 404'd, and every one of these clients renders
+  a 404 as an empty result, so search returned nothing, harvest silently did
+  nothing, and a healthy server reported itself unreachable.
 
 ### Security
 
