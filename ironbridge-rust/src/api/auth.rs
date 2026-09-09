@@ -321,6 +321,161 @@ pub const DISABLE_AUTH_ENV: &str = "IRONBRIDGE_DISABLE_AUTH";
 /// differently, so it is still honoured as a no-op-that-confirms-on.
 pub const REQUIRE_AUTH_ENV: &str = "IRONBRIDGE_REQUIRE_AUTH";
 
+/// The shortest password accepted, in characters.
+pub const MIN_PASSWORD_CHARS: usize = 8;
+
+/// Passwords common enough that an online guesser tries them first.
+///
+/// NIST SP 800-63B asks for exactly one check beyond length: compare the
+/// candidate against passwords known to be compromised, and reject a match.
+/// It argues *against* composition rules -- forcing a digit and a symbol
+/// pushes people toward `Passw0rd!`, which is on every list already -- so
+/// length plus this is the whole policy, deliberately.
+///
+/// Entries shorter than [`MIN_PASSWORD_CHARS`] are already refused by the
+/// length check. They stay listed anyway so the two rules remain independent:
+/// a future change to the minimum cannot quietly let `qwerty` back in.
+const COMMON_PASSWORDS: &[&str] = &[
+    // Sequences and keyboard walks -- the overwhelming majority of real hits.
+    "123456",
+    "1234567",
+    "12345678",
+    "123456789",
+    "1234567890",
+    "12345678910",
+    "987654321",
+    "qwerty",
+    "qwerty123",
+    "qwerty1234",
+    "qwertyuiop",
+    "1q2w3e4r",
+    "1q2w3e4r5t",
+    "zaq12wsx",
+    "qazwsxedc",
+    "asdfghjkl",
+    "1qaz2wsx",
+    "q1w2e3r4",
+    // The word itself and its predictable decorations.
+    "password",
+    "password1",
+    "password12",
+    "password123",
+    "password1234",
+    "passw0rd",
+    "p@ssw0rd",
+    "p@ssword",
+    "passwort",
+    "contrasena",
+    "motdepasse",
+    // Access words.
+    "letmein",
+    "letmein1",
+    "letmein123",
+    "welcome",
+    "welcome1",
+    "welcome123",
+    "admin123",
+    "administrator",
+    "root1234",
+    "changeme",
+    "changeit",
+    "secret123",
+    "default1",
+    "guest123",
+    "trustno1",
+    "iloveyou",
+    "whatever",
+    "computer",
+    "internet",
+    "starwars",
+    "superman",
+    "batman123",
+    "pokemon123",
+    "dragon123",
+    "monkey123",
+    "freedom1",
+    "shadow123",
+    "master123",
+    "hello123",
+    "charlie1",
+    "jennifer",
+    "michael1",
+    "jordan23",
+    "princess",
+    "princess1",
+    "sunshine",
+    "sunshine1",
+    "football",
+    "football1",
+    "baseball",
+    "baseball1",
+    "basketball",
+    "liverpool",
+    "liverpool1",
+    "arsenal1",
+    "chelsea1",
+    "barcelona",
+    "juventus1",
+    "corvette",
+    "harley123",
+    "nintendo",
+    "creative",
+    "midnight",
+    "flowerpot",
+    "butterfly",
+    "chocolate",
+    "cocacola",
+    "pepsi123",
+    "samsung1",
+    "michelle",
+    "danielle",
+    "nicholas",
+    "jonathan",
+    "samantha",
+    "elizabeth",
+    "alexander",
+    "anthony1",
+    "matthew1",
+    "andrew123",
+    "joshua123",
+    "robert123",
+    "thomas123",
+    "william1",
+    "abc12345",
+    "abcd1234",
+    "a1b2c3d4",
+    "asdf1234",
+    "test1234",
+    "temp1234",
+    "demo1234",
+    "user1234",
+    "login123",
+    "access123",
+    "system123",
+    "server123",
+    "database1",
+    "backup123",
+    "qwe123456",
+    "111111111",
+    "000000000",
+    "121212121",
+    "iloveyou1",
+    "princess123",
+];
+
+/// Whether a password is too common to accept.
+///
+/// Case-insensitive: `Password` is guessed as readily as `password`, and a
+/// list that only caught the lowercase spelling would be trivially sidestepped
+/// by the shift key. Comparison is on the raw characters otherwise -- no
+/// trimming, since leading or trailing spaces are legitimate password content
+/// and silently stripping them would change what the user chose.
+pub fn is_common_password(password: &str) -> bool {
+    COMMON_PASSWORDS
+        .iter()
+        .any(|common| password.eq_ignore_ascii_case(common))
+}
+
 /// Whether every `/api` route requires a valid Bearer token, resolved once.
 ///
 /// **On by default.** The web and desktop clients present a login screen and
@@ -944,10 +1099,18 @@ pub async fn register(
         }));
     }
 
-    if body.password.len() < 8 {
+    if body.password.len() < MIN_PASSWORD_CHARS {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "success": false,
             "error": "Password must be at least 8 characters"
+        }));
+    }
+
+    if is_common_password(&body.password) {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "success": false,
+            "error": "That password is one of the most commonly used ones and is \
+                      guessed first in an attack. Please choose another."
         }));
     }
 
@@ -1509,10 +1672,18 @@ pub async fn change_password(
         }));
     }
 
-    if body.new_password.len() < 8 {
+    if body.new_password.len() < MIN_PASSWORD_CHARS {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "success": false,
             "error": "New password must be at least 8 characters"
+        }));
+    }
+
+    if is_common_password(&body.new_password) {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "success": false,
+            "error": "That password is one of the most commonly used ones and is \
+                      guessed first in an attack. Please choose another."
         }));
     }
 
@@ -1792,6 +1963,47 @@ mod security_tests {
 
         // Unknown user -> current (reject-only guarantee).
         assert!(token_not_revoked(&conn, "nobody", 1));
+    }
+
+    /// The common-password check catches the passwords that actually get
+    /// guessed, ignores case, and leaves strong passwords alone.
+    ///
+    /// `password` and `12345678` both clear the eight-character minimum, so
+    /// length alone accepted the two most-guessed passwords there are. The
+    /// case-insensitivity matters as much as the list: a check that only
+    /// matched the lowercase spelling would be sidestepped by the shift key.
+    #[test]
+    fn the_most_guessed_passwords_are_refused_whatever_their_case() {
+        // The two that motivated this: long enough, and still top of every list.
+        assert!(is_common_password("password"));
+        assert!(is_common_password("12345678"));
+
+        // Case must not be an escape hatch.
+        assert!(is_common_password("Password"));
+        assert!(is_common_password("PASSWORD"));
+        assert!(is_common_password("PaSsWoRd"));
+        assert!(is_common_password("QwErTy123"));
+
+        // Decorations that feel clever and are not.
+        assert!(is_common_password("password123"));
+        assert!(is_common_password("passw0rd"));
+        assert!(is_common_password("p@ssw0rd"));
+        assert!(is_common_password("letmein123"));
+        assert!(is_common_password("qwertyuiop"));
+
+        // Entries below the length minimum stay listed so the two rules stay
+        // independent -- raising or lowering the minimum must not change this.
+        assert!(is_common_password("qwerty"));
+        assert!(is_common_password("123456"));
+
+        // Strong passwords must pass untouched; a false positive here locks a
+        // user out of a password that was fine.
+        assert!(!is_common_password("Aud1t-Probe-Passw0rd!"));
+        assert!(!is_common_password("correct horse battery staple"));
+        assert!(!is_common_password("wR7#pq2Lm!vZ"));
+        // Contains a listed entry but is not one: matching is whole-string.
+        assert!(!is_common_password("mypasswordislong"));
+        assert!(!is_common_password("password!extra"));
     }
 
     /// Logout has to move the same cut-off a password change moves, and it has
