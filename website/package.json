@@ -13,7 +13,7 @@
   "dependencies": {
     "gray-matter": "^4.0.3",
     "next": "^15.1.0",
-    "react": "^19.0.0",
+    "react": "^19.2.8",
     "react-dom": "^19.0.0",
     "react-syntax-highlighter": "^15.6.1",
     "remark": "^15.0.1",
@@ -22,7 +22,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.18",
     "@types/react-dom": "^19.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "eslint": "^9.39.5",
