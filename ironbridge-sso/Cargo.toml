@@ -29,7 +29,7 @@ url = "2"
 chrono = "0.4"
 
 # OIDC: ID tokens are JWTs, so this is the whole signature story.
-jsonwebtoken = "9.3"
+jsonwebtoken = "11.0"
 
 # SAML: XML plus RSA signature verification, all pure Rust.
 roxmltree = "0.20"
