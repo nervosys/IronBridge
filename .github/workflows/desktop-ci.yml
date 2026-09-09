@@ -1,0 +1,102 @@
+name: Desktop CI
+
+# ironbridge-desktop had no workflow at all: it bundles ironbridge-web, links
+# the API server in-process, and produces the MSI/NSIS installers, none of which
+# anything checked.
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'ironbridge-desktop/**'
+      # The desktop app bundles the web build, which depends on the shared
+      # package, so a break in either surfaces here.
+      - 'ironbridge-web/**'
+      - 'ironbridge-shared/**'
+      - 'ironbridge-rust/**'
+      - '.github/workflows/desktop-ci.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'ironbridge-desktop/**'
+      - 'ironbridge-web/**'
+      - 'ironbridge-shared/**'
+      - 'ironbridge-rust/**'
+      - '.github/workflows/desktop-ci.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: '20'
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Tauri v2 needs webkit2gtk 4.1 and its friends on Linux. Windows runners
+      # already carry WebView2.
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ironbridge-desktop/target/
+          key: ${{ runner.os }}-desktop-cargo-${{ hashFiles('ironbridge-desktop/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-desktop-cargo-
+
+      # `npm run build` in ironbridge-desktop shells out to the web build first,
+      # so the shared package has to exist before either.
+      - name: Build shared package
+        working-directory: ironbridge-shared
+        run: npm ci && npm run build
+
+      - name: Install web dependencies
+        working-directory: ironbridge-web
+        run: npm ci
+
+      - name: Build web frontend
+        working-directory: ironbridge-web
+        run: npm run build
+
+      - name: Install desktop dependencies
+        working-directory: ironbridge-desktop
+        run: npm ci
+
+      # cargo check rather than a full bundle: this proves the Tauri crate and
+      # its in-process API server compile against the current ironbridge-rust on
+      # both platforms, without paying for installer generation on every push.
+      # The release workflow is what produces the bundles.
+      - name: Check Tauri crate
+        working-directory: ironbridge-desktop
+        run: cargo check --all-targets

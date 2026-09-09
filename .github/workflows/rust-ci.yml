@@ -5,11 +5,15 @@ on:
     branches: [main, master, develop]
     paths:
       - 'ironbridge-rust/**'
+      # Path dependency of ironbridge-rust: a change here is only compiled by
+      # this workflow, so it has to trigger it.
+      - 'ironbridge-sso/**'
       - '.github/workflows/rust-ci.yml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'ironbridge-rust/**'
+      - 'ironbridge-sso/**'
       - '.github/workflows/rust-ci.yml'
   workflow_dispatch:
 
