@@ -1,0 +1,100 @@
+name: Security CI
+
+# `deny.toml` and `.cargo/audit.toml` carry risk-accepted advisories with
+# written rationale, but nothing ran them, so the acceptances could drift out of
+# date silently. This workflow is what keeps them honest.
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'ironbridge-rust/deny.toml'
+      - 'ironbridge-rust/.cargo/audit.toml'
+      - '**/package-lock.json'
+      - '.github/workflows/security-ci.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'ironbridge-rust/deny.toml'
+      - 'ironbridge-rust/.cargo/audit.toml'
+      - '**/package-lock.json'
+      - '.github/workflows/security-ci.yml'
+  schedule:
+    # Advisories land against unchanged code, so also run weekly.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      # Checks advisories, bans, licenses and sources against deny.toml.
+      - name: cargo deny check
+        working-directory: ironbridge-rust
+        run: cargo deny check
+
+  cargo-audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      # Honours ironbridge-rust/.cargo/audit.toml.
+      - name: cargo audit
+        working-directory: ironbridge-rust
+        run: cargo audit
+
+  npm-audit:
+    name: npm audit (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - ironbridge-shared
+          - ironbridge-web
+          - ironbridge-app
+          - ironbridge-desktop
+          - vscode-extension
+          - browser-extension
+          - website
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Production trees only, and high-and-above only. The React Navigation
+      # chain carries moderate advisories with no non-breaking fix available;
+      # gating on those would mean a permanently red job that teaches people to
+      # ignore it. Run `npm audit --omit=dev` locally to see the full picture.
+      - name: npm audit
+        working-directory: ${{ matrix.package }}
+        run: npm audit --omit=dev --audit-level=high

@@ -15,10 +15,28 @@ yanked = "warn"
 # paste by ratatui-style macro chains, proc-macro-error by older derive
 # crates). They cannot be removed without breaking-change upgrades to those
 # upstreams. Re-evaluate when upstreams release new majors.
+#
+# The vulnerability entries below are risk-accepted with the same rationale
+# recorded in `.cargo/audit.toml`; keep the two lists in step, or `cargo deny
+# check` and `cargo audit` disagree about whether this tree is clean.
 ignore = [
     "RUSTSEC-2024-0384", # instant — unmaintained
     "RUSTSEC-2024-0436", # paste — unmaintained
-    "RUSTSEC-2024-0370", # proc-macro-error — unmaintained
+    "RUSTSEC-2026-0173", # proc-macro-error2 — unmaintained; pulled in by the
+                         # async-graphql and actix derive chains. Replaces the
+                         # ignore for RUSTSEC-2024-0370 (proc-macro-error v1),
+                         # which no longer appears in the tree.
+
+    # h2 0.3.x — HTTP/2 DoS via unbounded empty DATA frames. Not reachable: the
+    # server binds plain HTTP, and HTTP/2 is only negotiated over TLS ALPN,
+    # which this process never does. h2 0.3.x is pinned by the whole actix-web
+    # 4.x stack; the fix is in h2 >=0.4.16, which needs hyper 1.x.
+    "RUSTSEC-2026-0258",
+
+    # rsa 0.9.x — Marvin Attack timing sidechannel. No fixed release exists
+    # upstream. The attack needs an RSA decryption oracle; ironbridge-sso does
+    # no RSA decryption, only signature verification and signing.
+    "RUSTSEC-2023-0071",
 ]
 
 [licenses]
