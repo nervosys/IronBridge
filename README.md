@@ -37,8 +37,10 @@ cargo install --path .
 
 That puts `ironbridge` and `ironbridge-mcp` on your PATH. The 1.x line is
 published as [`chasm-cli`](https://crates.io/crates/chasm-cli) under the
-project's former name; it predates the 2.0 release and is not a substitute for
-the above.
+project's former name, and its source is archived at
+[nervosys/IronBridgeCLI](https://github.com/nervosys/IronBridgeCLI); it predates
+the 2.0 release and is not a substitute for the above. The `ironbridge-cli`
+crate name belongs to this tree.
 
 ## Quick Start
 
