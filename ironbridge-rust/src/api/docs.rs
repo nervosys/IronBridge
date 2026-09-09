@@ -16,6 +16,13 @@ const OPENAPI_YAML: &str = include_str!("../../openapi.yaml");
 const OPENAPI_YAML_DOCS_COPY: &str = include_str!("../../docs/assets/openapi.yaml");
 
 /// The MCP reference page, checked against the tool registry below.
+///
+/// `#[cfg(test)]` because the file lives outside this crate, at the repository
+/// root. `cargo package` only carries files from the package directory, so
+/// including it unconditionally made the published crate fail to compile for
+/// anyone who installed it -- while building fine here, where the path
+/// resolves. Test-only keeps the check without shipping the dependency.
+#[cfg(test)]
 const MCP_DOC: &str = include_str!("../../../docs/api/mcp.md");
 
 /// Get OpenAPI specification (YAML)
