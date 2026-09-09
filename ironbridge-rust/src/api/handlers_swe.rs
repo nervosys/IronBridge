@@ -1189,7 +1189,9 @@ pub async fn execute_tool(
     match body.tool.as_str() {
         "read_file" => {
             let file_path = body.input["path"].as_str().unwrap_or("");
-            let full_path = resolve_path(&base_path, file_path);
+            let Some(full_path) = resolve_path(&base_path, file_path) else {
+                return ApiResponse::<()>::error("path must stay inside the project directory");
+            };
 
             match std::fs::read_to_string(&full_path) {
                 Ok(content) => ApiResponse::success(serde_json::json!({
@@ -1206,7 +1208,9 @@ pub async fn execute_tool(
         "write_file" => {
             let file_path = body.input["path"].as_str().unwrap_or("");
             let content = body.input["content"].as_str().unwrap_or("");
-            let full_path = resolve_path(&base_path, file_path);
+            let Some(full_path) = resolve_path(&base_path, file_path) else {
+                return ApiResponse::<()>::error("path must stay inside the project directory");
+            };
 
             // Create parent directories if needed
             if let Some(parent) = full_path.parent() {
@@ -1226,7 +1230,9 @@ pub async fn execute_tool(
         }
         "list_directory" => {
             let dir_path = body.input["path"].as_str().unwrap_or(".");
-            let full_path = resolve_path(&base_path, dir_path);
+            let Some(full_path) = resolve_path(&base_path, dir_path) else {
+                return ApiResponse::<()>::error("path must stay inside the project directory");
+            };
 
             match std::fs::read_dir(&full_path) {
                 Ok(entries) => {
@@ -1277,7 +1283,10 @@ pub async fn execute_tool(
             let working_dir = body.input["workingDirectory"]
                 .as_str()
                 .map(|d| resolve_path(&base_path, d))
-                .unwrap_or_else(|| base_path.clone());
+                .unwrap_or_else(|| Some(base_path.clone()));
+            let Some(working_dir) = working_dir else {
+                return ApiResponse::<()>::error("path must stay inside the project directory");
+            };
 
             // Execute command
             #[cfg(target_os = "windows")]
@@ -1312,7 +1321,10 @@ pub async fn execute_tool(
             let search_dir = body.input["directory"]
                 .as_str()
                 .map(|d| resolve_path(&base_path, d))
-                .unwrap_or_else(|| base_path.clone());
+                .unwrap_or_else(|| Some(base_path.clone()));
+            let Some(search_dir) = search_dir else {
+                return ApiResponse::<()>::error("path must stay inside the project directory");
+            };
 
             let mut results = vec![];
             if let Ok(entries) =
@@ -1446,13 +1458,62 @@ fn detect_project_type(path: &std::path::Path) -> (Option<String>, Option<String
     (language, framework)
 }
 
-fn resolve_path(base: &std::path::Path, relative: &str) -> PathBuf {
-    let path = PathBuf::from(relative);
-    if path.is_absolute() {
-        path
-    } else {
-        base.join(relative)
+/// Resolve a caller-supplied path against the project root, refusing anything
+/// that leaves it.
+///
+/// The previous version was `if path.is_absolute() { path } else {
+/// base.join(relative) }`: it honoured an absolute path verbatim and did not
+/// look at `..` at all. Since `/api/swe/projects/{id}/execute` exposes
+/// `read_file` and `write_file`, and registration is open, that meant anyone
+/// able to reach the server could create an account, open a project, and then
+/// read or write any file the server process could -- `../../..`, or a plain
+/// absolute path. Confirmed against a running server before the fix: a
+/// self-registered user read a file outside the project via both forms,
+/// overwrote it, and created a new directory outside the root.
+///
+/// The escape is closed the same way `downloads::safe_relative_path` closes
+/// it, by classifying components rather than matching strings, because the
+/// string forms are endless while the parser already sorts them. `CurDir` is
+/// tolerated here -- `./src/main.rs` is an ordinary way to name a file and `.`
+/// cannot escape -- which is the one behavioural difference from that
+/// function, whose tests deliberately pin `.` as rejected.
+///
+/// Containment is structural: only `Normal` components are ever appended, so
+/// the result is under `base` by construction. What this does not defend
+/// against is a symlink *inside* the project pointing outside it; catching
+/// that needs `canonicalize`, which cannot run on the not-yet-created file
+/// that `write_file` is about to make.
+fn resolve_path(base: &std::path::Path, relative: &str) -> Option<PathBuf> {
+    use std::path::Component;
+
+    if relative.trim().is_empty() {
+        return None;
     }
+
+    let mut safe = PathBuf::new();
+    for component in std::path::Path::new(relative).components() {
+        match component {
+            // `.` is a no-op, not an escape.
+            Component::CurDir => {}
+            Component::Normal(part) => {
+                // A component of nothing but dots is not a name anyone means.
+                let text = part.to_str()?;
+                if text.chars().all(|c| c == '.') {
+                    return None;
+                }
+                safe.push(part);
+            }
+            // Each of these leaves, or could leave, the project root.
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    // An input of only `.` (or `./`) leaves nothing to append, and names the
+    // project root itself. `list_directory` defaults to exactly that, so
+    // rejecting the empty result would break listing the project. Joining an
+    // empty path yields `base` unchanged, which is the intended target and is
+    // trivially inside the root.
+    Some(base.join(safe))
 }
 
 #[cfg(test)]
@@ -1532,5 +1593,79 @@ mod run_command_gate_tests {
         );
         // A refusal must carry no command output.
         assert!(body["data"]["stdout"].as_str().unwrap_or("").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod path_confinement_tests {
+    use super::resolve_path;
+    use std::path::Path;
+
+    /// A caller-supplied path must not leave the project root.
+    ///
+    /// `/api/swe/projects/{id}/execute` exposes `read_file` and `write_file`,
+    /// and registration is open, so before this was confined anyone who could
+    /// reach the server could register, open a project, and read or write any
+    /// file the server process could. Verified against a running server at the
+    /// time: a self-registered user read a file outside the project through
+    /// both an absolute path and `../`, overwrote it, and created a directory
+    /// outside the root.
+    #[test]
+    fn paths_that_leave_the_project_are_refused() {
+        let base = Path::new("/projects/demo");
+
+        // Relative escapes, including ones that only escape after descending.
+        assert!(resolve_path(base, "../secret").is_none());
+        assert!(resolve_path(base, "../../etc/passwd").is_none());
+        assert!(resolve_path(base, "a/../../b").is_none());
+        assert!(resolve_path(base, "src/../../../root").is_none());
+        assert!(resolve_path(base, "..").is_none());
+
+        // A component of nothing but dots is not a name anyone means.
+        assert!(resolve_path(base, "...").is_none());
+
+        // Empty input is not a path.
+        assert!(resolve_path(base, "").is_none());
+        assert!(resolve_path(base, "   ").is_none());
+    }
+
+    /// Absolute paths were honoured verbatim by the previous implementation --
+    /// `if path.is_absolute() { path }` -- which is the sharpest form of the
+    /// bug, since it needs no traversal at all.
+    #[cfg(unix)]
+    #[test]
+    fn absolute_paths_are_refused_on_unix() {
+        let base = Path::new("/projects/demo");
+        assert!(resolve_path(base, "/etc/passwd").is_none());
+        assert!(resolve_path(base, "/").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn absolute_paths_are_refused_on_windows() {
+        let base = Path::new(r"C:\projects\demo");
+        assert!(resolve_path(base, r"C:\Windows\System32\drivers\etc\hosts").is_none());
+        assert!(resolve_path(base, r"\server\share\file").is_none());
+        assert!(resolve_path(base, r"..\..\Windows").is_none());
+    }
+
+    /// Ordinary in-project paths must survive, and stay under the root. A
+    /// false positive here breaks the tools rather than securing them.
+    #[test]
+    fn ordinary_project_paths_resolve_under_the_root() {
+        let base = Path::new("/projects/demo");
+
+        for raw in ["src/main.rs", "./src/main.rs", "a/b/c.txt", "README.md"] {
+            let got = resolve_path(base, raw).unwrap_or_else(|| panic!("rejected {raw:?}"));
+            assert!(got.starts_with(base), "{raw:?} resolved outside: {got:?}");
+        }
+
+        // `.` names the project root itself -- list_directory defaults to it.
+        assert_eq!(resolve_path(base, ".").as_deref(), Some(base));
+        assert_eq!(resolve_path(base, "./").as_deref(), Some(base));
+
+        // Interior dots in a filename are ordinary.
+        let got = resolve_path(base, "src/my.file.txt").expect("dotted filename");
+        assert!(got.starts_with(base));
     }
 }
