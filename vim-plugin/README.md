@@ -17,24 +17,24 @@ A Vim plugin for managing AI chat sessions with the IronBridge system.
 
 ## Installation
 
+The plugin lives in the `vim-plugin/` directory of the IronBridge
+monorepo; there is no separate `IronBridge.vim` repository.
+
 ### Using vim-plug
 
 ```vim
-Plug 'nervosys/IronBridge.vim'
-```
-
-### Using Vundle
-
-```vim
-Plugin 'nervosys/IronBridge.vim'
+Plug 'nervosys/IronBridge', { 'rtp': 'vim-plugin' }
 ```
 
 ### Using Pathogen
 
 ```bash
-cd ~/.vim/bundle
-git clone https://github.com/nervosys/IronBridge.vim
+git clone https://github.com/nervosys/IronBridge ~/src/IronBridge
+ln -s ~/src/IronBridge/vim-plugin ~/.vim/bundle/ironbridge
 ```
+
+Vundle cannot load a plugin from a subdirectory of a repository; use the manual
+install below instead.
 
 ### Manual
 

@@ -172,10 +172,10 @@ Before open-sourcing, audit ironbridge-rust for:
 ### Crates.io Publication
 
 ```toml
-# Cargo.toml
+# Cargo.toml — as published; the tree currently declares `ironbridge-cli` 2.0.1
 [package]
 name = "ironbridge"
-version = "1.0.0"
+version = "2.0.1"
 edition = "2021"
 license = "AGPL-3.0-only OR LicenseRef-IronBridge-Commercial"
 description = "Universal chat session manager - harvest, merge, and analyze AI chat history"
@@ -193,8 +193,11 @@ categories = ["command-line-utilities", "database"]
 
 ### Container Images
 
+The real Dockerfile is `ironbridge-rust/Dockerfile`. No image has been pushed
+to ghcr.io yet; the sketch below is the intended shape.
+
 ```dockerfile
-# Published to ghcr.io/nervosys/IronBridge
+# Intended: ghcr.io/nervosys/ironbridge
 FROM rust:alpine AS builder
 COPY . .
 RUN cargo build --release
@@ -341,19 +344,27 @@ ENTERPRISE (Custom)
 
 ## 9. Migration Timeline
 
-### Phase 1: Preparation (2 weeks) ✅
+### Phase 1: Preparation (2 weeks)
 
 - [x] Complete code audit
 - [x] Remove proprietary references
 - [x] Finalize licensing (AGPL-3.0-only + commercial dual-license)
 - [x] Create public documentation
-- [x] Set up new public repository (nervosys/IronBridge-cli)
+- [ ] Make the repository public — `nervosys/IronBridge` exists but is private,
+      so every public-facing link in the README and on the docs site resolves
+      only for people inside the org. There is no `nervosys/IronBridge-cli`.
 
-### Phase 2: Soft Launch (2 weeks) ✅
+### Phase 2: Soft Launch (2 weeks)
 
-- [x] Push to public repo (no announcement)
-- [x] Publish to crates.io (ironbridge-cli v1.0.0)
-- [x] Set up CI/CD for releases (GitHub Actions)
+- [ ] Push to a public repo (no announcement) — blocked on the item above
+- [ ] Publish to crates.io — neither `ironbridge` nor `ironbridge-cli` is
+      registered. What is published is [`chasm-cli`](https://crates.io/crates/chasm-cli),
+      the project's former name, last released as 2.0.0 in March 2026 and
+      pointing at a repository URL that has since been renamed. Until this is
+      done, the README's install instructions have to build from source.
+- [x] Set up CI/CD for releases (GitHub Actions) — `release.yml` exists and
+      triggers on `v*` tags, but no `v2.*` tag has been cut, so it has never
+      produced a 2.x artifact
 - [x] Gather early feedback from select users
 - [x] Fix any issues discovered (reqwest CVE, cargo-deny)
 

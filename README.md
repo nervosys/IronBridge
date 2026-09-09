@@ -15,7 +15,7 @@
 - 🎛️ **Interactive TUI** — Browse workspaces and sessions in the terminal
 - 🤖 **MCP Server** — Model Context Protocol integration for AI agents
 - 📦 **Git Integration** — Version control your chat histories
-- 🌐 **REST API** — 137 documented operations, every one verified as routed
+- 🌐 **REST API** — 170 documented operations, every one verified as routed
 - 🔗 **Local Share Links** — Revocable, expiring tokens that read a session
   back through your own server. Nothing is uploaded anywhere
 - 🧠 **Conversation Analysis** — Model-backed against any OpenAI-compatible
@@ -27,9 +27,18 @@
 
 ## Install
 
+The 2.x line is not on crates.io yet, so install it from source:
+
 ```bash
-cargo install ironbridge
+git clone https://github.com/nervosys/IronBridge
+cd IronBridge/ironbridge-rust
+cargo install --path .
 ```
+
+That puts `ironbridge` and `ironbridge-mcp` on your PATH. The 1.x line is
+published as [`chasm-cli`](https://crates.io/crates/chasm-cli) under the
+project's former name; it predates the 2.0 release and is not a substitute for
+the above.
 
 ## Quick Start
 
@@ -103,17 +112,23 @@ ironbridge harvest share <url>          # Import share link
 
 ## Ecosystem
 
-| Component             | Description                       | Status         |
-| --------------------- | --------------------------------- | -------------- |
-| **ironbridge-rust**        | Core Rust library and CLI         | ✅ Stable       |
-| **ironbridge-web**         | React web application             | ✅ Stable       |
-| **ironbridge-app**         | React Native mobile app           | ⚠️ Partly wired |
-| **ironbridge-desktop**     | Tauri desktop application         | ✅ Stable       |
-| **vscode-extension**  | VS Code extension                 | ✅ Stable       |
-| **browser-extension** | Chrome/Firefox extension          | ✅ Stable       |
-| **jetbrains-plugin**  | IntelliJ/PyCharm/WebStorm plugin  | ✅ Stable       |
-| **vim-plugin**        | Vim 8.0+ plugin                   | ✅ Stable       |
-| **neovim-plugin**     | Neovim 0.8+ plugin with Telescope | ✅ Stable       |
+| Component              | Description                        | Status          | Automated checks              |
+| ---------------------- | ---------------------------------- | --------------- | ----------------------------- |
+| **ironbridge-rust**    | Core Rust library and CLI          | ✅ Stable       | 1121 tests (1187 enterprise)  |
+| **ironbridge-sso**     | Pure-Rust OIDC and SAML            | ✅ Stable       | covered by ironbridge-rust    |
+| **ironbridge-shared**  | Shared TypeScript types            | ✅ Stable       | 29 tests                      |
+| **ironbridge-web**     | React web application              | ✅ Stable       | 13 tests, lint, typecheck     |
+| **ironbridge-app**     | React Native mobile app            | ⚠️ Partly wired | typecheck only                |
+| **ironbridge-desktop** | Tauri desktop application          | ✅ Stable       | build only                    |
+| **vscode-extension**   | VS Code extension                  | ✅ Stable       | 64 tests, lint, compile       |
+| **browser-extension**  | Chrome/Firefox extension           | ✅ Stable       | lint only                     |
+| **jetbrains-plugin**   | IntelliJ/PyCharm/WebStorm plugin   | ✅ Stable       | Gradle build only             |
+| **vim-plugin**         | Vim 8.0+ plugin                    | ✅ Stable       | none                          |
+| **neovim-plugin**      | Neovim 0.8+ plugin with Telescope  | ✅ Stable       | none                          |
+
+The last column is what actually runs against each component, not a coverage
+figure. Where it says "build only" or "none", the component compiles and has
+been exercised by hand, but nothing would catch a regression automatically.
 
 > **ironbridge-app is partly wired.** Sessions, workspaces, chat, harvest
 > statistics, providers, SWE project context and provider accounts all come
@@ -306,7 +321,7 @@ Every endpoint **except `GET /api/health`** wraps its payload:
 
 Errors carry `{"success": false, "error": "..."}` with no `data`.
 
-The full spec is `ironbridge-rust/openapi.yaml` — 105 paths, 137 operations. Two
+The full spec is `ironbridge-rust/openapi.yaml` — 127 paths, 170 operations. Two
 tests keep it honest: one fails if a documented path is not routed, the other
 if a response body no longer matches its schema.
 
@@ -714,10 +729,10 @@ enterprise layers are scaffolding at varying stages. Concretely:
 
 | Area                            | State                                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| CLI, library, harvest, recovery | **Working.** ~96k LOC Rust, 910 tests passing (961 with `--features enterprise`).                                         |
+| CLI, library, harvest, recovery | **Working.** ~110k LOC Rust in `src/` plus 12.5k of tests; 1121 passing on a default build, 1187 with `--features enterprise`, none failing.                                         |
 | Providers                       | **Working.** 11 local/OpenAI-compatible endpoints in the catalogue, 21 cloud providers listed, and 5 cloud share-link parsers (ChatGPT, Claude, Gemini, Perplexity, Poe). |
 | MCP server, TUI                 | **Working.**                                                                                                              |
-| REST API                        | **Working.** 137 operations across 105 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
+| REST API                        | **Working.** 170 operations across 127 documented paths, covering `/api` plus the root-mounted auth, sync, recording and webhook scopes. Every one is asserted to be routed by a test, and response bodies are checked against the schema. The rival implementation in `api/handlers.rs`/`api/routes.rs`, which held the 24 `"not yet implemented"` stubs and was never compiled, has been deleted. |
 | GraphQL                         | **Working.** Mounted at `/graphql`, with playground and SDL. `harvest`/`sync` mutations deliberately error and point at the CLI. |
 | Enterprise (SSO/audit/retention)| **Working, all platforms.** OIDC (authorization code + PKCE) and SAML both run on the pure-Rust `ironbridge-sso`; SAML signatures are verified against wrapping attacks. `SqliteEnterpriseStore` implements every `DatabaseOps` method, so provider config, pending logins, sessions, audit events and retention policies persist. All 25 enterprise operations are served, probed by tests, and their response bodies documented. Until recently the lines that mount these scopes were missing, so every enterprise build answered 404 — the handlers, tests and docs had all existed the whole time. |
 | Conversation analysis           | **Model-backed.** `ironbridge analyze <file>` calls any OpenAI-compatible endpoint. Without a key it falls back to the old heuristics, and the output always names which one ran. |
@@ -734,17 +749,24 @@ failing backend renders as empty or as an error, never as fixtures.
 
 ```bash
 ironbridge/
-├── ironbridge-rust/          # Core CLI and API server (Rust)
-├── ironbridge-web/           # Web dashboard (React)
-├── ironbridge-app/           # Mobile app (React Native)
-├── ironbridge-desktop/       # Desktop app (Tauri)
-├── vscode-extension/    # VS Code extension
-├── browser-extension/   # Chrome/Firefox extension
-├── jetbrains-plugin/    # JetBrains IDEs plugin
-├── vim-plugin/          # Vim plugin
-├── neovim-plugin/       # Neovim plugin
-└── examples/            # Provider examples
+├── ironbridge-rust/      # Core CLI, API server and MCP server (Rust)
+├── ironbridge-sso/       # Pure-Rust OIDC and SAML, used by the above
+├── ironbridge-shared/    # Shared TypeScript types (file: dep of web and app)
+├── ironbridge-web/       # Web dashboard (React)
+├── ironbridge-app/       # Mobile app (React Native / Expo)
+├── ironbridge-desktop/   # Desktop app (Tauri; bundles the web dashboard)
+├── vscode-extension/     # VS Code extension
+├── browser-extension/    # Chrome/Firefox extension
+├── jetbrains-plugin/     # JetBrains IDEs plugin
+├── vim-plugin/           # Vim plugin
+├── neovim-plugin/        # Neovim plugin
+├── website/              # Documentation site
+├── skills/               # Agent skills for working with the harvest database
+├── docs/                 # Design notes and API documentation
+└── examples/             # Provider examples
 ```
+
+Everything above ships as one version; see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
@@ -753,4 +775,8 @@ ironbridge/
 its source-disclosure terms. Absent a signed agreement, what you receive IronBridge
 under is AGPL-3.0-only. Made by [Nervosys](https://nervosys.ai)
 
-Contributions require signing the [CLA](CLA.md).
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how to
+build and test the tree, and what has to pass before a pull request lands. All
+contributions require signing the [CLA](CLA.md), and participation is governed
+by the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through
+[SECURITY.md](SECURITY.md), not the public issue tracker.

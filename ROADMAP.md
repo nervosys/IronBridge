@@ -74,12 +74,12 @@ token limits, and the shape of their error bodies. The flow itself is proven.
 
 ## Known gaps
 
-Verified against the tree as of August 4, 2026:
+Verified against the tree as of September 9, 2026:
 
 | Item | Reality |
 | --- | --- |
 | GraphQL API | Mounted and backed by the database. `harvest` and `sync` mutations return errors by design (use the CLI or REST). `tags` is rejected on session updates -- no column exists for it. |
-| REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted. The served API is 92 routes across `api/mod.rs` and `api/handlers_write.rs`, plus the root-mounted auth, sync, recording, webhook and websocket scopes. (This said 47 until the write handlers landed; the count is now asserted by `openapi.yaml` and its route test rather than kept by hand.) |
+| REST API | Single implementation. The orphaned `api/handlers.rs` and `api/routes.rs` — which held all 24 `"not yet implemented"` stubs — were deleted. The served API is `api/mod.rs` and `api/handlers_write.rs`, plus the root-mounted auth, sync, recording, webhook and websocket scopes — 127 paths and 170 operations as documented in `openapi.yaml`. (A hand-kept route count lived here and went stale twice; the number now comes from the spec, which its own route test asserts against the running app.) |
 | SSO/OIDC | Authorization code + PKCE, served at `/oidc`. ID tokens are verified against the provider's JWKS by `ironbridge-sso`. The `state` is consumed atomically (`DELETE ... RETURNING`), so a replayed callback is refused; an unverified email claim is refused too. The client secret is stored in plaintext — never returned over HTTP, but readable by anyone with the database file. |
 | SSO/SAML | Signature verification is implemented in pure Rust (`ironbridge-sso`) and covered by wrapping-attack tests. IdP config and sessions persist via `SqliteEnterpriseStore`. Builds on every platform; no native dependencies. |
 | Audit logging, retention | Persist through `SqliteEnterpriseStore`, which implements all 35 `api::audit::DatabaseOps` methods. |
@@ -151,7 +151,7 @@ The root-mounted scopes are documented too. `/auth`, `/sync`, `/recording` and
 `/webhooks` are registered on the App rather than inside the `/api` scope, so
 each of their paths carries an OpenAPI 3 path-level `servers` override
 pointing at the server root; both spec tests honour that override rather than
-blindly prefixing `/api`. The spec is now 80 paths and 102 operations, up from
+blindly prefixing `/api`. The spec is now 127 paths and 170 operations, up from
 32 when this work started.
 
 Those scopes are less consistent than `/api`, and the spec records it rather

@@ -19,11 +19,18 @@ A Neovim plugin for managing AI chat sessions with the IronBridge system.
 
 ## Installation
 
+The plugin lives in the `neovim-plugin/` directory of the IronBridge monorepo;
+there is no separate `IronBridge.nvim` repository. Plugin managers that cannot
+load from a subdirectory are given a local-path form below.
+
 ### Using lazy.nvim
 
 ```lua
 {
-  "nervosys/IronBridge.nvim",
+  "nervosys/IronBridge",
+  -- lazy.nvim loads the repository root, so point it at the plugin directory
+  -- of a local clone instead:
+  -- dir = "~/src/IronBridge/neovim-plugin",
   dependencies = {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope.nvim", -- optional
@@ -40,7 +47,8 @@ A Neovim plugin for managing AI chat sessions with the IronBridge system.
 
 ```lua
 use {
-  "nervosys/IronBridge.nvim",
+  "nervosys/IronBridge",
+  rtp = "neovim-plugin",
   requires = {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope.nvim",
@@ -56,7 +64,7 @@ use {
 ```vim
 Plug 'nvim-lua/plenary.nvim'
 Plug 'nvim-telescope/telescope.nvim'
-Plug 'nervosys/IronBridge.nvim'
+Plug 'nervosys/IronBridge', { 'rtp': 'neovim-plugin' }
 ```
 
 ## Configuration

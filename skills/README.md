@@ -1,6 +1,6 @@
 # Agent Skills for IronBridge
 
-A collection of AI agent skills for working with [IronBridge](https://github.com/nervosys/IronBridge-cli)
+A collection of AI agent skills for working with [IronBridge](https://github.com/nervosys/IronBridge)
 session histories. These skills give AI coding agents (Claude Code, Codex CLI,
 Cursor, Copilot, Gemini CLI, etc.) specialized knowledge for analyzing,
 organizing, and extracting insights from AI-assisted coding sessions.
