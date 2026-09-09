@@ -20,7 +20,7 @@
     "react-dom": "^19.2.0",
     "react-error-boundary": "^6.0.1",
     "react-router-dom": "^7.10.1",
-    "recharts": "^3.5.1",
+    "recharts": "^3.10.1",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
