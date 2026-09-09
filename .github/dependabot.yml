@@ -5,6 +5,11 @@ updates:
     directory: "/ironbridge-rust"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -17,6 +22,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -29,6 +39,11 @@ updates:
     directory: "/ironbridge-sso"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -40,6 +55,11 @@ updates:
     directory: "/ironbridge-desktop"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -52,6 +72,11 @@ updates:
     directory: "/ironbridge-shared"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -63,6 +88,11 @@ updates:
     directory: "/ironbridge-web"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -74,6 +104,11 @@ updates:
     directory: "/ironbridge-app"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -85,6 +120,11 @@ updates:
     directory: "/ironbridge-desktop"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -96,6 +136,11 @@ updates:
     directory: "/vscode-extension"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -107,6 +152,11 @@ updates:
     directory: "/browser-extension"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -118,6 +168,11 @@ updates:
     directory: "/website"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
