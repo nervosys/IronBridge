@@ -2309,7 +2309,7 @@ dependencies = [
  "clap_complete",
  "colored",
  "crossterm 0.29.0",
- "digest 0.10.7",
+ "digest 0.11.3",
  "dirs",
  "flate2",
  "futures-util",
