@@ -29,7 +29,7 @@ endfunction
 
 " Check server health
 function! ironbridge#health() abort
-  let l:data = s:request('GET', '/health')
+  let l:data = s:request('GET', '/api/health')
   
   if has_key(l:data, 'error')
     echohl ErrorMsg

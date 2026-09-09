@@ -79,7 +79,7 @@ end
 
 -- Check server health
 function M.health()
-  local data, err = request("GET", "/health")
+  local data, err = request("GET", "/api/health")
   if data then
     vim.notify(
       string.format("IronBridge server: %s (v%s)", data.status or "ok", data.version or "unknown"),
