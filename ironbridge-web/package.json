@@ -18,7 +18,7 @@
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-error-boundary": "^6.0.1",
+    "react-error-boundary": "^6.1.5",
     "react-router-dom": "^7.10.1",
     "recharts": "^3.5.1",
     "tailwindcss": "^4.1.18"
