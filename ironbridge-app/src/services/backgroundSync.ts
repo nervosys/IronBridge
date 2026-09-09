@@ -5,6 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import * as Battery from 'expo-battery';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 
 const SYNC_CONFIG_KEY = '@ironbridge_sync_config';
@@ -64,8 +65,15 @@ export interface SyncQueueItem {
 }
 
 export interface BatteryInfo {
+  /** Charge percentage 0-100. Meaningless when `available` is false. */
   level: number;
   isCharging: boolean;
+  /**
+   * Whether the platform actually reported battery state. Web and some
+   * simulators do not, and the battery gates below are skipped rather than
+   * evaluated against a made-up figure when this is false.
+   */
+  available: boolean;
 }
 
 export interface NetworkInfo {
@@ -228,12 +236,29 @@ class BackgroundSyncService {
    * Get current battery info
    */
   private async getBatteryInfo(): Promise<BatteryInfo> {
-    // In a real implementation, use react-native-battery
-    // For now, return mock data
-    return {
-      level: 80,
-      isCharging: false,
-    };
+    try {
+      if (!(await Battery.isAvailableAsync())) {
+        return { level: 0, isCharging: false, available: false };
+      }
+      const [level, state] = await Promise.all([
+        Battery.getBatteryLevelAsync(),
+        Battery.getBatteryStateAsync(),
+      ]);
+      // getBatteryLevelAsync resolves to -1 when the level is unknown.
+      if (level < 0) {
+        return { level: 0, isCharging: false, available: false };
+      }
+      return {
+        level: Math.round(level * 100),
+        isCharging:
+          state === Battery.BatteryState.CHARGING ||
+          state === Battery.BatteryState.FULL,
+        available: true,
+      };
+    } catch (error) {
+      console.warn('[BackgroundSync] Battery state unavailable:', error);
+      return { level: 0, isCharging: false, available: false };
+    }
   }
 
   /**
@@ -291,10 +316,14 @@ class BackgroundSyncService {
     } else if (this.config.wifiOnly && network.type !== 'wifi') {
       canSync = false;
       reason = 'WiFi-only sync enabled';
-    } else if (this.config.chargingOnly && !battery.isCharging) {
+    } else if (battery.available && this.config.chargingOnly && !battery.isCharging) {
       canSync = false;
       reason = 'Charging-only sync enabled';
-    } else if (battery.level < this.config.minBatteryLevel && !battery.isCharging) {
+    } else if (
+      battery.available &&
+      battery.level < this.config.minBatteryLevel &&
+      !battery.isCharging
+    ) {
       canSync = false;
       reason = `Battery level too low (${battery.level}%)`;
     } else if (isQuietHours) {
@@ -394,7 +423,7 @@ class BackgroundSyncService {
       sessionsSynced: 0,
       bytesTransferred: 0,
       durationMs: 0,
-      batteryLevel: conditions.battery.level,
+      batteryLevel: conditions.battery.available ? conditions.battery.level : undefined,
       networkType: conditions.network.type,
     };
 
