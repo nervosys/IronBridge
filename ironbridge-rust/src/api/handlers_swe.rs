@@ -1186,6 +1186,36 @@ pub async fn execute_tool(
 
     let base_path = PathBuf::from(&project_path);
 
+    // Filesystem tools are off unless the operator opts in.
+    //
+    // Confining these to the project root (see `resolve_path`) stops a path
+    // from escaping the root, but it cannot stop the caller *choosing* the
+    // root: `create_project` takes an arbitrary `path`, so a project rooted at
+    // `C:/` or `/` makes every file on the host "inside the project".
+    // Confirmed against a running server -- a self-registered user created a
+    // project at `C:/` and read `Windows/System32/drivers/etc/hosts` with a
+    // purely relative path, defeating containment without traversing anything.
+    //
+    // Containment is still worth having: with a sensible root it is what keeps
+    // a path from wandering out. But it is not sufficient on its own, and the
+    // capability underneath is "read and write files as this process", which
+    // `run_command` already treats as opt-in for the same reason. This follows
+    // that precedent rather than inventing a policy: default closed, and a
+    // deployment that wants the SWE tools says so.
+    //
+    // Nothing shipped calls this endpoint -- the web SWE and Agents pages use
+    // /swe/projects, /memory and /rules, none of them /execute -- so the
+    // default costs no working feature.
+    const FILE_TOOLS: &[&str] = &["read_file", "write_file", "list_directory", "search_files"];
+    if FILE_TOOLS.contains(&body.tool.as_str()) && !file_tools_enabled() {
+        return ApiResponse::<()>::error(
+            "filesystem tools are disabled. Set IRONBRIDGE_ENABLE_FILE_TOOLS=1 in the \
+             server's environment to allow them, and only bind the server to a trusted \
+             interface. Note that a project's path is chosen by the caller, so these \
+             tools reach anything the server process can.",
+        );
+    }
+
     match body.tool.as_str() {
         "read_file" => {
             let file_path = body.input["path"].as_str().unwrap_or("");
@@ -1458,6 +1488,18 @@ fn detect_project_type(path: &std::path::Path) -> (Option<String>, Option<String
     (language, framework)
 }
 
+/// Whether the SWE filesystem tools are enabled, from
+/// `IRONBRIDGE_ENABLE_FILE_TOOLS`.
+///
+/// Read on each call rather than cached, matching `run_command`'s gate, so a
+/// test can set and clear it without the first read fixing the value for the
+/// life of the process.
+fn file_tools_enabled() -> bool {
+    std::env::var("IRONBRIDGE_ENABLE_FILE_TOOLS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
 /// Resolve a caller-supplied path against the project root, refusing anything
 /// that leaves it.
 ///
@@ -1593,6 +1635,97 @@ mod run_command_gate_tests {
         );
         // A refusal must carry no command output.
         assert!(body["data"]["stdout"].as_str().unwrap_or("").is_empty());
+    }
+
+    /// The filesystem tools must be refused unless the operator opts in, and
+    /// the refusal must not leak the file.
+    ///
+    /// Confining paths to the project root does not settle this, because the
+    /// caller picks the root: `create_project` takes an arbitrary `path`, so a
+    /// project at `C:/` or `/` makes the whole host "inside the project".
+    /// Verified against a running server -- a self-registered user read
+    /// `Windows/System32/drivers/etc/hosts` that way, with a purely relative
+    /// path and no traversal at all. The gate is what closes that; this proves
+    /// the shipped default is closed.
+    #[tokio::test]
+    async fn file_tools_are_refused_by_default() {
+        assert!(
+            std::env::var("IRONBRIDGE_ENABLE_FILE_TOOLS").is_err(),
+            "IRONBRIDGE_ENABLE_FILE_TOOLS is set in the test environment; \
+             this test can only verify the default when it is unset"
+        );
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("swe-file-gate.db");
+        crate::commands::create_harvest_database(&db_path).expect("schema");
+        {
+            let conn = rusqlite::Connection::open(&db_path).expect("open");
+            init_swe_tables(&conn).expect("swe tables");
+        }
+        let db = ChatDatabase::open(&db_path).expect("open");
+        let state = web::Data::new(AppState::new(db, db_path));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(crate::api::configure_routes),
+        )
+        .await;
+
+        // A file inside the project, so the refusal is the gate and not the
+        // containment check doing the work.
+        let secret = dir.path().join("inside.txt");
+        std::fs::write(&secret, "CANARY").expect("write canary");
+
+        let created = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/swe/projects")
+                .set_json(serde_json::json!({
+                    "name": "p",
+                    "path": dir.path().to_string_lossy()
+                }))
+                .to_request(),
+        )
+        .await;
+        let body: serde_json::Value = test::read_body_json(created).await;
+        let pid = body["data"]["id"].as_str().expect("project id").to_string();
+
+        for (tool, input) in [
+            ("read_file", serde_json::json!({ "path": "inside.txt" })),
+            (
+                "write_file",
+                serde_json::json!({ "path": "planted.txt", "content": "x" }),
+            ),
+            ("list_directory", serde_json::json!({})),
+            ("search_files", serde_json::json!({ "pattern": "*" })),
+        ] {
+            let resp = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri(&format!("/api/swe/projects/{pid}/execute"))
+                    .set_json(serde_json::json!({ "tool": tool, "input": input }))
+                    .to_request(),
+            )
+            .await;
+            let body: serde_json::Value = test::read_body_json(resp).await;
+            assert_eq!(body["success"], false, "{tool} ran with no opt-in");
+            assert!(
+                body["error"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("filesystem tools are disabled"),
+                "{tool}: unexpected error: {}",
+                body["error"]
+            );
+        }
+
+        // The refusal must not have leaked the contents, and write_file must
+        // not have created anything.
+        assert!(
+            !dir.path().join("planted.txt").exists(),
+            "write went through"
+        );
     }
 }
 
